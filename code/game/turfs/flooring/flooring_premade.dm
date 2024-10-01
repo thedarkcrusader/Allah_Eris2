@@ -341,3 +341,20 @@
 /turf/simulated/floor/beach/water/New()
 	..()
 	overlays += image("icon"='icons/misc/beach.dmi',"icon_state"="water5","layer"=BASE_MOB_LAYER+0.1)
+
+
+//NASS13/
+
+/turf/simulated/floor/nass13/steel
+	name = "Steel plated floor"
+	icon = 'icons/turf/flooring/plating.dmi'
+	icon_state = "steelplate"
+
+/turf/simulated/floor/nass13/darth
+	icon_state = "darthsteel"
+
+/turf/simulated/floor/nass13/wornsteel
+	icon_state = "wornsteel"
+
+/turf/simulated/floor/nass13/corodedsteel
+	icon_state = "corodedsteel"
