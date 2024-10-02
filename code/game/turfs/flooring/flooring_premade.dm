@@ -358,3 +358,171 @@
 
 /turf/simulated/floor/nass13/corodedsteel
 	icon_state = "corodedsteel"
+
+/turf/simulated/floor/nass13/plated
+	icon_state = "plated"
+
+/turf/simulated/floor/nass13/plated/brown
+	icon_state = "brownplate"
+
+/turf/simulated/floor/nass13/plated/sunburnt
+	icon_state = "sunburnt"
+
+/turf/simulated/floor/nass13/plated/burnt
+	icon_state = "burnt"
+
+/turf/simulated/floor/nass13/plated/hex
+	icon_state = "hex"
+
+/turf/simulated/floor/nass13/plated/brian
+	icon_state = "brian"
+
+/turf/simulated/floor/nass13/plated/hex2
+	icon_state = "hex2"
+
+/turf/simulated/floor/nass13/plated/hex2
+	icon_state = "drought"
+
+/turf/simulated/floor/nass13/plated/burnned
+	icon_state = "burnned"
+
+/turf/simulated/floor/nass13/plated/burnned
+	icon_state = "flatpacked"
+
+/turf/simulated/floor/nass13/plated/tyrson
+	icon_state = "tryson"
+
+/turf/simulated/floor/nass13/plated/gritty
+	icon_state = "gritty"
+
+/turf/simulated/floor/nass13/plated/gritty/tri
+	icon_state = "tri"
+
+
+/turf/simulated/floor/nass13/plated/gritty/bleak
+	icon_state = "bleak"
+
+/turf/simulated/floor/nass13/plated/stained
+	icon_state = "platedstainned"
+
+/turf/simulated/floor/nass13/plated/ceramic
+	icon_state = "ceramic"
+
+/turf/simulated/floor/nass13/plated/ceramic2
+	icon_state = "ceramic2"
+
+/turf/simulated/floor/nass13/plated/ceramic3
+	icon_state = "ceramic3"
+
+/turf/simulated/floor/nass13/plated/ceramic4
+	icon_state = "ceramic4"
+
+/turf/simulated/floor/nass13/plated/ceramic5
+	icon_state = "ceramic4"
+
+/turf/simulated/floor/nass13/plated/brick
+	icon_state = "brick"
+
+/turf/simulated/floor/nass13/plated/brick/darkpath
+	icon_state = "darkpath"
+
+/turf/simulated/floor/nass13/plated/brick/darkpath
+	icon_state = "darthsidewalk"
+
+/turf/simulated/floor/nass13/plated/brick/darkpath2
+	icon_state = "darthsidewalk2"
+
+/turf/simulated/floor/nass13/plated/brick/darkpath3
+	icon_state = "darthsidewalk3"
+
+
+
+
+
+//New shit here//
+
+/turf/simulated/floor/nass13/plated/decay
+	icon_state = "plateddecay"
+
+/turf/simulated/floor/nass13/plated/decay2
+	icon_state = "pplateddecay2"
+
+/turf/simulated/floor/nass13/plated/decay3
+	icon_state = "pplateddecay3"
+
+/turf/simulated/floor/nass13/plated/intersection
+	icon_state = "intersection"
+
+/turf/simulated/floor/nass13/plated/noble
+	icon_state = "noble"
+
+/turf/simulated/floor/nass13/plated/lord
+	icon_state = "lord"
+
+/turf/simulated/floor/nass13/plated/lord2
+	icon_state = "lord2"
+
+
+/turf/simulated/floor/nass13/brick/grated
+	icon_state = "grated"
+
+
+/turf/simulated/floor/nass13/brick/grated2
+	icon_state = "grated2"
+
+
+/turf/simulated/floor/nass13/brick/bricked
+	icon_state = "bricked"
+
+
+/turf/simulated/floor/nass13/brick/bricked2
+	icon_state = "bricked2"
+
+
+
+/turf/simulated/floor/nass13/bricked3
+	icon_state = "bricked3"
+
+
+/turf/simulated/floor/nass13/bricked4
+	icon_state = "bricked4"
+
+
+/turf/simulated/floor/nass13/bricked5
+	icon_state = "bricked5"
+
+
+/turf/simulated/floor/nass13/bricked6
+	icon_state = "bricked6"
+
+
+/turf/simulated/floor/nass13/bricked7
+	icon_state = "bricked7"
+
+
+
+/turf/simulated/floor/nass13/bricked8
+	icon_state = "bricked8"
+
+
+/turf/simulated/floor/nass13/bricked9
+	icon_state = "bricked9"
+
+
+/turf/simulated/floor/nass13/bricked10
+	icon_state = "bricked10"
+
+
+/turf/simulated/floor/nass13/cated
+	icon_state = "cated"
+
+/turf/simulated/floor/nass13/cated2
+	icon_state = "cated2"
+
+
+/turf/simulated/floor/nass13/cated3
+	icon_state = "cated3"
+
+
+/turf/simulated/floor/nass13/cated4
+	icon_state = "cated4"
