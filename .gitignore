@@ -5,7 +5,6 @@
 /tmp/**/*
 
 #Ignore byond config folder.
-/cfg/**/*
 
 #Ignore cached sound files.
 /sound/tts_cache/**/*
