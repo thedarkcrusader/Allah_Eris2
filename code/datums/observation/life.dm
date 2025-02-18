@@ -15,8 +15,10 @@ GLOBAL_DATUM_INIT(life_event, /decl/observ/life, new)
 /*****************
 * Life Handling *
 *****************/
-
+// TODO: enable after baymed
+/*
 /mob/add_to_living_mob_list()
 	. = ..()
 	if(.)
 		GLOB.life_event.raise_event(src)
+*/

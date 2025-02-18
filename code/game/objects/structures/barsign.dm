@@ -1,10 +1,7 @@
 /obj/structure/sign/double/barsign
-	desc = "A jumbo-sized LED sign. This one seems to be showing its age."
-	description_info = "If your ID has bar access, you may swipe it on this sign to alter its display."
 	icon = 'icons/obj/barsigns.dmi'
 	icon_state = "empty"
-	appearance_flags = 0
-	anchored = 1
+	anchored = TRUE
 	var/cult = 0
 
 /obj/structure/sign/double/barsign/proc/get_valid_states(initial=1)
@@ -15,17 +12,17 @@
 	if(initial)
 		. -= "Off"
 
-/obj/structure/sign/double/barsign/examine(mob/user)
-	. = ..()
+/obj/structure/sign/double/barsign/examine(mob/user, extra_description = "")
 	switch(icon_state)
 		if("Off")
-			to_chat(user, "It appears to be switched off.")
+			extra_description += "It appears to be switched off."
 		if("narsiebistro")
-			to_chat(user, "It shows a picture of a large black and red being. Spooky!")
+			extra_description += "It shows a picture of a large black and red being. Spooky!"
 		if("on", "empty")
-			to_chat(user, "The lights are on, but there's no picture.")
+			extra_description += "The lights are on, but there's no picture."
 		else
-			to_chat(user, "It says '[icon_state]'")
+			extra_description += "It says '[icon_state]'"
+	..(user, extra_description)
 
 /obj/structure/sign/double/barsign/New()
 	..()
@@ -42,9 +39,9 @@
 			if(!sign_type)
 				return
 			icon_state = sign_type
-			to_chat(user, "<span class='notice'>You change the barsign.</span>")
+			to_chat(user, SPAN_NOTICE("You change the barsign."))
 		else
-			to_chat(user, "<span class='warning'>Access denied.</span>")
+			to_chat(user, SPAN_WARNING("Access denied."))
 		return
 
 	return ..()

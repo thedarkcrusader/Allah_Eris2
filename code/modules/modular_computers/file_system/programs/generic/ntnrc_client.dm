@@ -17,6 +17,7 @@
 	var/datum/ntnet_conversation/channel = null
 	var/operator_mode = 0		// Channel operator mode
 	var/netadmin_mode = 0		// Administrator mode (invisible to other users + bypasses passwords)
+	usage_flags = PROGRAM_ALL
 
 /datum/computer_file/program/chatclient/New()
 	username = "DefaultUser[rand(100, 999)]"
@@ -70,9 +71,9 @@
 		var/channel_title = sanitizeSafe(input(user,"Enter channel name or leave blank to cancel:"), 64)
 		if(!channel_title)
 			return
-		var/datum/ntnet_conversation/C = new/datum/ntnet_conversation()
+		var/datum/ntnet_conversation/C = new/datum/ntnet_conversation(computer.z)
 		C.add_client(src)
-		C.opperator = src
+		C.operator = src
 		channel = C
 		C.title = channel_title
 	if(href_list["PRG_toggleadmin"])
@@ -109,7 +110,7 @@
 		if(!channel)
 			return
 		var/mob/living/user = usr
-		var/logname = input(user,"Enter desired logfile name (.log) or leave blank to cancel:")
+		var/logname = sanitize(input(user,"Enter desired logfile name (.log) or leave blank to cancel:"))
 		if(!logname || !channel)
 			return 1
 		var/datum/computer_file/data/logfile = new/datum/computer_file/data/logfile()
@@ -124,11 +125,13 @@
 			if(!computer)
 				// This program shouldn't even be runnable without computer.
 				CRASH("Var computer is null!")
-				return 1
+
 			if(!computer.hard_drive)
 				computer.visible_message("\The [computer] shows an \"I/O Error - Hard drive connection error\" warning.")
-			else	// In 99.9% cases this will mean our HDD is full
+			else if (computer.hard_drive.used_capacity + logfile.size == computer.hard_drive.max_capacity)	// In 99.9% cases this will mean our HDD is full
 				computer.visible_message("\The [computer] shows an \"I/O Error - Hard drive may be full. Please free some space and try again. Required space: [logfile.size]GQ\" warning.")
+			else
+				computer.visible_message("\The [computer] shows an \"I/O Error - Unable to store log. Invalid name")
 	if(href_list["PRG_renamechannel"])
 		. = 1
 		if(!operator_mode || !channel)
@@ -141,17 +144,17 @@
 		channel.title = newname
 	if(href_list["PRG_deletechannel"])
 		. = 1
-		if(channel && ((channel.opperator == src) || netadmin_mode))
+		if(channel && ((channel.operator == src) || netadmin_mode))
 			qdel(channel)
 			channel = null
 	if(href_list["PRG_setpassword"])
 		. = 1
-		if(!channel || ((channel.opperator != src) && !netadmin_mode))
+		if(!channel || ((channel.operator != src) && !netadmin_mode))
 			return 1
 
 		var/mob/living/user = usr
 		var/newpassword = sanitize(input(user, "Enter new password for this channel. Leave blank to cancel, enter 'nopassword' to remove password completely:"))
-		if(!channel || !newpassword || ((channel.opperator != src) && !netadmin_mode))
+		if(!channel || !newpassword || ((channel.operator != src) && !netadmin_mode))
 			return 1
 
 		if(newpassword == "nopassword")
@@ -160,7 +163,13 @@
 			channel.password = newpassword
 
 /datum/computer_file/program/chatclient/process_tick()
+
 	..()
+
+	if(channel && !(channel.source_z in GetConnectedZlevels(computer.z)))
+		channel.remove_client(src)
+		channel = null
+
 	if(program_state != PROGRAM_STATE_KILLED)
 		ui_header = "ntnrc_idle.gif"
 		if(channel)
@@ -169,21 +178,22 @@
 		else
 			last_message = null
 		return 1
+
 	if(channel && channel.messages && channel.messages.len)
 		ui_header = last_message == channel.messages[channel.messages.len - 1] ? "ntnrc_idle.gif" : "ntnrc_new.gif"
 	else
 		ui_header = "ntnrc_idle.gif"
 
-/datum/computer_file/program/chatclient/kill_program(var/forced = 0)
+/datum/computer_file/program/chatclient/kill_program(forced = FALSE)
 	if(channel)
 		channel.remove_client(src)
 		channel = null
-	..(forced)
+	..()
 
 /datum/nano_module/program/computer_chatclient
 	name = "NTNet Relay Chat Client"
 
-/datum/nano_module/program/computer_chatclient/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/topic_state/state = GLOB.default_state)
+/datum/nano_module/program/computer_chatclient/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state = GLOB.default_state)
 	if(!ntnet_global || !ntnet_global.chat_channels)
 		return
 
@@ -210,20 +220,21 @@
 				"name" = cl.username
 			)))
 		data["clients"] = clients
-		C.operator_mode = (C.channel.opperator == C) ? 1 : 0
+		C.operator_mode = (C.channel.operator == C) ? 1 : 0
 		data["is_operator"] = C.operator_mode || C.netadmin_mode
 
 	else // Channel selection screen
 		var/list/all_channels[0]
+		var/list/connected_zs = GetConnectedZlevels(C.computer.z)
 		for(var/datum/ntnet_conversation/conv in ntnet_global.chat_channels)
-			if(conv && conv.title)
+			if(conv && conv.title && (conv.source_z in connected_zs))
 				all_channels.Add(list(list(
 					"chan" = conv.title,
 					"id" = conv.id
 				)))
 		data["all_channels"] = all_channels
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
 		ui = new(user, src, ui_key, "ntnet_chat.tmpl", "NTNet Relay Chat Client", 575, 700, state = state)
 		ui.auto_update_layout = 1

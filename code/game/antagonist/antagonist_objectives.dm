@@ -1,82 +1,98 @@
-/datum/antagonist/proc/create_global_objectives(var/override=0)
-	if(config.objectives_disabled != CONFIG_OBJECTIVE_ALL && !override)
-		return 0
-	if(global_objectives && global_objectives.len)
-		return 0
-	return 1
+/datum/antagonist/proc/create_objectives(survive = FALSE)
 
-/datum/antagonist/proc/create_objectives(var/datum/mind/player, var/override=0)
-	if(config.objectives_disabled != CONFIG_OBJECTIVE_ALL && !override)
-		return 0
-	if(create_global_objectives(override) || global_objectives.len)
-		player.objectives |= global_objectives
-	return 1
+	if(!possible_objectives || !possible_objectives.len)
+		return
+	pick_objectives(src, possible_objectives, objective_quantity)
 
-/datum/antagonist/proc/get_special_objective_text()
-	return ""
-
-/datum/antagonist/proc/check_victory()
-	var/result = 1
-	if(config.objectives_disabled == CONFIG_OBJECTIVE_NONE)
-		return 1
-	if(global_objectives && global_objectives.len)
-		for(var/datum/objective/O in global_objectives)
-			if(!O.completed && !O.check_completion())
-				result = 0
-		if(result && victory_text)
-			to_world("<span class='danger'><font size = 3>[victory_text]</font></span>")
-			if(victory_feedback_tag) feedback_set_details("round_end_result","[victory_feedback_tag]")
-		else if(loss_text)
-			to_world("<span class='danger'><font size = 3>[loss_text]</font></span>")
-			if(loss_feedback_tag) feedback_set_details("round_end_result","[loss_feedback_tag]")
+	if(survive)
+		create_survive_objective()
 
 
-/mob/proc/add_objectives()
-	set name = "Get Objectives"
-	set desc = "Recieve optional objectives."
-	set category = "OOC"
+// used only for factions antagonists
+/datum/antagonist/proc/set_objectives(list/new_objectives)
 
-	src.verbs -= /mob/proc/add_objectives
-
-	if(!src.mind)
+	if(!owner || !owner.current)
 		return
 
-	var/all_antag_types = all_antag_types()
-	for(var/tag in all_antag_types) //we do all of them in case an admin adds an antagonist via the PP. Those do not show up in gamemode.
-		var/datum/antagonist/antagonist = all_antag_types[tag]
-		if(antagonist && antagonist.is_antagonist(src.mind))
-			antagonist.create_objectives(src.mind,1)
+	if(objectives.len)
+		to_chat(owner.current, "<span class='danger'><font size=3>Your objectives were updated.</font></span>")
 
-	to_chat(src, "<b><font size=3>These objectives are completely voluntary. You are not required to complete them.</font></b>")
-	show_objectives(src.mind)
+	objectives.Cut()
+	objectives.Add(new_objectives)
 
-/mob/living/proc/write_ambition()
-	set name = "Set Ambition"
-	set category = "IC"
-	set src = usr
+	show_objectives()
 
-	if(!mind)
+/datum/antagonist/proc/create_survive_objective()
+	if(ispath(survive_objective))
+		new survive_objective(src)
+
+//Returns a list of all minds and atoms which have been targeted by our objectives
+//This is used to disqualify them from being picked by farther objectives
+/datum/antagonist/proc/get_targets()
+	var/list/targets = list()
+	for (var/datum/objective/O in objectives)
+		targets.Add(O.get_target())
+	return targets
+
+
+
+//This function handles some of the logic for picking objectives for an antag or faction. It requires three inputs
+//Owner: The antag or faction that will own this objective
+//Possible objectives: The weighted list of objectives we choose from
+//Quantity: How many objectives we will select
+/proc/pick_objectives(owner, list/possible_objectives, quantity)
+	//Safety checks first
+	if(!possible_objectives || !possible_objectives.len)
 		return
-	if(!is_special_character(mind))
-		to_chat(src, "<span class='warning'>While you may perhaps have goals, this verb's meant to only be visible \
-		to antagonists.  Please make a bug report!</span>")
-		return
-	var/new_ambitions = input(src, "Write a short sentence of what your character hopes to accomplish \
-	today as an antagonist.  Remember that this is purely optional.  It will be shown at the end of the \
-	round for everybody else.", "Ambitions", mind.ambitions) as null|message
-	if(isnull(new_ambitions))
-		return
-	new_ambitions = sanitize(new_ambitions)
-	mind.ambitions = new_ambitions
-	if(new_ambitions)
-		to_chat(src, "<span class='notice'>You've set your goal to be '[new_ambitions]'.</span>")
-	else
-		to_chat(src, "<span class='notice'>You leave your ambitions behind.</span>")
-	log_and_message_admins("has set their ambitions to now be: [new_ambitions].")
 
-//some antagonist datums are not actually antagonists, so we might want to avoid
-//sending them the antagonist meet'n'greet messages.
-//E.G. ERT
-/datum/antagonist/proc/show_objectives_at_creation(var/datum/mind/player)
-	if(src.show_objectives_on_creation)
-		show_objectives(player)
+	if (!owner || (!istype(owner, /datum/faction) && !istype(owner, /datum/antagonist)))
+		return
+
+	if (!isnum(quantity) || quantity <= 0)
+		return
+
+
+	for (var/i = 0; i < quantity; i++)
+		if (!possible_objectives.len)
+			return
+
+		var/chosen_obj = pickweight(possible_objectives)
+
+		//Lets check for uniqueness
+		var/datum/objective/O = chosen_obj
+		if (initial(O.unique))
+			//If this objective is unique, then we will search the list for an existing copy of it
+			var/matched = FALSE
+			for (var/datum/objective/P in owner:objectives) //We've already confirmed the type of owner, so : should be safe here
+				if (P.type == chosen_obj)
+					matched = TRUE
+					break
+
+			//We will remove it from the list regardless because we dont want to pick it again in future
+			possible_objectives.Remove(chosen_obj)
+
+			//If it already existed then we decrement i and continue to pick another objective
+			if (matched)
+				i--
+				continue
+
+
+
+		O = new chosen_obj(owner, ANTAG_SKIP_TARGET)
+
+
+		//We pass ANTAG_SKIP_TARGET so we can manually search for targets
+		if (!O.find_target())
+			//If it fails to find a target, then bad things happen
+			//First of all, we must delete this objective so we can get another
+			qdel(O) //This will automatically remove itself from objective lists
+
+			//Secondly, decrement i so we get another try
+			i--
+
+			//Thirdly, remove this objective from the possible list
+			possible_objectives.Remove(chosen_obj)
+
+
+
+

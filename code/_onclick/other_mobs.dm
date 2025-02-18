@@ -8,7 +8,7 @@
 
 	Otherwise pretty standard.
 */
-/mob/living/carbon/human/UnarmedAttack(var/atom/A, var/proximity)
+/mob/living/carbon/human/UnarmedAttack(var/atom/A, var/proximity, params)
 
 	if(!..())
 		return
@@ -17,67 +17,131 @@
 	// If the gloves do anything, have them return 1 to stop
 	// normal attack_hand() here.
 	var/obj/item/clothing/gloves/G = gloves // not typecast specifically enough in defines
-	if(istype(G) && G.Touch(A,1))
+	if(istype(G) && G.Touch(A, 1))
 		return
 
-	A.attack_hand(src)
+	A.attack_hand(src, params)
 
-/atom/proc/attack_hand(mob/user as mob)
-	return
+/atom/proc/attack_hand(mob/user as mob, params)
+	. = FALSE
+	// if(!(interaction_flags_atom & INTERACT_ATOM_NO_FINGERPRINT_ATTACK_HAND))
+	// 	add_fingerprint(user)
+	// if(SEND_SIGNAL_OLD(src, COMSIG_ATOM_ATTACK_HAND, user, modifiers) & COMPONENT_CANCEL_ATTACK_CHAIN)
+	// 	. = TRUE
+	// if(interaction_flags_atom & INTERACT_ATOM_ATTACK_HAND)
+	. = _try_interact(user)
+
+//Return a non FALSE value to cancel whatever called this from propagating, if it respects it.
+/atom/proc/_try_interact(mob/user)
+	if(is_admin(user) && isghost(user)) //admin abuse
+		return interact(user)
+	if(can_interact(user))
+		return interact(user)
+	return FALSE
+
+/atom/proc/can_interact(mob/user, require_adjacent_turf = TRUE)
+	// if(!user.can_interact_with(src, interaction_flags_atom & INTERACT_ATOM_ALLOW_USER_LOCATION))
+	// 	return FALSE
+	// if((interaction_flags_atom & INTERACT_ATOM_REQUIRES_DEXTERITY) && !ISADVANCEDTOOLUSER(user))
+	// 	to_chat(user, span_warning("You don't have the dexterity to do this!"))
+	// 	return FALSE
+	// BANAID: advanced tool usrs can only interact uis
+	if(!user.IsAdvancedToolUser())
+		to_chat(user, span_warning("You don't have the dexterity to do this!"))
+		return FALSE
+
+	// if(!(interaction_flags_atom & INTERACT_ATOM_IGNORE_INCAPACITATED))
+	// 	var/ignore_flags = NONE
+	// 	if(interaction_flags_atom & INTERACT_ATOM_IGNORE_RESTRAINED)
+	// 		ignore_flags |= IGNORE_RESTRAINTS
+	// 	if(!(interaction_flags_atom & INTERACT_ATOM_CHECK_GRAB))
+	// 		ignore_flags |= IGNORE_GRAB
+
+	// 	if(user.incapacitated(ignore_flags))
+	// 		return FALSE
+	return TRUE
+
+/atom/ui_status(mob/user)
+	. = ..()
+	//Check if both user and atom are at the same location
+	if(!can_interact(user))
+		. = min(., UI_UPDATE)
+
+/atom/movable/can_interact(mob/user)
+	. = ..()
+	if(!.)
+		return
+	// if(!anchored && (interaction_flags_atom & INTERACT_ATOM_REQUIRES_ANCHORED))
+	// 	return FALSE
+
+/atom/proc/interact(mob/user)
+	// Eugh. Wont implement interaction_flags_atom yet so here u go.
+	add_fingerprint(user)
+	return ui_interact(user)
+
+	// if(interaction_flags_atom & INTERACT_ATOM_NO_FINGERPRINT_INTERACT)
+	// 	add_hiddenprint(user)
+	// else
+	// 	add_fingerprint(user)
+	// if(interaction_flags_atom & INTERACT_ATOM_UI_INTERACT)
+	// 	SEND_SIGNAL_OLD(src, COMSIG_ATOM_UI_INTERACT, user)
+	// 	return ui_interact(user)
+	// return FALSE
 
 /mob/living/carbon/human/RestrainedClickOn(var/atom/A)
 	return
 
 /mob/living/carbon/human/RangedAttack(var/atom/A)
-	//Climbing up open spaces
-	if((istype(A, /turf/simulated/floor) || istype(A, /turf/unsimulated/floor) || istype(A, /obj/structure/lattice) || istype(A, /obj/structure/catwalk)) && isturf(loc) && shadow && !is_physically_disabled()) //Climbing through openspace
+	if((istype(A, /turf/floor) || istype(A, /obj/structure/catwalk)) && isturf(loc) && shadow && !is_physically_disabled()) //Climbing through openspace
 		var/turf/T = get_turf(A)
-		var/turf/above = shadow.loc
-		if(T.Adjacent(shadow) && above.CanZPass(src, UP)) //Certain structures will block passage from below, others not
+		if(T.Adjacent(shadow))
+			for(var/obj/structure/S in shadow.loc)
+				if(S.density)
+					return
 
+			var/list/objects_to_stand_on = list(
+				/obj/item/stool,
+				/obj/structure/bed,
+				/obj/structure/table,
+				/obj/structure/closet/crate
+			)
+			var/atom/helper
 			var/area/location = get_area(loc)
-			if(location.has_gravity && !can_overcome_gravity())
-				return
+			if(!location.has_gravity)
+				helper = src
+			else
+				for(var/type in objects_to_stand_on)
+					helper = locate(type) in src.loc
+					if(helper)
+						break
+				if(!helper)
+					return
 
-			visible_message("<span class='notice'>[src] starts climbing onto \the [A]!</span>", "<span class='notice'>You start climbing onto \the [A]!</span>")
-			shadow.visible_message("<span class='notice'>[shadow] starts climbing onto \the [A]!</span>")
-			if(do_after(src, 50, A))
-				visible_message("<span class='notice'>[src] climbs onto \the [A]!</span>", "<span class='notice'>You climb onto \the [A]!</span>")
-				shadow.visible_message("<span class='notice'>[shadow] climbs onto \the [A]!</span>")
+			visible_message(SPAN_WARNING("[src] starts climbing onto \the [A]!"))
+			shadow.visible_message(SPAN_WARNING("[shadow] starts climbing onto \the [A]!"))
+			var/delay = 50
+			if(do_after(src, max(delay * src.stats.getMult(STAT_VIG, STAT_LEVEL_EXPERT), delay * 0.66), helper))
+				visible_message(SPAN_WARNING("[src] climbs onto \the [A]!"))
+				shadow.visible_message(SPAN_WARNING("[shadow] climbs onto \the [A]!"))
 				src.Move(T)
 			else
-				visible_message("<span class='warning'>[src] gives up on trying to climb onto \the [A]!</span>", "<span class='warning'>You give up on trying to climb onto \the [A]!</span>")
-				shadow.visible_message("<span class='warning'>[shadow] gives up on trying to climb onto \the [A]!</span>")
+				visible_message(SPAN_WARNING("[src] gives up on trying to climb onto \the [A]!"))
+				shadow.visible_message(SPAN_WARNING("[shadow] gives up on trying to climb onto \the [A]!"))
 			return
 
-	if(!gloves && !mutations.len) return
-	var/obj/item/clothing/gloves/G = gloves
-	if((LASER in mutations) && a_intent == I_HURT)
-		LaserEyes(A) // moved into a proc below
+	//PERK_ABSOLUTE_GRAB
+	if(get_dist_euclidian(get_turf(A), get_turf(src)) < 4 && ishuman(A))
+		if(stats.getPerk(PERK_ABSOLUTE_GRAB) && a_intent == I_GRAB)
+			leap(A)
+			return
 
-	else if(istype(G) && G.Touch(A,0)) // for magic gloves
-		return
-
-	else if(TK in mutations)
+//	if((LASER in mutations) && a_intent == I_HURT)
+//		LaserEyes(A) // moved into a proc below
+	if(get_active_mutation(src, MUTATION_TELEKINESIS))
 		A.attack_tk(src)
 
 /mob/living/RestrainedClickOn(var/atom/A)
 	return
-
-/*
-	Aliens
-*/
-
-/mob/living/carbon/alien/RestrainedClickOn(var/atom/A)
-	return
-
-/mob/living/carbon/alien/UnarmedAttack(var/atom/A, var/proximity)
-
-	if(!..())
-		return 0
-
-	setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-	A.attack_generic(src,rand(5,6),"bitten")
 
 /*
 	Slimes
@@ -98,21 +162,21 @@
 			Feedstop()
 		return
 
-	//should have already been set if we are attacking a mob, but it doesn't hurt and will cover attacking non-mobs too
-	setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
 	var/mob/living/M = A
-	if(!istype(M))
-		A.attack_generic(src, (is_adult ? rand(20,40) : rand(5,25)), "glomped") // Basic attack.
-	else
-		var/power = max(0, min(10, (powerlevel + rand(0, 3))))
+	if (istype(M))
 
 		switch(src.a_intent)
 			if (I_HELP) // We just poke the other
-				M.visible_message("<span class='notice'>[src] gently pokes [M]!</span>", "<span class='notice'>[src] gently pokes you!</span>")
+				M.visible_message(SPAN_NOTICE("[src] gently pokes [M]!"), SPAN_NOTICE("[src] gently pokes you!"))
 			if (I_DISARM) // We stun the target, with the intention to feed
 				var/stunprob = 1
+				var/power = max(0, min(10, (powerlevel + rand(0, 3))))
+				if (powerlevel > 0 && !isslime(A))
+					if(ishuman(M))
+						var/mob/living/carbon/human/H = M
+						stunprob *= H.species.siemens_coefficient
 
-				if (powerlevel > 0 && !istype(A, /mob/living/carbon/slime))
+
 					switch(power * 10)
 						if(0) stunprob *= 10
 						if(1 to 2) stunprob *= 20
@@ -123,23 +187,30 @@
 						if(10) 	   stunprob *= 95
 
 				if(prob(stunprob))
-					var/shock_damage = max(0, powerlevel-3) * rand(6,10)
-					M.electrocute_act(shock_damage, src, 1.0, ran_zone())
+					powerlevel = max(0, powerlevel-3)
+					M.visible_message(SPAN_DANGER("[src] has shocked [M]!"), SPAN_DANGER("[src] has shocked you!"))
+					M.Weaken(power)
+					M.Stun(power)
+					M.stuttering = max(M.stuttering, power)
+
+					var/datum/effect/effect/system/spark_spread/s = new /datum/effect/effect/system/spark_spread
+					s.set_up(5, 1, M)
+					s.start()
+
+					if(prob(stunprob) && powerlevel >= 8)
+						M.adjustFireLoss(powerlevel * rand(6, 10))
 				else if(prob(40))
-					M.visible_message("<span class='danger'>[src] has pounced at [M]!</span>", "<span class='danger'>[src] has pounced at you!</span>")
+					M.visible_message(SPAN_DANGER("[src] has pounced at [M]!"), SPAN_DANGER("[src] has pounced at you!"))
 					M.Weaken(power)
 				else
-					M.visible_message("<span class='danger'>[src] has tried to pounce at [M]!</span>", "<span class='danger'>[src] has tried to pounce at you!</span>")
+					M.visible_message(SPAN_DANGER("[src] has tried to pounce at [M]!"), SPAN_DANGER("[src] has tried to pounce at you!"))
 				M.updatehealth()
 			if (I_GRAB) // We feed
 				Wrap(M)
 			if (I_HURT) // Attacking
-				if(iscarbon(M) && prob(15))
-					M.visible_message("<span class='danger'>[src] has pounced at [M]!</span>", "<span class='danger'>[src] has pounced at you!</span>")
-					M.Weaken(power)
-				else
-					A.attack_generic(src, (is_adult ? rand(20,40) : rand(5,25)), "glomped")
-
+				A.attack_generic(src, (is_adult ? rand(20, 40) : rand(5, 25)), "glomped")
+	else
+		A.attack_generic(src, (is_adult ? rand(20, 40) : rand(5, 25)), "glomped") // Basic attack.
 /*
 	New Players:
 	Have no reason to click on anything at all.
@@ -154,13 +225,11 @@
 
 	if(!..())
 		return
-	if(istype(A,/mob/living))
-		if(melee_damage_upper == 0)
-			custom_emote(1,"[friendly] [A]!")
-			return
-		if(ckey)
-			admin_attack_log(src, A, "Has [attacktext] its victim.", "Has been [attacktext] by its attacker.", attacktext)
-	setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
+
+	if(melee_damage_upper == 0 && isliving(A))
+		custom_emote(1, "[friendly] [A]!")
+		return
+
 	var/damage = rand(melee_damage_lower, melee_damage_upper)
-	if(A.attack_generic(src,damage,attacktext,environment_smash) && loc && attack_sound)
+	if(A.attack_generic(src, damage, attacktext, environment_smash) && loc && attack_sound)
 		playsound(loc, attack_sound, 50, 1, 1)

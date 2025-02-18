@@ -8,6 +8,7 @@
 	item_state = ""
 	w_class = ITEM_SIZE_SMALL
 	var/obj/item/stored_item = null
+	price_tag = 5
 
 /obj/item/evidencebag/MouseDrop(var/obj/item/I as obj)
 	if (!ishuman(usr))
@@ -42,15 +43,15 @@
 		return
 
 	if(istype(I, /obj/item/evidencebag))
-		to_chat(user, "<span class='notice'>You find putting an evidence bag in another evidence bag to be slightly absurd.</span>")
+		to_chat(user, SPAN_NOTICE("You find putting an evidence bag in another evidence bag to be slightly absurd."))
 		return
 
-	if(I.w_class > ITEM_SIZE_NORMAL)
-		to_chat(user, "<span class='notice'>[I] won't fit in [src].</span>")
+	if(I.w_class >= ITEM_SIZE_BULKY)
+		to_chat(user, SPAN_NOTICE("[I] won't fit in [src]."))
 		return
 
 	if(contents.len)
-		to_chat(user, "<span class='notice'>[src] already has something inside it.</span>")
+		to_chat(user, SPAN_NOTICE("[src] already has something inside it."))
 		return
 
 	user.visible_message("[user] puts [I] into [src]", "You put [I] inside [src].",\
@@ -93,6 +94,8 @@
 		icon_state = "evidenceobj"
 	return
 
-/obj/item/evidencebag/examine(mob/user)
-	. = ..(user)
-	if (stored_item) user.examinate(stored_item)
+/obj/item/evidencebag/examine(mob/user, extra_description = "")
+	..(user, extra_description)
+
+	if(stored_item)
+		user.examinate(stored_item)

@@ -1,7 +1,11 @@
 /datum/wires/nuclearbomb
 	holder_type = /obj/machinery/nuclearbomb
-	random = 1
 	wire_count = 7
+	descriptions = list(
+		new /datum/wire_description(NUCLEARBOMB_WIRE_LIGHT, "Light"),
+		new /datum/wire_description(NUCLEARBOMB_WIRE_TIMING, "Timer"),
+		new /datum/wire_description(NUCLEARBOMB_WIRE_SAFETY, "Safety")
+	)
 
 var/const/NUCLEARBOMB_WIRE_LIGHT		= 1
 var/const/NUCLEARBOMB_WIRE_TIMING		= 2
@@ -11,9 +15,9 @@ var/const/NUCLEARBOMB_WIRE_SAFETY		= 4
 	var/obj/machinery/nuclearbomb/N = holder
 	return N.panel_open
 
-/datum/wires/nuclearbomb/GetInteractWindow()
+/datum/wires/nuclearbomb/GetInteractWindow(mob/living/user)
 	var/obj/machinery/nuclearbomb/N = holder
-	. += ..()
+	. += ..(user)
 	. += "<BR>The device is [N.timing ? "shaking!" : "still."]<BR>"
 	. += "The device is is [N.safety ? "quiet" : "whirring"].<BR>"
 	. += "The lights are [N.lighthack ? "static" : "functional"].<BR>"
@@ -37,10 +41,10 @@ var/const/NUCLEARBOMB_WIRE_SAFETY		= 4
 			spawn(100)
 				N.safety = !N.safety
 				if(N.safety == 1)
-					N.visible_message("<span class='notice'>\The [N] quiets down.</span>")
+					N.visible_message(SPAN_NOTICE("\The [N] quiets down."))
 					N.secure_device()
 				else
-					N.visible_message("<span class='notice'>\The [N] emits a quiet whirling noise!</span>")
+					N.visible_message(SPAN_NOTICE("\The [N] emits a quiet whirling noise!"))
 
 /datum/wires/nuclearbomb/UpdateCut(var/index, var/mended)
 	var/obj/machinery/nuclearbomb/N = holder

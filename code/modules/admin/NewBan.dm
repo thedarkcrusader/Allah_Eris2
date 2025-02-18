@@ -1,4 +1,4 @@
-var/CMinutes = null
+var/CMinutes
 var/savefile/Banlist
 
 
@@ -96,7 +96,10 @@ var/savefile/Banlist
 	return 1
 
 
-/proc/AddBan(ckey, computerid, reason, bannedby, temp, minutes, address)
+/proc/AddBan(ckey, computerid, reason, bannedby, temp, minutes, address, delayed_ban)
+
+	if(delayed_ban) //ban will be loaded at the next roundstart from DB
+		return
 
 	var/bantimestamp
 
@@ -106,7 +109,7 @@ var/savefile/Banlist
 
 	Banlist.cd = "/base"
 	if ( Banlist.dir.Find("[ckey][computerid]") )
-		to_chat(usr, "<span class='warning'>Ban already exists.</span>")
+		to_chat(usr, text("\red Ban already exists."))
 		return 0
 	else
 		Banlist.dir.Add("[ckey][computerid]")
@@ -119,6 +122,7 @@ var/savefile/Banlist
 		Banlist["temp"] << temp
 		if (temp)
 			Banlist["minutes"] << bantimestamp
+		notes_add(ckey, "Banned - [reason]")
 	return 1
 
 /proc/RemoveBan(foldername)
@@ -139,7 +143,7 @@ var/savefile/Banlist
 		ban_unban_log_save("[key_name_admin(usr)] unbanned [key]")
 		log_admin("[key_name_admin(usr)] unbanned [key]")
 		message_admins("[key_name_admin(usr)] unbanned: [key]")
-		feedback_inc("ban_unban",1)
+
 		usr.client.holder.DB_ban_unban( ckey(key), BANTYPE_ANY_FULLBAN)
 	for (var/A in Banlist.dir)
 		Banlist.cd = "/base/[A]"
@@ -168,7 +172,7 @@ var/savefile/Banlist
 /datum/admins/proc/unbanpanel()
 	var/count = 0
 	var/dat
-	//var/dat = "<HR><B>Unban Player:</B> <span class='notice'>(U) = Unban , (E) = Edit Ban</span> <span class='good'>(Total<HR><table border=1 rules=all frame=void cellspacing=0 cellpadding=3 ></span>"
+	//var/dat = "<HR><B>Unban Player:</B> \blue(U) = Unban , (E) = Edit Ban\green (Total<HR><table border=1 rules=all frame=void cellspacing=0 cellpadding=3 >"
 	Banlist.cd = "/base"
 	for (var/A in Banlist.dir)
 		count++
@@ -189,7 +193,10 @@ var/savefile/Banlist
 
 	dat += "</table>"
 	dat = "<HR><B>Bans:</B> <FONT COLOR=blue>(U) = Unban , (E) = Edit Ban</FONT> - <FONT COLOR=green>([count] Bans)</FONT><HR><table border=1 rules=all frame=void cellspacing=0 cellpadding=3 >[dat]"
-	usr << browse(dat, "window=unbanp;size=875x400")
+	
+	var/datum/browser/panel = new(usr, "unbanp", "Unban Panel", 875, 400)
+	panel.set_content(dat)
+	panel.open()
 
 //////////////////////////////////// DEBUG ////////////////////////////////////
 

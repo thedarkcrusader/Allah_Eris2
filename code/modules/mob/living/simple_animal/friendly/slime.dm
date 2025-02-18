@@ -3,7 +3,6 @@
 	desc = "A lovable, domesticated slime."
 	icon = 'icons/mob/slimes.dmi'
 	icon_state = "grey baby slime"
-	icon_living = "grey baby slime"
 	icon_dead = "grey baby slime dead"
 	speak_emote = list("chirps")
 	health = 100
@@ -13,6 +12,8 @@
 	response_harm   = "stomps on"
 	emote_see = list("jiggles", "bounces in place")
 	var/colour = "grey"
+	can_burrow = TRUE
+	injury_type = INJURY_TYPE_HOMOGENOUS
 
 /mob/living/simple_animal/slime/can_force_feed(var/feeder, var/food, var/feedback)
 	if(feedback)
@@ -26,7 +27,6 @@
 	health = 200
 	maxHealth = 200
 	icon_state = "grey adult slime"
-	icon_living = "grey adult slime"
 	icon_dead = "grey baby slime dead"
 	response_help  = "pets"
 	response_disarm = "shoos"

@@ -1,235 +1,253 @@
-#define BG_READY 0
-#define BG_PROCESSING 1
-#define BG_NO_BEAKER 2
-#define BG_COMPLETE 3
-#define BG_EMPTY 4
-
 /obj/machinery/biogenerator
 	name = "Biogenerator"
 	desc = ""
 	icon = 'icons/obj/biogenerator.dmi'
 	icon_state = "biogen-stand"
-	density = 1
-	anchored = 1
-	use_power = 1
+	density = TRUE
+	anchored = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 40
 	var/processing = 0
 	var/obj/item/reagent_containers/glass/beaker = null
 	var/points = 0
-	var/state = BG_READY
-	var/denied = 0
+	var/menustat = "menu"
 	var/build_eff = 1
 	var/eat_eff = 1
-	var/list/products = list(
-		"Food" = list(
-			/obj/item/reagent_containers/food/drinks/milk/smallcarton = 30,
-			/obj/item/reagent_containers/food/snacks/meat = 50),
-		"Nutrients" = list(
-			/obj/item/reagent_containers/glass/bottle/eznutrient = 60,
-			/obj/item/reagent_containers/glass/bottle/left4zed = 120,
-			/obj/item/reagent_containers/glass/bottle/robustharvest = 120),
-		"Leather" = list(
-			/obj/item/storage/wallet/leather = 100,
-			/obj/item/clothing/gloves/thick/botany = 250,
-			/obj/item/storage/belt/utility = 300,
-			/obj/item/storage/backpack/satchel = 400,
-			/obj/item/storage/bag/cash = 400,
-			/obj/item/clothing/shoes/workboots = 400,
-			/obj/item/clothing/shoes/leather = 400,
-			/obj/item/clothing/shoes/dress = 400,
-			/obj/item/clothing/suit/leathercoat = 500,
-			/obj/item/clothing/suit/storage/toggle/brown_jacket = 500,
-			/obj/item/clothing/suit/storage/toggle/bomber = 500,
-			/obj/item/clothing/suit/storage/hooded/wintercoat = 500))
+
+
+	var/list/recipes = list(
+		"Food",
+			list(name="Milk, 30u", cost=60, reagent="milk"),
+			list(name="Stick of butter", cost=60, path=/obj/item/reagent_containers/food/snacks/sliceable/butterstick),
+			list(name="Slab of meat", cost=50, path=/obj/item/reagent_containers/food/snacks/meat),
+			list(name="Box of eggs", cost=200, path=/obj/item/storage/fancy/egg_box),
+		"Nutrient",
+			list(name="EZ-Nutrient, 30u", cost=30, reagent="eznutrient"),
+			list(name="Left4Zed, 30u", cost=60, reagent="left4zed"),
+			list(name="Robust Harvest, 30u", cost=75, reagent="robustharvest"),
+		"Leather",
+			list(name="Wallet", cost=100, path=/obj/item/storage/wallet),
+			list(name="Botanical gloves", cost=250, path=/obj/item/clothing/gloves/botanic_leather),
+			list(name="Utility belt", cost=300, path=/obj/item/storage/belt/utility),
+			list(name="Leather Satchel", cost=400, path=/obj/item/storage/backpack/satchel),
+			list(name="Leather jacket", cost=400, /obj/item/clothing/suit/storage/leather_jacket),
+			list(name="Cash Bag", cost=400, path=/obj/item/storage/bag/money),
+			list(name="Medical belt", cost=300, path=/obj/item/storage/belt/medical),
+			list(name="Tactical belt", cost=300, path=/obj/item/storage/belt/tactical),
+			list(name="EMT belt", cost=300, path=/obj/item/storage/belt/medical/emt),
+			list(name="Champion belt", cost=500, path=/obj/item/storage/belt/champion),
+		"Medicine",
+			list(name="Medical splints", cost=100, path=/obj/item/stack/medical/splint),
+			list(name="Roll of gauze", cost=100, path=/obj/item/stack/medical/bruise_pack),
+			list(name="Ointment", cost=100, path=/obj/item/stack/medical/ointment),
+			list(name="Advanced trauma kit", cost=200, path=/obj/item/stack/medical/advanced/bruise_pack),
+			list(name="Advanced burn kit", cost=200, path=/obj/item/stack/medical/advanced/ointment),
+	)
+
 
 /obj/machinery/biogenerator/New()
 	..()
 	create_reagents(1000)
-	beaker = new /obj/item/reagent_containers/glass/bottle(src)
+	beaker = new /obj/item/reagent_containers/glass/beaker/large(src)
 
-	component_parts = list()
-	component_parts += new /obj/item/circuitboard/biogenerator(src)
-	component_parts += new /obj/item/stock_parts/matter_bin(src)
-	component_parts += new /obj/item/stock_parts/manipulator(src)
-
-	RefreshParts()
 
 /obj/machinery/biogenerator/on_reagent_change()			//When the reagents change, change the icon as well.
 	update_icon()
 
 /obj/machinery/biogenerator/update_icon()
-	if(state == BG_NO_BEAKER)
+	if(!beaker)
 		icon_state = "biogen-empty"
-	else if(state == BG_READY || state == BG_COMPLETE)
+	else if(!processing)
 		icon_state = "biogen-stand"
 	else
 		icon_state = "biogen-work"
 	return
 
-/obj/machinery/biogenerator/attackby(var/obj/item/O as obj, var/mob/user as mob)
-	if(default_deconstruction_screwdriver(user, O))
+/obj/machinery/biogenerator/attackby(var/obj/item/I, var/mob/user)
+
+	if(default_deconstruction(I, user))
 		return
-	if(default_deconstruction_crowbar(user, O))
+
+	if(default_part_replacement(I, user))
 		return
-	if(default_part_replacement(user, O))
-		return
-	if(istype(O, /obj/item/reagent_containers/glass))
+	if(istype(I, /obj/item/reagent_containers/glass))
 		if(beaker)
-			to_chat(user, "<span class='notice'>]The [src] is already loaded.</span>")
+			to_chat(user, SPAN_NOTICE("The [src] is already loaded."))
 		else
-			user.remove_from_mob(O)
-			O.forceMove(src)
-			beaker = O
-			state = BG_READY
+			user.remove_from_mob(I)
+			I.loc = src
+			beaker = I
 			updateUsrDialog()
 	else if(processing)
-		to_chat(user, "<span class='notice'>\The [src] is currently processing.</span>")
-	else if(istype(O, /obj/item/storage/plants))
-		var/obj/item/storage/plants/P = O
+		to_chat(user, SPAN_NOTICE("\The [src] is currently processing."))
+	else if(istype(I, /obj/item/storage/bag/produce))
 		var/i = 0
 		for(var/obj/item/reagent_containers/food/snacks/grown/G in contents)
 			i++
 		if(i >= 10)
-			to_chat(user, "<span class='notice'>\The [src] is already full! Activate it.</span>")
+			to_chat(user, SPAN_NOTICE("\The [src] is already full! Activate it."))
 		else
-			var/hadPlants = 0
-			for(var/obj/item/reagent_containers/food/snacks/grown/G in P.contents)
-				hadPlants = 1
-				P.remove_from_storage(G, src)
+			for(var/obj/item/reagent_containers/food/snacks/grown/G in I.contents)
+				G.loc = src
 				i++
 				if(i >= 10)
-					to_chat(user, "<span class='notice'>You fill \the [src] to its capacity.</span>")
+					to_chat(user, SPAN_NOTICE("You fill \the [src] to its capacity."))
 					break
-			if(!hadPlants)
-				to_chat(user, "<span class='notice'>\The [P] has no produce inside.</span>")
-			else if(i < 10)
-				to_chat(user, "<span class='notice'>You empty \the [P] into \the [src].</span>")
+			if(i < 10)
+				to_chat(user, SPAN_NOTICE("You empty \the [I] into \the [src]."))
 
 
-	else if(!istype(O, /obj/item/reagent_containers/food/snacks/grown))
-		to_chat(user, "<span class='notice'>You cannot put this in \the [src].</span>")
+	else if(!istype(I, /obj/item/reagent_containers/food/snacks/grown))
+		to_chat(user, SPAN_NOTICE("You cannot put this in \the [src]."))
 	else
 		var/i = 0
 		for(var/obj/item/reagent_containers/food/snacks/grown/G in contents)
 			i++
 		if(i >= 10)
-			to_chat(user, "<span class='notice'>\The [src] is full! Activate it.</span>")
+			to_chat(user, SPAN_NOTICE("\The [src] is full! Activate it."))
 		else
-			user.remove_from_mob(O)
-			O.forceMove(src)
-			to_chat(user, "<span class='notice'>You put \the [O] in \the [src]</span>")
+			user.remove_from_mob(I)
+			I.loc = src
+			to_chat(user, SPAN_NOTICE("You put \the [I] in \the [src]"))
 	update_icon()
 	return
 
-/**
- *  Display the NanoUI window for the vending machine.
- *
- *  See NanoUI documentation for details.
- */
-/obj/machinery/biogenerator/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1)
+/obj/machinery/biogenerator/nano_ui_interact(var/mob/user, var/ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state =GLOB.outside_state)
 	user.set_machine(src)
 	var/list/data = list()
-	data["state"] = state
-	var/name
-	var/cost
-	var/type_name
-	var/path
-	if (state == BG_READY)
-		data["points"] = points
-		var/list/listed_types = list()
-		for(var/c_type =1 to products.len)
-			type_name = products[c_type]
-			var/list/current_content = products[type_name]
-			var/list/listed_products = list()
-			for(var/c_product =1 to current_content.len)
-				path = current_content[c_product]
-				var/atom/A = path
-				name = initial(A.name)
-				cost = current_content[path]
-				listed_products.Add(list(list(
-					"product_index" = c_product,
-					"name" = name,
-					"cost" = cost)))
-			listed_types.Add(list(list(
-				"type_name" = type_name,
-				"products" = listed_products)))
-		data["types"] = listed_types
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	data["points"] = points
+	if(menustat == "menu")
+		data["beaker"] = beaker
+		if(beaker)
+
+			var/list/tmp_recipes = list()
+			for(var/smth in recipes)
+				if(istext(smth))
+					tmp_recipes += list(list(
+						"is_category" = 1,
+						"name" = smth,
+					))
+				else
+					var/list/L = smth
+					tmp_recipes += list(list(
+						"is_category" = 0,
+						"name" = L["name"],
+						"cost" = round(L["cost"]/build_eff),
+						"allow_multiple" = L["allow_multiple"],
+					))
+
+			data["recipes"] = tmp_recipes
+
+	data["processing"] = processing
+	data["menustat"] = menustat
+	if(menustat == "menu")
+		data["beaker"] = beaker
+
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
-		ui = new(user, src, ui_key, "biogenerator.tmpl", "Biogenerator", 440, 600)
+		// the ui does not exist, so we'll create a new() one
+		// for a list of parameters and their descriptions see the code docs in \code\modules\nano\nanoui.dm
+		ui = new(user, src, ui_key, "biogenerator.tmpl", "Biogenerator", 550, 655)
+		// when the ui is first opened this is the data it will use
 		ui.set_initial_data(data)
+		// open the new ui window
 		ui.open()
 
-/obj/machinery/biogenerator/OnTopic(user, href_list)
-	switch (href_list["action"])
-		if("activate")
-			activate()
-		if("detach")
-			if(beaker)
-				beaker.dropInto(src.loc)
-				beaker = null
-				state = BG_NO_BEAKER
-				update_icon()
-		if("create")
-			if (state == BG_PROCESSING)
-				return TOPIC_REFRESH
-			var/type = href_list["type"]
-			var/product_index = text2num(href_list["product_index"])
-			if (isnull(products[type]))
-				return TOPIC_REFRESH
-			var/list/sub_products = products[type]
-			if (product_index < 1 || product_index > sub_products.len)
-				return TOPIC_REFRESH
-			create_product(type, sub_products[product_index])
-		if("return")
-			state = BG_READY
-	return TOPIC_REFRESH
-
 /obj/machinery/biogenerator/attack_hand(mob/user as mob)
-	if(stat & (BROKEN|NOPOWER))
-		return
-	ui_interact(user)
+	if(..())
+		return TRUE
+
+	user.set_machine(src)
+	nano_ui_interact(user)
 
 /obj/machinery/biogenerator/proc/activate()
 	if (usr.stat)
 		return
 	if (stat) //NOPOWER etc
 		return
-
+	if(processing)
+		to_chat(usr, SPAN_NOTICE("The biogenerator is in the process of working."))
+		return
 	var/S = 0
 	for(var/obj/item/reagent_containers/food/snacks/grown/I in contents)
 		S += 5
-		if(I.reagents.get_reagent_amount(/datum/reagent/nutriment) < 0.1)
+		if(I.reagents.get_reagent_amount("nutriment") < 0.1)
 			points += 1
-		else points += I.reagents.get_reagent_amount(/datum/reagent/nutriment) * 10 * eat_eff
+		else points += I.reagents.get_reagent_amount("nutriment") * 8 * eat_eff
 		qdel(I)
 	if(S)
-		state = BG_PROCESSING
-		SSnanoui.update_uis(src)
+		processing = 1
 		update_icon()
+		updateUsrDialog()
 		playsound(src.loc, 'sound/machines/blender.ogg', 50, 1)
 		use_power(S * 30)
 		sleep((S + 15) / eat_eff)
-		state = BG_READY
+		processing = 0
 		update_icon()
 	else
-		state = BG_EMPTY
+		menustat = "void"
 	return
 
-/obj/machinery/biogenerator/proc/create_product(var/type, var/path)
-	state = BG_PROCESSING
-	var/cost = products[type][path]
-	cost = round(cost/build_eff)
-	points -= cost
-	SSnanoui.update_uis(src)
+/obj/machinery/biogenerator/proc/create_product(var/item, var/amount)
+	var/list/recipe = null
+	if(processing)
+		return
+
+	for(var/list/R in recipes)
+		if(R["name"] == item)
+			recipe = R
+			break
+	if(!recipe)
+		return
+
+	if(!("allow_multiple" in recipe))
+		amount = 1
+	else
+		amount = max(amount, 1)
+
+	var/cost = recipe["cost"] * amount / build_eff
+
+	if(cost > points)
+		menustat = "nopoints"
+		return 0
+
+	processing = 1
 	update_icon()
-	sleep(30)
-	var/atom/movable/result = new path
-	result.dropInto(loc)
-	state = BG_COMPLETE
+	updateUsrDialog() //maybe we can remove it
+	points -= cost
+	sleep(cost*0.5)
+
+	var/creating = recipe["path"]
+	var/reagent = recipe["reagent"]
+	if(reagent) //For reagents like milk
+		beaker.reagents.add_reagent(reagent, 30)
+	else
+		for(var/i in 1 to amount)
+			new creating(loc)
+	processing = 0
+	menustat = "complete"
 	update_icon()
 	return 1
 
+/obj/machinery/biogenerator/Topic(href, href_list)
+	if(stat & BROKEN) return
+	if(usr.stat || usr.restrained()) return
+	if(!in_range(src, usr)) return
+	usr.set_machine(src)
+
+	switch(href_list["action"])
+		if("activate")
+			activate()
+		if("detach")
+			if(beaker)
+				beaker.loc = src.loc
+				beaker = null
+				update_icon()
+		if("create")
+			create_product(href_list["item"], text2num(href_list["amount"]))
+		if("menu")
+			menustat = "menu"
+	updateUsrDialog()
 
 /obj/machinery/biogenerator/RefreshParts()
 	..()

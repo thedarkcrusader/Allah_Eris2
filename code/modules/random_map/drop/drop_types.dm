@@ -22,12 +22,6 @@ var/global/list/datum/supply_drop_loot/supply_drop
 /datum/supply_drop_loot/dd_SortValue()
 	return name
 
-/datum/supply_drop_loot/supermatter
-	name = "Supermatter"
-/datum/supply_drop_loot/supermatter/New()
-	..()
-	contents = list(/obj/machinery/power/supermatter)
-
 /datum/supply_drop_loot/lasers
 	name = "Lasers"
 	container = /obj/structure/largecrate
@@ -45,22 +39,10 @@ var/global/list/datum/supply_drop_loot/supply_drop
 /datum/supply_drop_loot/ballistics/New()
 	..()
 	contents = list(
-		/obj/item/gun/projectile/sec,
+		/obj/item/gun/projectile/automatic/modular/mk58/gray/stock,
 		/obj/item/gun/projectile/shotgun/doublebarrel,
-		/obj/item/gun/projectile/shotgun/pump/combat,
-		/obj/item/gun/projectile/automatic/wt550,
-		/obj/item/gun/projectile/automatic/z8)
-
-/datum/supply_drop_loot/ballistics
-	name = "Ballistics"
-	container = /obj/structure/largecrate
-/datum/supply_drop_loot/ballistics/New()
-	..()
-	contents = list(
-		/obj/item/gun/projectile/sec,
-		/obj/item/gun/projectile/shotgun/doublebarrel,
-		/obj/item/gun/projectile/shotgun/pump/combat,
-		/obj/item/gun/projectile/automatic/wt550,
+		/obj/item/gun/projectile/shotgun/pump/regulator,
+		/obj/item/gun/projectile/automatic/zoric,
 		/obj/item/gun/projectile/automatic/z8)
 
 /datum/supply_drop_loot/seeds
@@ -109,12 +91,12 @@ var/global/list/datum/supply_drop_loot/supply_drop
 /datum/supply_drop_loot/armour/New()
 	..()
 	contents = list(
-		/obj/item/clothing/head/helmet/riot,
-		/obj/item/clothing/suit/armor/riot,
-		/obj/item/clothing/head/helmet/riot,
-		/obj/item/clothing/suit/armor/riot,
-		/obj/item/clothing/head/helmet/riot,
-		/obj/item/clothing/suit/armor/riot,
+		/obj/item/clothing/head/armor/faceshield/riot,
+		/obj/item/clothing/suit/armor/heavy/riot,
+		/obj/item/clothing/head/armor/faceshield/riot,
+		/obj/item/clothing/suit/armor/heavy/riot,
+		/obj/item/clothing/head/armor/faceshield/riot,
+		/obj/item/clothing/suit/armor/heavy/riot,
 		/obj/item/clothing/suit/armor/vest,
 		/obj/item/clothing/suit/armor/vest,
 		/obj/item/clothing/suit/storage/vest,
@@ -155,21 +137,6 @@ var/global/list/datum/supply_drop_loot/supply_drop
 		/obj/item/storage/box/syringes,
 		/obj/item/storage/box/autoinjectors)
 
-/datum/supply_drop_loot/power
-	name = "Power"
-	container = /obj/structure/largecrate
-/datum/supply_drop_loot/power/New()
-	..()
-	contents = list(
-		/obj/item/stack/material/steel,
-		/obj/item/stack/material/steel,
-		/obj/item/stack/material/steel,
-		/obj/item/stack/material/glass,
-		/obj/item/stack/material/glass,
-		/obj/item/stack/material/wood,
-		/obj/item/stack/material/plastic,
-		/obj/item/stack/material/glass/reinforced,
-		/obj/item/stack/material/plasteel)
 
 /datum/supply_drop_loot/hydroponics
 	name = "Hydroponics"

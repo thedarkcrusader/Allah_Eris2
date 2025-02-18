@@ -1,305 +1,350 @@
-/obj/item/ammo_magazine/a357
-	name = "speed loader (.357)"
-	desc = "A speed loader for revolvers."
-	icon_state = "38"
-	caliber = "357"
-	ammo_type = /obj/item/ammo_casing/a357
-	matter = list(DEFAULT_WALL_MATERIAL = 1260)
-	max_ammo = 6
-	multiple_sprites = 1
+/*This code for boxes with ammo, you cant use them as magazines, but should be able to fill magazines with them.*/
+/obj/item/ammo_magazine/ammobox	//Should not be used bu its own
+	name = "ammunition box"
+	desc = "Gun ammunition stored in a shiny new box. You can see caliber information on the label."
+	mag_type = SPEEDLOADER	//To prevent load in magazine filled guns
+	icon = 'icons/obj/ammo.dmi'
+	reload_delay = 30
+	ammo_mag = "box"
+	matter = list(MATERIAL_CARDBOARD = 1)
+	bad_type = /obj/item/ammo_magazine/ammobox
+	price_tag = 100
 
-/obj/item/ammo_magazine/c50
-	name = "speed loader (.50)"
-	desc = "A speed loader for revolvers."
-	icon_state = "38"
-	caliber = ".50"
-	ammo_type = /obj/item/ammo_casing/a50
-	matter = list(DEFAULT_WALL_MATERIAL = 1260)
-	max_ammo = 6
-	multiple_sprites = 1
+/obj/item/ammo_magazine/ammobox/resolve_attackby(atom/A, mob/user)
+	if(isturf(A) && locate(/obj/item/ammo_casing) in A || istype(A, /obj/item/ammo_casing))
+		if(!do_after(user, src.reload_delay, src))
+			to_chat(user, SPAN_WARNING("You stoped scooping ammo into [src]."))
+			return
+		if(collectAmmo(get_turf(A), user))
+			return TRUE
+	..()
 
-/obj/item/ammo_magazine/c38
-	name = "speed loader (.38)"
-	desc = "A speed loader for revolvers."
-	icon_state = "38"
-	caliber = "38"
-	matter = list(DEFAULT_WALL_MATERIAL = 360)
-	ammo_type = /obj/item/ammo_casing/c38
-	max_ammo = 6
-	multiple_sprites = 1
+/obj/item/ammo_magazine/ammobox/proc/collectAmmo(turf/target, mob/user)
+	ASSERT(istype(target))
+	. = FALSE
+	for(var/obj/item/ammo_casing/I in target)
+		if(stored_ammo.len >= max_ammo)
+			break
+		if(I.caliber == src.caliber)
+			for(var/j = 1 to I.amount)
+				if(stored_ammo.len >= max_ammo)
+					break
+				. |= TRUE
+				insertCasing(I)
+	if(user)
+		if(.)
+			user.visible_message(SPAN_NOTICE("[user] scoopes some ammo in [src]."),SPAN_NOTICE("You scoop some ammo in [src]."),SPAN_NOTICE("You hear metal clanging."))
+		else
+			to_chat(user, SPAN_NOTICE("You fail to pick anything up with \the [src]."))
+	update_icon()
 
-/obj/item/ammo_magazine/c38/rubber
-	name = "speed loader (.38, rubber)"
-	icon_state = "R38"
-	ammo_type = /obj/item/ammo_casing/c38/rubber
+/obj/item/ammo_magazine/ammobox/pistol
+	name = "ammunition packet (.35 Auto)"
+	icon_state = "pistol"
+	matter = list(MATERIAL_CARDBOARD = 1) // the autofill increases the cost depending on the contents
+	caliber = CAL_PISTOL
+	ammo_type = /obj/item/ammo_casing/pistol
+	max_ammo = 70
+	rarity_value = 10
+	spawn_tags = SPAWN_TAG_AMMO_COMMON
+	ammo_states = list(70)
 
-/obj/item/ammo_magazine/c44
-	name = "speed loader (.44 magnum)"
-	desc = "A speed loader for revolvers."
-	icon_state = "38"
-	ammo_type = /obj/item/ammo_casing/c44
-	matter = list(DEFAULT_WALL_MATERIAL = 450)
-	caliber = ".44"
-	max_ammo = 6
-	multiple_sprites = 1
+/obj/item/ammo_magazine/ammobox/pistol/practice
+	ammo_type = /obj/item/ammo_casing/pistol/practice
 
-/obj/item/ammo_magazine/c44/rubber
-	name = "speed loader (.44 magnum, rubber)"
-	icon_state = "R38"
-	ammo_type = /obj/item/ammo_casing/c44/rubber
+/obj/item/ammo_magazine/ammobox/pistol/hv
+	ammo_type = /obj/item/ammo_casing/pistol/hv
 
-/obj/item/ammo_magazine/c45m
-	name = "magazine (.45)"
-	icon_state = "45"
-	mag_type = MAGAZINE
-	ammo_type = /obj/item/ammo_casing/c45
-	matter = list(DEFAULT_WALL_MATERIAL = 525) //metal costs are very roughly based around 1 .45 casing = 75 metal
-	caliber = ".45"
-	max_ammo = 7
-	multiple_sprites = 1
+/obj/item/ammo_magazine/ammobox/pistol/rubber
+	ammo_type = /obj/item/ammo_casing/pistol/rubber
+	rarity_value = 5
 
-/obj/item/ammo_magazine/c45m/empty
-	initial_ammo = 0
+/obj/item/ammo_magazine/ammobox/pistol/scrap
+	rarity_value = 5
+	ammo_type = /obj/item/ammo_casing/pistol/scrap
 
-/obj/item/ammo_magazine/c45m/rubber
-	name = "magazine (.45, rubber)"
-	ammo_type = /obj/item/ammo_casing/c45/rubber
+//// . 40 ////
 
-/obj/item/ammo_magazine/c45m/practice
-	name = "magazine (.45, practice)"
-	ammo_type = /obj/item/ammo_casing/c45/practice
-
-/obj/item/ammo_magazine/c45m/flash
-	name = "magazine (.45, flash)"
-	ammo_type = /obj/item/ammo_casing/c45/flash
-
-/obj/item/ammo_magazine/c45uzi
-	name = "stick magazine (.45)"
-	icon_state = "uzi45"
-	mag_type = MAGAZINE
-	ammo_type = /obj/item/ammo_casing/c45
-	matter = list(DEFAULT_WALL_MATERIAL = 1200)
-	caliber = ".45"
-	max_ammo = 16
-	multiple_sprites = 1
-
-/obj/item/ammo_magazine/c45uzi/empty
-	initial_ammo = 0
-
-/obj/item/ammo_magazine/c45rifle
-	name = "rifle magazine (.45)"
-	icon_state = "rifle"
-	mag_type = MAGAZINE
-	ammo_type = /obj/item/ammo_casing/c45
-	matter = list(DEFAULT_WALL_MATERIAL = 1500)
-	caliber = ".45"
-	max_ammo = 30
-	multiple_sprites = 1
-
-
-/obj/item/ammo_magazine/c45rifle/akarabiner
-	name = "Warmonger magazine (.45)"
-	icon_state = "autorifle"
-
-
-/obj/item/ammo_magazine/c45rifle/combatrifle
-	name = "Nightfall magazine (.45)"
-	icon_state = "akarabiner"
-
-
-/obj/item/ammo_magazine/mc9mm
-	name = "magazine (9mm)"
-	icon_state = "9x19p"
-	origin_tech = list(TECH_COMBAT = 2)
-	mag_type = MAGAZINE
-	matter = list(DEFAULT_WALL_MATERIAL = 600)
-	caliber = "9mm"
-	ammo_type = /obj/item/ammo_casing/c9mm
-	max_ammo = 10
-	multiple_sprites = 1
-
-/obj/item/ammo_magazine/mc9mm/empty
-	initial_ammo = 0
-
-/obj/item/ammo_magazine/mc9mm/flash
-	name = "magazine (9mm, flash)"
-	ammo_type = /obj/item/ammo_casing/c9mm/flash
-
-/obj/item/ammo_magazine/box/c9mm
-	name = "ammunition box (9mm)"
-	icon_state = "9mm"
-	origin_tech = list(TECH_COMBAT = 2)
-	matter = list(DEFAULT_WALL_MATERIAL = 1800)
-	caliber = "9mm"
-	ammo_type = /obj/item/ammo_casing/c9mm
-	max_ammo = 30
-
-/obj/item/ammo_magazine/box/c9mm/empty
-	initial_ammo = 0
-
-/obj/item/ammo_magazine/box/emp
-	name = "ammunition box (.38, haywire)"
-	icon_state = "empbox"
-	origin_tech = list(TECH_COMBAT = 2)
-	max_ammo = 10
-	ammo_type = /obj/item/ammo_casing/c38/emp
-	caliber = ".38"
-
-/obj/item/ammo_magazine/box/emp/c45
-	name = "ammunition box (.45, haywire)"
-	ammo_type = /obj/item/ammo_casing/c45/emp
-	caliber = ".45"
-
-/obj/item/ammo_magazine/box/emp/a10mm
-	name = "ammunition box (10mm, haywire)"
-	ammo_type = /obj/item/ammo_casing/a10mm/emp
-	caliber = "10mm"
-
-/obj/item/ammo_magazine/mc9mmt
-	name = "top mounted magazine (9mm)"
-	icon_state = "9mmt"
-	mag_type = MAGAZINE
-	ammo_type = /obj/item/ammo_casing/c9mm
-	matter = list(DEFAULT_WALL_MATERIAL = 1200)
-	caliber = "9mm"
-	max_ammo = 20
-	multiple_sprites = 1
-
-/obj/item/ammo_magazine/mc9mmt/empty
-	initial_ammo = 0
-
-/obj/item/ammo_magazine/mc9mmt/machinepistol
-	name = "Soulburn magazine"
-	desc = "Holds 30 bullets. That should be enough for all of ya."
-	icon_state = "machinepistol"
-	max_ammo = 30
-
-/obj/item/ammo_magazine/mc9mmt/rubber
-	name = "top mounted magazine (9mm, rubber)"
-	ammo_type = /obj/item/ammo_casing/c9mm/rubber
-
-/obj/item/ammo_magazine/mc9mmt/practice
-	name = "top mounted magazine (9mm, practice)"
-	ammo_type = /obj/item/ammo_casing/c9mm/practice
-
-/obj/item/ammo_magazine/box/c45
-	name = "ammunition box (.45)"
-	icon_state = "9mm"
-	origin_tech = list(TECH_COMBAT = 2)
-	caliber = ".45"
-	matter = list(DEFAULT_WALL_MATERIAL = 2250)
-	ammo_type = /obj/item/ammo_casing/c45
-	max_ammo = 30
-
-/obj/item/ammo_magazine/box/c45/empty
-	initial_ammo = 0
-
-/obj/item/ammo_magazine/a10mm
-	name = "magazine (10mm)"
-	icon_state = "10mm"
-	origin_tech = list(TECH_COMBAT = 2)
-	mag_type = MAGAZINE
-	caliber = "10mm"
-	matter = list(DEFAULT_WALL_MATERIAL = 1500)
-	ammo_type = /obj/item/ammo_casing/a10mm
-	max_ammo = 20
-	multiple_sprites = 1
-
-/obj/item/ammo_magazine/a10mm/empty
-	initial_ammo = 0
-
-/obj/item/ammo_magazine/a762
-	name = "magazine (7.62mm)"
-	icon_state = "5.56"
-	origin_tech = list(TECH_COMBAT = 2)
-	mag_type = MAGAZINE
-	caliber = "a762"
-	matter = list(DEFAULT_WALL_MATERIAL = 1800)
-	ammo_type = /obj/item/ammo_casing/a762
-	max_ammo = 15 //if we lived in a world where normal mags had 30 rounds, this would be a 20 round mag
-	multiple_sprites = 1
-
-/obj/item/ammo_magazine/a762/empty
-	initial_ammo = 0
-
-/obj/item/ammo_magazine/a762/practice
-	name = "magazine (7.62mm, practice)"
-	ammo_type = /obj/item/ammo_casing/a762/practice
-
-/obj/item/ammo_magazine/a50
-	name = "magazine (.50)"
-	icon_state = "50ae"
-	origin_tech = list(TECH_COMBAT = 2)
-	mag_type = MAGAZINE
-	caliber = ".50"
-	matter = list(DEFAULT_WALL_MATERIAL = 1260)
-	ammo_type = /obj/item/ammo_casing/a50
-	max_ammo = 7
-	multiple_sprites = 1
-
-/obj/item/ammo_magazine/a50/empty
-	initial_ammo = 0
-
-/obj/item/ammo_magazine/a75
-	name = "ammo magazine (20mm)"
-	icon_state = "75"
-	mag_type = MAGAZINE
-	caliber = "75"
-	ammo_type = /obj/item/ammo_casing/a75
-	multiple_sprites = 1
-	max_ammo = 4
-
-/obj/item/ammo_magazine/a75/empty
-	initial_ammo = 0
-
-/obj/item/ammo_magazine/box/a556
-	name = "magazine box (5.56mm)"
-	icon_state = "a762"
-	origin_tech = list(TECH_COMBAT = 2)
-	mag_type = MAGAZINE
-	caliber = "a556"
-	matter = list(DEFAULT_WALL_MATERIAL = 4500)
-	ammo_type = /obj/item/ammo_casing/a556
+/obj/item/ammo_magazine/ammobox/magnum
+	name = "ammunition packet (.40 Magnum)"
+	icon_state = "magnum"
+	matter = list(MATERIAL_CARDBOARD = 1)
+	caliber = CAL_MAGNUM
+	ammo_type = /obj/item/ammo_casing/magnum
 	max_ammo = 50
-	multiple_sprites = 1
+	ammo_states = list(50)
 
-/obj/item/ammo_magazine/box/a556/empty
-	initial_ammo = 0
+/obj/item/ammo_magazine/ammobox/magnum/practice
+	ammo_type = /obj/item/ammo_casing/magnum/practice
 
-/obj/item/ammo_magazine/box/a556/mg08
-	name = "LMG mag"
-	icon_state = "hmg"
+/obj/item/ammo_magazine/ammobox/magnum/hv
+	ammo_type = /obj/item/ammo_casing/magnum/hv
 
-/obj/item/ammo_magazine/c556
-	name = "magazine (5.56mm)"
-	icon_state = "c762"
-	mag_type = MAGAZINE
-	caliber = "a556"
-	matter = list(DEFAULT_WALL_MATERIAL = 1800)
-	ammo_type = /obj/item/ammo_casing/a556
-	max_ammo = 20
-	multiple_sprites = 1
+/obj/item/ammo_magazine/ammobox/magnum/rubber
+	ammo_type = /obj/item/ammo_casing/magnum/rubber
 
-/obj/item/ammo_magazine/caps
-	name = "speed loader (caps)"
-	desc = "A cheap plastic speed loader for some kind of revolver."
-	icon_state = "T38"
-	caliber = "caps"
-	color = "#ff0000"
-	ammo_type = /obj/item/ammo_casing/cap
-	matter = list(DEFAULT_WALL_MATERIAL = 600)
-	max_ammo = 7
-	multiple_sprites = 1
+/obj/item/ammo_magazine/ammobox/magnum/scrap
+	ammo_type = /obj/item/ammo_casing/magnum/scrap
+	rarity_value = 5
+	spawn_tags = SPAWN_TAG_AMMO_COMMON
 
-/obj/item/ammo_magazine/flamer
-	name = "flamer fuel"
-	desc = "Put it in your flamer and roast those you don't like."
-	icon_state = "flamer"
-	caliber = "flamer"
-	mag_type = MAGAZINE
-	ammo_type = /obj/item/ammo_casing/flamer
+//// . 20 ////
+
+
+/obj/item/ammo_magazine/ammobox/srifle
+	name = "ammunition box (.20 Rifle)"
+	icon_state = "box_srifle"
+	matter = list(MATERIAL_STEEL = 5) // the autofill increases the cost further depending on the contents
+	w_class = ITEM_SIZE_BULKY
+	caliber = CAL_SRIFLE
+	ammo_type = /obj/item/ammo_casing/srifle
+	max_ammo = 240
+	ammo_states = list(240)
+
+/obj/item/ammo_magazine/ammobox/srifle/rubber
+	ammo_type = /obj/item/ammo_casing/srifle/rubber
+
+/obj/item/ammo_magazine/ammobox/srifle_small
+	name = "ammunition packet (.20 Rifle)"
+	icon_state = "srifle"
+	matter = list(MATERIAL_CARDBOARD = 1)
+	caliber = CAL_SRIFLE
+	ammo_type = /obj/item/ammo_casing/srifle
+	max_ammo = 50
+	ammo_states = list(60)
+
+/obj/item/ammo_magazine/ammobox/srifle_small/practice
+	ammo_type = /obj/item/ammo_casing/srifle/practice
+
+/obj/item/ammo_magazine/ammobox/srifle_small/hv
+	ammo_type = /obj/item/ammo_casing/srifle/hv
+
+/obj/item/ammo_magazine/ammobox/srifle_small/rubber
+	ammo_type = /obj/item/ammo_casing/srifle/rubber
+
+/obj/item/ammo_magazine/ammobox/srifle_small/scrap
+	ammo_type = /obj/item/ammo_casing/srifle/scrap
+	rarity_value = 5
+	spawn_tags = SPAWN_TAG_AMMO_COMMON
+
+//// . 25 CASELESS ////
+
+/obj/item/ammo_magazine/ammobox/clrifle
+	name = "ammunition box (.25 Caseless Rifle)"
+	icon_state = "box_clrifle"
+	matter = list(MATERIAL_STEEL = 5) // the autofill increases the cost further depending on the contents
+	w_class = ITEM_SIZE_BULKY
+	caliber = CAL_CLRIFLE
+	ammo_type = /obj/item/ammo_casing/clrifle
+	max_ammo = 240
+	spawn_tags = SPAWN_TAG_AMMO_IH
+	rarity_value = 5
+	ammo_states = list(240)
+
+/obj/item/ammo_magazine/ammobox/clrifle/rubber
+	ammo_type = /obj/item/ammo_casing/clrifle/rubber
+	spawn_tags = SPAWN_TAG_AMMO_IH
+
+/obj/item/ammo_magazine/ammobox/clrifle_small
+	name = "ammunition packet (.25 Caseless Rifle)"
+	icon_state = "clrifle"
+	matter = list(MATERIAL_CARDBOARD = 1)
+	caliber = CAL_CLRIFLE
+	ammo_type = /obj/item/ammo_casing/clrifle
+	max_ammo = 60
+	ammo_states = list(60)
+
+/obj/item/ammo_magazine/ammobox/clrifle_small/practice
+	ammo_type = /obj/item/ammo_casing/clrifle/practice
+
+/obj/item/ammo_magazine/ammobox/clrifle_small/hv
+	ammo_type = /obj/item/ammo_casing/clrifle/hv
+
+/obj/item/ammo_magazine/ammobox/clrifle_small/rubber
+	ammo_type = /obj/item/ammo_casing/clrifle/rubber
+
+/obj/item/ammo_magazine/ammobox/clrifle_small/scrap
+	ammo_type = /obj/item/ammo_casing/clrifle/scrap
+	rarity_value = 5
+	spawn_tags = SPAWN_TAG_AMMO_COMMON
+
+//// . 30 ////
+/obj/item/ammo_magazine/ammobox/lrifle
+	name = "ammunition box (.30 Rifle)"
+	icon_state = "box_lrifle"
+	matter = list(MATERIAL_STEEL = 5) // the autofill increases the cost further depending on the contents
+	w_class = ITEM_SIZE_BULKY
+	caliber = CAL_LRIFLE
+	ammo_type = /obj/item/ammo_casing/lrifle
+	mag_type = SPEEDLOADER | MAGAZINE
+	max_ammo = 240
+	ammo_states = list(240)
+
+/obj/item/ammo_magazine/ammobox/lrifle/rubber
+	ammo_type = /obj/item/ammo_casing/lrifle/rubber
+
+/obj/item/ammo_magazine/ammobox/lrifle_small
+	name = "ammunition packet (.30 Rifle)"
+	icon_state = "lrifle"
+	matter = list(MATERIAL_CARDBOARD = 1)
+	caliber = CAL_LRIFLE
+	ammo_type = /obj/item/ammo_casing/lrifle
+	max_ammo = 60
+	ammo_states = list(60)
+
+/obj/item/ammo_magazine/ammobox/lrifle_small/practice
+	ammo_type = /obj/item/ammo_casing/lrifle/practice
+
+/obj/item/ammo_magazine/ammobox/lrifle_small/hv
+	ammo_type = /obj/item/ammo_casing/lrifle/hv
+
+/obj/item/ammo_magazine/ammobox/lrifle_small/rubber
+	ammo_type = /obj/item/ammo_casing/lrifle/rubber
+
+/obj/item/ammo_magazine/ammobox/lrifle_small/scrap
+	ammo_type = /obj/item/ammo_casing/lrifle/scrap
+	rarity_value = 5
+	spawn_tags = SPAWN_TAG_AMMO_COMMON
+
+//// .60 ////
+
+/obj/item/ammo_magazine/ammobox/antim
+	name = "ammunition box (.60 Anti Material)"
+	icon_state = "antim"
+	matter = list(MATERIAL_STEEL = 5) // the autofill increases the cost further depending on the contents
+	w_class = ITEM_SIZE_BULKY
+	caliber = CAL_ANTIM
+	ammo_type = /obj/item/ammo_casing/antim
 	max_ammo = 30
-	multiple_sprites = FALSE
+	ammo_states = list(30)
 
-/obj/item/ammo_magazine/flamer/attack_self(mob/user) //Don't empty ur ammo
-	return
+/obj/item/ammo_magazine/ammobox/antim/scrap
+	ammo_type = /obj/item/ammo_casing/antim/scrap
+	max_ammo = 30
+	rarity_value = 20
+
+//// SHOTGUN ////
+
+/obj/item/ammo_magazine/ammobox/shotgun
+	name = "ammunition box (.50)"
+	icon_state = "box_shot"
+	matter = list(MATERIAL_STEEL = 10)
+	w_class = ITEM_SIZE_BULKY
+	caliber = CAL_SHOTGUN
+	ammo_type = /obj/item/ammo_casing/shotgun
+	max_ammo = 160
+	rarity_value = 20
+	spawn_tags = SPAWN_TAG_AMMO_SHOTGUN
+	ammo_states = list(160)
+	ammo_names = list(
+		"hv" = "slug",
+		"r" = "beanbag",
+		"l" = "pellet",
+		"p" = "practice",
+		"f" = "flash",
+		"i" = "incendiary",
+		"b" = "blank",
+		"scrap" = "scrap slug",
+		"scrap_r" = "scrap beanbag",
+		"scrap_s" = "scrap pellet")
+
+/obj/item/ammo_magazine/ammobox/shotgun/scrap
+	ammo_type = /obj/item/ammo_casing/shotgun/scrap
+	rarity_value = 10
+	spawn_tags = SPAWN_TAG_AMMO_SHOTGUN_COMMON
+
+/obj/item/ammo_magazine/ammobox/shotgun/beanbag
+	ammo_type = /obj/item/ammo_casing/shotgun/beanbag
+	rarity_value = 10
+
+/obj/item/ammo_magazine/ammobox/shotgun/beanbag/scrap
+	ammo_type = /obj/item/ammo_casing/shotgun/beanbag/scrap
+	rarity_value = 5
+	spawn_tags = SPAWN_TAG_AMMO_SHOTGUN_COMMON
+
+/obj/item/ammo_magazine/ammobox/shotgun/buckshot
+	ammo_type = /obj/item/ammo_casing/shotgun/pellet
+	rarity_value = 13.33
+
+/obj/item/ammo_magazine/ammobox/shotgun/pellet/scrap
+	ammo_type = /obj/item/ammo_casing/shotgun/pellet/scrap
+	rarity_value = 6.66
+	spawn_tags = SPAWN_TAG_AMMO_SHOTGUN_COMMON
+
+/obj/item/ammo_magazine/ammobox/shotgun/blanks
+	ammo_type = /obj/item/ammo_casing/shotgun/blank
+	rarity_value = 50
+
+/obj/item/ammo_magazine/ammobox/shotgun/flashshells
+	ammo_type = /obj/item/ammo_casing/shotgun/flash
+	rarity_value = 40
+
+/obj/item/ammo_magazine/ammobox/shotgun/practiceshells
+	ammo_type = /obj/item/ammo_casing/shotgun/practice
+	rarity_value = 50
+
+/obj/item/ammo_magazine/ammobox/shotgun/incendiaryshells
+	ammo_type = /obj/item/ammo_casing/shotgun/incendiary
+	rarity_value = 100
+
+/obj/item/ammo_magazine/ammobox/shotgun_small
+	name = "ammunition packet (.50)"
+	icon_state = "shot"
+	matter = list(MATERIAL_STEEL = 5)
+	w_class = ITEM_SIZE_SMALL
+	caliber = CAL_SHOTGUN
+	ammo_type = /obj/item/ammo_casing/shotgun
+	max_ammo = 40
+	rarity_value = 20
+	spawn_tags = SPAWN_TAG_AMMO_SHOTGUN
+	ammo_states = list(40)
+	ammo_names = list(
+		"hv" = "slug",
+		"r" = "beanbag",
+		"l" = "pellet",
+		"p" = "practice",
+		"f" = "flash",
+		"i" = "incendiary",
+		"b" = "blank",
+		"scrap" = "scrap slug",
+		"scrap_r" = "scrap beanbag",
+		"scrap_s" = "scrap pellet")
+
+/obj/item/ammo_magazine/ammobox/shotgun_small/scrap
+	ammo_type = /obj/item/ammo_casing/shotgun/scrap
+	rarity_value = 10
+	spawn_tags = SPAWN_TAG_AMMO_SHOTGUN_COMMON
+
+/obj/item/ammo_magazine/ammobox/shotgun_small/beanbag
+	ammo_type = /obj/item/ammo_casing/shotgun/beanbag
+	rarity_value = 10
+
+/obj/item/ammo_magazine/ammobox/shotgun_small/beanbag/scrap
+	ammo_type = /obj/item/ammo_casing/shotgun/beanbag/scrap
+	rarity_value = 5
+	spawn_tags = SPAWN_TAG_AMMO_SHOTGUN_COMMON
+
+/obj/item/ammo_magazine/ammobox/shotgun_small/buckshot
+	ammo_type = /obj/item/ammo_casing/shotgun/pellet
+	rarity_value = 13.33
+
+/obj/item/ammo_magazine/ammobox/shotgun_small/pellet/scrap
+	ammo_type = /obj/item/ammo_casing/shotgun/pellet/scrap
+	rarity_value = 6.66
+	spawn_tags = SPAWN_TAG_AMMO_SHOTGUN_COMMON
+
+/obj/item/ammo_magazine/ammobox/shotgun_small/blanks
+	ammo_type = /obj/item/ammo_casing/shotgun/blank
+	rarity_value = 50
+
+/obj/item/ammo_magazine/ammobox/shotgun_small/flashshells
+	ammo_type = /obj/item/ammo_casing/shotgun/flash
+	rarity_value = 40
+
+/obj/item/ammo_magazine/ammobox/shotgun_small/practiceshells
+	ammo_type = /obj/item/ammo_casing/shotgun/practice
+	rarity_value = 50
+
+/obj/item/ammo_magazine/ammobox/shotgun_small/incendiaryshells
+	ammo_type = /obj/item/ammo_casing/shotgun/incendiary
+	rarity_value = 100

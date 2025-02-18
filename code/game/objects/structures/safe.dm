@@ -7,11 +7,11 @@ FLOOR SAFES
 //SAFES
 /obj/structure/safe
 	name = "safe"
-	desc = "A huge chunk of metal with a dial embedded in it. Fine print on the dial reads \"Scarborough Arms - 2 tumbler safe, guaranteed thermite resistant, explosion resistant, and assistant resistant.\"."
+	desc = "A huge chunk of metal with a dial embedded in it. Fine print on the dial reads \"Scarborough Arms - 2 tumbler safe, guaranteed thermite resistant, explosion resistant, and assistant resistant.\""
 	icon = 'icons/obj/structures.dmi'
 	icon_state = "safe"
-	anchored = 1
-	density = 1
+	anchored = TRUE
+	density = TRUE
 	var/open = 0		//is the safe open?
 	var/tumbler_1_pos	//the tumbler position- from 0 to 72
 	var/tumbler_1_open	//the tumbler position to open at- 0 to 72
@@ -31,13 +31,14 @@ FLOOR SAFES
 
 
 /obj/structure/safe/Initialize()
+	. = ..()
 	for(var/obj/item/I in loc)
 		if(space >= maxspace)
 			return
-		if(I.w_class + space <= maxspace) //todo replace with internal storage or something
+		if(I.w_class + space <= maxspace)
 			space += I.w_class
-			I.forceMove(src)
-	. = ..()
+			I.loc = src
+
 
 /obj/structure/safe/proc/check_unlocked(mob/user as mob, canhear)
 	if(user && canhear)
@@ -145,14 +146,13 @@ FLOOR SAFES
 /obj/structure/safe/attackby(obj/item/I as obj, mob/user as mob)
 	if(open)
 		if(I.w_class + space <= maxspace)
-			space += I.w_class
-			user.drop_item()
-			I.loc = src
-			to_chat(user, "<span class='notice'>You put [I] in [src].</span>")
-			updateUsrDialog()
+			if(user.unEquip(I, src))
+				space += I.w_class
+				to_chat(user, SPAN_NOTICE("You put [I] in [src]."))
+				updateUsrDialog()
 			return
 		else
-			to_chat(user, "<span class='notice'>[I] won't fit in [src].</span>")
+			to_chat(user, SPAN_NOTICE("[I] won't fit in [src]."))
 			return
 	else
 		if(istype(I, /obj/item/clothing/accessory/stethoscope))
@@ -160,16 +160,16 @@ FLOOR SAFES
 			return
 
 
-obj/structure/safe/ex_act(severity)
-	return
+/obj/structure/safe/explosion_act(target_power, explosion_handler/handler)
+	return 0
 
 //FLOOR SAFES
 /obj/structure/safe/floor
 	name = "floor safe"
 	icon_state = "floorsafe"
-	density = 0
+	density = FALSE
 	level = 1	//underfloor
-	layer = BELOW_OBJ_LAYER
+	layer = LOW_OBJ_LAYER
 
 /obj/structure/safe/floor/Initialize()
 	. = ..()
@@ -179,7 +179,7 @@ obj/structure/safe/ex_act(severity)
 	update_icon()
 
 /obj/structure/safe/floor/hide(var/intact)
-	set_invisibility(intact ? 101 : 0)
+	invisibility = intact ? 101 : 0
 
 /obj/structure/safe/floor/hides_under_flooring()
 	return 1

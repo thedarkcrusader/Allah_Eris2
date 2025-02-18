@@ -40,7 +40,9 @@ var NanoTemplate = function () {
 
             $.when($.ajax({
                     url: _templateData[key],
-                    cache: false,
+                    // Disabling caching using jQuery's hack seems to break Nano in some obscure cases on BYOND 512.
+                    // Oh well.
+                    //cache: false,
                     dataType: 'text'
                 }))
                 .done(function(templateMarkup) {
@@ -88,7 +90,10 @@ var NanoTemplate = function () {
         addTemplate: function (key, templateString) {
             _templates[key] = templateString;
         },
-        templateExists: function (key) {
+        getTemplates: function () {
+            return _templates;
+		},
+		templateExists: function (key) {
             return _templates.hasOwnProperty(key);
         },
         parse: function (templateKey, data) {

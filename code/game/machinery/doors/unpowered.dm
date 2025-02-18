@@ -13,7 +13,7 @@
 	if(src.locked)	return
 	..()
 	return
-
+	
 /obj/machinery/door/unpowered/emag_act()
 	return -1
 
@@ -22,4 +22,4 @@
 	name = "door"
 	icon_state = "door1"
 	opacity = 1
-	density = 1
+	density = TRUE

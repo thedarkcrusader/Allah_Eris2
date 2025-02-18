@@ -1,5 +1,5 @@
 /datum/species/monkey
-	name = "Monkey"
+	name = SPECIES_MONKEY
 	name_plural = "Monkeys"
 	blurb = "Ook."
 
@@ -9,71 +9,44 @@
 	damage_mask = 'icons/mob/human_races/masks/dam_mask_monkey.dmi'
 	blood_mask = 'icons/mob/human_races/masks/blood_monkey.dmi'
 	language = null
-	default_language = "Chimpanzee"
-	greater_form = SPECIES_HUMAN
+	default_language = LANGUAGE_MONKEY
 	mob_size = MOB_SMALL
+	has_fine_manipulation = 0
 	show_ssd = null
-	health_hud_intensity = 1.75
+
+	eyes = "blank_eyes"
 
 	gibbed_anim = "gibbed-m"
 	dusted_anim = "dust-m"
 	death_message = "lets out a faint chimper as it collapses and stops moving..."
 	tail = "chimptail"
 
-	inherent_verbs = list(/mob/living/proc/ventcrawl)
+	unarmed_types = list(/datum/unarmed_attack/bite, /datum/unarmed_attack/claws)
+	inherent_verbs = list(/mob/living/proc/ventcrawl, /mob/living/proc/hide)
 	hud_type = /datum/hud_data/monkey
 	meat_type = /obj/item/reagent_containers/food/snacks/meat/monkey
 
-	rarity_value = 0.1
-	total_health = 150
+	species_rarity_value = 0.1
+	total_health = 75
 	brute_mod = 1.5
 	burn_mod = 1.5
+	lower_sanity_process = TRUE
 
-	spawn_flags = SPECIES_IS_RESTRICTED
+	spawn_flags = IS_RESTRICTED
 
 	bump_flag = MONKEY
 	swap_flags = MONKEY|SLIME|SIMPLE_ANIMAL
 	push_flags = MONKEY|SLIME|SIMPLE_ANIMAL|ALIEN
 
-	pass_flags = PASS_FLAG_TABLE
+	pass_flags = PASSTABLE
 	holder_type = /obj/item/holder
-	has_limbs = list(
-		BP_CHEST =  list("path" = /obj/item/organ/external/chest),
-		BP_GROIN =  list("path" = /obj/item/organ/external/groin),
-		BP_HEAD =   list("path" = /obj/item/organ/external/head/no_eyes),
-		BP_L_ARM =  list("path" = /obj/item/organ/external/arm),
-		BP_R_ARM =  list("path" = /obj/item/organ/external/arm/right),
-		BP_L_LEG =  list("path" = /obj/item/organ/external/leg),
-		BP_R_LEG =  list("path" = /obj/item/organ/external/leg/right),
-		BP_L_HAND = list("path" = /obj/item/organ/external/hand),
-		BP_R_HAND = list("path" = /obj/item/organ/external/hand/right),
-		BP_L_FOOT = list("path" = /obj/item/organ/external/foot),
-		BP_R_FOOT = list("path" = /obj/item/organ/external/foot/right)
-		)
-
 /datum/species/monkey/handle_npc(var/mob/living/carbon/human/H)
 	if(H.stat != CONSCIOUS)
 		return
 	if(prob(33) && H.canmove && isturf(H.loc) && !H.pulledby) //won't move if being pulled
-		step(H, pick(GLOB.cardinal))
+		step(H, pick(cardinal))
 	if(prob(1))
 		H.emote(pick("scratch","jump","roll","tail"))
 
-	if(H.get_shock() && H.shock_stage < 40 && prob(3))
-		H.custom_emote("chimpers pitifully")
-
-	if(H.shock_stage > 10 && prob(3))
-		H.emote(pick("cry","whimper"))
-
-	if(H.shock_stage >= 40 && prob(3))
-		H.emote("scream")
-
-	if(!H.restrained() && H.lying && H.shock_stage >= 60 && prob(3))
-		H.custom_emote("thrashes in agony")
-
 /datum/species/monkey/get_random_name()
 	return "[lowertext(name)] ([rand(100,999)])"
-
-/datum/species/monkey/handle_post_spawn(var/mob/living/carbon/human/H)
-	..()
-	H.item_state = lowertext(name)

@@ -7,34 +7,31 @@ RSF
 /obj/item/rsf
 	name = "\improper Rapid-Service-Fabricator"
 	desc = "A device used to rapidly deploy service items."
-	icon = 'icons/obj/items.dmi'
+	icon = 'icons/obj/tools.dmi'
 	icon_state = "rcd"
 	opacity = 0
-	density = 0
-	anchored = 0.0
+	density = FALSE
+	anchored = FALSE
+	var/max_stored_matter = 30
 	var/stored_matter = 30
 	var/mode = 1
 	w_class = ITEM_SIZE_NORMAL
 
-/obj/item/rsf/examine(mob/user)
-	if(..(user, 0))
-		to_chat(user, "It currently holds [stored_matter]/30 fabrication-units.")
+/obj/item/rsf/examine(mob/user, extra_description = "")
+	if(get_dist(user, src) < 2)
+		extra_description += "It holds [stored_matter] out of [max_stored_matter] charges."
+	..(user, extra_description)
 
 /obj/item/rsf/attackby(obj/item/W as obj, mob/user as mob)
-	..()
-	if (istype(W, /obj/item/rcd_ammo))
-
-		if ((stored_matter + 10) > 30)
-			to_chat(user, "The RSF can't hold any more matter.")
-			return
-
-		qdel(W)
-
-		stored_matter += 10
-		playsound(src.loc, 'sound/machines/click.ogg', 10, 1)
-		to_chat(user, "The RSF now holds [stored_matter]/30 fabrication-units.")
-		return
-
+	var/obj/item/stack/material/M = W
+	if(istype(M) && M.material.name == MATERIAL_COMPRESSED)
+		var/amount = min(M.get_amount(), round(max_stored_matter - stored_matter))
+		if(M.use(amount) && stored_matter < max_stored_matter)
+			stored_matter += amount
+			playsound(src.loc, 'sound/machines/click.ogg', 10, 1)
+			to_chat(user, "<span class='notice'>You load [amount] Compressed Matter into \the [src]</span>.")
+	else
+		..()
 /obj/item/rsf/attack_self(mob/user as mob)
 	playsound(src.loc, 'sound/effects/pop.ogg', 50, 0)
 	if (mode == 1)
@@ -62,15 +59,15 @@ RSF
 
 	if(!proximity) return
 
-	if(istype(user,/mob/living/silicon/robot))
+	if(isrobot(user))
 		var/mob/living/silicon/robot/R = user
-		if(R.stat || !R.cell || R.cell.charge <= 0)
+		if(R.stat || !R.cell || R.cell.is_empty())
 			return
 	else
 		if(stored_matter <= 0)
 			return
 
-	if(!istype(A, /obj/structure/table) && !istype(A, /turf/simulated/floor))
+	if(!istype(A, /obj/structure/table) && !istype(A, /turf/floor))
 		return
 
 	playsound(src.loc, 'sound/machines/click.ogg', 10, 1)
@@ -82,7 +79,7 @@ RSF
 			product = new /obj/item/clothing/mask/smokable/cigarette()
 			used_energy = 10
 		if(2)
-			product = new /obj/item/reagent_containers/food/drinks/glass2()
+			product = new /obj/item/reagent_containers/food/drinks/drinkingglass()
 			used_energy = 50
 		if(3)
 			product = new /obj/item/paper()
@@ -91,7 +88,7 @@ RSF
 			product = new /obj/item/pen()
 			used_energy = 50
 		if(5)
-			product = new /obj/item/storage/pill_bottle/dice()
+			product = new /obj/item/storage/box/dice()
 			used_energy = 200
 
 	to_chat(user, "Dispensing [product ? product : "product"]...")

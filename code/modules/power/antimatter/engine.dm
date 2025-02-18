@@ -1,8 +1,8 @@
 /obj/machinery/power/am_engine
 	icon = 'icons/am_engine.dmi'
-	density = 1
-	anchored = 1.0
-	atom_flags = ATOM_FLAG_CHECKS_BORDER
+	density = TRUE
+	anchored = TRUE
+	flags = ON_BORDER
 
 /obj/machinery/power/am_engine/bits
 	name = "Antimatter Engine"
@@ -42,9 +42,9 @@
 
 	if(istype(F, /obj/item/fuel/H))
 		if(injecting)
-			to_chat(user, "Theres already a fuel rod in the injector!")
+			user << "Theres already a fuel rod in the injector!"
 			return
-		to_chat(user, "You insert the rod into the injector")
+		user << "You insert the rod into the injector."
 		injecting = 1
 		var/fuel = F.fuel
 		qdel(F)
@@ -55,9 +55,9 @@
 
 	if(istype(F, /obj/item/fuel/antiH))
 		if(injecting)
-			to_chat(user, "Theres already a fuel rod in the injector!")
+			user << "Theres already a fuel rod in the injector!"
 			return
-		to_chat(user, "You insert the rod into the injector")
+		user << "You insert the rod into the injector."
 		injecting = 1
 		var/fuel = F.fuel
 		qdel(F)
@@ -109,7 +109,7 @@
 			antiH_fuel = residual_matter
 
 	for(var/mob/M in hearers(src, null))
-		M.show_message("<span class='warning'>You hear a loud bang!</span>"))
+		M.show_message(text("\red You hear a loud bang!"))
 
 	//Q = k x (delta T)
 
@@ -161,7 +161,7 @@
 
 		if(energy > convert2energy(8e-12))	//TOO MUCH ENERGY
 			for(var/mob/M in hearers(src, null))
-				M.show_message("<span class='warning'>You hear a loud whirring!</span>"))
+				M.show_message(text("\red You hear a loud whirring!"))
 			sleep(20)
 
 			//Q = k x (delta T)
@@ -180,7 +180,7 @@
 
 			if(energy > convert2energy(8e-12))	//FAR TOO MUCH ENERGY STILL
 				for(var/mob/M in hearers(src, null))
-					M.show_message("<span class='danger'><big>BANG!</big></span>"))
+					M.show_message(text("\red <big>BANG!</big>"))
 				new /obj/effect/bhole(src.loc)
 
 		else	//this amount of energy is okay so it does the proper output thing

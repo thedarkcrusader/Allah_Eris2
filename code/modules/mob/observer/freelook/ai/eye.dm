@@ -3,17 +3,8 @@
 // A mob that the AI controls to look around the station with.
 // It streams chunks as it moves around, which will show it what the AI can and cannot see.
 
-/mob/observer/eye/cameranet
-	name = "Inactive Camera Eye"
-	name_sufix = "Camera Eye"
-
-/mob/observer/eye/cameranet/New()
-	..()
-	visualnet = cameranet
-
 /mob/observer/eye/aiEye
 	name = "Inactive AI Eye"
-	name_sufix = "AI Eye"
 	icon_state = "AI-eye"
 
 /mob/observer/eye/aiEye/New()
@@ -21,8 +12,7 @@
 	visualnet = cameranet
 
 /mob/observer/eye/aiEye/setLoc(var/T, var/cancel_tracking = 1)
-	. = ..()
-	if(. && isAI(owner))
+	if(..())
 		var/mob/living/silicon/ai/ai = owner
 		if(cancel_tracking)
 			ai.ai_cancel_tracking()
@@ -32,15 +22,10 @@
 			ai.holo.move_hologram(ai)
 		return 1
 
-/mob/observer/eye/aiEye/set_dir(new_dir)
-	. = ..()
-	if(. && isAI(owner))
-		var/mob/living/silicon/ai/ai = owner
-
-		//Holopad
-		if(ai.holo && ai.hologram_follow)
-			ai.holo.set_dir_hologram(new_dir, ai)
-		return 1
+/mob/observer/eye/aiEye/zMove()
+	..()
+	spawn(0)
+		visualnet.visibility(src)
 
 // AI MOVEMENT
 
@@ -53,6 +38,7 @@
 	if(!eyeobj) return
 	if(!new_eye)
 		new_eye = src
+	eyeobj.owner = null
 	qdel(eyeobj) // No AI, no Eye
 	eyeobj = null
 	if(client)
@@ -60,21 +46,27 @@
 
 /mob/living/silicon/ai/proc/create_eyeobj(var/newloc)
 	if(eyeobj) destroy_eyeobj()
-	if(!newloc) newloc = get_turf(src)
+	if(!newloc) newloc = src.loc
 	eyeobj = new /mob/observer/eye/aiEye(newloc)
-	eyeobj.possess(src)
+	eyeobj.owner = src
+	eyeobj.name = "[src.name] (AI Eye)" // Give it a name
+	if(client) client.eye = eyeobj
+	SetName(src.name)
 
 // Intiliaze the eye by assigning it's "ai" variable to us. Then set it's loc to us.
 /mob/living/silicon/ai/New()
 	..()
 	create_eyeobj()
+	spawn(5)
+		if(eyeobj)
+			eyeobj.forceMove(src.loc)
 
 /mob/living/silicon/ai/Destroy()
 	destroy_eyeobj()
 	. = ..()
 
 /atom/proc/move_camera_by_click()
-	if(istype(usr, /mob/living/silicon/ai))
+	if(isAI(usr))
 		var/mob/living/silicon/ai/AI = usr
 		if(AI.eyeobj && AI.client.eye == AI.eyeobj)
 			AI.eyeobj.setLoc(src)
@@ -93,7 +85,11 @@
 	if(!src.eyeobj)
 		return
 
-	eyeobj.possess(src)
+	if(client && client.eye)
+		client.eye = src
+	for(var/datum/chunk/c in eyeobj.visibleChunks)
+		c.remove(eyeobj)
+	src.eyeobj.setLoc(src)
 
 /mob/living/silicon/ai/proc/toggle_acceleration()
 	set category = "Silicon Commands"

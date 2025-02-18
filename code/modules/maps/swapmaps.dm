@@ -325,7 +325,12 @@ swapmap
 		x2+=x1-1
 		y2+=y1-1
 		z2+=z1-1
-		world.maxz=max(z2,world.maxz)	// stretch z if necessary
+		if(z2 > world.maxz) // stretch z if necessary
+			while(z2 > world.maxz)
+				world.incrementMaxZ()
+		else //Shrinking z level, notify it got changed
+			SSmobs.MaxZChanged()
+
 		if(!ischunk)
 			swapmaps_loaded[src]=null
 			swapmaps_byname[id]=src
@@ -372,6 +377,8 @@ swapmap
 			mz=max(mz,M.z2)
 		world.maxx=mx
 		world.maxy=my
+		if(mz != world.maxz)
+			SSmobs.MaxZChanged()
 		world.maxz=mz
 
 	// save and delete
@@ -489,12 +496,11 @@ atom
 
 
 // set this up (at runtime) as follows:
-/* list(\
-     'player.dmi'="player",\
-     'monster.dmi'="monster",\
-     ...
-     'item.dmi'="item")
-*/
+// list(
+//     'player.dmi'="player",
+//     'monster.dmi'="monster",
+//     ...
+//     'item.dmi'="item")
 var/list/swapmaps_iconcache
 
 // preferred mode; sav or text
@@ -586,7 +592,7 @@ proc/SwapMaps_CreateFromTemplate(template_id)
 	else if(swapmaps_mode!=SWAPMAPS_TEXT && fexists("map_[template_id].txt"))
 		text=1
 	else
-		world.log << "SwapMaps error in SwapMaps_CreateFromTemplate(): map_[template_id] file not found."
+		log_world("SwapMaps error in SwapMaps_CreateFromTemplate(): map_[template_id] file not found.")
 		return
 	if(text)
 		S=new
@@ -613,7 +619,7 @@ proc/SwapMaps_LoadChunk(chunk_id,turf/locorner)
 	else if(swapmaps_mode!=SWAPMAPS_TEXT && fexists("map_[chunk_id].txt"))
 		text=1
 	else
-		world.log << "SwapMaps error in SwapMaps_LoadChunk(): map_[chunk_id] file not found."
+		log_world("SwapMaps error in SwapMaps_LoadChunk(): map_[chunk_id] file not found.")
 		return
 	if(text)
 		S=new
@@ -631,9 +637,9 @@ proc/SwapMaps_LoadChunk(chunk_id,turf/locorner)
 
 proc/SwapMaps_SaveChunk(chunk_id,turf/corner1,turf/corner2)
 	if(!corner1 || !corner2)
-		world.log << "SwapMaps error in SwapMaps_SaveChunk():"
-		if(!corner1) world.log << "  corner1 turf is null"
-		if(!corner2) world.log << "  corner2 turf is null"
+		log_world("SwapMaps error in SwapMaps_SaveChunk():")
+		if(!corner1) log_world("  corner1 turf is null")
+		if(!corner2) log_world("  corner2 turf is null")
 		return
 	var/swapmap/M=new
 	M.id=chunk_id
@@ -660,7 +666,7 @@ proc/SwapMaps_GetSize(id)
 	else if(swapmaps_mode!=SWAPMAPS_TEXT && fexists("map_[id].txt"))
 		text=1
 	else
-		world.log << "SwapMaps error in SwapMaps_GetSize(): map_[id] file not found."
+		log_world("SwapMaps error in SwapMaps_GetSize(): map_[id] file not found.")
 		return
 	if(text)
 		S=new

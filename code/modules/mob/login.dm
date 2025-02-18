@@ -1,7 +1,5 @@
 //handles setting lastKnownIP and computer_id for use by the ban systems as well as checking for multikeying
 /mob/proc/update_Login_details()
-	var/serbname = "[server_name]: [station_name()]"
-	winset(src, null, "mainwindow.title='[serbname]'")
 	//Multikey checks and logging
 	lastKnownIP	= client.address
 	computer_id	= client.computer_id
@@ -27,55 +25,50 @@
 						log_access("Notice: [key_name(src)] has the same [matches] as [key_name(M)] (no longer logged in).")
 		if(is_multikeying && !client.warned_about_multikeying)
 			client.warned_about_multikeying = 1
-			spawn(1 SECOND)
+			spawn(1 SECONDS)
 				to_chat(src, "<b>WARNING:</b> It would seem that you are sharing connection or computer with another player. If you haven't done so already, please contact the staff via the Adminhelp verb to resolve this situation. Failure to do so may result in administrative action. You have been warned.")
 
-	if(config.login_export_addr)
-		spawn(-1)
-			var/list/params = new
-			params["login"] = 1
-			params["key"] = client.key
-			if(isnum(client.player_age))
-				params["server_age"] = client.player_age
-			params["ip"] = client.address
-			params["clientid"] = client.computer_id
-			params["roundid"] = game_id
-			params["name"] = real_name || name
-			world.Export("[config.login_export_addr]?[list2params(params)]", null, 1)
-	var/savefile/F = new /savefile("data/player_saves/[copytext(ckey, 1, 2)]/[ckey]/achievements.sav")
-	client.achievement_holder.Read(F)
-
-/mob/proc/maybe_send_staffwarns(var/action)
-	if(client.staffwarn)
-		for(var/client/C in GLOB.admins)
-			send_staffwarn(C, action)
-
-/mob/proc/send_staffwarn(var/client/C, var/action, var/noise = 1)
-	if(check_rights((R_ADMIN|R_MOD),0,C))
-		to_chat(C,"<span class='staffwarn'>StaffWarn: [client.ckey] [action]</span><br><span class='notice'>[client.staffwarn]</span>")
-		if(noise && C.get_preference_value(/datum/client_preference/staff/play_adminhelp_ping) == GLOB.PREF_HEAR)
-			sound_to(C, 'sound/effects/adminhelp.ogg')
-
-/mob
-	var/client/my_client // Need to keep track of this ourselves, since by the time Logout() is called the client has already been nulled
-
 /mob/Login()
-
+	if(!client)
+		return FALSE
 	GLOB.player_list |= src
 	update_Login_details()
 	world.update_status()
 
-	maybe_send_staffwarns("joined the round")
-
-	client.images = null				//remove the images such as AIs being unable to see runes
+	client.images = list()				//remove the images such as AIs being unable to see runes
 	client.screen = list()				//remove hud items just in case
-	InitializeHud()
+	if(hud_used)
+		qdel(hud_used)		//remove the hud objects
+	hud_used = new /datum/hud(src)
 
 	next_move = 1
-	set_sight(sight|SEE_SELF)
+	sight |= SEE_SELF
+
+	// YES, this is expensive
+	// YES, this calls 200k Move() calls
+	// however eris paralax is so bad that removing this breaks it
+
+	// BYOND's internal implementation of login does two things
+	// 1: Set statobj to the mob being logged into (We got this covered)
+	// 2: And I quote "If the mob has no location, place it near (1,1,1) if possible"
+	// See, near is doing an agressive amount of legwork there
+	// What it actually does is takes the area that (1,1,1) is in, and loops through all those turfs
+	// If you successfully move into one, it stops
+	// Because we want Move() to mean standard movements rather then just what byond treats it as (ALL moves)
+	// We don't allow moves from nullspace -> somewhere. This means the loop has to iterate all the turfs in (1,1,1)'s area
+	// For us, (1,1,1) is a space tile. This means roughly 200,000! calls to Move()
+	// You do not want this
 	..()
 
-	my_client = client
+	if(!client)
+		return FALSE
+
+	SEND_SIGNAL_OLD(src, COMSIG_MOB_LOGIN)
+	// the datum fires first than actual login. Do actual login first before triggering login events
+	GLOB.logged_in_event.raise_event(src)
+
+	if (key != client.key)
+		key = client.key
 
 	if(loc && !isturf(loc))
 		client.eye = loc
@@ -84,16 +77,20 @@
 		client.eye = src
 		client.perspective = MOB_PERSPECTIVE
 
-	if(eyeobj)
-		eyeobj.possess(src)
+	// This is located here instead of under /mob/living/silicon/robot/Login() to make sure that player looses "robot" macro in all cases when they stop being a robot
+	winset(src, null, "mainwindow.macro=[isrobot(src) ? "robot" : "default"]")
 
-	refresh_client_images()
-	reload_fullscreen() // Reload any fullscreen overlays this mob has.
-	add_click_catcher()
-	winset(src, "name", "text='[real_name]'")
+	if(client)
+		if(client.UI)
+			client.UI.show()
+		else
+			client.create_UI(src.type)
 
-	//set macro to normal incase it was overriden (like cyborg currently does)
-	winset(src, null, "mainwindow.macro=hotkeymode hotkey_toggle.is-checked=true mapwindow.map.focus=true")
+		add_click_catcher()
+		update_action_buttons()
 
-	if(warfare_faction)//If they are on a team already, then keep them on that team.
-		client.warfare_faction = warfare_faction
+		client.CAN_MOVE_DIAGONALLY = FALSE
+
+	update_client_colour(0)
+
+	return TRUE

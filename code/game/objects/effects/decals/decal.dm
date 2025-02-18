@@ -1,6 +1,8 @@
-/obj/effect/decal
-	plane = ABOVE_TURF_PLANE
-	layer = DECAL_LAYER
+/obj/effect
+	spawn_frequency = 10
+	bad_type = /obj/effect
+	spawn_tags = null
 
-/obj/effect/decal/fall_damage()
-	return 0
+/obj/effect/decal
+	plane = FLOOR_PLANE
+	bad_type = /obj/effect/decal

@@ -1,528 +1,758 @@
-// simulated/floor is currently plating by default, but there really should be an explicit plating type.
-/turf/simulated/floor/plating
-	name = "plating"
-	icon = 'icons/turf/flooring/plating.dmi'
-	icon_state = "plating"
-	plane = PLATING_PLANE
-	layer = PLATING_LAYER
+/turf/floor/carpet
+	name = "carpet"
+	icon = 'icons/turf/flooring/carpet.dmi'
+	icon_state = "carpet"
+	initial_flooring = /decl/flooring/carpet
 
-/turf/simulated/floor/plating/AltClick(var/mob/user)
-	if(CanPhysicallyInteract(user))
-		if(istype(user.get_active_hand(), /obj/item/stack/rods))
-			var/obj/item/stack/rods/R = user.get_active_hand()
-			visible_message("<span class='notice'>[user] has started place reinforced plating!</span>")
-			if(R.get_amount() > 10)
-				if(do_after(user, 10 SECONDS))
-					R.use(10)
-					ChangeTurf(/turf/simulated/floor/plating/reinforced)
+/turf/floor/carpet/bcarpet
+	name = "black carpet"
+	icon_state = "bcarpet"
+	initial_flooring = /decl/flooring/carpet/bcarpet
 
+/turf/floor/carpet/blucarpet
+	name = "blue carpet"
+	icon_state = "blucarpet"
+	initial_flooring = /decl/flooring/carpet/blucarpet
 
-/turf/simulated/floor/plating/reinforced
-	name = "reinforced plating"
-	icon = 'icons/turf/flooring/decals.dmi'
-	icon_state = "shaft-ready"
-	var/image/lattice_overlay
-	var/reinforced_stage = 1
+/turf/floor/carpet/turcarpet
+	name = "tur carpet"
+	icon_state = "turcarpet"
+	initial_flooring = /decl/flooring/carpet/turcarpet
 
-/turf/simulated/floor/plating/reinforced/New()
-	..()
-	icon_state = "shaft"
-	lattice_overlay = image(icon ='icons/obj/structures.dmi',icon_state ="latticefull")
-	lattice_overlay.layer = CATWALK_LAYER
-	//lattice_overlay.plane = ABOVE_TURF_PLANE
-	overlays += lattice_overlay
+/turf/floor/carpet/sblucarpet
+	name = "sblue carpet"
+	icon_state = "sblucarpet"
+	initial_flooring = /decl/flooring/carpet/sblucarpet
 
-/turf/simulated/floor/plating/reinforced/attackby(obj/item/C as obj, mob/user as mob)
-	if(isWelder(C) && reinforced_stage == 1)
-		var/obj/item/weldingtool/welder = C
-		if(welder.isOn())
-			visible_message("<span class='notice'>[user] start to unweld lattice from [src]!</span>")
-			if(do_after(user, 15 SECONDS) && welder.isOn())
-				to_chat(user, "<span class='notice'>You unweld lattice from plating.</span>")
-				playsound(src, 'sound/items/Welder.ogg', 80, 1)
-				overlays.Cut()
-				reinforced_stage++
-	if(isCrowbar(C) && reinforced_stage == 2)
-		visible_message("<span class='notice'>[user] start to pry off [src.name] from floor!</span>")
-		playsound(src, 'sound/items/Crowbar.ogg', 80, 1)
-		if(do_after(user, 10 SECONDS))
-			playsound(src, 'sound/items/Crowbar.ogg', 80, 1)
-			new /obj/item/stack/rods(src.loc)
-			ChangeTurf(/turf/simulated/floor/plating)
+/turf/floor/carpet/gaycarpet
+	name = "clown carpet"
+	icon_state = "gaycarpet"
+	initial_flooring = /decl/flooring/carpet/gaycarpet
 
+/turf/floor/carpet/purcarpet
+	name = "purple carpet"
+	icon_state = "purcarpet"
+	initial_flooring = /decl/flooring/carpet/purcarpet
 
-/turf/simulated/floor/bluegrid
+/turf/floor/carpet/oracarpet
+	name = "orange carpet"
+	icon_state = "oracarpet"
+	initial_flooring = /decl/flooring/carpet/oracarpet
+
+// Airless versions
+/turf/floor/carpet/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/carpet/bcarpet/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/carpet/blucarpet/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/carpet/turcarpet/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/carpet/sblucarpet/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/carpet/gaycarpet/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/carpet/purcarpet/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/carpet/oracarpet/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/bluegrid
 	name = "mainframe floor"
 	icon = 'icons/turf/flooring/circuit.dmi'
 	icon_state = "bcircuit"
+	flags = TURF_HAS_CORNERS  | TURF_HIDES_THINGS
 	initial_flooring = /decl/flooring/reinforced/circuit
-	light_range = 2
-	light_power = 3
-	light_color = COLOR_BLUE
 
-/turf/simulated/floor/bluegrid/airless
-	initial_gas = null
 
-/turf/simulated/floor/greengrid
+/turf/floor/greengrid
 	name = "mainframe floor"
 	icon = 'icons/turf/flooring/circuit.dmi'
 	icon_state = "gcircuit"
 	initial_flooring = /decl/flooring/reinforced/circuit/green
-	light_range = 2
-	light_power = 3
-	light_color = COLOR_GREEN
 
-/turf/simulated/floor/blackgrid
-	name = "mainframe floor"
-	icon = 'icons/turf/flooring/circuit.dmi'
-	icon_state = "rcircuit"
-	initial_flooring = /decl/flooring/reinforced/circuit/red
-	light_range = 2
-	light_power = 2
-	light_color = COLOR_RED
-
-/turf/simulated/floor/greengrid/airless
-	initial_gas = null
-
-/turf/simulated/floor/wood
+/turf/floor/wood
 	name = "wooden floor"
 	icon = 'icons/turf/flooring/wood.dmi'
 	icon_state = "wood"
 	initial_flooring = /decl/flooring/wood
 
-/turf/simulated/floor/grass
-	name = "grass patch"
-	icon = 'icons/turf/flooring/grass.dmi'
-	icon_state = "grass0"
-	initial_flooring = /decl/flooring/grass
+/turf/floor/wood/airless
+	oxygen = 0
+	nitrogen = 0
 
-/turf/simulated/floor/diona
-	name = "biomass"
-	icon = 'icons/turf/floors.dmi'
-	initial_flooring = /decl/flooring/diona
-
-/turf/simulated/floor/tiled
-	name = "steel floor"
+/turf/floor/tiled
+	name = "floor"
 	icon = 'icons/turf/flooring/tiles.dmi'
-	icon_state = "steel"
+	icon_state = "tiles"
 	initial_flooring = /decl/flooring/tiling
 
-/turf/simulated/floor/carpet
-	name = "brown carpet"
-	icon = 'icons/turf/flooring/carpet.dmi'
-	icon_state = "brown"
-	initial_flooring = /decl/flooring/carpet
 
-/turf/simulated/floor/carpet/blue
-	name = "blue carpet"
-	icon_state = "blue1"
-	initial_flooring = /decl/flooring/carpet/blue
 
-/turf/simulated/floor/carpet/blue2
-	name = "pale blue carpet"
-	icon_state = "blue2"
-	initial_flooring = /decl/flooring/carpet/blue2
 
-/turf/simulated/floor/carpet/purple
-	name = "purple carpet"
-	icon_state = "purple"
-	initial_flooring = /decl/flooring/carpet/purple
 
-/turf/simulated/floor/carpet/orange
-	name = "orange carpet"
-	icon_state = "orange"
-	initial_flooring = /decl/flooring/carpet/orange
+/turf/floor/tiled/steel
+	name = "floor"
+	icon = 'icons/turf/flooring/tiles_steel.dmi'
+	icon_state = "tiles"
+	initial_flooring = /decl/flooring/tiling/steel
 
-/turf/simulated/floor/carpet/green
-	name = "green carpet"
-	icon_state = "green"
-	initial_flooring = /decl/flooring/carpet/green
+/turf/floor/tiled/steel/panels
+	icon_state = "panels"
+	initial_flooring = /decl/flooring/tiling/steel/panels
 
-/turf/simulated/floor/carpet/red
-	name = "red carpet"
-	icon_state = "red"
-	initial_flooring = /decl/flooring/carpet/red
+/turf/floor/tiled/steel/techfloor
+	icon_state = "techfloor"
+	initial_flooring = /decl/flooring/tiling/steel/techfloor
 
-/turf/simulated/floor/reinforced
+/turf/floor/tiled/steel/techfloor_grid
+	icon_state = "techfloor_grid"
+	initial_flooring = /decl/flooring/tiling/steel/techfloor_grid
+
+/turf/floor/tiled/steel/brown_perforated
+	icon_state = "brown_perforated"
+	initial_flooring = /decl/flooring/tiling/steel/brown_perforated
+
+/turf/floor/tiled/steel/gray_perforated
+	icon_state = "gray_perforated"
+	initial_flooring = /decl/flooring/tiling/steel/gray_perforated
+
+/turf/floor/tiled/steel/cargo
+	icon_state = "cargo"
+	initial_flooring = /decl/flooring/tiling/steel/cargo
+
+/turf/floor/tiled/steel/brown_platform
+	icon_state = "brown_platform"
+	initial_flooring = /decl/flooring/tiling/steel/brown_platform
+
+/turf/floor/tiled/steel/gray_platform
+	icon_state = "gray_platform"
+	initial_flooring = /decl/flooring/tiling/steel/gray_platform
+
+/turf/floor/tiled/steel/danger
+	icon_state = "danger"
+	initial_flooring = /decl/flooring/tiling/steel/danger
+
+/turf/floor/tiled/steel/golden
+	icon_state = "golden"
+	initial_flooring = /decl/flooring/tiling/steel/golden
+
+/turf/floor/tiled/steel/bluecorner
+	icon_state = "bluecorner"
+	initial_flooring = /decl/flooring/tiling/steel/bluecorner
+
+/turf/floor/tiled/steel/orangecorner
+	icon_state = "orangecorner"
+	initial_flooring = /decl/flooring/tiling/steel/orangecorner
+
+/turf/floor/tiled/steel/cyancorner
+	icon_state = "cyancorner"
+	initial_flooring = /decl/flooring/tiling/steel/cyancorner
+
+/turf/floor/tiled/steel/violetcorener
+	icon_state = "violetcorener"
+	initial_flooring = /decl/flooring/tiling/steel/violetcorener
+
+/turf/floor/tiled/steel/monofloor
+	icon_state = "monofloor"
+	initial_flooring = /decl/flooring/tiling/steel/monofloor
+
+/turf/floor/tiled/steel/bar_flat
+	icon_state = "bar_flat"
+	initial_flooring = /decl/flooring/tiling/steel/bar_flat
+
+/turf/floor/tiled/steel/bar_dance
+	icon_state = "bar_dance"
+	initial_flooring = /decl/flooring/tiling/steel/bar_dance
+
+/turf/floor/tiled/steel/bar_light
+	icon_state = "bar_light"
+	initial_flooring = /decl/flooring/tiling/steel/bar_light
+
+
+
+
+/turf/floor/tiled/white
+	name = "floor"
+	icon = 'icons/turf/flooring/tiles_white.dmi'
+	icon_state = "tiles"
+	initial_flooring = /decl/flooring/tiling/white
+
+/turf/floor/tiled/white/panels
+	icon_state = "panels"
+	initial_flooring = /decl/flooring/tiling/white/panels
+
+/turf/floor/tiled/white/techfloor
+	icon_state = "techfloor"
+	initial_flooring = /decl/flooring/tiling/white/techfloor
+
+/turf/floor/tiled/white/techfloor_grid
+	icon_state = "techfloor_grid"
+	initial_flooring = /decl/flooring/tiling/white/techfloor_grid
+
+/turf/floor/tiled/white/brown_perforated
+	icon_state = "brown_perforated"
+	initial_flooring = /decl/flooring/tiling/white/brown_perforated
+
+/turf/floor/tiled/white/gray_perforated
+	icon_state = "gray_perforated"
+	initial_flooring = /decl/flooring/tiling/white/gray_perforated
+
+/turf/floor/tiled/white/cargo
+	icon_state = "cargo"
+	initial_flooring = /decl/flooring/tiling/white/cargo
+
+/turf/floor/tiled/white/brown_platform
+	icon_state = "brown_platform"
+	initial_flooring = /decl/flooring/tiling/white/brown_platform
+
+/turf/floor/tiled/white/gray_platform
+	icon_state = "gray_platform"
+	initial_flooring = /decl/flooring/tiling/white/gray_platform
+
+/turf/floor/tiled/white/danger
+	icon_state = "danger"
+	initial_flooring = /decl/flooring/tiling/white/danger
+
+/turf/floor/tiled/white/golden
+	icon_state = "golden"
+	initial_flooring = /decl/flooring/tiling/white/golden
+
+/turf/floor/tiled/white/bluecorner
+	icon_state = "bluecorner"
+	initial_flooring = /decl/flooring/tiling/white/bluecorner
+
+/turf/floor/tiled/white/orangecorner
+	icon_state = "orangecorner"
+	initial_flooring = /decl/flooring/tiling/white/orangecorner
+
+/turf/floor/tiled/white/cyancorner
+	icon_state = "cyancorner"
+	initial_flooring = /decl/flooring/tiling/white/cyancorner
+
+/turf/floor/tiled/white/violetcorener
+	icon_state = "violetcorener"
+	initial_flooring = /decl/flooring/tiling/white/violetcorener
+
+/turf/floor/tiled/white/monofloor
+	icon_state = "monofloor"
+	initial_flooring = /decl/flooring/tiling/white/monofloor
+
+
+
+
+
+
+/turf/floor/tiled/dark
+	name = "floor"
+	icon = 'icons/turf/flooring/tiles_dark.dmi'
+	icon_state = "tiles"
+	initial_flooring = /decl/flooring/tiling/dark
+
+/turf/floor/tiled/dark/panels
+	icon_state = "panels"
+	initial_flooring = /decl/flooring/tiling/dark/panels
+
+/turf/floor/tiled/dark/techfloor
+	icon_state = "techfloor"
+	initial_flooring = /decl/flooring/tiling/dark/techfloor
+
+/turf/floor/tiled/dark/techfloor_grid
+	icon_state = "techfloor_grid"
+	initial_flooring = /decl/flooring/tiling/dark/techfloor_grid
+
+/turf/floor/tiled/dark/brown_perforated
+	icon_state = "brown_perforated"
+	initial_flooring = /decl/flooring/tiling/dark/brown_perforated
+
+/turf/floor/tiled/dark/gray_perforated
+	icon_state = "gray_perforated"
+	initial_flooring = /decl/flooring/tiling/dark/gray_perforated
+
+/turf/floor/tiled/dark/cargo
+	icon_state = "cargo"
+	initial_flooring = /decl/flooring/tiling/dark/cargo
+
+/turf/floor/tiled/dark/brown_platform
+	icon_state = "brown_platform"
+	initial_flooring = /decl/flooring/tiling/dark/brown_platform
+
+/turf/floor/tiled/dark/gray_platform
+	icon_state = "gray_platform"
+	initial_flooring = /decl/flooring/tiling/dark/gray_platform
+
+/turf/floor/tiled/dark/danger
+	icon_state = "danger"
+	initial_flooring = /decl/flooring/tiling/dark/danger
+
+/turf/floor/tiled/dark/golden
+	icon_state = "golden"
+	initial_flooring = /decl/flooring/tiling/dark/golden
+
+/turf/floor/tiled/dark/bluecorner
+	icon_state = "bluecorner"
+	initial_flooring = /decl/flooring/tiling/dark/bluecorner
+
+/turf/floor/tiled/dark/orangecorner
+	icon_state = "orangecorner"
+	initial_flooring = /decl/flooring/tiling/dark/orangecorner
+
+/turf/floor/tiled/dark/cyancorner
+	icon_state = "cyancorner"
+	initial_flooring = /decl/flooring/tiling/dark/cyancorner
+
+/turf/floor/tiled/dark/violetcorener
+	icon_state = "violetcorener"
+	initial_flooring = /decl/flooring/tiling/dark/violetcorener
+
+/turf/floor/tiled/dark/monofloor
+	icon_state = "monofloor"
+	initial_flooring = /decl/flooring/tiling/dark/monofloor
+
+
+
+/turf/floor/tiled/cafe
+	name = "floor"
+	icon = 'icons/turf/flooring/tiles.dmi'
+	icon_state = "cafe"
+	initial_flooring = /decl/flooring/tiling/cafe
+
+/turf/floor/tiled/techmaint
+	name = "floor"
+	icon = 'icons/turf/flooring/tiles_maint.dmi'
+	icon_state = "techmaint"
+	initial_flooring = /decl/flooring/tiling/techmaint
+
+/turf/floor/tiled/techmaint_perforated
+	name = "floor"
+	icon = 'icons/turf/flooring/tiles_maint.dmi'
+	icon_state = "techmaint_perforated"
+	initial_flooring = /decl/flooring/tiling/techmaint_perforated
+
+/turf/floor/tiled/techmaint_panels
+	name = "floor"
+	icon = 'icons/turf/flooring/tiles_maint.dmi'
+	icon_state = "techmaint_panels"
+	initial_flooring = /decl/flooring/tiling/techmaint_panels
+
+/turf/floor/tiled/techmaint_cargo
+	name = "floor"
+	icon = 'icons/turf/flooring/tiles_maint.dmi'
+	icon_state = "techmaint_cargo"
+	initial_flooring = /decl/flooring/tiling/techmaint_cargo
+
+
+/turf/floor/reinforced
 	name = "reinforced floor"
 	icon = 'icons/turf/flooring/tiles.dmi'
 	icon_state = "reinforced"
 	initial_flooring = /decl/flooring/reinforced
 
-/turf/simulated/floor/reinforced/airless
-	initial_gas = null
+/turf/floor/reinforced/almost_airless //Shields detect zero atmosphere next to walls, which empty chambers with airless tiles technically count, and diffusers don't allow gasses through injectors
+	oxygen = 0
+	nitrogen = 0.5
 
-/turf/simulated/floor/reinforced/airmix
-	initial_gas = list("oxygen" = MOLES_O2ATMOS, "nitrogen" = MOLES_N2ATMOS)
+/turf/floor/reinforced/airmix
+	oxygen = MOLES_O2ATMOS
+	nitrogen = MOLES_N2ATMOS
 
-/turf/simulated/floor/reinforced/nitrogen
-	initial_gas = list("nitrogen" = ATMOSTANK_NITROGEN)
+/turf/floor/reinforced/nitrogen
+	oxygen = 0
+	nitrogen = ATMOSTANK_NITROGEN
 
-/turf/simulated/floor/reinforced/hydrogen
-	initial_gas = list("hydrogen" = ATMOSTANK_HYDROGEN)
+/turf/floor/reinforced/oxygen
+	oxygen = ATMOSTANK_OXYGEN
+	nitrogen = 0
 
-/turf/simulated/floor/reinforced/oxygen
-	initial_gas = list("oxygen" = ATMOSTANK_OXYGEN)
+/turf/floor/reinforced/plasma
+	oxygen = 0
+	nitrogen = 0
+	plasma = ATMOSTANK_PLASMA
 
-/turf/simulated/floor/reinforced/phoron
-	initial_gas = list("phoron" = ATMOSTANK_PHORON)
+/turf/floor/reinforced/carbon_dioxide
+	oxygen = 0
+	nitrogen = 0
+	carbon_dioxide = ATMOSTANK_CO2
 
-/turf/simulated/floor/reinforced/nitrogen/engine
-	name = "engine floor"
-	initial_gas = list("nitrogen" = MOLES_N2STANDARD)
+/turf/floor/reinforced/n20
+	oxygen = 0
+	nitrogen = 0
 
-/turf/simulated/floor/reinforced/phoron/fuel
-	initial_gas = list("phoron" = ATMOSTANK_PHORON_FUEL)
+/turf/floor/reinforced/engine
+	oxygen = 825
+	nitrogen = 0
+	plasma = 2500
+	temperature = 374
 
-/turf/simulated/floor/reinforced/hydrogen
-	initial_gas = list("hydrogen" = ATMOSTANK_HYDROGEN)
-
-/turf/simulated/floor/reinforced/hydrogen/fuel
-	initial_gas = list("hydrogen" = ATMOSTANK_HYDROGEN_FUEL)
-
-/turf/simulated/floor/reinforced/carbon_dioxide
-	initial_gas = list("carbon_dioxide" = ATMOSTANK_CO2)
-
-/turf/simulated/floor/reinforced/n20
-	initial_gas = list("sleeping_agent" = ATMOSTANK_NITROUSOXIDE)
-
-
-/turf/simulated/floor/cult
-	name = "engraved floor"
-	icon = 'icons/turf/flooring/cult.dmi'
-	icon_state = "cult"
-	initial_flooring = /decl/flooring/reinforced/cult
-
-/turf/simulated/floor/cult/cultify()
-	return
-
-/turf/simulated/floor/tiled/dark
-	name = "dark floor"
-	icon_state = "dark"
-	initial_flooring = /decl/flooring/tiling/dark
-
-/turf/simulated/floor/tiled/dark/airless
-	initial_gas = null
-
-/turf/simulated/floor/tiled/white
-	name = "white floor"
-	icon_state = "white"
-	initial_flooring = /decl/flooring/tiling/white
-
-/turf/simulated/floor/tiled/freezer
-	name = "tiles"
-	icon_state = "freezer"
-	initial_flooring = /decl/flooring/tiling/freezer
-
-/turf/simulated/floor/lino
-	name = "lino"
-	icon = 'icons/turf/flooring/linoleum.dmi'
-	icon_state = "lino"
-	initial_flooring = /decl/flooring/linoleum
-
-/turf/simulated/floor/tiled/ramp
-	name = "foot ramp"
-	icon = 'icons/turf/flooring/tiles.dmi'
-	icon_state = "ramptop"
-	initial_flooring = /decl/flooring/reinforced/ramp
-
-/turf/simulated/floor/tiled/ramp/bottom
-	name = "foot ramp"
-	icon = 'icons/turf/flooring/tiles.dmi'
-	icon_state = "rampbot"
-	initial_flooring = /decl/flooring/reinforced/ramp/bottom
-
-/turf/simulated/floor/plating/n2floor
-	name = "floor with low ceiling"
-	icon_state = "n2floor"
-	desc = "There is low ceiling here!"
-
-/turf/simulated/floor/plating/n2floor/Enter(var/atom/movable/A)
+/turf/floor/reinforced/n20/New()
 	..()
-	if(ishuman(A))
-		var/mob/living/carbon/human/L = A
-		var/turf/Above = GetAbove(src)
-		if(L.isChild())
-			return 1
-		if(!L.resting && !istype(Above, /turf/simulated/open))
-			to_chat(L, "This passage is too low. I need to lie down.")
-			return 0
-		return 1
+	sleep(-1)
+	if(!air) make_air()
+	air.adjust_gas("sleeping_agent", ATMOSTANK_NITROUSOXIDE)
+
+
 
 //ATMOS PREMADES
-/turf/simulated/floor/reinforced/airless
-	name = "vacuum floor"
-	initial_gas = null
+/turf/floor/reinforced/airless
+	name = "reinforced floor"
+	oxygen = 0
+	nitrogen = 0
 	temperature = TCMB
 
-/turf/simulated/floor/airless
-	name = "airless plating"
-	initial_gas = null
+/turf/floor/airless
+	name = "plating"
+	oxygen = 0
+	nitrogen = 0
 	temperature = TCMB
 
-/turf/simulated/floor/tiled/airless
-	name = "airless floor"
-	initial_gas = null
+/turf/floor/tiled/airless
+	name = "floor"
+	oxygen = 0
+	nitrogen = 0
 	temperature = TCMB
 
-/turf/simulated/floor/bluegrid/airless
-	name = "airless floor"
-	initial_gas = null
+/turf/floor/bluegrid/airless
+	name = "floor"
+	oxygen = 0
+	nitrogen = 0
 	temperature = TCMB
 
-/turf/simulated/floor/greengrid/airless
-	name = "airless floor"
-	initial_gas = null
+/turf/floor/greengrid/airless
+	name = "floor"
+	oxygen = 0
+	nitrogen = 0
 	temperature = TCMB
 
-/turf/simulated/floor/greengrid/nitrogen
-	initial_gas = list("nitrogen" = MOLES_N2STANDARD)
+/turf/floor/greengrid/nitrogen
+	oxygen = 0
 
-/turf/simulated/floor/tiled/white/airless
-	name = "airless floor"
-	initial_gas = null
+/turf/floor/tiled/white/airless
+	name = "floor"
+	oxygen = 0
+	nitrogen = 0
 	temperature = TCMB
+
+
+/turf/floor/tiled/derelict
+	name = "floor"
+	icon = 'icons/turf/flooring/derelict.dmi'
+	icon_state = "derelict1"
+	initial_flooring = /decl/flooring/tiling/derelict/white_red_edges
+
+/turf/floor/tiled/derelict/white_red_edges
+	name = "floor"
+	icon_state = "derelict1"
+	initial_flooring = /decl/flooring/tiling/derelict/white_red_edges
+
+/turf/floor/tiled/derelict/white_small_edges
+	name = "floor"
+	icon_state = "derelict2"
+	initial_flooring = /decl/flooring/tiling/derelict/white_small_edges
+
+/turf/floor/tiled/derelict/red_white_edges
+	name = "floor"
+	icon_state = "derelict3"
+	initial_flooring = /decl/flooring/tiling/derelict/red_white_edges
+
+/turf/floor/tiled/derelict/white_big_edges
+	name = "floor"
+	icon_state = "derelict4"
+	initial_flooring = /decl/flooring/tiling/derelict/white_big_edges
+
+////
+// Airless versions
+////
+/turf/floor/tiled/steel/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/panels/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/techfloor/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/techfloor_grid/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/brown_perforated/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/gray_perforated/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/cargo/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/brown_platform/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/gray_platform/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/danger/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/golden/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/bluecorner/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/orangecorner/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/cyancorner/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/violetcorener/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/monofloor/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/bar_flat/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/bar_dance/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/steel/bar_light/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/panels/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/techfloor/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/techfloor_grid/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/brown_perforated/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/gray_perforated/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/cargo/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/brown_platform/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/gray_platform/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/danger/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/golden/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/bluecorner/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/orangecorner/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/cyancorner/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/violetcorener/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/white/monofloor/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/panels/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/techfloor/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/techfloor_grid/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/brown_perforated/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/gray_perforated/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/cargo/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/brown_platform/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/gray_platform/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/danger/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/golden/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/bluecorner/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/orangecorner/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/cyancorner/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/violetcorener/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/dark/monofloor/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/cafe/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/techmaint/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/techmaint_perforated/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/techmaint_panels/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/techmaint_cargo/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/derelict/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/derelict/white_red_edges/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/derelict/white_small_edges/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/derelict/red_white_edges/airless
+	oxygen = 0
+	nitrogen = 0
+
+/turf/floor/tiled/derelict/white_big_edges/airless
+	oxygen = 0
+	nitrogen = 0
 
 // Placeholders
-/turf/simulated/floor/airless/lava
-	name = "lava"
-	icon = 'icons/turf/flooring/lava.dmi'
-	icon_state = "lava"
+/turf/floor/airless/lava
+/turf/floor/light
+/turf/floor/snow
+/turf/floor/beach/coastline
+/turf/floor/plating/snow
+/turf/floor/airless/ceiling
 
-/turf/simulated/floor/ice
-	name = "ice"
-	icon = 'icons/turf/snow.dmi'
-	icon_state = "ice"
-
-/turf/simulated/floor/snow
-	name = "snow"
-	icon = 'icons/turf/snow.dmi'
-	icon_state = "snow"
-
-/turf/simulated/floor/snow/New()
-	icon_state = pick("snow[rand(1,12)]","snow0")
-	..()
-
-
-/turf/simulated/floor/light
-/turf/simulated/floor/airless/ceiling
-
-/turf/simulated/floor/beach
+/turf/floor/beach
 	name = "beach"
 	icon = 'icons/misc/beach.dmi'
 
-/turf/simulated/floor/beach/sand
+/turf/floor/beach/sand
 	name = "sand"
 	icon_state = "sand"
 
-/turf/simulated/floor/beach/sand/desert
+/turf/floor/beach/sand/desert
 	icon_state = "desert"
-	has_resources = 1
 
-/turf/simulated/floor/beach/sand/desert/New()
-	icon_state = "desert[rand(0,5)]"
-	..()
-
-/turf/simulated/floor/beach/coastline
+/turf/floor/beach/coastline
 	name = "coastline"
 	icon = 'icons/misc/beach2.dmi'
 	icon_state = "sandwater"
 
-/turf/simulated/floor/beach/water
+/turf/floor/beach/water
 	name = "water"
 	icon_state = "water"
 
-/turf/simulated/floor/beach/water/update_dirt()
-	return	// Water doesn't become dirty
-
-/turf/simulated/floor/beach/water/ocean
+/turf/floor/beach/water/ocean
 	icon_state = "seadeep"
 
-/turf/simulated/floor/beach/water/New()
+/turf/floor/beach/water/New()
 	..()
-	overlays += image("icon"='icons/misc/beach.dmi',"icon_state"="water5","layer"=BASE_MOB_LAYER+0.1)
+	overlays += image("icon"='icons/misc/beach.dmi',"icon_state"="water5","layer"=MOB_LAYER+0.1)
 
-
-//NASS13/
-
-/turf/simulated/floor/nass13/steel
-	name = "Steel plated floor"
-	icon = 'icons/turf/flooring/plating.dmi'
-	icon_state = "steelplate"
-
-/turf/simulated/floor/nass13/darth
-	icon_state = "darthsteel"
-
-/turf/simulated/floor/nass13/wornsteel
-	icon_state = "wornsteel"
-
-/turf/simulated/floor/nass13/corodedsteel
-	icon_state = "corodedsteel"
-
-/turf/simulated/floor/nass13/plated
-	icon_state = "plated"
-
-/turf/simulated/floor/nass13/plated/brown
-	icon_state = "brownplate"
-
-/turf/simulated/floor/nass13/plated/sunburnt
-	icon_state = "sunburnt"
-
-/turf/simulated/floor/nass13/plated/burnt
-	icon_state = "burnt"
-
-/turf/simulated/floor/nass13/plated/hex
-	icon_state = "hex"
-
-/turf/simulated/floor/nass13/plated/brian
-	icon_state = "brian"
-
-/turf/simulated/floor/nass13/plated/hex2
-	icon_state = "hex2"
-
-/turf/simulated/floor/nass13/plated/hex2
-	icon_state = "drought"
-
-/turf/simulated/floor/nass13/plated/burnned
-	icon_state = "burnned"
-
-/turf/simulated/floor/nass13/plated/burnned
-	icon_state = "flatpacked"
-
-/turf/simulated/floor/nass13/plated/tyrson
-	icon_state = "tryson"
-
-/turf/simulated/floor/nass13/plated/gritty
-	icon_state = "gritty"
-
-/turf/simulated/floor/nass13/plated/gritty/tri
-	icon_state = "tri"
-
-
-/turf/simulated/floor/nass13/plated/gritty/bleak
-	icon_state = "bleak"
-
-/turf/simulated/floor/nass13/plated/stained
-	icon_state = "platedstainned"
-
-/turf/simulated/floor/nass13/plated/ceramic
-	icon_state = "ceramic"
-
-/turf/simulated/floor/nass13/plated/ceramic2
-	icon_state = "ceramic2"
-
-/turf/simulated/floor/nass13/plated/ceramic3
-	icon_state = "ceramic3"
-
-/turf/simulated/floor/nass13/plated/ceramic4
-	icon_state = "ceramic4"
-
-/turf/simulated/floor/nass13/plated/ceramic5
-	icon_state = "ceramic4"
-
-/turf/simulated/floor/nass13/plated/brick
-	icon_state = "brick"
-
-/turf/simulated/floor/nass13/plated/brick/darkpath
-	icon_state = "darkpath"
-
-/turf/simulated/floor/nass13/plated/brick/darkpath
-	icon_state = "darthsidewalk"
-
-/turf/simulated/floor/nass13/plated/brick/darkpath2
-	icon_state = "darthsidewalk2"
-
-/turf/simulated/floor/nass13/plated/brick/darkpath3
-	icon_state = "darthsidewalk3"
-
-
-
-
-
-//New shit here//
-
-/turf/simulated/floor/nass13/plated/decay
-	icon_state = "plateddecay"
-
-/turf/simulated/floor/nass13/plated/decay2
-	icon_state = "pplateddecay2"
-
-/turf/simulated/floor/nass13/plated/decay3
-	icon_state = "pplateddecay3"
-
-/turf/simulated/floor/nass13/plated/intersection
-	icon_state = "intersection"
-
-/turf/simulated/floor/nass13/plated/noble
-	icon_state = "noble"
-
-/turf/simulated/floor/nass13/plated/lord
-	icon_state = "lord"
-
-/turf/simulated/floor/nass13/plated/lord2
-	icon_state = "lord2"
-
-
-/turf/simulated/floor/nass13/brick/grated
-	icon_state = "grated"
-
-
-/turf/simulated/floor/nass13/brick/grated2
-	icon_state = "grated2"
-
-
-/turf/simulated/floor/nass13/brick/bricked
-	icon_state = "bricked"
-
-
-/turf/simulated/floor/nass13/brick/bricked2
-	icon_state = "bricked2"
-
-
-
-/turf/simulated/floor/nass13/bricked3
-	icon_state = "bricked3"
-
-
-/turf/simulated/floor/nass13/bricked4
-	icon_state = "bricked4"
-
-
-/turf/simulated/floor/nass13/bricked5
-	icon_state = "bricked5"
-
-
-/turf/simulated/floor/nass13/bricked6
-	icon_state = "bricked6"
-
-
-/turf/simulated/floor/nass13/bricked7
-	icon_state = "bricked7"
-
-
-
-/turf/simulated/floor/nass13/bricked8
-	icon_state = "bricked8"
-
-
-/turf/simulated/floor/nass13/bricked9
-	icon_state = "bricked9"
-
-
-/turf/simulated/floor/nass13/bricked10
-	icon_state = "bricked10"
-
-
-/turf/simulated/floor/nass13/cated
-	icon_state = "cated"
-
-/turf/simulated/floor/nass13/cated2
-	icon_state = "cated2"
-
-
-/turf/simulated/floor/nass13/cated3
-	icon_state = "cated3"
-
-
-/turf/simulated/floor/nass13/cated4
-	icon_state = "cated4"

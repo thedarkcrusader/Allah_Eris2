@@ -7,23 +7,22 @@
 /obj/vehicle
 	name = "vehicle"
 	icon = 'icons/obj/vehicles.dmi'
-	plane = ABOVE_HUMAN_PLANE
-	layer = ABOVE_HUMAN_LAYER
-	density = 1
-	anchored = 1
+	layer = MOB_LAYER + 0.1 //so it sits above objects including mobs
+	density = TRUE
+	anchored = TRUE
 	animate_movement=1
 	light_range = 3
 
-	can_buckle = 1
+	can_buckle = TRUE
 	buckle_movable = 1
 	buckle_lying = 0
 
 	var/attack_log = null
-	var/on = 0
+	var/on = FALSE
 	var/health = 0	//do not forget to set health for your vehicle!
 	var/maxhealth = 0
-	var/fire_dam_coeff = 1.0
-	var/brute_dam_coeff = 1.0
+	var/fire_dam_coeff = 1
+	var/brute_dam_coeff = 1
 	var/open = 0	//Maint panel
 	var/locked = 1
 	var/stat = 0
@@ -31,13 +30,16 @@
 	var/powered = 0		//set if vehicle is powered and should use fuel when moving
 	var/move_delay = 1	//set this to limit the speed of the vehicle
 
-	var/obj/item/cell/cell
-	var/charge_use = 200 //W
+	var/passenger_allowed = 1
+
+	var/obj/item/cell/large/cell
+	var/charge_use = 5	//set this to adjust the amount of power the vehicle uses per move
 
 	var/atom/movable/load		//all vehicles can take a load, since they should all be a least drivable
 	var/load_item_visible = 1	//set if the loaded item should be overlayed on the vehicle sprite
 	var/load_offset_x = 0		//pixel_x offset for item overlay
 	var/load_offset_y = 0		//pixel_y offset for item overlay
+	var/mob_offset_y = 0		//pixel_y offset for mob overlay
 
 //-------------------------------------------
 // Standard procs
@@ -46,68 +48,93 @@
 	..()
 	//spawn the cell you want in each vehicle
 
-/obj/vehicle/Move()
+/obj/vehicle/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
 	if(world.time > l_move_time + move_delay)
 		var/old_loc = get_turf(src)
-		if(on && powered && cell.charge < (charge_use * CELLRATE))
+		if(on && powered && cell.charge < charge_use)
 			turn_off()
 
 		var/init_anc = anchored
-		anchored = 0
-		if(!..())
+		anchored = FALSE
+		if(!(. = ..()))
 			anchored = init_anc
-			return 0
+			return
 
 		set_dir(get_dir(old_loc, loc))
 		anchored = init_anc
 
 		if(on && powered)
-			cell.use(charge_use * CELLRATE)
+			cell.use(charge_use)
 
 		//Dummy loads do not have to be moved as they are just an overlay
 		//See load_object() proc in cargo_trains.dm for an example
 		if(load && !istype(load, /datum/vehicle_dummy_load))
-			load.forceMove(loc)
+			load.forceMove(loc, glide_size_override=DELAY2GLIDESIZE(move_delay))
 			load.set_dir(dir)
 
 		return 1
 	else
 		return 0
 
-/obj/vehicle/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W, /obj/item/hand_labeler))
-		return
-	if(isScrewdriver(W))
-		if(!locked)
-			open = !open
-			update_icon()
-			to_chat(user, "<span class='notice'>Maintenance panel is now [open ? "opened" : "closed"].</span>")
-	else if(isCrowbar(W) && cell && open)
-		remove_cell(user)
+/obj/vehicle/attackby(obj/item/I, mob/user)
 
-	else if(istype(W, /obj/item/cell) && !cell && open)
-		insert_cell(W, user)
-	else if(isWelder(W))
-		var/obj/item/weldingtool/T = W
-		if(T.welding)
-			if(health < maxhealth)
-				if(open)
-					health = min(maxhealth, health+10)
-					user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-					user.visible_message("<span class='warning'>\The [user] repairs \the [src]!</span>","<span class='notice'>You repair \the [src]!</span>")
+	var/list/usable_qualities = list(QUALITY_PRYING, QUALITY_SCREW_DRIVING)
+	if(open)
+		usable_qualities.Add(QUALITY_WIRE_CUTTING)
+	if(open && health < maxhealth)
+		usable_qualities.Add(QUALITY_WELDING)
+
+
+	var/tool_type = I.get_tool_type(user, usable_qualities, src)
+	switch(tool_type)
+
+		if(QUALITY_PRYING)
+			if(I.use_tool(user, src, WORKTIME_NORMAL, tool_type, FAILCHANCE_EASY,  required_stat = STAT_MEC))
+				remove_cell(user)
+			return
+
+		if(QUALITY_SCREW_DRIVING)
+			var/used_sound = open ? 'sound/machines/Custom_screwdriveropen.ogg' :  'sound/machines/Custom_screwdriverclose.ogg'
+			if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, tool_type, FAILCHANCE_EASY,  required_stat = STAT_MEC, instant_finish_tier = 30, forced_sound = used_sound))
+				if(!locked)
+					open = !open
+					update_icon()
+					to_chat(user, SPAN_NOTICE("You [open ? "open" : "close"] the maintenance hatch of \the [src] with [I]."))
 				else
-					to_chat(user, "<span class='notice'>Unable to repair with the maintenance panel closed.</span>")
-			else
-				to_chat(user, "<span class='notice'>[src] does not need a repair.</span>")
-		else
-			to_chat(user, "<span class='notice'>Unable to repair while [src] is off.</span>")
-	else if(hasvar(W,"force") && hasvar(W,"damtype"))
+					to_chat(user, SPAN_NOTICE("You fail to unsrew the cover, looks like its locked from the inside."))
+				return
+
+		if(QUALITY_WIRE_CUTTING)
+			if(open)
+				if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, tool_type, FAILCHANCE_EASY,  required_stat = STAT_MEC))
+					passenger_allowed = !passenger_allowed
+					user.visible_message(
+						SPAN_NOTICE("[user] [passenger_allowed ? "cuts" : "mends"] a cable in [src]."),
+						SPAN_NOTICE("You [passenger_allowed ? "cut" : "mend"] the load limiter cable.")
+					)
+			return
+
+		if(QUALITY_WELDING)
+			if(I.use_tool(user, src, WORKTIME_NORMAL, tool_type, FAILCHANCE_EASY,  required_stat = STAT_MEC))
+				health = min(maxhealth, health+10)
+				user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
+				user.visible_message("\red [user] repairs [src]!","\blue You repair [src]!")
+			return
+
+		if(ABORT_CHECK)
+			return
+
+	if(istype(I, /obj/item/hand_labeler))
+		return
+	else if(istype(I, /obj/item/cell/large) && !cell && open)
+		insert_cell(I, user)
+	else if(hasvar(I,"force") && hasvar(I,"damtype"))
 		user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-		switch(W.damtype)
+		switch(I.damtype)
 			if("fire")
-				health -= W.force * fire_dam_coeff
+				health -= I.force * fire_dam_coeff
 			if("brute")
-				health -= W.force * brute_dam_coeff
+				health -= I.force * brute_dam_coeff
 		..()
 		healthcheck()
 	else
@@ -118,36 +145,18 @@
 	..()
 	healthcheck()
 
-/obj/vehicle/ex_act(severity)
-	switch(severity)
-		if(1.0)
-			explode()
-			return
-		if(2.0)
-			health -= rand(5,10)*fire_dam_coeff
-			health -= rand(10,20)*brute_dam_coeff
-			healthcheck()
-			return
-		if(3.0)
-			if (prob(50))
-				health -= rand(1,5)*fire_dam_coeff
-				health -= rand(1,5)*brute_dam_coeff
-				healthcheck()
-				return
-	return
+/obj/vehicle/explosion_act(target_power, explosion_handler/handler)
+	health -= rand(5,10)*fire_dam_coeff
+	health -= rand(10,20)*brute_dam_coeff
+	healthcheck()
+	return 0
 
 /obj/vehicle/emp_act(severity)
 	var/was_on = on
 	stat |= EMPED
-	var/obj/effect/overlay/pulse2 = new /obj/effect/overlay(loc)
-	pulse2.icon = 'icons/effects/effects.dmi'
-	pulse2.icon_state = "empdisable"
-	pulse2.SetName("emp sparks")
-	pulse2.anchored = 1
-	pulse2.set_dir(pick(GLOB.cardinal))
 
-	spawn(10)
-		qdel(pulse2)
+	new /obj/effect/overlay/pulse(loc)
+
 	if(on)
 		turn_off()
 	spawn(severity*300)
@@ -158,10 +167,9 @@
 /obj/vehicle/attack_ai(mob/user as mob)
 	return
 
-/obj/vehicle/unbuckle_mob(mob/user)
-	. = ..(user)
-	if(load == .)
-		unload(.)
+// For downstream compatibility (in particular Paradise)
+/obj/vehicle/proc/handle_rotation()
+	return
 
 //-------------------------------------------
 // Vehicle procs
@@ -169,15 +177,15 @@
 /obj/vehicle/proc/turn_on()
 	if(stat)
 		return 0
-	if(powered && cell.charge < (charge_use * CELLRATE))
+	if(powered && cell.charge < charge_use)
 		return 0
-	on = 1
+	on = TRUE
 	set_light(initial(light_range))
 	update_icon()
 	return 1
 
 /obj/vehicle/proc/turn_off()
-	on = 0
+	on = FALSE
 	set_light(0)
 	update_icon()
 
@@ -186,15 +194,16 @@
 		emagged = 1
 		if(locked)
 			locked = 0
-			to_chat(user, "<span class='warning'>You bypass [src]'s controls.</span>")
+			to_chat(user, SPAN_WARNING("You bypass [src]'s controls."))
 		return 1
 
 /obj/vehicle/proc/explode()
-	src.visible_message("<span class='danger'>\The [src] blows apart!</span>")
+	src.visible_message(SPAN_DANGER("\The [src] blows apart!"))
 	var/turf/Tsec = get_turf(src)
 
-	new /obj/item/stack/rods(Tsec)
-	new /obj/item/stack/rods(Tsec)
+	for (var/i in 1 to 2)
+		new /obj/item/stack/rods(Tsec)
+
 	new /obj/item/stack/cable_coil/cut(Tsec)
 
 	if(cell)
@@ -203,7 +212,7 @@
 		cell = null
 
 	//stuns people who are thrown off a train that has been blown up
-	if(istype(load, /mob/living))
+	if(isliving(load))
 		var/mob/living/M = load
 		M.apply_effects(5, 5)
 
@@ -226,7 +235,7 @@
 		turn_off()
 		return
 
-	if(cell.charge < (charge_use * CELLRATE))
+	if(cell.charge < charge_use)
 		turn_off()
 		return
 
@@ -234,7 +243,7 @@
 		turn_on()
 		return
 
-/obj/vehicle/proc/insert_cell(var/obj/item/cell/C, var/mob/living/carbon/human/H)
+/obj/vehicle/proc/insert_cell(var/obj/item/cell/large/C, var/mob/living/carbon/human/H)
 	if(cell)
 		return
 	if(!istype(C))
@@ -242,15 +251,15 @@
 
 	H.drop_from_inventory(C)
 	C.forceMove(src)
-	cell = C
+	src.cell = C
 	powercheck()
-	to_chat(usr, "<span class='notice'>You install [C] in [src].</span>")
+	to_chat(usr, SPAN_NOTICE("You install [C] in [src]."))
 
 /obj/vehicle/proc/remove_cell(var/mob/living/carbon/human/H)
 	if(!cell)
 		return
 
-	to_chat(usr, "<span class='notice'>You remove [cell] from [src].</span>")
+	to_chat(usr, SPAN_NOTICE("You remove [cell] from [src]."))
 	cell.forceMove(get_turf(H))
 	H.put_in_hands(cell)
 	cell = null
@@ -276,24 +285,25 @@
 
 	// if a create/closet, close before loading
 	var/obj/structure/closet/crate = C
-	if(istype(crate) && crate.opened && !crate.close())
-		return 0
+	if(istype(crate))
+		crate.close()
 
 	C.forceMove(loc)
 	C.set_dir(dir)
-	C.anchored = 1
+	C.anchored = TRUE
 
 	load = C
 
 	if(load_item_visible)
-		C.plane = plane
-		C.layer = VEHICLE_LOAD_LAYER		//so it sits above the vehicle
+		C.pixel_x += load_offset_x
+		if(ismob(C))
+			C.pixel_y += mob_offset_y
+		else
+			C.pixel_y += load_offset_y
+		C.layer = layer + 0.1		//so it sits above the vehicle
 
 	if(ismob(C))
 		buckle_mob(C)
-	else if(load_item_visible)
-		C.pixel_x += load_offset_x
-		C.pixel_y += load_offset_y
 
 	return 1
 
@@ -316,7 +326,7 @@
 	//if these all result in the same turf as the vehicle or nullspace, pick a new turf with open space
 	if(!dest || dest == get_turf(src))
 		var/list/options = new()
-		for(var/test_dir in GLOB.alldirs)
+		for(var/test_dir in alldirs)
 			var/new_dir = get_step_to(src, get_step(src, test_dir))
 			if(new_dir && load.Adjacent(new_dir))
 				options += new_dir
@@ -330,15 +340,10 @@
 
 	load.forceMove(dest)
 	load.set_dir(get_dir(loc, dest))
-	load.anchored = 0		//we can only load non-anchored items, so it makes sense to set this to false
-	if(ismob(load)) //atoms should probably have their own procs to define how their pixel shifts and layer can be manipulated, someday
-		var/mob/M = load
-		M.pixel_x = M.default_pixel_x
-		M.pixel_y = M.default_pixel_y
-	else
-		load.pixel_x = initial(load.pixel_x)
-		load.pixel_y = initial(load.pixel_y)
-	load.reset_plane_and_layer()
+	load.anchored = FALSE		//we can only load non-anchored items, so it makes sense to set this to false
+	load.pixel_x = initial(load.pixel_x)
+	load.pixel_y = initial(load.pixel_y)
+	load.layer = initial(load.layer)
 
 	if(ismob(load))
 		unbuckle_mob(load)
@@ -357,9 +362,10 @@
 /obj/vehicle/attack_generic(var/mob/user, var/damage, var/attack_message)
 	if(!damage)
 		return
-	visible_message("<span class='danger'>\The [user] [attack_message] the \the [src]!</span>")
+	visible_message(SPAN_DANGER("\The [user] [attack_message] the \the [src]!"))
 	if(istype(user))
-		admin_attacker_log(user, "attacked \the [src]")
+		user.attack_log += text("\[[time_stamp()]\] <font color='red'>attacked \the [src.name]</font>")
+		user.do_attack_animation(src)
 	src.health -= damage
 	if(prob(10))
 		new /obj/effect/decal/cleanable/blood/oil(src.loc)

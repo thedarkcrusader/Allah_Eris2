@@ -30,7 +30,7 @@
 	var/current_status = STATE_DEFAULT
 	var/msg_line1 = ""
 	var/msg_line2 = ""
-	var/centcomm_message_cooldown = 0
+	var/centcom_message_cooldown = 0
 	var/announcment_cooldown = 0
 	var/datum/announcement/priority/crew_announcement = new
 	var/current_viewing_message_id = 0
@@ -40,7 +40,7 @@
 	..()
 	crew_announcement.newscast = 1
 
-/datum/nano_module/program/comm/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/topic_state/state = GLOB.default_state)
+/datum/nano_module/program/comm/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state = GLOB.default_state)
 
 	var/list/data = host.initial_data()
 
@@ -49,7 +49,7 @@
 		data["net_comms"] = !!program.get_signal(NTNET_COMMUNICATION) //Double !! is needed to get 1 or 0 answer
 		data["net_syscont"] = !!program.get_signal(NTNET_SYSTEMCONTROL)
 		if(program.computer)
-			data["have_printer"] = !!program.computer.nano_printer
+			data["have_printer"] = !!program.computer.printer
 		else
 			data["have_printer"] = 0
 	else
@@ -63,28 +63,28 @@
 	data["state"] = current_status
 	data["isAI"] = issilicon(usr)
 	data["authenticated"] = is_autenthicated(user)
-	data["boss_short"] = GLOB.using_map.boss_short
+	//data["boss_short"] = GLOB.maps_data.boss_short
 
-	var/decl/security_state/security_state = decls_repository.get_decl(GLOB.using_map.security_state)
+	var/decl/security_state/security_state = decls_repository.get_decl(GLOB.maps_data.security_state)
 	data["current_security_level_ref"] = any2ref(security_state.current_security_level)
 	data["current_security_level_title"] = security_state.current_security_level.name
 
 	data["cannot_change_security_level"] = !security_state.can_change_security_level()
 	var/list/security_levels = list()
-	for(var/decl/security_level/security_level in security_state.standard_security_levels)
+	for(var/decl/security_level/security_level in security_state.comm_console_security_levels)
 		var/list/security_setup = list()
 		security_setup["title"] = security_level.name
 		security_setup["ref"] = any2ref(security_level)
 		security_levels[++security_levels.len] = security_setup
 	data["security_levels"] = security_levels
-
+/*
 	var/datum/comm_message_listener/l = obtain_message_listener()
 	data["messages"] = l.messages
 	data["message_deletion_allowed"] = l != global_message_listener
 	data["message_current_id"] = current_viewing_message_id
 	if(current_viewing_message)
 		data["message_current"] = current_viewing_message
-
+*/
 	var/list/processed_evac_options = list()
 	if(!isnull(evacuation_controller))
 		for (var/datum/evacuation_option/EO in evacuation_controller.available_evac_options())
@@ -96,7 +96,7 @@
 			processed_evac_options[++processed_evac_options.len] = option
 	data["evac_options"] = processed_evac_options
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if(!ui)
 		ui = new(user, src, ui_key, "communication.tmpl", name, 550, 420, state = state)
 		ui.auto_update_layout = 1
@@ -136,49 +136,63 @@
 				if(announcment_cooldown)
 					to_chat(usr, "Please allow at least one minute to pass between announcements")
 					return TRUE
-				var/input = input(usr, "Please write a message to announce to the [station_name()].", "Priority Announcement") as null|text
+				var/input = input(usr, "Please write a message to announce to the [station_name].", "Priority Announcement") as null|text
 				if(!input || !can_still_topic())
 					return 1
-				crew_announcement.Announce(input)
+				if(GLOB.in_character_filter.len) //I don't want to read announcements about sending people to brazil.
+					if(findtext(input, config.ic_filter_regex))
+						to_chat(usr, SPAN_WARNING("You think better of announcing something so foolish."))
+						return 1
+
+				var/affected_zlevels = GLOB.maps_data.contact_levels
+				var/atom/A = host
+				if(istype(A))
+					affected_zlevels = GetConnectedZlevels(A.z)
+				crew_announcement.Announce(input, zlevels = affected_zlevels, use_text_to_speech = TRUE)
 				announcment_cooldown = 1
 				spawn(600)//One minute cooldown
 					announcment_cooldown = 0
+
+		/*
 		if("message")
 			. = 1
 			if(href_list["target"] == "emagged")
 				if(program)
 					if(is_autenthicated(user) && program.computer_emagged && !issilicon(usr) && ntn_comm)
-						if(centcomm_message_cooldown)
+						if(centcom_message_cooldown)
 							to_chat(usr, "<span class='warning'>Arrays recycling. Please stand by.</span>")
-							SSnanoui.update_uis(src)
+							SSnano.update_uis(src)
 							return
 						var/input = sanitize(input(usr, "Please choose a message to transmit to \[ABNORMAL ROUTING CORDINATES\] via quantum entanglement.  Please be aware that this process is very expensive, and abuse will lead to... termination. Transmission does not guarantee a response. There is a 30 second delay before you may send another message, be clear, full and concise.", "To abort, send an empty message.", "") as null|text)
 						if(!input || !can_still_topic())
 							return 1
-						Syndicate_announce(input, usr)
+						//Syndicate_announce(input, usr)	TODO : THIS
 						to_chat(usr, "<span class='notice'>Message transmitted.</span>")
 						log_say("[key_name(usr)] has made an illegal announcement: [input]")
-						centcomm_message_cooldown = 1
+						centcom_message_cooldown = 1
 						spawn(300)//30 second cooldown
-							centcomm_message_cooldown = 0
+							centcom_message_cooldown = 0
 			else if(href_list["target"] == "regular")
 				if(is_autenthicated(user) && !issilicon(usr) && ntn_comm)
-					if(centcomm_message_cooldown)
+					if(centcom_message_cooldown)
 						to_chat(usr, "<span class='warning'>Arrays recycling. Please stand by.</span>")
-						SSnanoui.update_uis(src)
+						SSnano.update_uis(src)
 						return
-					if(!is_relay_online())//Contact Centcom has a check, Syndie doesn't to allow for Traitor funs.
+					if(!is_relay_online())//Contact Centcom has a check, Syndie doesn't to allow for Contractor funs.
 						to_chat(usr, "<span class='warning'>No Emergency Bluespace Relay detected. Unable to transmit message.</span>")
 						return 1
-					var/input = sanitize(input("Please choose a message to transmit to [GLOB.using_map.boss_short] via quantum entanglement.  Please be aware that this process is very expensive, and abuse will lead to... termination.  Transmission does not guarantee a response. There is a 30 second delay before you may send another message, be clear, full and concise.", "To abort, send an empty message.", "") as null|text)
+
+					var/input = sanitize(input("Please choose a message to transmit to [GLOB.maps_data.boss_short] via quantum entanglement.  Please be aware that this process is very expensive, and abuse will lead to... termination.  Transmission does not guarantee a response. There is a 30 second delay before you may send another message, be clear, full and concise.", "To abort, send an empty message.", "") as null|text)
 					if(!input || !can_still_topic())
 						return 1
-					Centcomm_announce(input, usr)
+					Centcom_announce(input, usr)
 					to_chat(usr, "<span class='notice'>Message transmitted.</span>")
-					log_say("[key_name(usr)] has made an IA [GLOB.using_map.boss_short] announcement: [input]")
-					centcomm_message_cooldown = 1
+					log_say("[key_name(usr)] has made an IA [GLOB.maps_data.boss_short] announcement: [input]")
+					centcom_message_cooldown = 1
 					spawn(300) //30 second cooldown
-						centcomm_message_cooldown = 0
+						centcom_message_cooldown = 0
+
+						*/
 		if("evac")
 			. = 1
 			if(is_autenthicated(user))
@@ -213,13 +227,12 @@
 		if("setalert")
 			. = 1
 			if(is_autenthicated(user) && !issilicon(usr) && ntn_cont && ntn_comm)
-				var/decl/security_state/security_state = decls_repository.get_decl(GLOB.using_map.security_state)
-				var/decl/security_level/target_level = locate(href_list["target"]) in security_state.standard_security_levels
+				var/decl/security_state/security_state = decls_repository.get_decl(GLOB.maps_data.security_state)
+				var/decl/security_level/target_level = locate(href_list["target"]) in security_state.comm_console_security_levels
 				if(target_level && security_state.can_switch_to(target_level))
-					var/confirm = alert("Are you sure you want to change alert level to [target_level.name]?", name, "No", "Yes")
+					var/confirm = alert("Are you sure you want to change the alert level to [target_level.name]?", name, "No", "Yes")
 					if(confirm == "Yes" && can_still_topic())
-						if(security_state.set_security_level(target_level))
-							feedback_inc(target_level.type,1)
+						security_state.set_security_level(target_level)
 			else
 				to_chat(usr, "You press the button, but a red light flashes and nothing happens.") //This should never happen
 
@@ -240,8 +253,8 @@
 		if("printmessage")
 			. = 1
 			if(is_autenthicated(user) && ntn_comm)
-				if(program && program.computer && program.computer.nano_printer)
-					if(!program.computer.nano_printer.print_text(current_viewing_message["contents"],current_viewing_message["title"]))
+				if(program && program.computer && program.computer.printer)
+					if(!program.computer.printer.print_text(current_viewing_message["contents"],current_viewing_message["title"]))
 						to_chat(usr, "<span class='notice'>Hardware Error: Printer was unable to print the selected file.</span>")
 					else
 						program.computer.visible_message("<span class='notice'>\The [program.computer] prints out a paper.</span>")
@@ -293,7 +306,6 @@ var/last_message_id = 0
 	if(!frequency) return
 
 	var/datum/signal/status_signal = new
-	status_signal.source = src
 	status_signal.transmission_method = 1
 	status_signal.data["command"] = command
 
@@ -301,14 +313,14 @@ var/last_message_id = 0
 		if("message")
 			status_signal.data["msg1"] = data1
 			status_signal.data["msg2"] = data2
-			log_admin("STATUS: [key_name(usr)] set status screen message with [src]: [data1] [data2]")
+			log_admin("STATUS: [key_name(usr)] set status screen message with : [data1] [data2]")
 		if("image")
 			status_signal.data["picture_state"] = data1
 
-	frequency.post_signal(src, status_signal)
+	frequency.post_signal( signal = status_signal )
 
 /proc/cancel_call_proc(var/mob/user)
-	if (!ticker || !evacuation_controller)
+	if (!SSticker || !evacuation_controller)
 		return
 
 	if(evacuation_controller.cancel_evacuation())
@@ -319,26 +331,26 @@ var/last_message_id = 0
 
 
 /proc/is_relay_online()
-	for(var/obj/machinery/bluespacerelay/M in SSmachines.machinery)
+	for(var/obj/machinery/bluespacerelay/M in GLOB.machines)
 		if(M.stat == 0)
 			return 1
 	return 0
 
 /proc/call_shuttle_proc(var/mob/user, var/emergency)
-	if (!ticker || !evacuation_controller)
+	if (!SSticker || !evacuation_controller)
 		return
 
 	if(isnull(emergency))
 		emergency = 1
 
-	if(!GLOB.universe.OnShuttleCall(usr))
+	if(universe.OnShuttleCall(usr))
 		to_chat(user, "<span class='notice'>Cannot establish a bluespace connection.</span>")
 		return
-
-	if(deathsquad.deployed)
-		to_chat(user, "[GLOB.using_map.boss_short] will not allow an evacuation to take place. Consider all contracts terminated.")
+/*
+	if(GLOB.deathsquad.deployed)
+		to_chat(user, "[GLOB.maps_data.boss_short] will not allow an evacuation to take place. Consider all contracts terminated.")
 		return
-
+*/
 	if(evacuation_controller.deny)
 		to_chat(user, "An evacuation cannot be called at this time. Please try again later.")
 		return
@@ -354,12 +366,8 @@ var/last_message_id = 0
 		log_and_message_admins("[user? key_name(user) : "Autotransfer"] has called the shuttle.")
 
 /proc/init_autotransfer()
-	if (!ticker || !evacuation_controller)
+
+	if (!SSticker || !evacuation_controller)
 		return
 
 	. = evacuation_controller.call_evacuation(null, _emergency_evac = FALSE, autotransfer = TRUE)
-	if(.)
-		//delay events in case of an autotransfer
-		var/delay = evacuation_controller.evac_arrival_time - world.time + (2 MINUTES)
-		SSevents.delay_events(EVENT_LEVEL_MODERATE, delay)
-		SSevents.delay_events(EVENT_LEVEL_MAJOR, delay)

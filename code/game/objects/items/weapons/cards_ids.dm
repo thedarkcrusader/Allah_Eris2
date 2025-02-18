@@ -16,19 +16,18 @@
 	desc = "Does card things."
 	icon = 'icons/obj/card.dmi'
 	w_class = ITEM_SIZE_TINY
-	slot_flags = SLOT_EARS
-	var/associated_account_number = 0
-
-	var/list/files = list(  )
+	bad_type = /obj/item/card
+	spawn_blacklisted = TRUE
+	var/list/files = list()
 
 /obj/item/card/data
 	name = "data disk"
 	desc = "A disk of data."
 	icon_state = "data"
+	item_state = "card-id"
 	var/function = "storage"
 	var/data = "null"
-	var/special = null
-	item_state = "card-id"
+	var/special
 
 /obj/item/card/data/verb/label(t as text)
 	set name = "Label Disk"
@@ -36,9 +35,9 @@
 	set src in usr
 
 	if (t)
-		src.SetName(text("data disk- '[]'", t))
+		src.name = text("data disk- '[]'", t)
 	else
-		src.SetName("data disk")
+		src.name = "data disk"
 	src.add_fingerprint(usr)
 	return
 
@@ -46,7 +45,8 @@
 	name = "\proper the coordinates to clown planet"
 	icon_state = "data"
 	item_state = "card-id"
-	level = 2
+	layer = 3
+	level = ABOVE_PLATING_LEVEL
 	desc = "This card contains coordinates to the fabled Clown Planet. Handle with care."
 	function = "teleporter"
 	data = "Clown Land"
@@ -56,18 +56,20 @@
  */
 
 /obj/item/card/emag_broken
-	desc = "It's a card with a magnetic strip attached to some circuitry. It looks too busted to be used for anything but salvage."
+	desc = "A card with a magnetic strip attached to some circuitry. It looks too busted to be used for anything but salvage."
 	name = "broken cryptographic sequencer"
 	icon_state = "emag"
 	item_state = "card-id"
-	origin_tech = list(TECH_MAGNET = 2, TECH_ILLEGAL = 2)
+	origin_tech = list(TECH_MAGNET = 2, TECH_COVERT = 2)
+	matter = list(MATERIAL_SILVER = 1, MATERIAL_PLASTIC = 1)
 
 /obj/item/card/emag
-	desc = "It's a card with a magnetic strip attached to some circuitry."
+	desc = "A card with a magnetic strip attached to some circuitry."
 	name = "cryptographic sequencer"
+	description_antag = "This item has 10 by default. Emagging turrets turns them lethal to everyone. Emagging a door opens it and bolts it. Emagging a non-sentient robot turns them hostile. Emagging a cyborg forces them to obey you. Emagging an APC lets only you acces it."
 	icon_state = "emag"
 	item_state = "card-id"
-	origin_tech = list(TECH_MAGNET = 2, TECH_ILLEGAL = 2)
+	origin_tech = list(TECH_MAGNET = 2, TECH_COVERT = 2)
 	var/uses = 10
 
 var/const/NO_EMAG_ACT = -50
@@ -82,7 +84,7 @@ var/const/NO_EMAG_ACT = -50
 		log_and_message_admins("emagged \an [A].")
 
 	if(uses<1)
-		user.visible_message("<span class='warning'>\The [src] fizzles and sparks - it seems it's been used once too often, and is now spent.</span>")
+		user.visible_message(SPAN_WARNING("\The [src] fizzles and sparks - it seems it's been used once too often, and is now spent."))
 		user.drop_item()
 		var/obj/item/card/emag_broken/junk = new(user.loc)
 		junk.add_fingerprint(user)
@@ -92,16 +94,15 @@ var/const/NO_EMAG_ACT = -50
 
 /obj/item/card/id
 	name = "identification card"
-	desc = "A card used to provide ID and determine access."
+	desc = "A card used to provide ID and determine access across the ship."
 	icon_state = "id"
 	item_state = "card-id"
-
-	grab_sound = 'sound/items/handle/syringe_pickup.ogg' //It sounds like a card ok?
-	drop_sound = 'sound/items/handle/syringe_drop.ogg'
+	slot_flags = SLOT_ID
 
 	var/access = list()
 	var/registered_name = "Unknown" // The name registered_name on the card
-	slot_flags = SLOT_ID
+	var/list/associated_email_login = list("login" = "", "password" = "")
+	var/associated_account_number = 0
 
 	var/age = "\[UNSET\]"
 	var/blood_type = "\[UNSET\]"
@@ -112,31 +113,24 @@ var/const/NO_EMAG_ACT = -50
 	var/icon/side
 
 	//alt titles are handled a bit weirdly in order to unobtrusively integrate into existing ID system
-	var/assignment = null	//can be alt title or the actual job
-	var/rank = null			//actual job
+	var/assignment	//can be alt title or the actual job
+	var/rank			//actual job
 	var/dorm = 0			// determines if this ID has claimed a dorm already
 
-	var/job_access_type     // Job type to acquire access rights from, if any
+	var/formal_name_prefix
+	var/formal_name_suffix
 
-	var/datum/mil_branch/military_branch = null //Vars for tracking branches and ranks on multi-crewtype maps
-	var/datum/mil_rank/military_rank = null
-
-/obj/item/card/id/New()
-	..()
-	if(job_access_type)
-		var/datum/job/j = SSjobs.GetJobByType(job_access_type)
-		if(j)
-			rank = j.title
-			assignment = rank
-			access |= j.get_access()
-
-/obj/item/card/id/examine(mob/user)
-	set src in oview(1)
-	if(in_range(usr, src))
-		show(usr)
-		to_chat(usr, desc)
+/obj/item/card/id/examine(mob/user, extra_description = "")
+	set src in oview(1) // TODO: See if this could be safely removed --KIROV
+	if(get_dist(user, src) < 2)
+		show(user)
+		extra_description += desc
+		extra_description += text("\n\icon[src] [name]: The current assignment on the card is [assignment].")
+		extra_description += "\nThe blood type on the card is [blood_type]."
+		extra_description += "\nThe DNA hash on the card is [dna_hash]."
+		extra_description += "\nThe fingerprint hash on the card is [fingerprint_hash]."
 	else
-		to_chat(usr, "<span class='warning'>It is too far away.</span>")
+		extra_description += SPAN_WARNING("It is too far away.")
 
 /obj/item/card/id/proc/prevent_tracking()
 	return 0
@@ -147,63 +141,43 @@ var/const/NO_EMAG_ACT = -50
 		user << browse_rsc(side, "side.png")
 	var/datum/browser/popup = new(user, "idcard", name, 600, 250)
 	popup.set_content(dat())
-	popup.set_title_image(usr.browse_rsc_icon(src.icon, src.icon_state))
 	popup.open()
 	return
 
 /obj/item/card/id/proc/update_name()
-	var/final_name = "[registered_name]'s ID Card"
-	if(military_rank && military_rank.name_short)
-		final_name = military_rank.name_short + " " + final_name
-	if(assignment)
-		final_name = final_name + " ([assignment])"
-	SetName(final_name)
+	name = "[src.registered_name]'s ID Card ([src.assignment])"
 
 /obj/item/card/id/proc/set_id_photo(var/mob/M)
-	front = getFlatIcon(M, SOUTH, always_use_defdir = 1)
-	side = getFlatIcon(M, WEST, always_use_defdir = 1)
+	front = getFlatIcon(M, SOUTH)
+	side = getFlatIcon(M, WEST)
 
 /mob/proc/set_id_info(var/obj/item/card/id/id_card)
 	id_card.age = 0
 	id_card.registered_name		= real_name
 	id_card.sex 				= capitalize(gender)
 	id_card.set_id_photo(src)
-
-	if(dna)
-		id_card.blood_type		= dna.b_type
-		id_card.dna_hash		= dna.unique_enzymes
-		id_card.fingerprint_hash= md5(dna.uni_identity)
+	id_card.blood_type		= b_type
+	id_card.dna_hash		= dna_trace
+	id_card.fingerprint_hash= fingers_trace
 	id_card.update_name()
 
 /mob/living/carbon/human/set_id_info(var/obj/item/card/id/id_card)
 	..()
 	id_card.age = age
 
-	if(GLOB.using_map.flags & MAP_HAS_BRANCH)
-		id_card.military_branch = char_branch
-
-	if(GLOB.using_map.flags & MAP_HAS_RANK)
-		id_card.military_rank = char_rank
-
 /obj/item/card/id/proc/dat()
-	var/list/dat = list("<table><tr><td>")
+	var/dat = ("<table><tr><td>")
 	dat += text("Name: []</A><BR>", registered_name)
 	dat += text("Sex: []</A><BR>\n", sex)
 	dat += text("Age: []</A><BR>\n", age)
-
-	if(GLOB.using_map.flags & MAP_HAS_BRANCH)
-		dat += text("Branch: []</A><BR>\n", military_branch ? military_branch.name : "\[UNSET\]")
-	if(GLOB.using_map.flags & MAP_HAS_RANK)
-		dat += text("Rank: []</A><BR>\n", military_rank ? military_rank.name : "\[UNSET\]")
-
-	dat += text("Assignment: []</A><BR>\n", assignment)
+	dat += text("Rank: []</A><BR>\n", assignment)
 	dat += text("Fingerprint: []</A><BR>\n", fingerprint_hash)
 	dat += text("Blood Type: []<BR>\n", blood_type)
 	dat += text("DNA Hash: []<BR><BR>\n", dna_hash)
 	if(front && side)
 		dat +="<td align = center valign = top>Photo:<br><img src=front.png height=80 width=80 border=4><img src=side.png height=80 width=80 border=4></td>"
 	dat += "</tr></table>"
-	return jointext(dat,null)
+	return dat
 
 /obj/item/card/id/attack_self(mob/user as mob)
 	user.visible_message("\The [user] shows you: \icon[src] [src.name]. The assignment on the card: [src.assignment]",\
@@ -218,31 +192,6 @@ var/const/NO_EMAG_ACT = -50
 /obj/item/card/id/GetIdCard()
 	return src
 
-/obj/item/card/id/verb/read()
-	set name = "Read ID Card"
-	set category = "Object"
-	set src in usr
-
-	to_chat(usr, text("\icon[] []: The current assignment on the card is [].", src, src.name, src.assignment))
-	to_chat(usr, "The blood type on the card is [blood_type].")
-	to_chat(usr, "The DNA hash on the card is [dna_hash].")
-	to_chat(usr, "The fingerprint hash on the card is [fingerprint_hash].")
-	return
-
-/obj/item/card/id/silver
-	name = "identification card"
-	desc = "A silver card which shows honour and dedication."
-	icon_state = "silver"
-	item_state = "silver_id"
-	job_access_type = /datum/job/hop
-
-/obj/item/card/id/gold
-	name = "identification card"
-	desc = "A golden card which shows power and might."
-	icon_state = "gold"
-	item_state = "gold_id"
-	job_access_type = /datum/job/captain
-
 /obj/item/card/id/syndicate_command
 	name = "syndicate ID card"
 	desc = "An ID straight from the Syndicate."
@@ -253,10 +202,11 @@ var/const/NO_EMAG_ACT = -50
 /obj/item/card/id/captains_spare
 	name = "captain's spare ID"
 	desc = "The spare ID of the High Lord himself."
-	icon_state = "gold"
+	icon_state = MATERIAL_GOLD
 	item_state = "gold_id"
 	registered_name = "Captain"
 	assignment = "Captain"
+	spawn_blacklisted = TRUE
 
 /obj/item/card/id/captains_spare/New()
 	access = get_all_station_access()
@@ -264,36 +214,16 @@ var/const/NO_EMAG_ACT = -50
 
 /obj/item/card/id/synthetic
 	name = "\improper Synthetic ID"
-	desc = "Access module for lawed synthetics."
+	desc = "Access module for NanoTrasen Synthetics"
 	icon_state = "id-robot"
 	item_state = "tdgreen"
 	assignment = "Synthetic"
+	spawn_tags = null
+	bad_type = /obj/item/card/id/synthetic
 
 /obj/item/card/id/synthetic/New()
 	access = get_all_station_access() + access_synth
 	..()
-
-/obj/item/card/id/centcom
-	name = "\improper CentCom. ID"
-	desc = "An ID straight from Cent. Com."
-	icon_state = "centcom"
-	registered_name = "Central Command"
-	assignment = "General"
-/obj/item/card/id/centcom/New()
-	access = get_all_centcom_access()
-	..()
-
-/obj/item/card/id/centcom/station/New()
-	..()
-	access |= get_all_station_access()
-
-/obj/item/card/id/centcom/ERT
-	name = "\improper Emergency Response Team ID"
-	assignment = "Emergency Response Team"
-
-/obj/item/card/id/centcom/ERT/New()
-	..()
-	access |= get_all_station_access()
 
 /obj/item/card/id/all_access
 	name = "\improper Administrator's spare ID"
@@ -302,135 +232,115 @@ var/const/NO_EMAG_ACT = -50
 	item_state = "tdgreen"
 	registered_name = "Administrator"
 	assignment = "Administrator"
+	spawn_blacklisted = TRUE
+
 /obj/item/card/id/all_access/New()
 	access = get_access_ids()
 	..()
 
-// Department-flavor IDs
-/obj/item/card/id/medical
-	name = "identification card"
-	desc = "A card issued to medical staff."
-	icon_state = "med"
-	job_access_type = /datum/job/doctor
+/obj/item/card/id/centcom
+	name = "\improper CentCom. ID"
+	desc = "An ID straight from Cent. Com."
+	icon_state = "centcom"
+	registered_name = "Central Command"
+	assignment = "General"
+	New()
+		access = get_all_centcom_access()
+		..()
 
-/obj/item/card/id/medical/chemist
-	job_access_type = /datum/job/chemist
+/obj/item/card/id/gold
+	icon_state = MATERIAL_GOLD
+	item_state = "gold_id"
 
-/obj/item/card/id/medical/geneticist
-	job_access_type = /datum/job/geneticist
+/obj/item/card/id/sci
+	icon_state = "id_sci"
 
-/obj/item/card/id/medical/psychiatrist
-	job_access_type = /datum/job/psychiatrist
+/obj/item/card/id/gene
+	icon_state = "id_gene"
 
-/obj/item/card/id/medical/paramedic
-	job_access_type = /datum/job/Paramedic
+/obj/item/card/id/chem
+	icon_state = "id_chem"
 
-/obj/item/card/id/medical/head
-	name = "identification card"
-	desc = "A card which represents care and compassion."
-	icon_state = "medGold"
-	job_access_type = /datum/job/cmo
+/obj/item/card/id/med
+	icon_state = "id_med"
 
-/obj/item/card/id/security
-	name = "identification card"
-	desc = "A card issued to security staff."
-	icon_state = "sec"
-	job_access_type = /datum/job/officer
+/obj/item/card/id/sci
+	icon_state = "id_sci"
 
-/obj/item/card/id/security/warden
-	job_access_type = /datum/job/warden
+/obj/item/card/id/viro
+	icon_state = "id_viro"
 
-/obj/item/card/id/security/detective
-	job_access_type = /datum/job/detective
+/obj/item/card/id/heatlab
+	icon_state = "id_heatlab"
 
-/obj/item/card/id/security/head
-	name = "identification card"
-	desc = "A card which represents honor and protection."
-	icon_state = "secGold"
-	job_access_type = /datum/job/hos
+/obj/item/card/id/rd
+	icon_state = "id_rd"
 
-/obj/item/card/id/engineering
-	name = "identification card"
-	desc = "A card issued to engineering staff."
-	icon_state = "eng"
-	job_access_type = /datum/job/engineer
+/obj/item/card/id/cmo
+	icon_state = "id_cmo"
 
-/obj/item/card/id/engineering/atmos
-	job_access_type = /datum/job/atmos
+/obj/item/card/id/det
+	icon_state = "id_inspector"
 
-/obj/item/card/id/engineering/head
-	name = "identification card"
-	desc = "A card which represents creativity and ingenuity."
-	icon_state = "engGold"
-	job_access_type = /datum/job/chief_engineer
+/obj/item/card/id/medcpec
+	icon_state = "id_medspec"
 
-/obj/item/card/id/science
-	name = "identification card"
-	desc = "A card issued to science staff."
-	icon_state = "sci"
-	job_access_type = /datum/job/scientist
+/obj/item/card/id/sec
+	icon_state = "id_operative"
 
-/obj/item/card/id/science/xenobiologist
-	job_access_type = /datum/job/xenobiologist
+/obj/item/card/id/hos
+	icon_state = "id_hos"
 
-/obj/item/card/id/science/roboticist
-	job_access_type = /datum/job/roboticist
+/obj/item/card/id/hop
+	icon_state = "id_hop"
 
-/obj/item/card/id/science/head
-	name = "identification card"
-	desc = "A card which represents knowledge and reasoning."
-	icon_state = "sciGold"
-	job_access_type = /datum/job/rd
+/obj/item/card/id/ce
+	icon_state = "id_ce"
 
-/obj/item/card/id/cargo
-	name = "identification card"
-	desc = "A card issued to cargo staff."
-	icon_state = "cargo"
-	job_access_type = /datum/job/cargo_tech
+/obj/item/card/id/engie
+	icon_state = "id_engie"
 
-/obj/item/card/id/cargo/mining
-	job_access_type = /datum/job/mining
+/obj/item/card/id/atmos
+	icon_state = "id_atmos"
 
-/obj/item/card/id/cargo/head
-	name = "identification card"
-	desc = "A card which represents service and planning."
-	icon_state = "cargoGold"
-	job_access_type = /datum/job/qm
+/obj/item/card/id/car
+	icon_state = "id_car"
 
-/obj/item/card/id/civilian
-	name = "identification card"
-	desc = "A card issued to civilian staff."
-	icon_state = "civ"
-	job_access_type = /datum/job/assistant
+/obj/item/card/id/hydro
+	icon_state = "id_hydro"
 
-/obj/item/card/id/civilian/bartender
-	job_access_type = /datum/job/bartender
+/obj/item/card/id/chaplain
+	icon_state = "id_chaplain"
 
-/obj/item/card/id/civilian/chef
-	job_access_type = /datum/job/chef
+/obj/item/card/id/church
+	icon_state = "id_nt"
 
-/obj/item/card/id/civilian/botanist
-	job_access_type = /datum/job/hydro
+/obj/item/card/id/black
+	icon_state = "id_black"
 
-/obj/item/card/id/civilian/janitor
-	job_access_type = /datum/job/janitor
+/obj/item/card/id/dkgrey
+	icon_state = "id_dkgrey"
 
-/obj/item/card/id/civilian/librarian
-	job_access_type = /datum/job/librarian
+/obj/item/card/id/ltgrey
+	icon_state = "id_ltgrey"
 
-/obj/item/card/id/civilian/internal_affairs_agent
-	job_access_type = /datum/job/lawyer
+/obj/item/card/id/white
+	icon_state = "id_white"
 
-/obj/item/card/id/civilian/chaplain
-	job_access_type = /datum/job/chaplain
+/obj/item/card/id/blankwhite
+	icon_state = "id_blankwhite"
 
-/obj/item/card/id/civilian/head //This is not the HoP. There's no position that uses this right now.
-	name = "identification card"
-	desc = "A card which represents common sense and responsibility."
-	icon_state = "civGold"
+/obj/item/card/id/randomassistant
 
-/obj/item/card/id/merchant
-	name = "identification card"
-	desc = "A card issued to Merchants, indicating their right to sell and buy goods."
-	icon_state = "trader"
-	access = list(access_merchant)
+/obj/item/card/id/randomassistant/Initialize()
+	. = ..()
+	age = num2text(rand(18, 100))
+	var/datum/job_flavor/flavortype = pick(subtypesof(/datum/job_flavor/assistant))
+	assignment = initial(flavortype.title)
+	access = list(access_maint_tunnels)
+	sex = capitalize(pick(MALE, FEMALE))
+	registered_name = addtext(random_first_name(sex), " ", random_last_name()) // Is this faster than two concats? Probably!
+	dna_hash = sha1("A"+registered_name) // Something is subtly wrong with these IDs
+	fingerprint_hash = md5("A"+registered_name)
+	blood_type = pick(GLOB.blood_types)
+	update_name()

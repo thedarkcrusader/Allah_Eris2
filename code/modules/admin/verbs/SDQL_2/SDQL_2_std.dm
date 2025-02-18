@@ -53,11 +53,17 @@
 /proc/_image(icon, loc, icon_state, layer, dir)
 	return image(icon, loc, icon_state, layer, dir)
 
+/proc/_istype(object, type)
+	return istype(object, type)
+
+/proc/_ispath(path, type)
+	return ispath(path, type)
+
 /proc/_length(E)
 	return length(E)
 
 /proc/_link(thing, url)
-	send_link(thing, url)
+	thing << link(url)
 
 /proc/_locate(X, Y, Z)
 	if (isnull(Y)) // Assuming that it's only a single-argument call.
@@ -96,7 +102,10 @@
 	return orange(Dist, Center)
 
 /proc/_output(thing, msg, control)
-	send_output(thing, msg, control)
+	thing << output(msg, control)
+
+/proc/_chat_output(thing, msg)
+    to_chat(thing, msg)
 
 /proc/_oview(Dist, Center = usr)
 	return oview(Dist, Center)

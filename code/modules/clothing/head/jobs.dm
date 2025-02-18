@@ -2,26 +2,17 @@
 //Bartender
 /obj/item/clothing/head/chefhat
 	name = "chef's hat"
-	desc = "It's a hat used by chefs to keep hair out of your food. Judging by the food in the mess, they don't work."
+	desc = "A hat used by chefs to keep hair out of your food. Judging by the food in the mess, they don't work."
 	icon_state = "chefhat"
 	item_state = "chefhat"
-
-
-//Magistrate
-/obj/item/clothing/head/crown
-	name = "commandant's hat of authority"
-	icon_state = "redoffcap"
-	item_state = "redoffcap"
-	desc = "It's good being Commandant."
-	flags_inv = BLOCKHEADHAIR
-	body_parts_covered = HEAD
-	unacidable = TRUE //Do NOT want to lose this randomly.
+	spawn_blacklisted = TRUE
 
 //Captain
 /obj/item/clothing/head/caphat
 	name = "captain's hat"
 	icon_state = "captain"
 	desc = "It's good being the king."
+	spawn_blacklisted = TRUE
 	item_state_slots = list(
 		slot_l_hand_str = "caphat",
 		slot_r_hand_str = "caphat",
@@ -32,148 +23,135 @@
 	name = "captain's cap"
 	desc = "You fear to wear it for the negligence it brings."
 	icon_state = "capcap"
+	spawn_blacklisted = TRUE
 
 /obj/item/clothing/head/caphat/formal
 	name = "parade hat"
 	desc = "No one in a commanding position should be without a perfect, white hat of ultimate authority."
 	icon_state = "officercap"
+	spawn_blacklisted = TRUE
 
-//HOP
+//First Officer
 /obj/item/clothing/head/caphat/hop
-	name = "crew resource's hat"
+	name = "first officer's hat"
 	desc = "A stylish hat that both protects you from enraged former-crewmembers and gives you a false sense of authority."
 	icon_state = "hopcap"
+	spawn_blacklisted = TRUE
 
-//Chaplain
+//IHC Peaked Cap
+/obj/item/clothing/head/caphat/ihc
+	name = "lieutenant's hat"
+	desc = "A stylish peaked cap for the Lieutenant stationed onboard the Eris. Lucky bastard."
+	icon_state = "hoscap"
+	spawn_blacklisted = TRUE
+
+//NeoTheology
 /obj/item/clothing/head/chaplain_hood
-	name = "chaplain's hood"
+	name = "preacher's hood"
 	desc = "It's hood that covers the head. It keeps you warm during the space winters."
 	icon_state = "chaplain_hood"
 	flags_inv = BLOCKHAIR
 	body_parts_covered = HEAD
+	spawn_blacklisted = TRUE
 
-//Chaplain
 /obj/item/clothing/head/nun_hood
 	name = "nun hood"
 	desc = "Maximum piety in this star system."
 	icon_state = "nun_hood"
 	flags_inv = BLOCKHAIR
 	body_parts_covered = HEAD
+	spawn_blacklisted = TRUE
+	style_coverage = COVERS_HAIR
 
-//Medical
-/obj/item/clothing/head/surgery
-	name = "surgical cap"
-	desc = "A cap surgeons wear during operations. Keeps their hair from tickling your internal organs."
-	icon_state = "surgcap"
-	flags_inv = BLOCKHEADHAIR
+/obj/item/clothing/head/preacher
+	name = "preacher hat"
+	desc = "Useful for hiding disdainful eyes from the godless masses."
+	icon_state = "church_hat"
+	spawn_blacklisted = TRUE
+	style_coverage = COVERS_EYES|COVERS_HAIR
 
-/obj/item/clothing/head/surgery/purple
-	name = "purple surgical cap"
-	color = "#7a1b3f"
-
-/obj/item/clothing/head/surgery/blue
-	name = "blue surgical cap"
-	color = "#4891e1"
-
-/obj/item/clothing/head/surgery/green
-	name = "green surgical cap"
-	color = "#255a3e"
-
-/obj/item/clothing/head/surgery/black
-	name = "black surgical cap"
-	color = "#242424"
-
-/obj/item/clothing/head/surgery/navyblue
-	name = "navy blue surgical cap"
-	color = "#1f3a69"
-
-/obj/item/clothing/head/surgery/lilac
-	name = "lilac surgical cap"
-	color = "#c8a2c8"
-
-/obj/item/clothing/head/surgery/teal
-	name = "teal surgical cap"
-	color = "#008080"
-
-/obj/item/clothing/head/surgery/heliodor
-	name = "heliodor surgical cap"
-	color = "#aad539"
-
-//Berets
 /obj/item/clothing/head/beret
 	name = "beret"
 	desc = "A beret, an artists favorite headwear."
 	icon_state = "beret"
 	body_parts_covered = 0
+	spawn_blacklisted = TRUE
+	style_coverage = COVERS_HAIR
 
-/obj/item/clothing/head/beret/sec
-	name = "corporate security beret"
-	desc = "A beret with the security insignia emblazoned on it. For officers that are more inclined towards style than safety."
-	icon_state = "beret_corporate_red"
-
+//Ironhammer
 /obj/item/clothing/head/beret/sec/navy/officer
-	name = "corporate security officer beret"
-	desc = "A navy blue beret with an officer's rank emblem. For officers that are more inclined towards style than safety."
-	icon_state = "beret_corporate_navy_officer"
+	name = "Operative beret"
+	desc = "A navy blue beret with an Operative's rank emblem. For operatives that are more inclined towards style than safety."
+	icon_state = "beret_navy_officer"
+	spawn_blacklisted = TRUE
 
 /obj/item/clothing/head/beret/sec/navy/hos
-	name = "corporate security commander beret"
-	desc = "A navy blue beret with a commander's rank emblem. For officers that are more inclined towards style than safety."
-	icon_state = "beret_corporate_navy_hos"
+	name = "Commander beret"
+	desc = "Grey beret with a Lieutenant's rank emblem. For officers that are more inclined towards style than safety."
+	icon_state = "beret_navy_hos"
+	spawn_blacklisted = TRUE
 
 /obj/item/clothing/head/beret/sec/navy/warden
-	name = "corporate security warden beret"
-	desc = "A navy blue beret with a warden's rank emblem. For officers that are more inclined towards style than safety."
-	icon_state = "beret_corporate_navy_warden"
-
-/obj/item/clothing/head/beret/sec/corporate/officer
-	name = "corporate security officer beret"
-	desc = "A corporate black beret with an officer's rank emblem. For officers that are more inclined towards style than safety."
-	icon_state = "beret_corporate_officer"
-
-/obj/item/clothing/head/beret/sec/corporate/hos
-	name = "corporate security commander beret"
-	desc = "A corporate black beret with a commander's rank emblem. For officers that are more inclined towards style than safety."
-	icon_state = "beret_corporate_hos"
-
-/obj/item/clothing/head/beret/sec/corporate/warden
-	name = "corporate security warden beret"
-	desc = "A corporate black beret with a warden's rank emblem. For officers that are more inclined towards style than safety."
-	icon_state = "beret_corporate_warden"
-
-/obj/item/clothing/head/beret/engineering
-	name = "corporate engineering beret"
-	desc = "A beret with the engineering insignia emblazoned on it. For engineers that are more inclined towards style than safety."
-	icon_state = "beret_orange"
+	name = "Sergeant beret"
+	desc = "Red beret with a Sergeant's rank emblem. For Sergeants that are more inclined towards style than safety."
+	icon_state = "beret_navy_warden"
+	spawn_blacklisted = TRUE
 
 /obj/item/clothing/head/beret/purple
 	name = "purple beret"
-	desc = "A stylish, if purple, beret. For personnel that are more inclined towards style than safety."
+	desc = "A stylish, if purple, beret."
 	icon_state = "beret_purple"
 
-/obj/item/clothing/head/beret/centcom/officer
-	name = "asset protection beret"
-	desc = "A navy blue beret adorned with the crest of corporate asset protection. For asset protection agents that are more inclined towards style than safety."
-	icon_state = "beret_corporate_navy"
+/obj/item/clothing/head/beret/engineering
+	name = "Technomancer yellow beret"
+	desc = "A beret with the Technomancer League insignia emblazoned on it. For engineers that are more inclined towards style than safety."
+	icon_state = "beret_engineering"
+	spawn_blacklisted = TRUE
 
-/obj/item/clothing/head/beret/centcom/captain
-	name = "asset protection command beret"
-	desc = "A white beret adorned with the crest of corporate asset protection. For asset protection leaders that are more inclined towards style than safety."
-	icon_state = "beret_corporate_white"
+/obj/item/clothing/head/beret/engineering/old
+	name = "Technomancer orange beret"
+	desc = "A beret with the Technomancer League insignia emblazoned on it. For engineers that are more inclined towards style than safety."
+	icon_state = "beret_engineering_old"
+	spawn_blacklisted = TRUE
 
-/obj/item/clothing/head/beret/deathsquad
-	name = "heavy asset protection beret"
-	desc = "An armored red beret adorned with the crest of corporate asset protection. Doesn't sacrifice style or safety."
-	icon_state = "beret_red"
-	armor = list(melee = 65, bullet = 55, laser = 35,energy = 20, bomb = 30, bio = 30, rad = 30)
-	siemens_coefficient = 0.9
+/obj/item/clothing/head/beret/artist
+	name = "red feathered beret"
+	desc = "Fit for artists, frenchmen, and eccentric military officers across the cosmos."
+	icon_state = "beret_artist"
+	item_state = "beret_artist"
+	spawn_frequency = 0
 
-/obj/item/clothing/head/beret/guard
-	name = "corporate security beret"
-	desc = "A white beret adorned with the crest of NanoTrasen. For security guards that are more inclined towards style than safety."
-	icon_state = "beret_corporate_whitered"
+/obj/item/clothing/head/beret/artist/lime
+	name = "lime feathered beret"
+	desc = "A lime colored artist's beret, smells of citrus and pomp."
+	icon_state = "beret_artist_lime"
+	item_state = "beret_artist_lime"
 
-/obj/item/clothing/head/beret/plaincolor
-	name = "beret"
-	desc = "A simple, solid color beret. This one has no emblems or insignia on it."
-	icon_state = "beret_white"
+//Moebius
+/obj/item/clothing/head/beret/moebius
+	name = "Moebius beret"
+	desc = "A purple beret emblazioned with the Moebius Laboratories logo."
+	icon_state = "beret_moebius"
+	spawn_blacklisted = TRUE
+
+/obj/item/clothing/head/surgery
+	name = "surgical cap"
+	desc = "A cap surgeons wear during operations. Keeps their hair from tickling your internal organs."
+	icon_state = "surgcap_green"
+	flags_inv = BLOCKHEADHAIR
+	bad_type = /obj/item/clothing/head/surgery
+	spawn_blacklisted = TRUE
+	style_coverage = COVERS_HAIR
+	style = STYLE_LOW
+
+/obj/item/clothing/head/surgery/purple
+	desc = "A cap surgeons wear during operations. Keeps their hair from tickling your internal organs. This one is deep purple."
+	icon_state = "surgcap_purple"
+
+/obj/item/clothing/head/surgery/blue
+	desc = "A cap surgeons wear during operations. Keeps their hair from tickling your internal organs. This one is baby blue."
+	icon_state = "surgcap_blue"
+
+/obj/item/clothing/head/surgery/green
+	desc = "A cap surgeons wear during operations. Keeps their hair from tickling your internal organs. This one is dark green."
+	icon_state = "surgcap_green"

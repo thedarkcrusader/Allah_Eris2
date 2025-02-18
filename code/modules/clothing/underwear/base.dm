@@ -94,7 +94,7 @@
 		return FALSE
 
 	H.worn_underwear -= src
-	dropInto(H.loc)
+	forceMove(H.loc)
 	user.put_in_hands(src)
 	H.update_underwear()
 
@@ -108,13 +108,13 @@
 	RemoveUnderwear(usr, usr)
 
 /obj/item/underwear/socks
-	required_free_body_parts = FEET
+	required_free_body_parts = LEGS
 
 /obj/item/underwear/top
 	required_free_body_parts = UPPER_TORSO
 
 /obj/item/underwear/bottom
-	required_free_body_parts = FEET|LEGS|LOWER_TORSO
+	required_free_body_parts = LEGS|LOWER_TORSO
 
 /obj/item/underwear/undershirt
 	required_free_body_parts = UPPER_TORSO

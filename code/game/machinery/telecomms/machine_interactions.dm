@@ -7,7 +7,7 @@
 
 */
 
-#define STATION_Z 1
+#define STATION_Z list(1,2,3,4,5)
 #define TELECOMM_Z 3
 
 /obj/machinery/telecomms
@@ -15,116 +15,49 @@
 	var/construct_op = 0
 
 
-/obj/machinery/telecomms/attackby(obj/item/P as obj, mob/user as mob)
-
-	// Using a multitool lets you access the receiver's interface
-	if(isMultitool(P))
-		attack_hand(user)
-
-
-	// REPAIRING: Use Nanopaste to repair 10-20 integrity points.
-	if(istype(P, /obj/item/stack/nanopaste))
-		var/obj/item/stack/nanopaste/T = P
-		if (integrity < 100)               								//Damaged, let's repair!
-			if (T.use(1))
-				integrity = between(0, integrity + rand(10,20), 100)
-				to_chat(usr, "You apply the Nanopaste to [src], repairing some of the damage.")
-		else
-			to_chat(usr, "This machine is already in perfect condition.")
+/obj/machinery/telecomms/attackby(obj/item/I, mob/user)
+	if(default_deconstruction(I, user))
 		return
 
+	if(default_part_replacement(I, user))
+		return
 
-	switch(construct_op)
-		if(0)
-			if(isScrewdriver(P))
-				to_chat(user, "You unfasten the bolts.")
-				playsound(src.loc, 'sound/items/Screwdriver.ogg', 50, 1)
-				construct_op ++
-		if(1)
-			if(isScrewdriver(P))
-				to_chat(user, "You fasten the bolts.")
-				playsound(src.loc, 'sound/items/Screwdriver.ogg', 50, 1)
-				construct_op --
-			if(isWrench(P))
-				to_chat(user, "You dislodge the external plating.")
-				playsound(src.loc, 'sound/items/Ratchet.ogg', 75, 1)
-				construct_op ++
-		if(2)
-			if(isWrench(P))
-				to_chat(user, "You secure the external plating.")
-				playsound(src.loc, 'sound/items/Ratchet.ogg', 75, 1)
-				construct_op --
-			if(isWirecutter(P))
-				playsound(src.loc, 'sound/items/Wirecutter.ogg', 50, 1)
-				to_chat(user, "You remove the cables.")
-				construct_op ++
-				var/obj/item/stack/cable_coil/A = new /obj/item/stack/cable_coil( user.loc )
-				A.amount = 5
-				stat |= BROKEN // the machine's been borked!
-		if(3)
-			if(isCoil(P))
-				var/obj/item/stack/cable_coil/A = P
-				if (A.use(5))
-					to_chat(user, "<span class='notice'>You insert the cables.</span>")
-					construct_op--
-					stat &= ~BROKEN // the machine's not borked anymore!
-				else
-					to_chat(user, "<span class='warning'>You need five coils of wire for this.</span>")
-			if(isCrowbar(P))
-				to_chat(user, "You begin prying out the circuit board other components...")
-				playsound(src.loc, 'sound/items/Crowbar.ogg', 50, 1)
-				if(do_after(user,60, src))
-					to_chat(user, "You finish prying out the components.")
+	// Hardcoded tool paths are bad, but the tcomm code relies a "buffer" function that only the actual multitool has
+	// I really don't want to try and fix that now, so it stays that way
+	if(istype(I, /obj/item/tool/multitool))
+		attack_hand(user)
+		return
 
-					// Drop all the component stuff
-					if(contents.len > 0)
-						for(var/obj/x in src)
-							x.loc = user.loc
-					else
+	// REPAIRING: Use Nanopaste to repair 10-20 integrity points.
+	if(istype(I, /obj/item/stack/nanopaste))
+		var/obj/item/stack/nanopaste/T = I
+		if(integrity < 100) //Damaged, let's repair!
+			if(T.use(1))
+				integrity = between(0, integrity + rand(10,20), 100)
+				to_chat(usr, SPAN_WARNING("You apply nanopaste to [src], repairing some of the damage."))
+		else
+			to_chat(usr, SPAN_WARNING("This machine is already in perfect condition."))
+		return
 
-						// If the machine wasn't made during runtime, probably doesn't have components:
-						// manually find the components and drop them!
-						var/obj/item/circuitboard/C = new circuitboard
-						for(var/I in C.req_components)
-							for(var/i = 1, i <= C.req_components[I], i++)
-								var/obj/item/s = new I
-								s.loc = user.loc
-								if(istype(P, /obj/item/stack/cable_coil))
-									var/obj/item/stack/cable_coil/A = P
-									A.amount = 1
-
-						// Drop a circuit board too
-						C.loc = user.loc
-
-					// Create a machine frame and delete the current machine
-					var/obj/machinery/constructable_frame/machine_frame/F = new
-					F.loc = src.loc
-					qdel(src)
-
-
-/obj/machinery/telecomms/attack_ai(var/mob/user as mob)
-	attack_hand(user)
 
 /obj/machinery/telecomms/attack_hand(var/mob/user as mob)
 
 	// You need a multitool to use this, or be silicon
 	if(!issilicon(user))
 		// istype returns false if the value is null
-		if(!istype(user.get_active_hand(), /obj/item/device/multitool))
+		if(!istype(user.get_active_hand(), /obj/item/tool/multitool))
 			return
 
 	if(stat & (BROKEN|NOPOWER))
 		return
 
-	var/obj/item/device/multitool/P = get_multitool(user)
+	var/obj/item/tool/multitool/P = get_multitool(user)
 
 	user.set_machine(src)
 	var/dat
 	dat = "<font face = \"Courier\"><HEAD><TITLE>[src.name]</TITLE></HEAD><center><H3>[src.name] Access</H3></center>"
 	dat += "<br>[temp]<br>"
 	dat += "<br>Power Status: <a href='?src=\ref[src];input=toggle'>[src.toggled ? "On" : "Off"]</a>"
-	if(overloaded_for)
-		dat += "<br><br>WARNING: Ion interference detected. System will automatically recover in [overloaded_for*2] seconds. <a href='?src=\ref[src];input=resetoverload'>Reset manually</a><br>"
 	if(on && toggled)
 		if(id != "" && id)
 			dat += "<br>Identification String: <a href='?src=\ref[src];input=id'>[id]</a>"
@@ -180,34 +113,34 @@
 //
 // You are able to send/receive signals from the station's z level (changeable in the STATION_Z #define) if
 // the relay is on the telecomm satellite (changable in the TELECOMM_Z #define)
-
+/*
 
 /obj/machinery/telecomms/relay/proc/toggle_level()
 
 	var/turf/position = get_turf(src)
 
 	// Toggle on/off getting signals from the station or the current Z level
-	if(src.listening_levels == GLOB.using_map.contact_levels) // equals the station
-		src.listening_levels = GetConnectedZlevels(position.z)
+	if(src.listening_levels == STATION_Z) // equals the station
+		src.listening_levels = TELECOMM_Z
 		return 1
-	else
-		src.listening_levels = GLOB.using_map.contact_levels
+	else if(position.z == TELECOMM_Z)
+		src.listening_levels = STATION_Z
 		return 1
 	return 0
-
+*/
 // Returns a multitool from a user depending on their mobtype.
 
 /obj/machinery/telecomms/proc/get_multitool(mob/user as mob)
 
-	var/obj/item/device/multitool/P = null
+	var/obj/item/tool/multitool/P = null
 	// Let's double check
-	if(!issilicon(user) && istype(user.get_active_hand(), /obj/item/device/multitool))
+	if(!issilicon(user) && istype(user.get_active_hand(), /obj/item/tool/multitool))
 		P = user.get_active_hand()
 	else if(isAI(user))
 		var/mob/living/silicon/ai/U = user
 		P = U.aiMulti
 	else if(isrobot(user) && in_range(user, src))
-		if(istype(user.get_active_hand(), /obj/item/device/multitool))
+		if(istype(user.get_active_hand(), /obj/item/tool/multitool))
 			P = user.get_active_hand()
 	return P
 
@@ -240,8 +173,10 @@
 
 /obj/machinery/telecomms/relay/Options_Menu()
 	var/dat = ""
+/*
 	if(src.z == TELECOMM_Z)
-		dat += "<br>Signal Locked to the [station_name()]: <A href='?src=\ref[src];change_listening=1'>[listening_levels == GLOB.using_map.contact_levels ? "TRUE" : "FALSE"]</a>"
+		dat += "<br>Signal Locked to Station: <A href='?src=\ref[src];change_listening=1'>[listening_levels == STATION_Z ? "TRUE" : "FALSE"]</a>"
+*/
 	dat += "<br>Broadcasting: <A href='?src=\ref[src];broadcast=1'>[broadcasting ? "YES" : "NO"]</a>"
 	dat += "<br>Receiving:    <A href='?src=\ref[src];receive=1'>[receiving ? "YES" : "NO"]</a>"
 	return dat
@@ -254,6 +189,7 @@
 	if(href_list["broadcast"])
 		broadcasting = !broadcasting
 		temp = "<font color = #666633>-% Broadcasting mode changed. %-</font>"
+/*
 	if(href_list["change_listening"])
 		//Lock to the station OR lock to the current position!
 		//You need at least two receivers and two broadcasters for this to work, this includes the machine.
@@ -261,8 +197,8 @@
 		if(result)
 			temp = "<font color = #666633>-% [src]'s signal has been successfully changed.</font>"
 		else
-			temp = "<font color = #666633>-% [src] could not lock it's signal onto the [station_name()]. Two broadcasters or receivers required.</font>"
-
+			temp = "<font color = #666633>-% [src] could not lock it's signal onto the station. Two broadcasters or receivers required.</font>"
+*/
 // BUS
 
 /obj/machinery/telecomms/bus/Options_Menu()
@@ -287,23 +223,18 @@
 
 
 /obj/machinery/telecomms/Topic(href, href_list)
-	if(..())
-		return 1
+
 	if(!issilicon(usr))
-		if(!istype(usr.get_active_hand(), /obj/item/device/multitool))
+		if(!istype(usr.get_active_hand(), /obj/item/tool/multitool))
 			return
 
 	if(stat & (BROKEN|NOPOWER))
 		return
 
-	var/obj/item/device/multitool/P = get_multitool(usr)
+	var/obj/item/tool/multitool/P = get_multitool(usr)
 
 	if(href_list["input"])
 		switch(href_list["input"])
-
-			if("resetoverload")
-				overloaded_for = 0
-				temp = "<font color = #666633>-% Manual override accepted. \The [src] has been reset.</font>"
 
 			if("toggle")
 
@@ -399,6 +330,8 @@
 	src.Options_Topic(href, href_list)
 
 	usr.set_machine(src)
+	src.add_fingerprint(usr)
+	playsound(loc, 'sound/machines/machine_switch.ogg', 100, 1)
 
 	updateUsrDialog()
 
@@ -406,3 +339,6 @@
 	if(issilicon(user) || in_range(user, src))
 		return 1
 	return 0
+
+#undef TELECOMM_Z
+#undef STATION_Z

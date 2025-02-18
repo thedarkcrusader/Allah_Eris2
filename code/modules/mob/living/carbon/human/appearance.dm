@@ -1,7 +1,7 @@
-/mob/living/carbon/human/proc/change_appearance(var/flags = APPEARANCE_ALL_HAIR, var/location = src, var/mob/user = src, var/check_species_whitelist = 1, var/list/species_whitelist = list(), var/list/species_blacklist = list(), var/datum/topic_state/state = GLOB.default_state)
+/mob/living/carbon/human/proc/change_appearance(var/flags = APPEARANCE_ALL_HAIR, var/location = src, var/mob/user = src, var/check_species_whitelist = 1, var/list/species_whitelist = list(), var/list/species_blacklist = list(), var/datum/nano_topic_state/state =GLOB.default_state)
 	var/datum/nano_module/appearance_changer/AC = new(location, src, check_species_whitelist, species_whitelist, species_blacklist)
 	AC.flags = flags
-	AC.ui_interact(user, state = state)
+	AC.nano_ui_interact(user, state = state)
 
 /mob/living/carbon/human/proc/change_species(var/new_species)
 	if(!new_species)
@@ -17,14 +17,24 @@
 	reset_hair()
 	return 1
 
+/mob/living/carbon/human/proc/change_name(var/type)
+	if (type == "random")
+		var/datum/language/L = get_default_language()
+		L.set_random_name(src)
+
+	else
+		var/newname = input("Choose a name for your character.","Your Name", real_name)
+		fully_replace_character_name(real_name, newname)
+	to_chat(src, SPAN_NOTICE("Your name is now [real_name]"))
+
 /mob/living/carbon/human/proc/change_gender(var/gender)
 	if(src.gender == gender)
 		return
 
 	src.gender = gender
-	reset_hair()
-	update_body()
-	update_dna()
+	regenerate_icons() //This is overkill, but we do need to update all of the clothing. Maybe there's a more precise call
+	//reset_hair()
+	//update_body()
 	return 1
 
 /mob/living/carbon/human/proc/change_hair(var/hair_style)
@@ -75,56 +85,48 @@
 
 	update_hair()
 
-/mob/living/carbon/human/proc/change_eye_color(var/red, var/green, var/blue)
-	if(red == r_eyes && green == g_eyes && blue == b_eyes)
+/mob/living/carbon/human/proc/change_eye_color(var/color)
+	if(color == eyes_color)
 		return
 
-	r_eyes = red
-	g_eyes = green
-	b_eyes = blue
+	eyes_color = color
 
 	update_eyes()
 	update_body()
 	return 1
 
-/mob/living/carbon/human/proc/change_hair_color(var/red, var/green, var/blue)
-	if(red == r_eyes && green == g_eyes && blue == b_eyes)
+/mob/living/carbon/human/proc/change_hair_color(var/color)
+	if(color == hair_color)
 		return
 
-	r_hair = red
-	g_hair = green
-	b_hair = blue
+	hair_color = color
 
 	force_update_limbs()
 	update_body()
 	update_hair()
 	return 1
 
-/mob/living/carbon/human/proc/change_facial_hair_color(var/red, var/green, var/blue)
-	if(red == r_facial && green == g_facial && blue == b_facial)
+/mob/living/carbon/human/proc/change_facial_hair_color(var/color)
+	if(color == facial_color)
 		return
 
-	r_facial = red
-	g_facial = green
-	b_facial = blue
+	facial_color = color
 
 	update_hair()
 	return 1
 
-/mob/living/carbon/human/proc/change_skin_color(var/red, var/green, var/blue)
-	if(red == r_skin && green == g_skin && blue == b_skin || !(species.appearance_flags & HAS_SKIN_COLOR))
+/mob/living/carbon/human/proc/change_skin_color(var/color)
+	if(color == skin_color || !(species.appearance_flags & HAS_SKIN_COLOR))
 		return
 
-	r_skin = red
-	g_skin = green
-	b_skin = blue
+	skin_color = color
 
 	force_update_limbs()
 	update_body()
 	return 1
 
 /mob/living/carbon/human/proc/change_skin_tone(var/tone)
-	if(s_tone == tone || !(species.appearance_flags & HAS_A_SKIN_TONE))
+	if(s_tone == tone || !(species.appearance_flags & HAS_SKIN_TONE))
 		return
 
 	s_tone = tone
@@ -133,24 +135,20 @@
 	update_body()
 	return 1
 
-/mob/living/carbon/human/proc/update_dna()
-	check_dna()
-	dna.ready_dna(src)
-
 /mob/living/carbon/human/proc/generate_valid_species(var/check_whitelist = 1, var/list/whitelist = list(), var/list/blacklist = list())
 	var/list/valid_species = new()
 	for(var/current_species_name in all_species)
 		var/datum/species/current_species = all_species[current_species_name]
 
-		if(check_whitelist) //If we're using the whitelist, make sure to check it!
-			if((current_species.spawn_flags & SPECIES_IS_RESTRICTED) && !check_rights(R_ADMIN, 0, src))
+		if(check_whitelist)// && !check_rights(R_ADMIN, 0, src)) //If we're using the whitelist, make sure to check it!
+			if(!(current_species.spawn_flags & CAN_JOIN))
 				continue
-			if(!is_alien_whitelisted(src, current_species))
+			if(whitelist.len && !(current_species_name in whitelist))
 				continue
-		if(whitelist.len && !(current_species_name in whitelist))
-			continue
-		if(blacklist.len && (current_species_name in blacklist))
-			continue
+			if(blacklist.len && (current_species_name in blacklist))
+				continue
+			if((current_species.spawn_flags & IS_WHITELISTED) && !is_alien_whitelisted(src, current_species_name))
+				continue
 
 		valid_species += current_species_name
 
@@ -175,3 +173,27 @@
 	for(var/obj/item/organ/external/O in organs)
 		O.sync_colour_to_human(src)
 	update_body(0)
+
+/mob/living/carbon/human/proc/randomize_appearance()
+	hair_color = rgb(25 * rand(3,8),25 * rand(1,3),25 * rand(1,3)) //curated hair color
+	change_skin_tone(roll("1d20") * -10) //skintone randomization borrowed from corpse spawner. Increment by 10 to increase variance
+	change_hair(pick(GLOB.hair_styles_list)) //pick from hairstyles
+	change_hair_color(hair_color)
+	change_facial_hair_color(hair_color)
+	age = rand(20,50)
+	//set gender and gender specific traits
+	var/gender = pick(MALE, FEMALE)
+	var/list/tts_voices = new()
+	if(gender == FEMALE) //defaults are MALE so check for FEMALE first, use MALE as default case
+		change_gender(gender) 
+		tts_voices += TTS_SEED_DEFAULT_FEMALE //Failsafe voice
+	else
+		change_facial_hair(pick(GLOB.facial_hair_styles_list)) //pick a random facial hair
+		tts_voices += TTS_SEED_DEFAULT_MALE //Failsafe voice
+	real_name = species.get_random_name(gender) //set name according to gender
+	//Set voice based on gender
+	for(var/i in tts_seeds) //from tts_seeds, add voices that match gender tag to list tts_voices
+		var/list/V = tts_seeds[i]
+		if((V["gender"] == gender || V["category"] == "any") && (V["category"] == "human" || V["gender"] == "any")) //cribbed from /code/modules/client/preference_setup/general/01_basic.dm
+			tts_voices += i
+	tts_seed = pick(tts_voices) //pick a random voice from list tts_voices

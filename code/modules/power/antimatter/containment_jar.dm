@@ -1,10 +1,10 @@
 /obj/item/am_containment
 	name = "antimatter containment jar"
-	desc = "Holds antimatter."
+	desc = "A jar built for antimatter containment."
 	icon = 'icons/obj/machines/antimatter.dmi'
 	icon_state = "jar"
-	density = 0
-	anchored = 0
+	density = FALSE
+	anchored = FALSE
 	force = 8
 	throwforce = 10
 	throw_speed = 1
@@ -14,25 +14,17 @@
 	var/fuel_max = 10000//Lets try this for now
 	var/stability = 100//TODO: add all the stability things to this so its not very safe if you keep hitting in on things
 
+/obj/item/am_containment/explosion_act(target_power, explosion_handler/handle)
+	take_damage(target_power)
+	return 0
 
-/obj/item/am_containment/ex_act(severity)
-	switch(severity)
-		if(1.0)
-			explosion(get_turf(src), 1, 2, 3, 5)//Should likely be larger but this works fine for now I guess
-			if(src)
-				qdel(src)
-			return
-		if(2.0)
-			if(prob((fuel/10)-stability))
-				explosion(get_turf(src), 1, 2, 3, 5)
-				if(src)
-					qdel(src)
-				return
-			stability -= 40
-		if(3.0)
-			stability -= 20
-	//check_stability()
-	return
+/obj/item/am_containment/take_damage(damage)
+	if(health - damage < 0)
+		explosion(get_turf(src), 1500, 100)
+	else
+		..()
+		stability -= 60 - (60 * health / maxHealth)
+
 
 /obj/item/am_containment/proc/usefuel(var/wanted)
 	if(fuel < wanted)

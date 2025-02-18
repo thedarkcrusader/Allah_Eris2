@@ -5,7 +5,8 @@
 	desc = "Holds item of clothing you shouldn't be showing off in the hallways."
 	icon = 'icons/obj/closet.dmi'
 	icon_state = "cabinet_closed"
-	density = 1
+	w_class = ITEM_SIZE_NORMAL
+	density = TRUE
 
 	var/static/list/amount_of_underwear_by_id_card
 
@@ -46,8 +47,6 @@
 	interact(user)
 
 /obj/structure/undies_wardrobe/interact(var/mob/living/carbon/human/H)
-	return
-	/*
 	var/id = H.GetIdCard()
 
 	var/dat = list()
@@ -58,8 +57,7 @@
 		dat += "[UWC.name] <a href='?src=\ref[src];select_underwear=[UWC.name]'>(Select)</a><br>"
 	dat = jointext(dat,null)
 	show_browser(H, dat, "window=wardrobe;size=400x250")
-	*/
-	
+
 /obj/structure/undies_wardrobe/proc/human_who_can_use_underwear(var/mob/living/carbon/human/H)
 	if(!istype(H) || !H.species || !(H.species.appearance_flags & HAS_UNDERWEAR))
 		return FALSE
@@ -80,11 +78,17 @@
 		var/datum/category_group/underwear/UWC = GLOB.underwear.categories_by_name[href_list["select_underwear"]]
 		if(!UWC)
 			return
-		var/datum/category_item/underwear/UWI = input("Select your desired underwear:", "Choose underwear") as null|anything in exlude_none(UWC.items)
+		var/datum/category_item/underwear/UWI = input("Select your desired underwear:", "Choose underwear") as null|anything in exclude_none(UWC.items)
 		if(!UWI)
 			return
 
 		var/list/metadata_list = list()
+		for(var/tweak in UWI.tweaks)
+			var/datum/gear_tweak/gt = tweak
+			var/metadata = gt.get_metadata(H, title = "Adjust underwear")
+			if(!metadata)
+				return
+			metadata_list["[gt]"] = metadata
 
 		if(!CanInteract(H, state))
 			return
@@ -100,7 +104,7 @@
 			return
 		LAZYSET(amount_of_underwear_by_id_card, id, ++current_quota)
 
-		var/obj/UW = UWI.create_underwear(metadata_list)
+		var/obj/UW = UWI.create_underwear(loc, metadata_list, 'icons/inventory/underwear/mob.dmi')
 		UW.forceMove(loc)
 		H.put_in_hands(UW)
 
@@ -109,7 +113,7 @@
 	if(.)
 		interact(H)
 
-/obj/structure/undies_wardrobe/proc/exlude_none(var/list/L)
+/obj/structure/undies_wardrobe/proc/exclude_none(var/list/L)
 	. = L.Copy()
 	for(var/e in .)
 		var/datum/category_item/underwear/UWI = e

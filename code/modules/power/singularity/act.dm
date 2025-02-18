@@ -3,7 +3,7 @@
 /atom/proc/singularity_act()
 	return
 
-/atom/proc/singularity_pull(S, current_size)
+/atom/proc/singularity_pull()
 	return
 
 /mob/living/singularity_act()
@@ -11,25 +11,24 @@
 	gib()
 	return 20
 
-/mob/living/singularity_pull(S, current_size)
+/mob/living/singularity_pull(S)
 	step_towards(src, S)
-	apply_effect(current_size * 3, IRRADIATE, blocked = getarmor(null, "rad"))
 
 /mob/living/carbon/human/singularity_pull(S, current_size)
 	if(current_size >= STAGE_THREE)
 		var/list/handlist = list(l_hand, r_hand)
 		for(var/obj/item/hand in handlist)
-			if(prob(current_size*5) && hand.w_class >= ((11-current_size)/2) && unEquip(hand))
-				step_towards(hand, S)
-				to_chat(src, "<span class = 'warning'>\The [S] pulls \the [hand] from your grip!</span>")
-		if(!lying && (!shoes || !(shoes.item_flags & ITEM_FLAG_NOSLIP)) && (!species || !(species.species_flags & SPECIES_FLAG_NO_SLIP)) && prob(current_size*5))
-			to_chat(src, "<span class='danger'>A strong gravitational force slams you to the ground!</span>")
-			Weaken(current_size)
+			if(prob(current_size*5) && hand.w_class >= ((11-current_size)/2) && u_equip(hand))
+				step_towards(hand, src)
+				to_chat(src, "<span class = 'warning'>The [S] yanks \the [hand] from your grip!</span>")
+	apply_effect(current_size * 3, IRRADIATE)
+	if(shoes)
+		if(shoes.item_flags & NOSLIP) return 0
 	..()
 
 /obj/singularity_act()
 	if(simulated)
-		ex_act(1)
+		explosion_act(1000, null)
 		if(src)
 			qdel(src)
 		return 2
@@ -62,7 +61,7 @@
 	return
 
 /obj/machinery/power/supermatter/shard/singularity_act()
-	src.forceMove(null)
+	src.loc = null
 	qdel(src)
 	return 5000
 
@@ -77,7 +76,7 @@
 	SetUniversalState(/datum/universal_state/supermatter_cascade)
 	log_admin("New super singularity made by eating a SM crystal [prints]. Last touched by [src.fingerprintslast].")
 	message_admins("New super singularity made by eating a SM crystal [prints]. Last touched by [src.fingerprintslast].")
-	src.forceMove(null)
+	src.loc = null
 	qdel(src)
 	return 50000
 
@@ -85,8 +84,28 @@
 	return
 
 /obj/item/storage/backpack/holding/singularity_act(S, current_size)
-	var/dist = max((current_size - 2), 1)
-	explosion(src.loc,(dist),(dist*2),(dist*4))
+	var/power = max(current_size,1) * 500
+	explosion(get_turf(src), power, 250)
+	return 1000
+
+/obj/item/storage/pouch/holding/singularity_act(S, current_size)
+	var/power =	max(current_size,1) * 500
+	explosion(get_turf(src), power, 250)
+	return 1000
+
+/obj/item/storage/belt/holding/singularity_act(S, current_size)
+	var/power = max(current_size,1) * 500
+	explosion(get_turf(src), power, 250)
+	return 1000
+
+/obj/item/storage/bag/trash/singularity_act(S, current_size)
+	var/power = max(current_size,1) * 500
+	explosion(get_turf(src), power, 250)
+	return 1000
+
+/obj/item/storage/bag/ore/holding/singularity_act(S, current_size)
+	var/power = max(current_size,1) * 500
+	explosion(get_turf(src), power, 250)
 	return 1000
 
 /turf/singularity_act(S, current_size)

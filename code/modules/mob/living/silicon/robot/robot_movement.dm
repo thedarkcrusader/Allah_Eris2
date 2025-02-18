@@ -1,37 +1,43 @@
+/// For fellow coders , if you wish to control the conditions for a robot to move , you need to touch movement_handlers in init() proc
+/// I've spent 2 hours looking for them , but hopefully you don't have to go through my pain of going over and over undocumented code.
+
+
 /mob/living/silicon/robot/slip_chance(var/prob_slip)
 	if(module && module.no_slip)
 		return 0
 	..(prob_slip)
 
-/mob/living/silicon/robot/Check_Shoegrip()
-	if(module && module.no_slip)
-		return 1
-	return 0
+/mob/living/silicon/robot/allow_spacemove()
 
-/mob/living/silicon/robot/Allow_Spacemove()
-	if(module)
-		for(var/obj/item/tank/jetpack/J in module.modules)
-			if(J && J.allow_thrust(0.01))
-				return 1
-	. = ..()
+	//Do we have a working jetpack?
+	var/obj/item/tank/jetpack/thrust = get_jetpack()
+
+	if(thrust)
+		if(thrust.allow_thrust(JETPACK_MOVE_COST, src))
+			if (thrust.stabilization_on)
+				return TRUE
+			return -1
+
+	//If no working jetpack then use the other checks
+	if (is_component_functioning("actuator"))
+		return ..()
 
 
- //No longer needed, but I'll leave it here incase we plan to re-use it.
+
 /mob/living/silicon/robot/movement_delay()
-	var/tally = ..() //Incase I need to add stuff other than "speed" later
+	var/tally = ..()
+	tally += speed //This var is a placeholder
+	if(module_active && istype(module_active,/obj/item/borg/combat/mobility)) //And so is this silly check
+		tally-=1
+	tally /= speed_factor
+	return tally
 
-	tally += speed
 
-	if(module_active && istype(module_active,/obj/item/borg/combat/mobility))
-		tally-=3
-
-	return tally+config.robot_delay
-
-// NEW: Use power while moving.
 /mob/living/silicon/robot/SelfMove(turf/n, direct)
 	if (!is_component_functioning("actuator"))
-		return 0
+		return FALSE
 
 	var/datum/robot_component/actuator/A = get_component("actuator")
 	if (cell_use_power(A.active_usage))
 		return ..()
+

@@ -4,10 +4,9 @@ var/const/GHOST_IMAGE_SIGHTLESS = 2
 var/const/GHOST_IMAGE_ALL = ~GHOST_IMAGE_NONE
 
 /mob/observer
-	density = 0
-	alpha = 127
-	plane = OBSERVER_PLANE
+	density = FALSE
 	invisibility = INVISIBILITY_OBSERVER
+	layer = FLY_LAYER
 	see_invisible = SEE_INVISIBLE_OBSERVER
 	sight = SEE_TURFS|SEE_MOBS|SEE_OBJS|SEE_SELF
 	simulated = FALSE
@@ -16,11 +15,12 @@ var/const/GHOST_IMAGE_ALL = ~GHOST_IMAGE_NONE
 	var/ghost_image_flag = GHOST_IMAGE_DARKNESS
 	var/image/ghost_image = null //this mobs ghost image, for deleting and stuff
 
+/mob/observer/can_fall()
+	return FALSE
+
 /mob/observer/New()
 	..()
 	ghost_image = image(src.icon,src)
-	ghost_image.plane = plane
-	ghost_image.layer = layer
 	ghost_image.appearance = src
 	ghost_image.appearance_flags = RESET_ALPHA
 	if(ghost_image_flag & GHOST_IMAGE_DARKNESS)
@@ -50,54 +50,6 @@ mob/observer/check_airflow_movable()
 /mob/observer/gib()		//observers can't be gibbed.
 	return
 
-/mob/observer/is_blind()	//Not blind either.
-	return
-
-/mob/observer/is_deaf() 	//Nor deaf.
-	return
-
-/mob/observer/set_stat()
-	stat = DEAD // They are also always dead
-
 /proc/updateallghostimages()
 	for (var/mob/observer/ghost/O in GLOB.player_list)
 		O.updateghostimages()
-
-/mob/observer/touch_map_edge()
-	if(z in GLOB.using_map.sealed_levels)
-		return
-
-	var/new_x = x
-	var/new_y = y
-
-	if(x <= TRANSITIONEDGE)
-		new_x = TRANSITIONEDGE + 1
-	else if (x >= (world.maxx - TRANSITIONEDGE + 1))
-		new_x = world.maxx - TRANSITIONEDGE
-	else if (y <= TRANSITIONEDGE)
-		new_y = TRANSITIONEDGE + 1
-	else if (y >= (world.maxy - TRANSITIONEDGE + 1))
-		new_y = world.maxy - TRANSITIONEDGE
-
-	var/turf/T = locate(new_x, new_y, z)
-	if(T)
-		forceMove(T)
-		inertia_dir = 0
-		throwing = 0
-		to_chat(src, "<span class='notice'>You cannot move further in this direction.</span>")
-
-
-/mob/observer/Stat()
-	. = ..()
-	if(statpanel("Status"))
-		if(iswarfare())
-			if(client?.holder)
-				stat("[BLUE_TEAM] reinforcements:", SSwarfare.blue.left)
-				//stat("[BLUE_TEAM] capture points:", SSwarfare.blue.points)
-				stat("[RED_TEAM] reinforcements:", SSwarfare.red.left)
-				//stat("[RED_TEAM] capture points:", SSwarfare.red.points)
-
-			for(var/area/A in GLOB.red_captured_zones)
-				stat("Red Captured Trench:", A)
-			for(var/area/A in GLOB.blue_captured_zones)
-				stat("Blue Captured Trench:", A)

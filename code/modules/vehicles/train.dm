@@ -9,8 +9,6 @@
 	fire_dam_coeff = 0.7
 	brute_dam_coeff = 0.5
 
-	var/passenger_allowed = 1
-
 	var/active_engines = 0
 	var/train_length = 0
 
@@ -26,9 +24,9 @@
 	for(var/obj/vehicle/train/T in orange(1, src))
 		latch(T)
 
-/obj/vehicle/train/Move()
+/obj/vehicle/train/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
 	var/old_loc = get_turf(src)
-	if(..())
+	if((. = ..()))
 		if(tow)
 			tow.Move(old_loc)
 		return 1
@@ -48,15 +46,23 @@
 			A.Move(T)	//bump things away when hit
 
 	if(emagged)
-		if(istype(A, /mob/living))
+		if(isliving(A))
 			var/mob/living/M = A
-			visible_message("<span class='warning'>[src] knocks over [M]!</span>")
-			var/def_zone = ran_zone()
+			visible_message("\red [src] knocks over [M]!")
 			M.apply_effects(5, 5)				//knock people down if you hit them
-			M.apply_damage(22 / move_delay, BRUTE, def_zone, M.run_armor_check(def_zone, "melee"))	// and do damage according to how fast the train is going
-			if(istype(load, /mob/living/carbon/human))
+			M.apply_damages(22 / move_delay)	// and do damage according to how fast the train is going
+
+			var/damage = rand(5,15)
+			M.damage_through_armor( 2  * damage / move_delay, BRUTE, BP_HEAD, ARMOR_MELEE)
+			M.damage_through_armor( 2  * damage / move_delay, BRUTE, BP_CHEST, ARMOR_MELEE)
+			M.damage_through_armor(0.5 * damage / move_delay, BRUTE, BP_L_LEG, ARMOR_MELEE)
+			M.damage_through_armor(0.5 * damage / move_delay, BRUTE, BP_R_LEG, ARMOR_MELEE)
+			M.damage_through_armor(0.5 * damage / move_delay, BRUTE, BP_L_ARM, ARMOR_MELEE)
+			M.damage_through_armor(0.5 * damage / move_delay, BRUTE, BP_R_ARM, ARMOR_MELEE)
+
+			if(ishuman(load))
 				var/mob/living/D = load
-				to_chat(D, "<span class='warning'>You hit [M]!</span>")
+				to_chat(D, "\red You hit [M]!")
 				msg_admin_attack("[D.name] ([D.ckey]) hit [M.name] ([M.ckey]) with [src]. (<A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[src.x];Y=[src.y];Z=[src.z]'>JMP</a>)")
 
 
@@ -74,9 +80,6 @@
 // Interaction procs
 //-------------------------------------------
 /obj/vehicle/train/relaymove(mob/user, direction)
-	if(user.incapacitated())
-		return 0
-
 	var/turf/T = get_step_to(src, get_step(src, direction))
 	if(!T)
 		to_chat(user, "You can't find a clear area to step onto.")
@@ -90,7 +93,7 @@
 
 	unload(user, direction)
 
-	to_chat(user, "<span class='notice'>You climb down from [src].</span>")
+	to_chat(user, "\blue You climb down from [src].")
 
 	return 1
 
@@ -101,7 +104,7 @@
 		latch(C, user)
 	else
 		if(!load(C))
-			to_chat(user, "<span class='warning'>You were unable to load [C] on [src].</span>")
+			to_chat(user, "\red You were unable to load [C] on [src].")
 
 /obj/vehicle/train/attack_hand(mob/user as mob)
 	if(user.stat || user.restrained() || !Adjacent(user))
@@ -119,16 +122,17 @@
 /obj/vehicle/train/verb/unlatch_v()
 	set name = "Unlatch"
 	set desc = "Unhitches this train from the one in front of it."
-	set category = "Object"
+	set category = "Vehicle"
 	set src in view(1)
 
-	if(!istype(usr, /mob/living/carbon/human))
+	if(!ishuman(usr))
 		return
 
 	if(!usr.canmove || usr.stat || usr.restrained() || !Adjacent(usr))
 		return
 
 	unattach(usr)
+
 
 //-------------------------------------------
 // Latching/unlatching procs
@@ -138,22 +142,22 @@
 //Note: there is a modified version of this in code\modules\vehicles\cargo_train.dm specifically for cargo train engines
 /obj/vehicle/train/proc/attach_to(obj/vehicle/train/T, mob/user)
 	if (get_dist(src, T) > 1)
-		to_chat(user, "<span class='warning'>[src] is too far away from [T] to hitch them together.</span>")
+		to_chat(user, "\red [src] is too far away from [T] to hitch them together.")
 		return
 
 	if (lead)
-		to_chat(user, "<span class='warning'>\The [src] is already hitched to something.</span>")
+		to_chat(user, "\red [src] is already hitched to something.")
 		return
 
 	if (T.tow)
-		to_chat(user, "<span class='warning'>\The [T] is already towing something.</span>")
+		to_chat(user, "\red [T] is already towing something.")
 		return
 
 	//check for cycles.
 	var/obj/vehicle/train/next_car = T
 	while (next_car)
 		if (next_car == src)
-			to_chat(user, "<span class='warning'>That seems very silly.</span>")
+			to_chat(user, "\red That seems very silly.")
 			return
 		next_car = next_car.lead
 
@@ -163,7 +167,7 @@
 	set_dir(lead.dir)
 
 	if(user)
-		to_chat(user, "<span class='notice'>You hitch \the [src] to \the [T].</span>")
+		to_chat(user, "\blue You hitch [src] to [T].")
 
 	update_stats()
 
@@ -171,13 +175,13 @@
 //detaches the train from whatever is towing it
 /obj/vehicle/train/proc/unattach(mob/user)
 	if (!lead)
-		to_chat(user, "<span class='warning'>\The [src] is not hitched to anything.</span>")
+		to_chat(user, "\red [src] is not hitched to anything.")
 		return
 
 	lead.tow = null
 	lead.update_stats()
 
-	to_chat(user, "<span class='notice'>You unhitch \the [src] from \the [lead].</span>")
+	to_chat(user, "\blue You unhitch [src] from [lead].")
 	lead = null
 
 	update_stats()

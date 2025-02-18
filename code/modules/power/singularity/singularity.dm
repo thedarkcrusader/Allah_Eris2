@@ -2,16 +2,15 @@
 
 /obj/singularity/
 	name = "gravitational singularity"
-	desc = "A gravitational singularity."
+	desc = "A swirling, churning vortex of impossible darkness that threatens to swallow anything and everything that gets too close. Gazing into its infinite depth makes your head ache."
 	icon = 'icons/obj/singularity.dmi'
 	icon_state = "singularity_s1"
-	anchored = 1
-	density = 1
-	plane = EFFECTS_BELOW_LIGHTING_PLANE
-	layer = SINGULARITY_LAYER
-	light_range = 6
+	anchored = TRUE
+	density = TRUE
+	layer = MASSIVE_OBJ_LAYER
+	//light_range = 6
 	unacidable = 1 //Don't comment this out.
-
+	allow_spin = FALSE
 	var/current_size = 1
 	var/allowed_size = 1
 	var/contained = 1 //Are we going to move around?
@@ -41,10 +40,11 @@
 
 	..()
 	START_PROCESSING(SSobj, src)
-	for(var/obj/machinery/power/singularity_beacon/singubeacon in SSmachines.machinery)
+/*	for(var/obj/machinery/power/singularity_beacon/singubeacon in SSmachines.machinery)
 		if(singubeacon.active)
 			target = singubeacon
 			break
+*/
 
 /obj/singularity/Destroy()
 	STOP_PROCESSING(SSobj, src)
@@ -53,21 +53,6 @@
 /obj/singularity/attack_hand(mob/user as mob)
 	consume(user)
 	return 1
-
-/obj/singularity/ex_act(severity)
-	if(current_size == STAGE_SUPER)//IT'S UNSTOPPABLE
-		return
-	switch(severity)
-		if(1.0)
-			if(prob(25))
-				investigate_log("has been destroyed by an explosion.", I_SINGULO)
-				qdel(src)
-				return
-			else
-				energy += 50
-		if(2.0 to 3.0)
-			energy += round((rand(20,60)/2),1)
-			return
 
 /obj/singularity/bullet_act(obj/item/projectile/P)
 	return 0 //Will there be an impact? Who knows. Will we see it? No.
@@ -83,7 +68,7 @@
 	dissipate()
 	check_energy()
 
-	if (current_size >= STAGE_TWO)
+	if (current_size >= STAGE_THREE)
 		move()
 		pulse()
 
@@ -123,8 +108,8 @@
 
 	switch (temp_allowed_size)
 		if (STAGE_ONE)
-			SetName("gravitational singularity")
-			desc = "A gravitational singularity."
+			name = "gravitational singularity"
+			desc = "A swirling, churning vortex of impossible darkness that threatens to swallow anything and everything that gets too close. Gazing into its infinite depth makes your head ache."
 			current_size = STAGE_ONE
 			icon = 'icons/obj/singularity.dmi'
 			icon_state = "singularity_s1"
@@ -138,10 +123,10 @@
 			overlays = 0
 			if(chained)
 				overlays = "chain_s1"
-			visible_message("<span class='notice'>The singularity has shrunk to a rather pitiful size.</span>")
+			visible_message(SPAN_NOTICE("The singularity has shrunk to a rather pitiful size."))
 		if (STAGE_TWO) //1 to 3 does not check for the turfs if you put the gens right next to a 1x1 then its going to eat them.
-			SetName("gravitational singularity")
-			desc = "A gravitational singularity."
+			name = "gravitational singularity"
+			desc = "A swirling, churning vortex of impossible darkness that threatens to swallow anything and everything that gets too close. Gazing into its infinite depth makes your head ache."
 			current_size = STAGE_TWO
 			icon = 'icons/effects/96x96.dmi'
 			icon_state = "singularity_s3"
@@ -156,13 +141,13 @@
 			if(chained)
 				overlays = "chain_s3"
 			if(growing)
-				visible_message("<span class='notice'>The singularity noticeably grows in size.</span>")
+				visible_message(SPAN_NOTICE("The singularity noticeably grows in size."))
 			else
-				visible_message("<span class='notice'>The singularity has shrunk to a less powerful size.</span>")
+				visible_message(SPAN_NOTICE("The singularity has shrunk to a less powerful size."))
 		if (STAGE_THREE)
 			if ((check_turfs_in(1, 2)) && (check_turfs_in(2, 2)) && (check_turfs_in(4, 2)) && (check_turfs_in(8, 2)))
-				SetName("gravitational singularity")
-				desc = "A gravitational singularity."
+				name = "gravitational singularity"
+				desc = "A swirling, churning vortex of impossible darkness that threatens to swallow anything and everything that gets too close. Gazing into its infinite depth makes your head ache."
 				current_size = STAGE_THREE
 				icon = 'icons/effects/160x160.dmi'
 				icon_state = "singularity_s5"
@@ -177,13 +162,13 @@
 				if(chained)
 					overlays = "chain_s5"
 				if(growing)
-					visible_message("<span class='notice'>The singularity expands to a reasonable size.</span>")
+					visible_message(SPAN_NOTICE("The singularity expands to a reasonable size."))
 				else
-					visible_message("<span class='notice'>The singularity has returned to a safe size.</span>")
+					visible_message(SPAN_NOTICE("The singularity has returned to a safe size."))
 		if(STAGE_FOUR)
 			if ((check_turfs_in(1, 3)) && (check_turfs_in(2, 3)) && (check_turfs_in(4, 3)) && (check_turfs_in(8, 3)))
-				SetName("gravitational singularity")
-				desc = "A gravitational singularity."
+				name = "gravitational singularity"
+				desc = "A swirling, churning vortex of impossible darkness that threatens to swallow anything and everything that gets too close. Gazing into its infinite depth makes your head ache."
 				current_size = STAGE_FOUR
 				icon = 'icons/effects/224x224.dmi'
 				icon_state = "singularity_s7"
@@ -198,12 +183,12 @@
 				if(chained)
 					overlays = "chain_s7"
 				if(growing)
-					visible_message("<span class='warning'>The singularity expands to a dangerous size.</span>")
+					visible_message(SPAN_WARNING("The singularity expands to a dangerous size."))
 				else
-					visible_message("<span class='notice'>Miraculously, the singularity reduces in size, and can be contained.</span>")
+					visible_message(SPAN_NOTICE("Miraculously, the singularity reduces in size, and can be contained."))
 		if(STAGE_FIVE) //This one also lacks a check for gens because it eats everything.
-			SetName("gravitational singularity")
-			desc = "A gravitational singularity."
+			name = "gravitational singularity"
+			desc = "A swirling, churning vortex of impossible darkness that threatens to swallow anything and everything that gets too close. Gazing into its infinite depth makes your head ache."
 			current_size = STAGE_FIVE
 			icon = 'icons/effects/288x288.dmi'
 			icon_state = "singularity_s9"
@@ -216,12 +201,12 @@
 			if(chained)
 				overlays = "chain_s9"
 			if(growing)
-				visible_message("<span class='danger'><font size='2'>The singularity has grown out of control!</font></span>")
+				visible_message(SPAN_DANGER("<font size='2'>The singularity has grown out of control!</font>"))
 			else
-				visible_message("<span class='warning'>The singularity miraculously reduces in size and loses its supermatter properties.</span>")
+				visible_message(SPAN_WARNING("The singularity miraculously reduces in size and loses its supermatter properties."))
 		if(STAGE_SUPER)//SUPERSINGULO
-			SetName("super gravitational singularity")
-			desc = "A gravitational singularity with the properties of supermatter. <b>It has the power to destroy worlds.</b>"
+			name = "super gravitational singularity"
+			desc = "A swirling, churning vortex of impossible darkness that threatens to swallow anything and everything that gets too close. Its power of infinite consumption and matter obliteration has been fused with the properties of an unstable, explosive substance with the blasting power of a small star going supernova. <b>This was a terrible, horrible idea.</b>"
 			current_size = STAGE_SUPER
 			icon = 'icons/effects/352x352.dmi'
 			icon_state = "singularity_s11"//uh, whoever drew that, you know that black holes are supposed to look dark right? What's this, the clown's singulo?
@@ -278,7 +263,7 @@
 		else if(dist <= consume_range)
 			consume(X)
 
-	//for (var/turf/T in trange(grav_pull, src)) //TODO: Create a similar trange for orange to prevent snowflake of self check.
+	//for (var/turf/T in RANGE_TURFS(grav_pull, src)) //TODO: Create a similar RANGE_TURFS for orange to prevent snowflake of self check.
 	//	consume(T)
 
 	return
@@ -291,7 +276,7 @@
 	if(!move_self)
 		return 0
 
-	var/movement_dir = pick(GLOB.alldirs - last_failed_movement)
+	var/movement_dir = pick(alldirs - last_failed_movement)
 
 	if(force_move)
 		movement_dir = force_move
@@ -306,7 +291,7 @@
 			step(src, movement_dir)
 		return 1
 	else if(check_turfs_in(movement_dir))
-		last_failed_movement = 0 // Reset this because we moved
+		last_failed_movement = 0//Reset this because we moved
 		spawn(0)
 			step(src, movement_dir)
 		return 1
@@ -344,10 +329,10 @@
 	var/dir2 = 0
 	var/dir3 = 0
 	switch(direction)
-		if(NORTH||SOUTH)
+		if(NORTH, SOUTH)
 			dir2 = 4
 			dir3 = 8
-		if(EAST||WEST)
+		if(EAST, WEST)
 			dir2 = 1
 			dir3 = 2
 	var/turf/T2 = T
@@ -372,7 +357,7 @@
 	if (!isturf(T))
 		return 0
 
-	if ((locate(/obj/machinery/containment_field) in T) || (locate(/obj/machinery/shieldwall) in T))
+	if ((locate(/obj/machinery/containment_field) in T) || (locate(/obj/effect/shield) in T))
 		return 0
 	else if (locate(/obj/machinery/field_generator) in T)
 		var/obj/machinery/field_generator/G = locate(/obj/machinery/field_generator) in T
@@ -407,28 +392,30 @@
 	var/toxrange = 10
 	var/toxdamage = 4
 	var/radiation = 15
+	var/radiationmin = 3
 	if (src.energy>200)
 		toxdamage = round(((src.energy-150)/50)*4,1)
 		radiation = round(((src.energy-150)/50)*5,1)
-	radiation_repository.radiate(src, radiation) //Always radiate at max, so a decent dose of radiation is applied
+		radiationmin = round((radiation/5),1)//
 	for(var/mob/living/M in view(toxrange, src.loc))
 		if(M.status_flags & GODMODE)
 			continue
-		toxdamage = (toxdamage - (toxdamage*M.getarmor(null, "rad")))
+		M.apply_effect(rand(radiationmin,radiation), IRRADIATE)
+		toxdamage = (toxdamage - (toxdamage*M.getarmor(null, ARMOR_RAD)))
 		M.apply_effect(toxdamage, TOX)
 	return
 
 
 /obj/singularity/proc/mezzer()
 	for(var/mob/living/carbon/M in oviewers(8, src))
-		if(istype(M, /mob/living/carbon/brain)) //Ignore brains
+		if(isbrain(M)) //Ignore brains
 			continue
 		if(M.status_flags & GODMODE)
 			continue
 		if(M.stat == CONSCIOUS)
-			if (istype(M,/mob/living/carbon/human))
+			if (ishuman(M))
 				var/mob/living/carbon/human/H = M
-				if(istype(H.glasses,/obj/item/clothing/glasses/meson) && current_size != 11)
+				if(istype(H.glasses,/obj/item/clothing/glasses/powered/meson) && current_size != 11)
 					to_chat(H, "<span class=\"notice\">You look directly into The [src.name], good thing you had your protective eyewear on!</span>")
 					return
 				else
@@ -436,7 +423,7 @@
 		to_chat(M, "<span class='danger'>You look directly into The [src.name] and feel [current_size == 11 ? "helpless" : "weak"].</span>")
 		M.apply_effect(3, STUN)
 		for(var/mob/O in viewers(M, null))
-			O.show_message(text("<span class='danger'>[] stares blankly at The []!</span>", M, src), 1)
+			O.show_message(SPAN_DANGER("[M] stares blankly at The [src]!"), 1)
 
 /obj/singularity/proc/emp_area()
 	if(current_size != 11)
@@ -447,17 +434,17 @@
 /obj/singularity/proc/smwave()
 	for(var/mob/living/M in view(10, src.loc))
 		if(prob(67))
+			M.apply_effect(rand(energy), IRRADIATE)
 			to_chat(M, "<span class=\"warning\">You hear an uneartly ringing, then what sounds like a shrilling kettle as you are washed with a wave of heat.</span>")
 			to_chat(M, "<span class=\"notice\">Miraculously, it fails to kill you.</span>")
 		else
 			to_chat(M, "<span class=\"danger\">You hear an uneartly ringing, then what sounds like a shrilling kettle as you are washed with a wave of heat.</span>")
 			to_chat(M, "<span class=\"danger\">You don't even have a moment to react as you are reduced to ashes by the intense radiation.</span>")
 			M.dust()
-	radiation_repository.radiate(src, rand(energy))
 	return
 
 /obj/singularity/proc/pulse()
-	for(var/obj/machinery/power/rad_collector/R in rad_collectors)
+	for(var/obj/machinery/power/rad_collector/R in GLOB.rad_collectors)
 		if (get_dist(R, src) <= 15) //Better than using orange() every process.
 			R.receive_pulse(energy)
 
@@ -485,8 +472,8 @@
 /obj/singularity/singularity_act(S, size)
 	if(current_size <= size)
 		var/gain = (energy/2)
-		var/dist = max((current_size - 2), 1)
-		explosion(src.loc,(dist),(dist*2),(dist*4))
+		var/power = max(current_size,1) * 500
+		explosion(get_turf(src), power, 250)
 		spawn(0)
 			qdel(src)
 		return gain

@@ -4,6 +4,9 @@
 	icon = 'icons/obj/bureaucracy.dmi'
 	icon_state = "folder"
 	w_class = ITEM_SIZE_SMALL
+	matter = list(MATERIAL_BIOMATTER = 2)
+	rarity_value = 5
+	spawn_tags = SPAWN_TAG_JUNK
 
 /obj/item/folder/blue
 	desc = "A blue folder."
@@ -17,16 +20,12 @@
 	desc = "A yellow folder."
 	icon_state = "folder_yellow"
 
-/obj/item/folder/white
-	desc = "A white folder."
-	icon_state = "folder_white"
-
-/obj/item/folder/nt
-	desc = "A NanoTrasen folder."
-	icon_state = "folder_nt"
+/obj/item/folder/cyan
+	desc = "A cyan folder."
+	icon_state = "folder_cyan"
 
 /obj/item/folder/update_icon()
-	overlays.Cut()
+	cut_overlays()
 	if(contents.len)
 		overlays += "folder_paper"
 	return
@@ -34,13 +33,14 @@
 /obj/item/folder/attackby(obj/item/W as obj, mob/user as mob)
 	if(istype(W, /obj/item/paper) || istype(W, /obj/item/photo) || istype(W, /obj/item/paper_bundle))
 		user.drop_item()
-		W.loc = src
-		to_chat(user, "<span class='notice'>You put the [W] into \the [src].</span>")
+		W.forceMove(src)
+		playsound(src,'sound/effects/Paper_Shake.ogg',40,1)
+		to_chat(user, SPAN_NOTICE("You put the [W] into \the [src]."))
 		update_icon()
 	else if(istype(W, /obj/item/pen))
 		var/n_name = sanitizeSafe(input(usr, "What would you like to label the folder?", "Folder Labelling", null)  as text, MAX_NAME_LEN)
 		if((loc == usr && usr.stat == 0))
-			SetName("folder[(n_name ? text("- '[n_name]'") : null)]")
+			name = "folder[(n_name ? text("- '[n_name]'") : null)]"
 	return
 
 /obj/item/folder/attack_self(mob/user as mob)
@@ -68,12 +68,14 @@
 			var/obj/item/P = locate(href_list["remove"])
 			if(P && (P.loc == src) && istype(P))
 				P.loc = usr.loc
+				playsound(src,'sound/effects/Paper_Remove.ogg',40,1)
 				usr.put_in_hands(P)
 
 		else if(href_list["read"])
 			var/obj/item/paper/P = locate(href_list["read"])
+			playsound(src,'sound/effects/Paper_Shake.ogg',40,1)
 			if(P && (P.loc == src) && istype(P))
-				if(!(istype(usr, /mob/living/carbon/human) || isghost(usr) || istype(usr, /mob/living/silicon)))
+				if(!(ishuman(usr) || isghost(usr) || issilicon(usr)))
 					usr << browse("<HTML><HEAD><TITLE>[P.name]</TITLE></HEAD><BODY>[stars(P.info)][P.stamps]</BODY></HTML>", "window=[P.name]")
 					onclose(usr, "[P.name]")
 				else
@@ -108,41 +110,3 @@
 		attack_self(usr)
 		update_icon()
 	return
-
-/obj/item/folder/envelope
-	name = "envelope"
-	desc = "A thick envelope. You can't see what's inside."
-	icon_state = "envelope_sealed"
-	var/sealed = 1
-
-/obj/item/folder/envelope/update_icon()
-	if(sealed)
-		icon_state = "envelope_sealed"
-	else
-		icon_state = "envelope[contents.len > 0]"
-
-/obj/item/folder/envelope/examine(var/user)
-	..()
-	to_chat(user, "The seal is [sealed ? "intact" : "broken"].")
-
-/obj/item/folder/envelope/proc/sealcheck(user)
-	var/ripperoni = alert("Are you sure you want to break the seal on \the [src]?", "Confirmation","Yes", "No")
-	if(ripperoni == "Yes")
-		visible_message("[user] breaks the seal on \the [src], and opens it.")
-		sealed = 0
-		update_icon()
-		return 1
-
-/obj/item/folder/envelope/attack_self(mob/user as mob)
-	if(sealed)
-		sealcheck(user)
-		return
-	else
-		..()
-
-/obj/item/folder/envelope/attackby(obj/item/W as obj, mob/user as mob)
-	if(sealed)
-		sealcheck(user)
-		return
-	else
-		..()

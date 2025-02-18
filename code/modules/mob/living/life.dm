@@ -2,27 +2,69 @@
 	set invisibility = 0
 	set background = BACKGROUND_ENABLED
 
+	. = FALSE
 	..()
+	if(config.enable_mob_sleep)
+		if(stat != DEAD && !mind)	// Check for mind so player-driven, nonhuman mobs don't sleep
+			if(life_cycles_before_scan > 0)
+				life_cycles_before_scan--
+			else
+				if(check_surrounding_area(7))
+					activate_ai()
+					life_cycles_before_scan = 29 //So it doesn't fall asleep just to wake up the next tick
+				else
+					life_cycles_before_scan = 240
+			if(life_cycles_before_sleep)
+				life_cycles_before_sleep--
 
-	if (transforming)
+			if(life_cycles_before_sleep < 1 && !AI_inactive)
+				AI_inactive = TRUE
+
+
+
+	if((!stasis && !AI_inactive) || ishuman(src)) //god fucking forbid we do this to humanmobs somehow
+		if(Life_Check())
+			. = TRUE
+
+	else
+		if((life_cycles_before_scan % 60) == 0)
+			Life_Check_Light()
+
+
+	var/turf/T = get_turf(src)
+	if(T)
+		if(registered_z != T.z)
+			update_z(T.z)
+
+
+/mob/living/proc/Life_Check()
+	if (HasMovementHandler(/datum/movement_handler/mob/transformation/))
 		return
 	if(!loc)
 		return
+	var/datum/gas_mixture/environment = loc.return_air()
 
-	if(machine && !CanMouseDrop(machine, src))
-		machine = null
+	if(stat != DEAD)
+		//Breathing, if applicable
+		handle_breathing()
+
+		//Mutations and radiation
+		handle_mutations_and_radiation()
+
+		//Blood
+		handle_blood()
+
+		//Random events (vomiting etc)
+		handle_random_events()
+
+		. = TRUE
 
 	//Handle temperature/pressure differences between body and environment
-	var/datum/gas_mixture/environment = loc.return_air()
 	if(environment)
 		handle_environment(environment)
 
-	blinded = 0 // Placing this here just show how out of place it is.
-	// human/handle_regular_status_updates() needs a cleanup, as blindness should be handled in handle_disabilities()
-	handle_regular_status_updates() // Status & health update, are we dead or alive etc.
-
-	if(stat != DEAD)
-		aura_check(AURA_TYPE_LIFE)
+	//Chemicals in the body
+	handle_chemicals_in_body()
 
 	//Check if we're on fire
 	handle_fire()
@@ -32,16 +74,29 @@
 	for(var/obj/item/grab/G in src)
 		G.Process()
 
-	handle_actions()
+	blinded = FALSE // Placing this here just show how out of place it is.
+	// human/handle_regular_status_updates() needs a cleanup, as blindness should be handled in handle_disabilities()
+	if(handle_regular_status_updates()) // Status & health update, are we dead or alive etc.
+		handle_disabilities() // eye, ear, brain damages
+		handle_status_effects() //all special effects, stunned, weakened, jitteryness, hallucination, sleeping, etc
 
-	update_canmove()
-
-	if(client)
-		handle_ambience()
+	update_lying_buckled_and_verb_status()
 
 	handle_regular_hud_updates()
 
-	return 1
+
+/mob/living/proc/Life_Check_Light()
+	if (HasMovementHandler(/datum/movement_handler/mob/transformation/))
+		return
+	if(!loc)
+		return
+	var/datum/gas_mixture/environment = loc.return_air()
+
+	//Handle temperature/pressure differences between body and environment
+	if(environment)
+		handle_environment(environment)
+
+	update_pulling()
 
 /mob/living/proc/handle_breathing()
 	return
@@ -52,13 +107,13 @@
 /mob/living/proc/handle_chemicals_in_body()
 	return
 
+/mob/living/proc/handle_blood()
+	return
+
 /mob/living/proc/handle_random_events()
 	return
 
 /mob/living/proc/handle_environment(var/datum/gas_mixture/environment)
-	return
-
-/mob/living/proc/handle_stomach()
 	return
 
 /mob/living/proc/update_pulling()
@@ -71,93 +126,28 @@
 	updatehealth()
 	if(stat != DEAD)
 		if(paralysis)
-			set_stat(UNCONSCIOUS)
+			stat = UNCONSCIOUS
 		else if (status_flags & FAKEDEATH)
-			set_stat(UNCONSCIOUS)
+			stat = UNCONSCIOUS
 		else
-			set_stat(CONSCIOUS)
+			stat = CONSCIOUS
 		return 1
 
-/mob/living/proc/handle_statuses()
-	handle_stunned()
-	handle_weakened()
-	handle_paralysed()
-	handle_stuttering()
-	handle_silent()
-	handle_drugged()
-	handle_slurring()
-	handle_lisp()
-
-/mob/living/proc/handle_stunned()
+//this updates all special effects: stunned, sleeping, weakened, druggy, stuttering, etc..
+/mob/living/proc/handle_status_effects()
+	if(paralysis)
+		paralysis = max(paralysis-1,0)
 	if(stunned)
-		AdjustStunned(-1)
+		stunned = max(stunned-1,0)
 		if(!stunned)
 			update_icons()
-	return stunned
 
-/mob/living/proc/handle_weakened()
 	if(weakened)
 		weakened = max(weakened-1,0)
 		if(!weakened)
 			update_icons()
-	return weakened
-
-/mob/living/proc/handle_stuttering()
-	if(stuttering)
-		stuttering = max(stuttering-1, 0)
-	return stuttering
-
-/mob/living/proc/handle_silent()
-	if(silent)
-		silent = max(silent-1, 0)
-	return silent
-
-/mob/living/proc/handle_drugged()
-	if(druggy)
-		druggy = max(druggy-1, 0)
-	return druggy
-
-/mob/living/proc/handle_slurring()
-	if(slurring)
-		slurring = max(slurring-1, 0)
-	return slurring
-
-/mob/living/proc/handle_paralysed()
-	if(paralysis)
-		AdjustParalysis(-1)
-		if(!paralysis)
-			update_icons()
-	return paralysis
-
-/mob/living/proc/handle_ambience()
-	if(deaf_loop)
-		sound_to(src, sound(null, repeat = 1, volume = 50, wait = 0, channel = 1))
-		ambience_is_playing = FALSE
-		for(var/datum/sound_token/ST)
-			ST.listener_status[src] |= SOUND_MUTE
-			ST.PrivUpdateListener(src)
-	else if(!deaf_loop && !ambience_is_playing)
-		ambience_is_playing = TRUE
-		sound_to(src, sound(current_ambience, repeat = 1, volume = 50, wait = 0, channel = 1))
-		for(var/datum/sound_token/ST)
-			ST.listener_status[src] &= ~SOUND_MUTE
-			ST.PrivUpdateListener(src)
-
-
-/mob/living/proc/change_current_ambience(var/ambience)
-	current_ambience = ambience
-	ambience_is_playing = FALSE
-
-/mob/living/proc/change_current_ambience_with_override(var/ambience)
-	current_ambience = ambience
-	ambience_override = TRUE
-	ambience_is_playing = FALSE
 
 /mob/living/proc/handle_disabilities()
-	handle_impaired_vision()
-	handle_impaired_hearing()
-
-/mob/living/proc/handle_impaired_vision()
 	//Eyes
 	if(sdisabilities & BLIND || stat)	//blindness from disability or unconsciousness doesn't get better on its own
 		eye_blind = max(eye_blind, 1)
@@ -166,77 +156,40 @@
 	else if(eye_blurry)			//blurry eyes heal slowly
 		eye_blurry = max(eye_blurry-1, 0)
 
-/mob/living/proc/handle_impaired_hearing()
 	//Ears
-	if(sdisabilities & DEAF)	//disabled-deaf, doesn't get better on its own
-		setEarDamage(null, max(ear_deaf, 1))
-	else if(ear_damage < 25)
-		adjustEarDamage(-0.05, -1)	// having ear damage impairs the recovery of ear_deaf
-	else if(ear_damage < 100)
-		adjustEarDamage(-0.05, 0)	// deafness recovers slowly over time, unless ear_damage is over 100. TODO meds that heal ear_damage
-
+	if(sdisabilities & DEAF) // Disabled-deaf, doesn't get better on its own
+		setEarDamage(-1, max(ear_deaf, 1))
+	else if(ear_damage < 100) // Deafness heals slowly over time, unless ear_damage is over 100
+		adjustEarDamage(-0.05,-1)
 
 //this handles hud updates. Calls update_vision() and handle_hud_icons()
 /mob/living/proc/handle_regular_hud_updates()
-	if(!client)	return 0
+	if(!client)	return FALSE
 
 	handle_hud_icons()
 	handle_vision()
 
 	return 1
 
-//I hate this with a burning passion.
-/mob/living/proc/set_all_blur()
-	if(!client)
-		return
-	client.screen += HB
-	client.screen += TB
-	client.screen += WB
-	client.screen += OB
-	client.screen += LB
-	client.screen += MB
-	client.screen += AB
-	client.screen += EB
-	client.screen += plating_blur
-	client.screen += AT
-	client.screen += AOB
-
-/mob/living/proc/remove_all_blur()
-	if(!client)
-		return
-	client.screen -= HB
-	client.screen -= TB
-	client.screen -= WB
-	client.screen -= OB
-	client.screen -= LB
-	client.screen -= MB
-	client.screen -= AB
-	client.screen -= EB
-	client.screen -= plating_blur
-	client.screen -= AT
-	client.screen -= AOB
-
 /mob/living/proc/handle_vision()
+	client.screen.Remove(global_hud.blurry, global_hud.druggy, global_hud.vimpaired, global_hud.darkMask, global_hud.nvg, global_hud.thermal, global_hud.meson, global_hud.science)
 	update_sight()
 
 	if(stat == DEAD)
 		return
-	if(eye_blind)
-		overlay_fullscreen("blind", /obj/screen/fullscreen/blind)
-	else
-		clear_fullscreen("blind")
-		set_fullscreen(disabilities & NEARSIGHTED, "impaired", /obj/screen/fullscreen/impaired, 1)
-		set_fullscreen(eye_blurry, "blurry", /obj/screen/fullscreen/blurry)
-		set_fullscreen(druggy, "high", /obj/screen/fullscreen/high)
 
-	set_fullscreen(stat == UNCONSCIOUS, "blackout", /obj/screen/fullscreen/blackout)
-
+	if(sdisabilities & NEARSIGHTED)
+		client.screen |= global_hud.vimpaired
+	if(eye_blurry)
+		client.screen |= global_hud.blurry
+	if(druggy)
+		client.screen |= global_hud.druggy
 	if(machine)
 		var/viewflags = machine.check_eye(src)
 		if(viewflags < 0)
 			reset_view(null, 0)
 		else if(viewflags)
-			set_sight(viewflags)
+			sight |= viewflags
 	else if(eyeobj)
 		if(eyeobj.owner != src)
 			reset_view(null)
@@ -244,24 +197,55 @@
 		reset_view(null)
 
 /mob/living/proc/update_sight()
+	set_sight(0)
+	set_see_in_dark(0)
 	if(stat == DEAD || eyeobj)
 		update_dead_sight()
 	else
-		update_living_sight()
-
-/mob/living/proc/update_living_sight()
-	set_sight(sight&(~(SEE_TURFS|SEE_MOBS|SEE_OBJS)))
-	set_see_in_dark(initial(see_in_dark))
-	set_see_invisible(initial(see_invisible))
+		if (is_ventcrawling)
+			sight |= SEE_TURFS|SEE_OBJS|BLIND
+		else
+			sight &= ~(SEE_TURFS|SEE_MOBS|SEE_OBJS)
+			see_in_dark = initial(see_in_dark)
+			see_invisible = initial(see_invisible)
+	set_sight(sight)
+	set_see_invisible(see_invisible)
 
 /mob/living/proc/update_dead_sight()
-	set_sight(sight|SEE_TURFS|SEE_MOBS|SEE_OBJS)
-	set_see_in_dark(8)
-	set_see_invisible(SEE_INVISIBLE_LEVEL_TWO)
+	sight |= SEE_TURFS
+	sight |= SEE_MOBS
+	sight |= SEE_OBJS
+	see_in_dark = 8
+	see_invisible = SEE_INVISIBLE_LEVEL_TWO
 
 /mob/living/proc/handle_hud_icons()
-	handle_hud_icons_health()
 	handle_hud_glasses()
 
-/mob/living/proc/handle_hud_icons_health()
-	return
+/*/mob/living/proc/HUD_create()
+	if (!usr.client)
+		return
+	usr.client.screen.Cut()
+	if(ishuman(usr) && (usr.client.prefs.UI_style != null))
+		if (!GLOB.HUDdatums.Find(usr.client.prefs.UI_style))
+			log_debug("[usr] try update a HUD, but HUDdatums not have [usr.client.prefs.UI_style]!")
+		else
+			var/mob/living/carbon/human/H = usr
+			var/datum/hud/human/HUDdatum = GLOB.HUDdatums[usr.client.prefs.UI_style]
+			if (!H.HUDneed.len)
+				if (H.HUDprocess.len)
+					log_debug("[usr] have object in HUDprocess list, but HUDneed is empty.")
+					for(var/obj/screen/health/HUDobj in H.HUDprocess)
+						H.HUDprocess -= HUDobj
+						qdel(HUDobj)
+				for(var/HUDname in HUDdatum.HUDneed)
+					if(!H.species.hud.ProcessHUD.Find(HUDname))
+						continue
+					var/HUDtype = HUDdatum.HUDneed[HUDname]
+					var/obj/screen/HUD = new HUDtype()
+					to_chat(world, "[HUD] added")
+					H.HUDneed += HUD
+					if (HUD.type in HUDdatum.HUDprocess)
+						to_chat(world, "[HUD] added in process")
+						H.HUDprocess += HUD
+					to_chat(world, "[HUD] added in screen")
+*/

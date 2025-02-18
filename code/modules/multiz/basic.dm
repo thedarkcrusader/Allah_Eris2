@@ -1,28 +1,17 @@
-// If you add a more comprehensive system, just untick this file.
-var/list/z_levels = list()// Each bit re... haha just kidding this is a list of bools now
+var/list/z_levels = list()	//Each item represents connection between index z-layer and next z-layer
 
-// If the height is more than 1, we mark all contained levels as connected.
-/obj/effect/landmark/map_data/New()
-	..()
-
-	for(var/i = (z - height + 1) to (z-1))
-		if (z_levels.len <i)
-			z_levels.len = i
-		z_levels[i] = TRUE
-
-/obj/effect/landmark/map_data/Initialize()
-	..()
-	return INITIALIZE_HINT_QDEL
-
+// The storage of connections between adjacent levels means some bitwise magic is needed.
 /proc/HasAbove(var/z)
-	if(z >= world.maxz || z < 1 || z > z_levels.len)
-		return 0
-	return z_levels[z]
+	if(z >= world.maxz || z > z_levels.len-1 || z < 1)
+		return FALSE
+	var/datum/level_data/LD = z_levels[z]
+	return LD != null && LD.height + LD.original_level - 1 > z
 
 /proc/HasBelow(var/z)
-	if(z > world.maxz || z < 2 || (z-1) > z_levels.len)
-		return 0
-	return z_levels[z-1]
+	if(z > world.maxz || z > z_levels.len || z < 2)
+		return FALSE
+	var/datum/level_data/LD = z_levels[z]
+	return LD != null && LD.original_level < z
 
 // Thankfully, no bitwise magic is needed here.
 /proc/GetAbove(var/atom/atom)
@@ -44,9 +33,6 @@ var/list/z_levels = list()// Each bit re... haha just kidding this is a list of 
 	for(var/level = z, HasAbove(level), level++)
 		. |= level+1
 
-/proc/AreConnectedZLevels(var/zA, var/zB)
-	return zA == zB || (zB in GetConnectedZlevels(zA))
-
 /proc/get_zstep(ref, dir)
 	if(dir == UP)
 		. = GetAbove(ref)
@@ -54,3 +40,6 @@ var/list/z_levels = list()// Each bit re... haha just kidding this is a list of 
 		. = GetBelow(ref)
 	else
 		. = get_step(ref, dir)
+
+/proc/AreConnectedZLevels(var/zA, var/zB)
+	return zA == zB || (zB in GetConnectedZlevels(zA))

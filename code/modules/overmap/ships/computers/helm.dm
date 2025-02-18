@@ -1,12 +1,12 @@
-LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
+#define NAVIGATION_VIEW_RANGE 10
 
 /obj/machinery/computer/helm
 	name = "helm control console"
-	icon_state = "thick"
+	icon_state = "computer"
 	icon_keyboard = "teleport_key"
-	icon_screen = "helm"
-	light_color = "#7faaff"
-	circuit = /obj/item/circuitboard/helm
+	icon_screen = "eris_control"
+	light_color = COLOR_LIGHTING_CYAN_MACHINERY
+	circuit = /obj/item/electronics/circuitboard/helm
 	var/obj/effect/overmap/ship/linked			//connected overmap object
 	var/autopilot = 0
 	var/manual_control = 0
@@ -19,22 +19,27 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 	. = ..()
 	linked = map_sectors["[z]"]
 	get_known_sectors()
+	new /obj/effect/overmap_event/movable/comet()
+
+	if (isnull(linked))
+		error("There are no map_sectors on [src]'s z.")
+		return
+	linked.check_link()
 
 /obj/machinery/computer/helm/proc/get_known_sectors()
 	var/area/overmap/map = locate() in world
 	for(var/obj/effect/overmap/sector/S in map)
 		if (S.known)
-			var/datum/computer_file/data/waypoint/R = new()
-			R.fields["name"] = S.name
+			var/datum/data/record/R = new()
+			R.fields["name"] = S.name_stages[1]
 			R.fields["x"] = S.x
 			R.fields["y"] = S.y
-			known_sectors[S.name] = R
-
+			known_sectors[S.name_stages[1]] = R
 
 /obj/machinery/computer/helm/Process()
 	..()
 	if (autopilot && dx && dy)
-		var/turf/T = locate(dx,dy,GLOB.using_map.overmap_z)
+		var/turf/T = locate(dx,dy,GLOB.maps_data.overmap_z)
 		if(linked.loc == T)
 			if(linked.is_still())
 				autopilot = 0
@@ -56,13 +61,18 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 		return 1
 
 /obj/machinery/computer/helm/check_eye(var/mob/user as mob)
-	if (!manual_control)
-		return -1
-	if (!get_dist(user, src) > 1 || user.blinded || !linked )
+	if (isAI(user))
+		user.unset_machine()
+		if (!manual_control)
+			user.reset_view(user.eyeobj)
+		return 0
+	if (!manual_control || (!get_dist(user, src) > 1) || user.blinded || !linked )
+		user.unset_machine()
 		return -1
 	return 0
 
-/obj/machinery/computer/helm/attack_hand(var/mob/user as mob)
+/obj/machinery/computer/helm/attack_hand(mob/user)
+
 	if(..())
 		user.unset_machine()
 		manual_control = 0
@@ -70,12 +80,20 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 
 	if(!isAI(user))
 		user.set_machine(src)
-		if(linked)
-			user.reset_view(linked)
 
-	ui_interact(user)
+	if(linked && manual_control)
+		user.reset_view(linked)
+		user.client.view = "[2*NAVIGATION_VIEW_RANGE+1]x[2*NAVIGATION_VIEW_RANGE+1]"
 
-/obj/machinery/computer/helm/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1)
+	else if(!config.use_overmap && user?.client?.holder)
+		// Let the new developers know why the helm console is unresponsive
+		// (it's disabled by default on local server to make it start a bit faster)
+		to_chat(user, "NOTE: overmap generation is disabled in server configuration.")
+		to_chat(user, "To use overmap, make sure that \"config.txt\" file is present in the server config folder and \"USE_OVERMAP\" is uncommented.")
+
+	nano_ui_interact(user)
+
+/obj/machinery/computer/helm/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	if(!linked)
 		return
 
@@ -98,6 +116,8 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 	data["autopilot"] = autopilot
 	data["manual_control"] = manual_control
 	data["canburn"] = linked.can_burn()
+	data["canpulse"] = linked.can_pulse()
+	data["canscanpoi"] = linked.can_scan_poi()
 
 	if(linked.get_speed())
 		data["ETAnext"] = "[round(linked.ETA()/10)] seconds"
@@ -106,7 +126,7 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 
 	var/list/locations[0]
 	for (var/key in known_sectors)
-		var/datum/computer_file/data/waypoint/R = known_sectors[key]
+		var/datum/data/record/R = known_sectors[key]
 		var/list/rdata[0]
 		rdata["name"] = R.fields["name"]
 		rdata["x"] = R.fields["x"]
@@ -116,7 +136,7 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 
 	data["locations"] = locations
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
 		ui = new(user, src, ui_key, "helm.tmpl", "[linked.name] Helm Control", 380, 530)
 		ui.set_initial_data(data)
@@ -131,8 +151,8 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 		return
 
 	if (href_list["add"])
-		var/datum/computer_file/data/waypoint/R = new()
-		var/sec_name = input("Input naviation entry name", "New navigation entry", "Sector #[known_sectors.len]") as text
+		var/datum/data/record/R = new()
+		var/sec_name = sanitize(input("Input naviation entry name", "New navigation entry", "Sector #[known_sectors.len]") as text)
 		if(!CanInteract(usr,state))
 			return
 		if(!sec_name)
@@ -152,12 +172,12 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 				var/newy = input("Input new entry y coordinate", "Coordinate input", linked.y) as num
 				if(!CanInteract(usr,state))
 					return
-				R.fields["x"] = Clamp(newx, 1, world.maxx)
-				R.fields["y"] = Clamp(newy, 1, world.maxy)
+				R.fields["x"] = CLAMP(newx, 1, world.maxx)
+				R.fields["y"] = CLAMP(newy, 1, world.maxy)
 		known_sectors[sec_name] = R
 
 	if (href_list["remove"])
-		var/datum/computer_file/data/waypoint/R = locate(href_list["remove"])
+		var/datum/data/record/R = locate(href_list["remove"])
 		if(R)
 			known_sectors.Remove(R.fields["name"])
 			qdel(R)
@@ -167,14 +187,14 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 		if(!CanInteract(usr,state))
 			return
 		if (newx)
-			dx = Clamp(newx, 1, world.maxx)
+			dx = CLAMP(newx, 1, world.maxx)
 
 	if (href_list["sety"])
 		var/newy = input("Input new destiniation y coordinate", "Coordinate input", dy) as num|null
 		if(!CanInteract(usr,state))
 			return
 		if (newy)
-			dy = Clamp(newy, 1, world.maxy)
+			dy = CLAMP(newy, 1, world.maxy)
 
 	if (href_list["x"] && href_list["y"])
 		dx = text2num(href_list["x"])
@@ -187,7 +207,7 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 	if (href_list["speedlimit"])
 		var/newlimit = input("Input new speed limit for autopilot (0 to disable)", "Autopilot speed limit", speedlimit) as num|null
 		if(newlimit)
-			speedlimit = Clamp(newlimit, 0, 100)
+			speedlimit = CLAMP(newlimit, 0, 100)
 
 	if (href_list["move"])
 		var/ndir = text2num(href_list["move"])
@@ -201,20 +221,31 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 
 	if (href_list["manual"])
 		manual_control = !manual_control
+		if(manual_control)
+			usr.reset_view(linked)
+			usr.client.view = "[2*NAVIGATION_VIEW_RANGE+1]x[2*NAVIGATION_VIEW_RANGE+1]"
+		else
+			if (isAI(usr))
+				usr.reset_view(usr.eyeobj)
 
-	add_fingerprint(usr)
+	if (href_list["pulse"])
+		linked.pulse()
+
+	if (href_list["scanpoi"])
+		linked.scan_poi()
+
 	updateUsrDialog()
 
 
 /obj/machinery/computer/navigation
 	name = "navigation console"
-	circuit = /obj/item/circuitboard/nav
+	circuit = /obj/item/electronics/circuitboard/nav
 	var/viewing = 0
 	var/obj/effect/overmap/ship/linked
 	icon_keyboard = "generic_key"
 	icon_screen = "helm"
 
-/obj/machinery/computer/navigation/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1)
+/obj/machinery/computer/navigation/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	if(!linked)
 		return
 
@@ -238,7 +269,7 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 	else
 		data["ETAnext"] = "N/A"
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
 		ui = new(user, src, ui_key, "nav.tmpl", "[linked.name] Navigation Screen", 380, 530)
 		ui.set_initial_data(data)
@@ -246,6 +277,11 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 		ui.set_auto_update(1)
 
 /obj/machinery/computer/navigation/check_eye(var/mob/user as mob)
+	if (isAI(user))
+		user.unset_machine()
+		if (!viewing)
+			user.reset_view(user.eyeobj)
+		return 0
 	if (!viewing)
 		return -1
 	if (!get_dist(user, src) > 1 || user.blinded || !linked )
@@ -259,11 +295,13 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 		viewing = 0
 		return
 
-	if(viewing && linked &&!isAI(user))
-		user.set_machine(src)
+	if(viewing && linked)
+		if (!isAI(user))
+			user.set_machine(src)
 		user.reset_view(linked)
+		user.client.view = "[2*NAVIGATION_VIEW_RANGE+1]x[2*NAVIGATION_VIEW_RANGE+1]"
 
-	ui_interact(user)
+	nano_ui_interact(user)
 
 /obj/machinery/computer/navigation/Topic(href, href_list)
 	if(..())
@@ -274,7 +312,10 @@ LEGACY_RECORD_STRUCTURE(all_waypoints, waypoint)
 
 	if (href_list["viewing"])
 		viewing = !viewing
-		if(viewing && !isAI(usr))
-			var/mob/user = usr
-			user.reset_view(linked)
+		if(viewing)
+			usr.reset_view(linked)
+			usr.client.view = "[2*NAVIGATION_VIEW_RANGE+1]x[2*NAVIGATION_VIEW_RANGE+1]"
+		else
+			if (isAI(usr))
+				usr.reset_view(usr.eyeobj)
 		return 1

@@ -31,7 +31,7 @@
 	cameras()	// Sets up both cameras and last alarm area.
 	set_source_data(source, duration, severity)
 
-/datum/alarm/proc/process()
+/datum/alarm/Process()
 	// Has origin gone missing?
 	if(!origin && !end_time)
 		end_time = world.time + ALARM_RESET_DELAY
@@ -109,7 +109,7 @@
 /atom/proc/get_alarm_z()
 	return get_z(src)
 
-area/get_alarm_z()
+/area/get_alarm_z()
 	return contents.len ? get_z(contents[1]) : 0
 
 /atom/proc/get_alarm_area()
@@ -150,3 +150,5 @@ area/get_alarm_z()
 
 /mob/living/silicon/robot/syndicate/get_alarm_cameras()
 	return list()
+
+#undef ALARM_RESET_DELAY

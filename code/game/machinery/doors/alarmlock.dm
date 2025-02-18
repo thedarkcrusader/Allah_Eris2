@@ -15,7 +15,7 @@
 
 /obj/machinery/door/airlock/alarmlock/Destroy()
 	SSradio.remove_object(src,air_frequency)
-	..()
+	. = ..()
 
 /obj/machinery/door/airlock/alarmlock/Initialize()
 	. = ..()

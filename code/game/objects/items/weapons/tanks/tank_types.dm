@@ -3,8 +3,7 @@
  *		Oxygen
  *		Anesthetic
  *		Air
- *		Phoron
- *		Hydrogen
+ *		Plasma
  *		Emergency Oxygen
  */
 
@@ -15,17 +14,25 @@
 	name = "oxygen tank"
 	desc = "A tank of oxygen."
 	icon_state = "oxygen"
+	force = WEAPON_FORCE_PAINFUL
 	distribute_pressure = ONE_ATMOSPHERE*O2STANDARD
-	starting_pressure = list("oxygen" = 6*ONE_ATMOSPHERE)
-	volume = 100
+	default_pressure = 6*ONE_ATMOSPHERE
+	default_gas = "oxygen"
+	slot_flags = SLOT_BACK
 
-/obj/item/tank/oxygen/yellow
-	desc = "A tank of oxygen. This one is yellow."
-	icon_state = "oxygen_f"
+/obj/item/tank/oxygen/examine(mob/user, extra_description = "")
+	if((get_dist(user, src) < 2) && (air_contents.gas["oxygen"] < 10))
+		extra_description += SPAN_WARNING("The meter on \the [src] indicates you are almost out of oxygen!")
+	..(user, extra_description)
 
 /obj/item/tank/oxygen/red
-	desc = "A tank of oxygen. This one is red."
-	icon_state = "oxygen_fr"
+	desc = "A tank of oxygen, this one is red."
+	icon_state = "oxygen_red"
+
+/obj/item/tank/oxygen/yellow
+	desc = "A tank of oxygen, this one is yellow."
+	icon_state = "oxygen_yellow"
+
 
 /*
  * Anesthetic
@@ -34,9 +41,15 @@
 	name = "anesthetic tank"
 	desc = "A tank with an N2O/O2 gas mix."
 	icon_state = "anesthetic"
-	item_state = "an_tank"
-	starting_pressure = list("oxygen" = 3*ONE_ATMOSPHERE*O2STANDARD, "sleeping_agent" = 3*ONE_ATMOSPHERE*N2STANDARD)
-	volume = 180
+	default_pressure = 3*ONE_ATMOSPHERE
+	rarity_value = 30
+
+/obj/item/tank/anesthetic/spawn_gas()
+	air_contents.adjust_multi(
+		"oxygen", default_pressure*volume/(R_IDEAL_GAS_EQUATION*T20C) * O2STANDARD,
+		"sleeping_agent", default_pressure*volume/(R_IDEAL_GAS_EQUATION*T20C) * N2STANDARD
+	)
+
 
 /*
  * Air
@@ -44,98 +57,94 @@
 /obj/item/tank/air
 	name = "air tank"
 	desc = "Mixed anyone?"
-	icon_state = "oxygen"
-	starting_pressure = list("oxygen" = 6*ONE_ATMOSPHERE*O2STANDARD, "nitrogen" = 6*ONE_ATMOSPHERE*N2STANDARD)
-	volume = 180
+	icon_state = "air"
+	force = WEAPON_FORCE_PAINFUL
+	default_pressure = 6*ONE_ATMOSPHERE
+	slot_flags = SLOT_BACK
+
+/obj/item/tank/air/spawn_gas()
+	air_contents.adjust_multi(
+		"oxygen", default_pressure*volume/(R_IDEAL_GAS_EQUATION*T20C) * O2STANDARD,
+		"nitrogen", default_pressure*volume/(R_IDEAL_GAS_EQUATION*T20C) * N2STANDARD
+	)
 
 /*
- * Phoron
+ * Plasma
  */
-/obj/item/tank/phoron
-	name = "phoron tank"
-	desc = "Contains dangerous phoron. Do not inhale. Warning: extremely flammable."
-	icon_state = "phoron"
+/obj/item/tank/plasma
+	name = "plasma tank"
+	desc = "Contains dangerous plasma. Do not inhale. Warning: extremely flammable."
+	icon_state = "plasma"
+	force = WEAPON_FORCE_NORMAL
 	gauge_icon = null
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
+	flags = CONDUCT
 	slot_flags = null	//they have no straps!
-	starting_pressure = list("phoron" = 3*ONE_ATMOSPHERE)
+	default_pressure = 3*ONE_ATMOSPHERE
+	default_gas = "plasma"
+	rarity_value = 30
 
-/*
- * Hydrogen
- */
-/obj/item/tank/hydrogen
-	name = "hydrogen tank"
-	desc = "Contains hydrogen. Warning: flammable."
-	icon_state = "hydrogen"
-	gauge_icon = null
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
-	slot_flags = null
-	starting_pressure = list("hydrogen" = 3*ONE_ATMOSPHERE)
-
-/obj/item/tank/hydrogen/attackby(obj/item/W as obj, mob/user as mob)
-	..()
-	if (istype(W, /obj/item/flamethrower))
-		var/obj/item/flamethrower/F = W
-		if (!F.status||F.ptank)	return
-		master = F
-		F.ptank = src
-		user.remove_from_mob(src)
-		forceMove(F)
 
 /*
  * Emergency Oxygen
  */
-/obj/item/tank/emergency
-	name = "emergency tank"
-	icon_state = "emergency"
-	gauge_icon = "indicator_emergency"
-	gauge_cap = 4
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
-	slot_flags = SLOT_BELT
-	w_class = ITEM_SIZE_SMALL
-	force = 4
-	distribute_pressure = ONE_ATMOSPHERE*O2STANDARD
-	volume = 40 //Tiny. Real life equivalents only have 21 breaths of oxygen in them. They're EMERGENCY tanks anyway -errorage (dangercon 2011)
-
-/obj/item/tank/emergency/oxygen
+/obj/item/tank/emergency_oxygen
 	name = "emergency oxygen tank"
 	desc = "Used for emergencies. Contains very little oxygen, so try to conserve it until you actually need it."
 	icon_state = "emergency"
-	gauge_icon = "indicator_emergency"
-	starting_pressure = list("oxygen" = 3*ONE_ATMOSPHERE)
+	gauge_icon = "indicator-tank-small"
+	gauge_cap = 4
+	flags = CONDUCT
+	slot_flags = SLOT_BELT
+	w_class = ITEM_SIZE_SMALL
+	force = WEAPON_FORCE_NORMAL
+	distribute_pressure = ONE_ATMOSPHERE*O2STANDARD
+	default_pressure = 3*ONE_ATMOSPHERE
+	default_gas = "oxygen"
+	volume = 2 //Tiny. Real life equivalents only have 21 breaths of oxygen in them. They're EMERGENCY tanks anyway -errorage (dangercon 2011)
+	rarity_value = 10
+	matter = list(MATERIAL_STEEL = 2)
 
-/obj/item/tank/emergency/oxygen/engi
+/obj/item/tank/emergency_oxygen/engi
 	name = "extended-capacity emergency oxygen tank"
 	icon_state = "emergency_engi"
-	volume = 60
+	volume = 6
+	rarity_value = 20
 
-/obj/item/tank/emergency/oxygen/double
+/obj/item/tank/emergency_oxygen/double
 	name = "double emergency oxygen tank"
 	icon_state = "emergency_double"
-	gauge_icon = "indicator_emergency_double"
-	volume = 90
-	w_class = ITEM_SIZE_NORMAL
+	gauge_icon = "indicator-tank-double"
+	volume = 10
+	rarity_value = 25
+	matter = list(MATERIAL_STEEL = 4)
 
-/obj/item/tank/emergency/nitrogen
+/obj/item/tank/emergency_oxygen/nitrogen
 	name = "emergency nitrogen tank"
-	desc = "An emergency air tank hastily painted red and issued to Vox crewmembers."
-	icon_state = "emergency_nitro"
-	gauge_icon = "indicator_emergency"
-	starting_pressure = list("nitrogen" = 3*ONE_ATMOSPHERE)
+	desc = "What kind of emergency would a tank of inert nitrogen prepare for?"
+	icon_state = "emergency_nitrogen"
+	default_pressure = 6*ONE_ATMOSPHERE
+	default_gas = "nitrogen"
+	rarity_value = 15
 
-/obj/item/tank/emergency/nitrogen/double
-	name = "double emergency nitrogen tank"
-	icon_state = "emergency_double_nitrogen"
-	gauge_icon = "indicator_emergency_double"
-	volume = 60
+/obj/item/tank/emergency_oxygen/nitrogen/examine(mob/user, extra_description = "")
+	if((get_dist(user, src) < 2) && (air_contents.gas["nitrogen"] < 10))
+		extra_description += SPAN_WARNING("The meter on \the [src] indicates you are almost out of nitrogen!")
+	..(user, extra_description)
 
 /*
  * Nitrogen
  */
 /obj/item/tank/nitrogen
 	name = "nitrogen tank"
-	desc = "A tank of nitrogen."
-	icon_state = "oxygen_fr"
+	desc = "Many a death for mistaking it for a fire extinguisher."
+	force = WEAPON_FORCE_PAINFUL
+	icon_state = "nitrogen"
 	distribute_pressure = ONE_ATMOSPHERE*O2STANDARD
-	starting_pressure = list("nitrogen" = 10*ONE_ATMOSPHERE)
-	volume = 180
+	default_pressure = 9*ONE_ATMOSPHERE
+	default_gas = "nitrogen"
+	rarity_value = 30
+
+/obj/item/tank/nitrogen/examine(mob/user, extra_description = "")
+	if((get_dist(user, src) < 2) && (air_contents.gas["nitrogen"] < 10))
+		extra_description += SPAN_WARNING("The meter on \the [src] indicates you are almost out of nitrogen!")
+	..(user, extra_description)

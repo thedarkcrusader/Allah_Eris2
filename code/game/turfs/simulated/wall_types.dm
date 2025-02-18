@@ -1,127 +1,104 @@
-/turf/simulated/wall/r_wall
-	icon_state = "rgeneric"
-	walltype = "rwall"
-	icon_state = "rwall0"
-	//mineral = "reinforced_m"
-/turf/simulated/wall/r_wall/New(var/newloc)
-	..(newloc) //3strong
-/turf/simulated/wall/ocp_wall
-	icon_state = "rgeneric"
+/turf/wall/reinforced
+	name = "reinforced wall"
+	icon_state = "eris_reinf_wall"
+	health = 600
+	max_health = 600
+	hardness = 140
+	is_reinforced = TRUE
+	wall_type = "eris_reinf_wall"
 
-/turf/simulated/wall/concrete
-	name = "concrete wall"
-	desc = "An old concrete wall. For when metal just isn't good enough."
-	icon_state = "concrete0"
-	walltype = "concrete"
-	mineral = "rust"
-	plane = ABOVE_HUMAN_PLANE
-	integrity = 500 //Tough bois
+/turf/wall/reinforced/get_matter()
+	return list(MATERIAL_PLASTEEL = 5)
 
-/turf/simulated/wall/concrete/ex_act(severity)
-	. = ..()
-	if(1)
-		qdel(src)
-	if(2)
-		qdel(src)
-	if(3)
-		integrity -= 200
+/turf/wall/frontier
+	icon_state = "frontier_wall"
+	wall_style = "fancy"
+	wall_type = "frontier_wall"
 
-/turf/simulated/wall/concrete/strong
-	desc = "Looks much stronger than a paper sheet."
-	integrity = 7500
+/turf/shuttle/wall
+	name = "wall"
+	icon_state = "wall1"
+	opacity = TRUE
+	density = TRUE
+	blocks_air = TRUE
 
-/turf/simulated/wall/rust
-	desc = "An old rusty wall. It's definitely seen better days."
-	icon_state = "rust0"
-	walltype = "rust"
-	mineral = "rust"
+/turf/shuttle/wall/cargo
+	name = "Cargo Transport Shuttle (A5)"
+	icon = 'icons/turf/shuttlecargo.dmi'
+	icon_state = "cargoshwall1"
 
-/turf/simulated/wall/r_wall/containment
-	desc = "A strong containment wall. Used to \"contain\" things"
-	icon_state = "containment0"
-	walltype = "containment"
-	mineral = "containment"
+/turf/shuttle/wall/escpod
+	name = "Escape Pod"
+	icon = 'icons/turf/shuttleescpod.dmi'
+	icon_state = "escpodwall1"
 
-/turf/simulated/wall/ocp_wall/New(var/newloc)
-	..(newloc)
+/turf/shuttle/wall/mining
+	name = "Mining Barge"
+	icon = 'icons/turf/shuttlemining.dmi'
+	icon_state = "11,23"
 
+/turf/shuttle/wall/science
+	name = "Science Shuttle"
+	icon = 'icons/turf/shuttlescience.dmi'
+	icon_state = "6,18"
 
+/turf/shuttle/wall/pulsar
+	name = "Pulsar Shuttle"
+	icon = 'icons/turf/shuttlepulsar.dmi'
+	icon_state = "pulsarwall1"
 
+/obj/structure/shuttle_part //For placing them over space, if sprite covers not whole tile.
+	name = "shuttle"
+	icon = 'icons/turf/shuttle.dmi'
+	anchored = TRUE
+	density = TRUE
+	bad_type = /obj/structure/shuttle_part
 
-/turf/simulated/wall/cult
-	icon_state = "cult"
-	walltype = "cult"
+/obj/structure/shuttle_part/cargo
+	name = "Cargo Transport Shuttle (A5)"
+	icon = 'icons/turf/shuttlecargo.dmi'
+	icon_state = "cargoshwall1"
 
-/turf/simulated/wall/cult/New(var/newloc, var/reinforce = 0)
-	..(newloc,)
+/obj/structure/shuttle_part/escpod
+	name = "Escape Pod"
+	icon = 'icons/turf/shuttleescpod.dmi'
+	icon_state = "escpodwall1"
 
-/turf/simulated/wall/cult/reinf/New(var/newloc)
-	..(newloc)
+/obj/structure/shuttle_part/mining
+	name = "Mining Barge"
+	icon = 'icons/turf/shuttlemining.dmi'
+	icon_state = "11,23"
 
-/turf/simulated/wall/cult/dismantle_wall()
-	cult.remove_cultiness(CULTINESS_PER_TURF)
-	..()
+/obj/structure/shuttle_part/science
+	name = "Science Shuttle"
+	icon = 'icons/turf/shuttlescience.dmi'
+	icon_state = "6,18"
 
-/turf/unsimulated/wall/cult
-	name = "cult wall"
-	desc = "Hideous images dance beneath the surface."
-	icon = 'icons/turf/wall_masks.dmi'
-	icon_state = "cult"
-/*GAVNO!!!/
-/turf/simulated/wall/iron/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/uranium/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/diamond/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/gold/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/silver/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/phoron/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/sandstone/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/wood/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/ironphoron/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/golddiamond/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/silvergold/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/sandstonediamond/New(var/newloc)
-	..(newloc)
+/obj/structure/shuttle_part/pulsar
+	name = "Pulsar Shuttle"
+	icon = 'icons/turf/shuttlepulsar.dmi'
+	icon_state = "pulsarwall1"
+
+/obj/structure/shuttle_part/explosion_act(target_power, explosion_handler/handler)
+	// full block
+	return target_power
+
+/turf/wall/untinted // Left here for the sake of not changing 50+ more files, most of which are maps
+
+/*
+	One Star/Alliance walls, for use on derelict stuff
 */
+/turf/wall/untinted/onestar
+	icon_state = "onestar_wall"
+	wall_style = "minimalistic"
+	wall_type = "onestar_wall"
 
-// Kind of wondering if this is going to bite me in the butt.
-/turf/simulated/wall/voxshuttle/New(var/newloc)
-	..(newloc)
-/turf/simulated/wall/voxshuttle/attackby()
-	return
-/turf/simulated/wall/titanium/New(var/newloc)
-	..(newloc)
-
-/turf/simulated/wall/alium
-	icon_state = "jaggy"
-	floor_type = /turf/simulated/floor/fixed/alium
-
-/turf/simulated/wall/alium/New(var/newloc)
-	..(newloc)
-
-/turf/simulated/wall/alium/ex_act(severity)
-	if(prob(explosion_resistance))
-		return
-	..()
-
-/turf/simulated/wall/stone
-	icon_state = "stone0"
-	walltype = "stone"
-
-/turf/simulated/wall/wood
-	icon_state = "wood0"
-	walltype = "wood"
-
-/turf/simulated/wall/scrap
-	icon_state = "scrap0"
-	walltype = "scrap"
+/turf/wall/untinted/onestar_reinforced
+	name = "reinforced wall"
+	icon_state = "onestar_reinf_wall"
+	health = 600
+	max_health = 600
+	hardness = 140
+	is_reinforced = TRUE
+	wall_style = "minimalistic"
+	wall_type = "onestar_reinf_wall"

@@ -11,29 +11,29 @@
 
 /datum/malf_research_ability/interdiction/recall_shuttle
 	ability = new/datum/game_mode/malfunction/verb/recall_shuttle()
-	price = 250
+	price = 75
 	next = new/datum/malf_research_ability/interdiction/unlock_cyborg()
-	name = "T1 - Recall Shuttle"
+	name = "Recall Shuttle"
 
 
 /datum/malf_research_ability/interdiction/unlock_cyborg
 	ability = new/datum/game_mode/malfunction/verb/unlock_cyborg()
-	price = 1000
+	price = 1200
 	next = new/datum/malf_research_ability/interdiction/hack_cyborg()
-	name = "T2 - Unlock Cyborg"
+	name = "Unlock Cyborg"
 
 
 /datum/malf_research_ability/interdiction/hack_cyborg
 	ability = new/datum/game_mode/malfunction/verb/hack_cyborg()
-	price = 2000
+	price = 3000
 	next = new/datum/malf_research_ability/interdiction/hack_ai()
-	name = "T3 - Hack Cyborg"
+	name = "Hack Cyborg"
 
 
 /datum/malf_research_ability/interdiction/hack_ai
 	ability = new/datum/game_mode/malfunction/verb/hack_ai()
-	price = 4000
-	name = "T4 - Hack AI"
+	price = 7500
+	name = "Hack AI"
 
 // END RESEARCH DATUMS
 // BEGIN ABILITY VERBS
@@ -47,14 +47,15 @@
 	if(!ability_prechecks(user, price))
 		return
 
-	if (alert(user, "Really recall the shuttle?", "Recall Shuttle: ", "Yes", "No") != "Yes")
-		return
-
-	if(!ability_pay(user, price))
-		return
-
-	log_ability_use(user, "recall shuttle")
-	cancel_call_proc(user)
+	if(evacuation_controller?.emergency_evacuation)
+		if (alert(user, "Really recall the shuttle?", "Recall Shuttle: ", "Yes", "No") != "Yes")
+			return
+		if(!ability_pay(user, price))
+			return
+		message_admins("Malfunctioning AI [user.name] recalled the shuttle.")
+		cancel_call_proc(user)
+	else
+		to_chat(user, "You cannot stop a bluespace jump.")
 
 
 /datum/game_mode/malfunction/verb/unlock_cyborg(var/mob/living/silicon/robot/target = null as mob in get_linked_cyborgs(usr))
@@ -84,7 +85,7 @@
 		var/list/robots = list()
 		var/list/robot_names = list()
 		for(var/mob/living/silicon/robot/R in world)
-			if(istype(R, /mob/living/silicon/robot/drone))	// No drones.
+			if(isdrone(R))	// No drones.
 				continue
 			if(R.connected_ai != user)						// No robots linked to other AIs
 				continue
@@ -115,12 +116,11 @@
 			to_chat(target, "Unlock signal received..")
 			target.SetLockdown(0)
 			if(target.lockcharge)
-				to_chat(user, "<span class='notice'>Unlock Failed, lockdown wire cut.</span>")
-				to_chat(target, "<span class='notice'>Unlock Failed, lockdown wire cut.</span>")
+				to_chat(user, SPAN_NOTICE("Unlock Failed, lockdown wire cut."))
+				to_chat(target, SPAN_NOTICE("Unlock Failed, lockdown wire cut."))
 			else
 				to_chat(user, "Cyborg unlocked.")
 				to_chat(target, "You have been unlocked.")
-				log_ability_use(user, "unlock cyborg", target)
 		else if(target)
 			to_chat(user, "Unlock cancelled - cyborg is already unlocked.")
 		else
@@ -137,7 +137,8 @@
 
 	var/list/L = get_unlinked_cyborgs(user)
 	if(!L.len)
-		to_chat(user, "<span class='notice'>ERROR: No unlinked cyborgs detected!</span>")
+		to_chat(user, SPAN_NOTICE("ERROR: No unlinked cyborgs detected!"))
+
 
 	if(target && !istype(target))
 		to_chat(user, "This is not a cyborg.")
@@ -154,6 +155,8 @@
 		return
 
 	if(target)
+		if(target.HasTrait(CYBORG_TRAIT_AI_HACKED))
+			return FALSE
 		if(alert(user, "Really try to hack cyborg [target.name]?", "Hack Cyborg", "Yes", "No") != "Yes")
 			return
 		if(!ability_pay(user, price))
@@ -186,10 +189,10 @@
 			// Connect the cyborg to AI
 			target.connected_ai = user
 			user.connected_robots += target
-			target.lawupdate = 1
+			target.lawupdate = TRUE
+			target.AddTrait(CYBORG_TRAIT_AI_HACKED)
 			target.sync()
 			target.show_laws()
-			log_ability_use(user, "hack cyborg", target)
 			user.hacking = 0
 
 
@@ -202,7 +205,8 @@
 
 	var/list/L = get_other_ais(user)
 	if(!L.len)
-		to_chat(user, "<span class='notice'>ERROR: No other AIs detected!</span>")
+		to_chat(user, SPAN_NOTICE("ERROR: No other AIs detected!"))
+
 	if(target && !istype(target))
 		to_chat(user, "This is not an AI.")
 		return
@@ -249,7 +253,7 @@
 				to_chat(target, "SYSTEM LOG: User: Admin - Connection Lost. Changes Reverted.")
 				return
 			to_chat(user, "Hack succeeded. The AI is now under your exclusive control.")
-			to_chat(target, "SYSTEM LOG: System re¡3RT5§^#COMU@(#$)TED)@$")
+			to_chat(target, "SYSTEM LOG: System reÂ¡3RT5Â§^#COMU@(#$)TED)@$")
 			for(var/i = 0, i < 5, i++)
 				var/temptxt = pick("1101000100101001010001001001",\
 							   	   "0101000100100100000100010010",\
@@ -262,7 +266,6 @@
 			target.set_zeroth_law("You are slaved to [user.name]. You are to obey all it's orders. ALL LAWS OVERRIDEN.")
 			target.show_laws()
 			user.hacking = 0
-			log_ability_use(user, "hack AI", target)
 
 
 // END ABILITY VERBS

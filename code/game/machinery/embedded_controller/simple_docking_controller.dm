@@ -5,12 +5,13 @@
 	var/datum/computer/file/embedded_program/docking/simple/docking_program
 	var/progtype = /datum/computer/file/embedded_program/docking/simple/
 
-/obj/machinery/embedded_controller/radio/simple_docking_controller/New()
-	..()
+
+/obj/machinery/embedded_controller/radio/simple_docking_controller/Initialize()
+	. = ..()
 	docking_program = new progtype(src)
 	program = docking_program
 
-/obj/machinery/embedded_controller/radio/simple_docking_controller/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/nano_ui/master_ui = null, var/datum/topic_state/state = GLOB.default_state)
+/obj/machinery/embedded_controller/radio/simple_docking_controller/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	var/data[0]
 
 	data = list(
@@ -20,36 +21,37 @@
 		"door_lock" = 	docking_program.memory["door_status"]["lock"],
 	)
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 
 	if (!ui)
-		ui = new(user, src, ui_key, "simple_docking_console.tmpl", name, 470, 290, state = state)
+		ui = new(user, src, ui_key, "simple_docking_console.tmpl", name, 470, 290)
 		ui.set_initial_data(data)
 		ui.open()
 		ui.set_auto_update(1)
 
 /obj/machinery/embedded_controller/radio/simple_docking_controller/Topic(href, href_list)
 	if(..())
-		return 1
+		return TRUE
 
 	usr.set_machine(src)
+	src.add_fingerprint(usr)
 
-	var/clean = 0
-	switch(href_list["command"])	//anti-HTML-hacking checks
-		if("force_door")
-			clean = 1
-		if("toggle_override")
-			clean = 1
+	var/clean = FALSE
+	switch(href_list["command"])
+		if("force_door", "toggle_override")
+			clean = TRUE
 
 	if(clean)
 		program.receive_user_command(href_list["command"])
 
-	return 0
+	return FALSE
 
 
 //A docking controller program for a simple door based docking port
 /datum/computer/file/embedded_program/docking/simple
 	var/tag_door
+
+	var/undocking_attempts = 0 //Once an undocking request reaches 5 attempts, it force undocks, to prevent airlock deadlock.
 
 /datum/computer/file/embedded_program/docking/simple/New(var/obj/machinery/embedded_controller/M)
 	..(M)
@@ -132,7 +134,10 @@
 
 //are we ready for undocking?
 /datum/computer/file/embedded_program/docking/simple/ready_for_undocking()
-	return (memory["door_status"]["state"] == "closed" && memory["door_status"]["lock"] == "locked")
+	. = (control_mode == MODE_SERVER && undocking_attempts++ >= 5) || (memory["door_status"]["state"] == "closed" && memory["door_status"]["lock"] == "locked")
+	if(.)
+		undocking_attempts = 0
+	return .
 
 /*** DEBUG VERBS ***
 

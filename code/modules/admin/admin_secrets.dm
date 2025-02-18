@@ -22,15 +22,13 @@ var/datum/admin_secrets/admin_secrets = new()
 		dd_insertObjectList(category.items, item)
 		items += item
 
-//
-// Secret Item Category - Each subtype is a category for organizing secret commands.
-//
 /datum/admin_secret_category
 	var/name = ""
 	var/desc = ""
 	var/list/datum/admin_secret_item/items
 
-/datum/admin_secret_category
+/datum/admin_secret_category/New()
+	..()
 	items = list()
 
 /datum/admin_secret_category/proc/can_view(var/mob/user)
@@ -39,15 +37,11 @@ var/datum/admin_secrets/admin_secrets = new()
 			return 1
 	return 0
 
-//
-// Secret Item Datum - Each subtype is a command on the secrets panel.
-// 	Override execute() with the implementation of the command.
-//
 /datum/admin_secret_item
 	var/name = ""
-	var/category = null
+	var/category
 	var/log = 1
-	var/feedback = 1
+	//var/feedback = 1
 	var/permissions = R_HOST
 	var/warn_before_use = 0
 
@@ -72,23 +66,14 @@ var/datum/admin_secrets/admin_secrets = new()
 
 	if(log)
 		log_and_message_admins("used secret '[name]'", user)
-	if(feedback)
-		feedback_inc("admin_secrets_used",1)
-		feedback_add_details("admin_secrets_used","[name]")
-	return 1
 
-/datum/admin_secret_item/Topic()
-	. = ..()
-	return !. && !can_execute(usr)
+	return 1
 
 /*************************
 * Pre-defined categories *
 *************************/
 /datum/admin_secret_category/admin_secrets
 	name = "Admin Secrets"
-
-/datum/admin_secret_category/investigation
-	name = "Investigation"
 
 /datum/admin_secret_category/random_events
 	name = "'Random' Events"
@@ -107,11 +92,6 @@ var/datum/admin_secrets/admin_secrets = new()
 	category = /datum/admin_secret_category/admin_secrets
 	log = 0
 	permissions = R_ADMIN
-
-/datum/admin_secret_item/investigation
-	category = /datum/admin_secret_category/investigation
-	log = 0
-	permissions = R_INVESTIGATE
 
 /datum/admin_secret_item/random_event
 	category = /datum/admin_secret_category/random_events

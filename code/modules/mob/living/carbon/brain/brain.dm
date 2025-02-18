@@ -10,57 +10,38 @@
 	icon_state = "brain1"
 
 /mob/living/carbon/brain/New()
+	. = ..()
 	create_reagents(1000)
-	..()
 
 /mob/living/carbon/brain/Destroy()
-	if(key)				//If there is a mob connected to this thing. Have to check key twice to avoid false death reporting.
-		if(stat!=DEAD)	//If not dead.
-			death(1)	//Brains can die again. AND THEY SHOULD AHA HA HA HA HA HA
+	if(key)	//If there is a mob connected to this thing. Have to check key twice to avoid false death reporting.
+		if(stat != DEAD) death(1)	//Brains can die again. AND THEY SHOULD AHA HA HA HA HA HA
 		ghostize()		//Ghostize checks for key so nothing else is necessary.
-	. = ..()
-
-/mob/living/carbon/brain/say_understands(var/other)//Goddamn is this hackish, but this say code is so odd
-	if (istype(other, /mob/living/silicon/ai))
-		if(!(container && istype(container, /obj/item/device/mmi)))
-			return 0
-		else
-			return 1
-	if (istype(other, /mob/living/silicon/decoy))
-		if(!(container && istype(container, /obj/item/device/mmi)))
-			return 0
-		else
-			return 1
-	if (istype(other, /mob/living/silicon/pai))
-		if(!(container && istype(container, /obj/item/device/mmi)))
-			return 0
-		else
-			return 1
-	if (istype(other, /mob/living/silicon/robot))
-		if(!(container && istype(container, /obj/item/device/mmi)))
-			return 0
-		else
-			return 1
-	if (istype(other, /mob/living/carbon/human))
-		return 1
-	if (istype(other, /mob/living/carbon/slime))
-		return 1
 	return ..()
 
-/mob/living/carbon/brain/update_canmove()
-	if(in_contents_of(/obj/mecha) || istype(loc, /obj/item/device/mmi))
+/mob/living/carbon/brain/say_understands(var/other)//Goddamn is this hackish, but this say code is so odd
+	if(isAI(other))
+		if(!(container && istype(container, /obj/item/device/mmi))) return 0
+		else return 1
+	if(istype(other, /mob/living/silicon/decoy))
+		if(!(container && istype(container, /obj/item/device/mmi))) return 0
+		else return 1
+	if(istype(other, /mob/living/silicon/pai))
+		if(!(container && istype(container, /obj/item/device/mmi))) return 0
+		else return 1
+	if(isrobot(other))
+		if(!(container && istype(container, /obj/item/device/mmi))) return 0
+		else return 1
+	if(ishuman(other)) return 1
+	if(isslime(other)) return 1
+	return ..()
+
+/mob/living/carbon/brain/update_lying_buckled_and_verb_status()
+	if(istype(loc, /obj/item/device/mmi))
 		canmove = 1
 		use_me = 1
-	else
-		canmove = 0
+	else canmove = 0
 	return canmove
 
-/mob/living/carbon/brain/isSynthetic()
-	return istype(loc, /obj/item/device/mmi/digital)
-
 /mob/living/carbon/brain/binarycheck()
-	return isSynthetic()
-
-/mob/living/carbon/brain/check_has_mouth()
-	return 0
-
+	return istype(loc, /obj/item/device/mmi/digital)

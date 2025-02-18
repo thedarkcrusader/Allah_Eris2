@@ -3,21 +3,16 @@
 	icon = 'icons/obj/library.dmi'
 	icon_state = "bigscanner"
 	var/insert_anim = "bigscanner1"
-	anchored = 1
-	density = 1
-	use_power = 1
+	anchored = TRUE
+	density = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 30
 	active_power_usage = 200
-	power_channel = EQUIP
-	atom_flags = ATOM_FLAG_CLIMBABLE
-	obj_flags = OBJ_FLAG_ANCHORABLE
+	power_channel = STATIC_EQUIP
 	var/obj/item/copyitem = null	//what's in the copier!
 	var/copies = 1	//how many copies to print!
 	var/toner = 30 //how much toner is left! woooooo~
 	var/maxcopies = 10	//how many copies can be copied at once- idea shamelessly stolen from bs12's copier!
-
-/obj/machinery/photocopier/attack_ai(mob/user as mob)
-	return attack_hand(user)
 
 /obj/machinery/photocopier/attack_hand(mob/user as mob)
 	user.set_machine(src)
@@ -32,7 +27,7 @@
 			dat += "<a href='byond://?src=\ref[src];add=1'>+</a><BR><BR>"
 	else if(toner)
 		dat += "Please insert something to copy.<BR><BR>"
-	if(istype(user,/mob/living/silicon))
+	if(issilicon(user))
 		dat += "<a href='byond://?src=\ref[src];aipic=1'>Print photo from database</a><BR><BR>"
 	dat += "Current toner level: [toner]"
 	if(!toner)
@@ -60,7 +55,7 @@
 				var/obj/item/paper_bundle/B = bundlecopy(copyitem)
 				sleep(15*B.pages.len)
 			else
-				to_chat(usr, "<span class='warning'>\The [copyitem] can't be copied by \the [src].</span>")
+				to_chat(usr, SPAN_WARNING("\The [copyitem] can't be copied by \the [src]."))
 				break
 
 			use_power(active_power_usage)
@@ -69,7 +64,7 @@
 		if(copyitem)
 			copyitem.loc = usr.loc
 			usr.put_in_hands(copyitem)
-			to_chat(usr, "<span class='notice'>You take \the [copyitem] out of \the [src].</span>")
+			to_chat(usr, SPAN_NOTICE("You take \the [copyitem] out of \the [src]."))
 			copyitem = null
 			updateUsrDialog()
 	else if(href_list["min"])
@@ -81,12 +76,14 @@
 			copies++
 			updateUsrDialog()
 	else if(href_list["aipic"])
-		if(!istype(usr,/mob/living/silicon)) return
-		if(stat & (BROKEN|NOPOWER)) return
+		if(!issilicon(usr))
+			return
+		if(stat & (BROKEN|NOPOWER))
+			return
 
 		if(toner >= 5)
 			var/mob/living/silicon/tempAI = usr
-			var/obj/item/device/camera/siliconcam/camera = tempAI.silicon_camera
+			var/obj/item/device/camera/siliconcam/camera = tempAI.aiCamera
 
 			if(!camera)
 				return
@@ -103,49 +100,42 @@
 			sleep(15)
 		updateUsrDialog()
 
-/obj/machinery/photocopier/attackby(obj/item/O as obj, mob/user as mob)
-	if(istype(O, /obj/item/paper) || istype(O, /obj/item/photo) || istype(O, /obj/item/paper_bundle))
+/obj/machinery/photocopier/attackby(obj/item/I, mob/user)
+	if(istype(I, /obj/item/paper) || istype(I, /obj/item/photo) || istype(I, /obj/item/paper_bundle))
 		if(!copyitem)
 			user.drop_item()
-			copyitem = O
-			O.loc = src
-			to_chat(user, "<span class='notice'>You insert \the [O] into \the [src].</span>")
+			copyitem = I
+			I.loc = src
+			to_chat(user, SPAN_NOTICE("You insert \the [I] into \the [src]."))
 			flick(insert_anim, src)
 			updateUsrDialog()
 		else
-			to_chat(user, "<span class='notice'>There is already something in \the [src].</span>")
-	else if(istype(O, /obj/item/device/toner))
+			to_chat(user, SPAN_NOTICE("There is already something in \the [src]."))
+	else if(istype(I, /obj/item/device/toner))
 		if(toner <= 10) //allow replacing when low toner is affecting the print darkness
 			user.drop_item()
-			to_chat(user, "<span class='notice'>You insert the toner cartridge into \the [src].</span>")
-			var/obj/item/device/toner/T = O
+			to_chat(user, SPAN_NOTICE("You insert the toner cartridge into \the [src]."))
+			var/obj/item/device/toner/T = I
 			toner += T.toner_amount
-			qdel(O)
+			qdel(I)
 			updateUsrDialog()
 		else
-			to_chat(user, "<span class='notice'>This cartridge is not yet ready for replacement! Use up the rest of the toner.</span>")
-	..()
+			to_chat(user, SPAN_NOTICE("This cartridge is not yet ready for replacement! Use up the rest of the toner."))
+	if(QUALITY_BOLT_TURNING in I.tool_qualities)
+		if(I.use_tool(user, src, WORKTIME_FAST, QUALITY_BOLT_TURNING, FAILCHANCE_EASY,  required_stat = STAT_MEC))
+			anchored = !anchored
+			to_chat(user, "<span class='notice'>You [anchored ? "wrench" : "unwrench"] \the [src].</span>")
 	return
 
-/obj/machinery/photocopier/ex_act(severity)
-	switch(severity)
-		if(1.0)
-			qdel(src)
-		if(2.0)
-			if(prob(50))
-				qdel(src)
-			else
-				if(toner > 0)
-					new /obj/effect/decal/cleanable/blood/oil(get_turf(src))
-					toner = 0
-		else
-			if(prob(50))
-				if(toner > 0)
-					new /obj/effect/decal/cleanable/blood/oil(get_turf(src))
-					toner = 0
-	return
+/obj/machinery/photocopier/take_damage(amount)
+	. = ..()
+	if(QDELETED(src))
+		return .
+	if(toner > 0)
+		new /obj/effect/decal/cleanable/blood/oil(get_turf(src))
+		toner = 0
 
-/obj/machinery/photocopier/proc/copy(var/obj/item/paper/copy, var/need_toner=1)
+/obj/machinery/photocopier/proc/copy(var/obj/item/paper/copy)
 	var/obj/item/paper/c = new /obj/item/paper (loc)
 	if(toner > 10)	//lots of toner, make it dark
 		c.info = "<font color = #101010>"
@@ -156,7 +146,7 @@
 	copied = replacetext(copied, "<font face=\"[c.crayonfont]\" color=", "<font face=\"[c.crayonfont]\" nocolor=")	//This basically just breaks the existing color tag, which we need to do because the innermost tag takes priority.
 	c.info += copied
 	c.info += "</font>"//</font>
-	c.SetName(copy.name) // -- Doohl
+	c.name = copy.name // -- Doohl
 	c.fields = copy.fields
 	c.stamps = copy.stamps
 	c.stamped = copy.stamped
@@ -176,28 +166,30 @@
 		img.pixel_y = copy.offset_y[j]
 		c.overlays += img
 	c.updateinfolinks()
-	if(need_toner)
-		toner--
+	toner--
 	if(toner == 0)
-		visible_message("<span class='notice'>A red light on \the [src] flashes, indicating that it is out of toner.</span>")
+		visible_message(SPAN_NOTICE("A red light on \the [src] flashes, indicating that it is out of toner."))
 	return c
 
 
-/obj/machinery/photocopier/proc/photocopy(var/obj/item/photo/photocopy, var/need_toner=1)
+/obj/machinery/photocopier/proc/photocopy(var/obj/item/photo/photocopy)
 	var/obj/item/photo/p = photocopy.copy()
-	p.forceMove(get_turf(src))
+	p.loc = src.loc
 
+	var/icon/I = icon(photocopy.icon, photocopy.icon_state)
 	if(toner > 10)	//plenty of toner, go straight greyscale
-		p.img.MapColors(rgb(77,77,77), rgb(150,150,150), rgb(28,28,28), rgb(0,0,0))//I'm not sure how expensive this is, but given the many limitations of photocopying, it shouldn't be an issue.
-		p.update_icon()
+		I.MapColors(rgb(77,77,77), rgb(150,150,150), rgb(28,28,28), rgb(0,0,0))		//I'm not sure how expensive this is, but given the many limitations of photocopying, it shouldn't be an issue.
+		p.img.MapColors(rgb(77,77,77), rgb(150,150,150), rgb(28,28,28), rgb(0,0,0))
+		p.tiny.MapColors(rgb(77,77,77), rgb(150,150,150), rgb(28,28,28), rgb(0,0,0))
 	else			//not much toner left, lighten the photo
+		I.MapColors(rgb(77,77,77), rgb(150,150,150), rgb(28,28,28), rgb(100,100,100))
 		p.img.MapColors(rgb(77,77,77), rgb(150,150,150), rgb(28,28,28), rgb(100,100,100))
-		p.update_icon()
-	if(need_toner)
-		toner -= 5	//photos use a lot of ink!
+		p.tiny.MapColors(rgb(77,77,77), rgb(150,150,150), rgb(28,28,28), rgb(100,100,100))
+	p.icon = I
+	toner -= 5	//photos use a lot of ink!
 	if(toner < 0)
 		toner = 0
-		visible_message("<span class='notice'>A red light on \the [src] flashes, indicating that it is out of toner.</span>")
+		visible_message(SPAN_NOTICE("A red light on \the [src] flashes, indicating that it is out of toner."))
 
 	return p
 
@@ -207,7 +199,7 @@
 	for(var/obj/item/W in bundle.pages)
 		if(toner <= 0 && need_toner)
 			toner = 0
-			visible_message("<span class='notice'>A red light on \the [src] flashes, indicating that it is out of toner.</span>")
+			visible_message(SPAN_NOTICE("A red light on \the [src] flashes, indicating that it is out of toner."))
 			break
 
 		if(istype(W, /obj/item/paper))
@@ -220,10 +212,13 @@
 	p.loc = src.loc
 	p.update_icon()
 	p.icon_state = "paper_words"
-	p.SetName(bundle.name)
+	p.name = bundle.name
+	p.pixel_y = rand(-8, 8)
+	p.pixel_x = rand(-9, 9)
 	return p
 
 /obj/item/device/toner
 	name = "toner cartridge"
 	icon_state = "tonercartridge"
+	price_tag = 100
 	var/toner_amount = 30

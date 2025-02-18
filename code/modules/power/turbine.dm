@@ -3,11 +3,11 @@
 	desc = "The compressor stage of a gas turbine generator."
 	icon = 'icons/obj/pipes.dmi'
 	icon_state = "compressor"
-	anchored = 1
-	density = 1
+	anchored = TRUE
+	density = TRUE
 	var/obj/machinery/power/turbine/turbine
 	var/datum/gas_mixture/gas_contained
-	var/turf/simulated/inturf
+	var/turf/inturf
 	var/starter = 0
 	var/rpm = 0
 	var/rpmtarget = 0
@@ -19,21 +19,21 @@
 	desc = "A gas turbine used for backup power generation."
 	icon = 'icons/obj/pipes.dmi'
 	icon_state = "turbine"
-	anchored = 1
-	density = 1
+	anchored = TRUE
+	density = TRUE
 	var/obj/machinery/compressor/compressor
-	var/turf/simulated/outturf
+	var/turf/outturf
 	var/lastgen
 
 /obj/machinery/computer/turbine_computer
 	name = "Gas turbine control computer"
-	desc = "A computer to remotely control a gas turbine."
+	desc = "A computer to remotely control a gas turbine"
 	icon = 'icons/obj/computer.dmi'
 	icon_keyboard = "tech_key"
 	icon_screen = "turbinecomp"
-	circuit = /obj/item/circuitboard/turbine_control
-	anchored = 1
-	density = 1
+	circuit = /obj/item/electronics/circuitboard/turbine_control
+	anchored = TRUE
+	density = TRUE
 	var/obj/machinery/compressor/compressor
 	var/list/obj/machinery/door/blast/doors
 	var/id = 0
@@ -151,7 +151,7 @@
 
 /obj/machinery/power/turbine/interact(mob/user)
 
-	if ( (get_dist(src, user) > 1 ) || (stat & (NOPOWER|BROKEN)) && (!istype(user, /mob/living/silicon/ai)) )
+	if ( (get_dist(src, user) > 1 ) || (stat & (NOPOWER|BROKEN)) && (!isAI(user)) )
 		user.machine = null
 		user << browse(null, "window=turbine")
 		return
@@ -174,74 +174,54 @@
 
 	return
 
-/obj/machinery/power/turbine/CanUseTopic(var/mob/user, href_list)
-	if(!user.IsAdvancedToolUser())
-		to_chat(user, FEEDBACK_YOU_LACK_DEXTERITY)
-		return min(..(), STATUS_UPDATE)
-	return ..()
+/obj/machinery/power/turbine/Topic(href, href_list)
+	..()
+	if(stat & BROKEN)
+		return
+	if(usr.stat || usr.restrained() )
+		return
+	if(!usr.IsAdvancedToolUser())
+		return
+	if(get_dist(src, usr) <= 1 || isAI(usr))
+		if( href_list["close"] )
+			usr << browse(null, "window=turbine")
+			usr.machine = null
+			return
 
-/obj/machinery/power/turbine/OnTopic(user, href_list)
-	if(href_list["close"])
-		usr << browse(null, "window=turbine")
-		return TOPIC_HANDLED
+		else if( href_list["str"] )
+			compressor.starter = !compressor.starter
 
-	if(href_list["str"])
-		compressor.starter = !compressor.starter
-		. = TOPIC_REFRESH
+		spawn(0)
+			for(var/mob/M in viewers(1, src))
+				if ((M.client && M.machine == src))
+					src.interact(M)
 
-	if(. == TOPIC_REFRESH)
-		interact(user)
-
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-/obj/machinery/computer/turbine_computer/Initialize()
-	. = ..()
-	for(var/obj/machinery/compressor/C in SSmachines.machinery)
-		if(id == C.comp_id)
-			compressor = C
-	doors = new /list()
-	for(var/obj/machinery/door/blast/P in SSmachines.machinery)
-		if(P.id == id)
-			doors += P
-
-/*
-/obj/machinery/computer/turbine_computer/attackby(I as obj, user as mob)
-	if(istype(I, /obj/item/screwdriver))
-		playsound(src.loc, 'sound/items/Screwdriver.ogg', 50, 1)
-		if(do_after(user, 20))
-			if (src.stat & BROKEN)
-				to_chat(user, "<span class='notice'>The broken glass falls out.</span>")
-				var/obj/structure/computerframe/A = new /obj/structure/computerframe( src.loc )
-				new /obj/item/material/shard( src.loc )
-				var/obj/item/circuitboard/turbine_control/M = new /obj/item/circuitboard/turbine_control( A )
-				for (var/obj/C in src)
-					C.loc = src.loc
-				M.id = src.id
-				A.circuit = M
-				A.state = 3
-				A.icon_state = "3"
-				A.anchored = 1
-				qdel(src)
-			else
-				to_chat(user, "<span class='notice'>You disconnect the monitor.</span>")
-				var/obj/structure/computerframe/A = new /obj/structure/computerframe( src.loc )
-				var/obj/item/circuitboard/turbine_control/M = new /obj/item/circuitboard/turbine_control( A )
-				for (var/obj/C in src)
-					C.loc = src.loc
-				M.id = src.id
-				A.circuit = M
-				A.state = 4
-				A.icon_state = "4"
-				A.anchored = 1
-				qdel(src)
 	else
-		src.attack_hand(user)
+		usr << browse(null, "window=turbine")
+		usr.machine = null
+
 	return
-*/
+
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+/obj/machinery/computer/turbine_computer/New()
+	..()
+	spawn(5)
+		for(var/obj/machinery/compressor/C in GLOB.machines)
+			if(id == C.comp_id)
+				compressor = C
+		doors = new /list()
+		for(var/obj/machinery/door/blast/P in GLOB.all_doors)
+			if(P.id == id)
+				doors += P
+
 
 /obj/machinery/computer/turbine_computer/attack_hand(var/mob/user as mob)
 	user.machine = src
@@ -259,7 +239,7 @@
 		\n<BR>
 		\n"}
 	else
-		dat += "<span class='danger'>No compatible attached compressor found.</span>"
+		dat += SPAN_DANGER("No compatible attached compressor found.")
 
 	user << browse(dat, "window=computer;size=400x500")
 	onclose(user, "computer")
@@ -267,13 +247,16 @@
 
 
 
-/obj/machinery/computer/turbine_computer/OnTopic(user, href_list)
+/obj/machinery/computer/turbine_computer/Topic(href, href_list)
+	if(..())
+		return 1
+
+	usr.machine = src
+
 	if( href_list["view"] )
 		usr.client.eye = src.compressor
-		. = TOPIC_HANDLED
 	else if( href_list["str"] )
 		src.compressor.starter = !src.compressor.starter
-		. = TOPIC_REFRESH
 	else if (href_list["doors"])
 		for(var/obj/machinery/door/blast/D in src.doors)
 			if (door_status == 0)
@@ -284,13 +267,12 @@
 				spawn( 0 )
 					D.close()
 					door_status = 0
-		. = TOPIC_REFRESH
 	else if( href_list["close"] )
-		user << browse(null, "window=computer")
-		return TOPIC_HANDLED
+		usr << browse(null, "window=computer")
+		usr.machine = null
+		return
 
-	if(. == TOPIC_REFRESH)
-		interact(user)
+	src.updateUsrDialog()
 
 /obj/machinery/computer/turbine_computer/Process()
 	src.updateDialog()

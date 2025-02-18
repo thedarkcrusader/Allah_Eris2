@@ -21,6 +21,17 @@ GLOBAL_VAR_CONST(PREF_CTRL_CLICK, "ctrl click")
 GLOBAL_VAR_CONST(PREF_CTRL_SHIFT_CLICK, "ctrl shift click")
 GLOBAL_VAR_CONST(PREF_HEAR, "Hear")
 GLOBAL_VAR_CONST(PREF_SILENT, "Silent")
+GLOBAL_VAR_CONST(PREF_SHORTHAND, "Shorthand")
+
+GLOBAL_VAR_CONST(PREF_0,	"0")
+GLOBAL_VAR_CONST(PREF_25,	"25")
+GLOBAL_VAR_CONST(PREF_50,	"50")
+GLOBAL_VAR_CONST(PREF_75,	"75")
+GLOBAL_VAR_CONST(PREF_100,	"100")
+GLOBAL_VAR_CONST(PREF_125,	"125")
+GLOBAL_VAR_CONST(PREF_150,	"150")
+GLOBAL_VAR_CONST(PREF_175,	"175")
+GLOBAL_VAR_CONST(PREF_200,	"200")
 
 var/list/_client_preferences
 var/list/_client_preferences_by_key
@@ -90,18 +101,44 @@ var/list/_client_preferences_by_type
 
 /datum/client_preference/play_lobby_music/changed(var/mob/preference_mob, var/new_value)
 	if(new_value == GLOB.PREF_YES)
-		GLOB.using_map.lobby_music.play_to(preference_mob)
+		if(isnewplayer(preference_mob))
+			GLOB.lobbyScreen.play_music(preference_mob.client)
 	else
-		sound_to(preference_mob, sound(null, repeat = 0, wait = 0, volume = 85, channel = 1))
+		GLOB.lobbyScreen.stop_music(preference_mob.client)
 
 /datum/client_preference/play_ambiance
 	description ="Play ambience"
 	key = "SOUND_AMBIENCE"
 
+/datum/client_preference/play_instruments
+	description ="Play instruments"
+	key = "SOUND_INSTRUMENTS"
+
+/datum/client_preference/play_jukebox
+	description ="Play jukebox music"
+	key = "SOUND_JUKEBOX"
+
+/datum/client_preference/play_jukebox/changed(var/mob/preference_mob, var/new_value)
+	if(new_value == GLOB.PREF_NO)
+		preference_mob.stop_all_music()
+	else
+		preference_mob.update_music()
+
+/datum/client_preference/play_local_tts
+	description ="Play local text-to-speech"
+	key = "TTS_VOLUME_LOCAL"
+	options = list(GLOB.PREF_0, GLOB.PREF_25, GLOB.PREF_50, GLOB.PREF_75, GLOB.PREF_100, GLOB.PREF_125, GLOB.PREF_150, GLOB.PREF_175, GLOB.PREF_200)
+	default_value = GLOB.PREF_100
+
+/datum/client_preference/play_radio_tts
+	description ="Play radio text-to-speech"
+	key = "TTS_VOLUME_RADIO"
+	options = list(GLOB.PREF_0, GLOB.PREF_25, GLOB.PREF_50, GLOB.PREF_75, GLOB.PREF_100, GLOB.PREF_125, GLOB.PREF_150, GLOB.PREF_175, GLOB.PREF_200)
+	default_value = GLOB.PREF_75
+
 /datum/client_preference/play_ambiance/changed(var/mob/preference_mob, var/new_value)
 	if(new_value == GLOB.PREF_NO)
-		sound_to(preference_mob, sound(null, repeat = 0, wait = 0, volume = 0, channel = 1))
-		sound_to(preference_mob, sound(null, repeat = 0, wait = 0, volume = 0, channel = 2))
+		sound_to(preference_mob, sound(null, repeat = 0, wait = 0, volume = 0, channel = GLOB.ambience_sound_channel))
 
 /datum/client_preference/ghost_ears
 	description ="Ghost ears"
@@ -118,11 +155,16 @@ var/list/_client_preferences_by_type
 	key = "CHAT_GHOSTRADIO"
 	options = list(GLOB.PREF_ALL_CHATTER, GLOB.PREF_NEARBY)
 
+/datum/client_preference/language_display
+	description = "Display Language Names"
+	key = "LANGUAGE_DISPLAY"
+	options = list(GLOB.PREF_FULL, GLOB.PREF_SHORTHAND, GLOB.PREF_OFF)
+/*
 /datum/client_preference/ghost_follow_link_length
 	description ="Ghost Follow Links"
 	key = "CHAT_GHOSTFOLLOWLINKLENGTH"
 	options = list(GLOB.PREF_SHORT, GLOB.PREF_LONG)
-
+*/
 /datum/client_preference/chat_tags
 	description ="Chat tags"
 	key = "CHAT_SHOWICONS"
@@ -141,7 +183,12 @@ var/list/_client_preferences_by_type
 	description ="OOC chat"
 	key = "CHAT_OOC"
 	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
-
+/*
+/datum/client_preference/show_aooc
+	description ="AOOC chat"
+	key = "CHAT_AOOC"
+	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
+*/
 /datum/client_preference/show_looc
 	description ="LOOC chat"
 	key = "CHAT_LOOC"
@@ -157,29 +204,67 @@ var/list/_client_preferences_by_type
 	key = "SHOW_PROGRESS"
 	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
 
-/datum/client_preference/tooltip
-	description = "Toggle Maptext"
-	key = "TOOLTIP"
-	options = list(GLOB.PREF_YES, GLOB.PREF_NO)
-
-/datum/client_preference/tooltip/changed(mob/preference_mob, new_value)
-	if (!preference_mob.client)
-		return
-
-	if (new_value == GLOB.PREF_YES)
-		preference_mob.client.tooltip.alpha = 255
-	else
-		preference_mob.client.tooltip.alpha = 0
-
 /datum/client_preference/floating_messages
 	description ="Floating chat messages"
 	key = "FLOATING_CHAT"
 	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
 
-/datum/client_preference/smooth_zoom
-	description = "Smooth Zooming"
-	key = "SMOOTH_ZOOM"
-	options = list(GLOB.PREF_YES, GLOB.PREF_NO)
+/datum/client_preference/browser_style
+	description = "Fake NanoUI Browser Style"
+	key = "BROWSER_STYLED"
+	options = list(GLOB.PREF_FANCY, GLOB.PREF_PLAIN)
+
+/*
+/datum/client_preference/autohiss
+	description = "Autohiss"
+	key = "AUTOHISS"
+	options = list(GLOB.PREF_OFF, GLOB.PREF_BASIC, GLOB.PREF_FULL)
+*/
+/datum/client_preference/hardsuit_activation
+	description = "Hardsuit Module Activation Key"
+	key = "HARDSUIT_ACTIVATION"
+	options = list(GLOB.PREF_MIDDLE_CLICK, GLOB.PREF_CTRL_CLICK, GLOB.PREF_ALT_CLICK, GLOB.PREF_CTRL_SHIFT_CLICK)
+/*
+/datum/client_preference/show_credits
+	description = "Show End Titles"
+	key = "SHOW_CREDITS"
+*/
+/*
+/datum/client_preference/play_instruments
+	description ="Play instruments"
+	key = "SOUND_INSTRUMENTS"
+*/
+
+/datum/client_preference/ambient_occlusion
+	description = "Ambient occlusion"
+	key = "AMBIENT_OCCLUSION"
+
+/datum/client_preference/gun_cursor
+	description = "Enable gun crosshair"
+	key = "GUN_CURSOR"
+
+/datum/client_preference/tgui_fancy
+	description ="Enable/Disable tgui fancy mode"
+	key = "tgui_fancy"
+
+/datum/client_preference/tgui_fancy/changed(mob/preference_mob, new_value)
+	for (var/datum/tgui/tgui as anything in preference_mob?.tgui_open_uis)
+		// Force it to reload either way
+		tgui.update_static_data(preference_mob)
+
+/datum/client_preference/tgui_lock
+	description ="TGUI Lock"
+	key = "tgui_lock"
+
+/datum/client_preference/tgui_lock/changed(mob/preference_mob, new_value)
+	for (var/datum/tgui/tgui as anything in preference_mob?.tgui_open_uis)
+		// Force it to reload either way
+		tgui.update_static_data(preference_mob)
+
+/datum/client_preference/equip_open_inventory
+	description = "Quick-equip stores items into open inventories"
+	key = "EQUIP_OPEN_INVENTORY"
+	default_value = GLOB.PREF_NO
 
 /********************
 * General Staff Preferences *

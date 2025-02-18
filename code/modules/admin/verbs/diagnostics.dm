@@ -1,42 +1,3 @@
-/client/proc/air_report()
-	set category = "Debug"
-	set name = "Show Air Report"
-
-	var/active_groups = SSair.active_zones
-	var/inactive_groups = SSair.zones.len - active_groups
-
-	var/hotspots = 0
-	for(var/obj/fire/hotspot in world)
-		hotspots++
-
-	var/active_on_main_station = 0
-	var/inactive_on_main_station = 0
-	for(var/zone/zone in SSair.zones)
-		var/turf/simulated/turf = locate() in zone.contents
-		if(turf && turf.z in GLOB.using_map.station_levels)
-			if(zone.needs_update)
-				active_on_main_station++
-			else
-				inactive_on_main_station++
-
-	var/output = {"<B>AIR SYSTEMS REPORT</B><HR>
-<B>General Processing Data</B><BR>
-	Cycle: [SSair.times_fired]<br>
-	Groups: [SSair.zones.len]<BR>
----- <I>Active:</I> [active_groups]<BR>
----- <I>Inactive:</I> [inactive_groups]<BR><br>
----- <I>Active on station:</i> [active_on_main_station]<br>
----- <i>Inactive on station:</i> [inactive_on_main_station]<br>
-<BR>
-<B>Special Processing Data</B><BR>
-	Hotspot Processing: [hotspots]<BR>
-<br>
-<B>Geometry Processing Data</B><BR>
-	Tile Update: [SSair.tiles_to_update.len]<BR>
-"}
-
-	usr << browse(output,"window=airreport")
-
 /client/proc/fix_next_move()
 	set category = "Debug"
 	set name = "Unfreeze Everyone"
@@ -65,7 +26,7 @@
 	message_admins("[key_name_admin(largest_move_mob)] had the largest move delay with [largest_move_time] frames / [largest_move_time/10] seconds!", 1)
 	message_admins("[key_name_admin(largest_click_mob)] had the largest click delay with [largest_click_time] frames / [largest_click_time/10] seconds!", 1)
 	message_admins("world.time = [world.time]", 1)
-	feedback_add_details("admin_verb","UFE") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+
 	return
 
 /client/proc/radio_report()
@@ -75,7 +36,7 @@
 	var/output = "<b>Radio Report</b><hr>"
 	for (var/fq in SSradio.frequencies)
 		output += "<b>Freq: [fq]</b><br>"
-		var/list/datum/radio_frequency/fqs = SSradio.frequencies[fq]
+		var/datum/radio_frequency/fqs = SSradio.frequencies[fq]
 		if (!fqs)
 			output += "&nbsp;&nbsp;<b>ERROR</b><br>"
 			continue
@@ -92,26 +53,26 @@
 					output += "&nbsp;&nbsp;&nbsp;&nbsp;[device]<br>"
 
 	usr << browse(output,"window=radioreport")
-	feedback_add_details("admin_verb","RR") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
 
 /client/proc/reload_admins()
 	set name = "Reload Admins"
 	set category = "Debug"
 
-	if(!check_rights(R_SERVER))	return
+	if(!check_rights(R_SERVER))
+		return
 
 	message_admins("[usr] manually reloaded admins")
 	load_admins()
-	feedback_add_details("admin_verb","RLDA") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
 
 /client/proc/reload_mentors()
 	set name = "Reload Mentors"
 	set category = "Debug"
 
-	if(!check_rights(R_SERVER)) return
+	if(!check_rights(R_SERVER))
+		return
 
 	message_admins("[usr] manually reloaded Mentors")
-	world.load_mods()
+	world.load_mentors()
 
 /client/proc/print_jobban_old()
 	set name = "Print Jobban Log"

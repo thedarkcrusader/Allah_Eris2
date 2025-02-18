@@ -1,144 +1,288 @@
 /obj/item/clothing/gloves/captain
-	desc = "Regal blue gloves, with a nice gold trim. Swanky."
+	desc = "Black gloves, with a nice gold trim. Swanky."
 	name = "captain's gloves"
 	icon_state = "captain"
 	item_state = "egloves"
-
-/obj/item/clothing/gloves/cyborg
-	desc = "Beep boop borp!"
-	name = "cyborg gloves"
-	icon_state = "black"
-	item_state = "r_hands"
-	siemens_coefficient = 1.0
+	armor = list(
+		melee = 6,
+		bullet = 2,
+		energy = 6,
+		bomb = 0,
+		bio = 0,
+		rad = 0
+	)
+	price_tag = 500
+	style = STYLE_HIGH
 
 /obj/item/clothing/gloves/insulated
-	desc = "These gloves will protect the wearer from electric shocks."
+	desc = "These gloves will protect the wearer from electric shock."
 	name = "insulated gloves"
-	color = COLOR_YELLOW
-	icon_state = "white"
-	item_state = "lgloves"
+	icon_state = "yellow"
+	item_state = "yellow"
+	armor = list(
+		melee = 0,
+		bullet = 0,
+		energy = 3,
+		bomb = 0,
+		bio = 0,
+		rad = 0
+	)
 	siemens_coefficient = 0
 	permeability_coefficient = 0.05
+	price_tag = 200
+	spawn_tags = SPAWN_TAG_GLOVES_INSULATED
+	style = STYLE_NEG_HIGH // very powergame much unstylish... literal power this time
 
-/obj/item/clothing/gloves/insulated/cheap                             //Cheap Chinese Crap
+/obj/item/clothing/gloves/insulated/cheap                          //Cheap Chinese Crap
 	desc = "These gloves are cheap copies of the coveted gloves, no way this can end badly."
 	name = "budget insulated gloves"
 	siemens_coefficient = 1			//Set to a default of 1, gets overridden in New()
-
-/obj/item/clothing/gloves/insulated/cheap/New()
-	..()
-	//average of 0.4, better than regular gloves' 0.75
-	siemens_coefficient = pick(0, 0.1, 0.2, 0.3, 0.4, 0.6, 1.3)
-
-/obj/item/clothing/gloves/forensic
-	desc = "Specially made gloves for forensic technicians. The luminescent threads woven into the material stand out under scrutiny."
-	name = "forensic gloves"
-	icon_state = "forensic"
-	item_state = "bgloves"
-	siemens_coefficient = 0.50
 	permeability_coefficient = 0.05
+	price_tag = 50
 
-	cold_protection = HANDS
-	min_cold_protection_temperature = GLOVES_MIN_COLD_PROTECTION_TEMPERATURE
-	heat_protection = HANDS
-	max_heat_protection_temperature = GLOVES_MAX_HEAT_PROTECTION_TEMPERATURE
+/obj/item/clothing/gloves/insulated/cheap/Initialize(mapload, ...)
+	. = ..()
+	//average of 0.5, somewhat better than regular gloves' 0.75
+	siemens_coefficient = pick(0,0.1,0.3,0.5,0.5,0.75,1.35)
 
 /obj/item/clothing/gloves/thick
 	desc = "These work gloves are thick and fire-resistant."
-	name = "work gloves"
+	name = "black gloves"
 	icon_state = "black"
-	item_state = "bgloves"
-	siemens_coefficient = 0.50
+	item_state = "black"
+	siemens_coefficient = 0.5
 	permeability_coefficient = 0.05
+	armor = list(
+		melee = 5,
+		bullet = 0,
+		energy = 5,
+		bomb = 0,
+		bio = 0,
+		rad = 0
+	)
+	price_tag = 100
 
-	cold_protection = HANDS
+	cold_protection = ARMS
 	min_cold_protection_temperature = GLOVES_MIN_COLD_PROTECTION_TEMPERATURE
-	heat_protection = HANDS
+	heat_protection = ARMS
 	max_heat_protection_temperature = GLOVES_MAX_HEAT_PROTECTION_TEMPERATURE
 
-/obj/item/clothing/gloves/thick/modified
-	item_flags = ITEM_FLAG_PREMODIFIED
+/obj/item/clothing/gloves/security
+	name = "security gloves"
+	desc = "Padded security gloves."
+	icon_state = "security"
+	item_state = "security"
+	siemens_coefficient = 0.5
+	permeability_coefficient = 0.05
+	armor = list(
+		melee = 6,
+		bullet = 1,
+		energy = 5,
+		bomb = 0,
+		bio = 0,
+		rad = 0
+	)
+	cold_protection = ARMS
+	min_cold_protection_temperature = GLOVES_MIN_COLD_PROTECTION_TEMPERATURE
+	heat_protection = ARMS
+	max_heat_protection_temperature = GLOVES_MAX_HEAT_PROTECTION_TEMPERATURE
+	price_tag = 100
 
-/obj/item/clothing/gloves/thick/swat
-	desc = "These tactical gloves are somewhat fire and impact-resistant."
-	name = "\improper SWAT Gloves"
-	item_state = "swat_gl"
-	force = 5
-	armor = list(melee = 80, bullet = 60, laser = 60,energy = 25, bomb = 50, bio = 10, rad = 0)
+/obj/item/clothing/gloves/security/ironhammer
+	name = "operator's gloves"
+	icon_state = "security_ironhammer"
+	item_state = "security_ironhammer"
+	spawn_blacklisted = TRUE
 
-/obj/item/clothing/gloves/thick/combat //Combined effect of SWAT gloves and insulated gloves
-	desc = "These tactical gloves are somewhat fire and impact resistant."
-	name = "combat gloves"
-	icon_state = "work"
-	item_state = "wgloves"
+/obj/item/clothing/gloves/security/tactical
+	name = "tactical gloves"
+	desc = "These tactical gloves are somewhat fire, shock and impact resistant."
+	icon_state = "security_tactical"
+	item_state = "security_tactical"
 	siemens_coefficient = 0
-	permeability_coefficient = 0.05
-	force = 5
-	armor = list(melee = 80, bullet = 60, laser = 60,energy = 25, bomb = 50, bio = 10, rad = 0)
-	cold_protection = HANDS
-	min_cold_protection_temperature = GLOVES_MIN_COLD_PROTECTION_TEMPERATURE
-	heat_protection = HANDS
-	max_heat_protection_temperature = GLOVES_MAX_HEAT_PROTECTION_TEMPERATURE
-
-/obj/item/clothing/gloves/thick/botany
-	desc = "These leather work gloves protect against thorns, barbs, prickles, spikes and other harmful objects of floral origin."
-	name = "thick leather gloves"
-	icon_state = "leather"
-	item_state = "ggloves"
-
-/obj/item/clothing/gloves/thick/botany/modified
-	item_flags = ITEM_FLAG_PREMODIFIED
+	price_tag = 500
 
 /obj/item/clothing/gloves/latex
 	name = "latex gloves"
 	desc = "Sterile latex gloves."
 	icon_state = "latex"
-	item_state = "lgloves"
-	siemens_coefficient = 1.1 //thin latex gloves, much more conductive than fabric gloves (basically a capacitor for AC)
+	item_state = "latex"
+	armor = list(
+		melee = 0,
+		bullet = 0,
+		energy = 0,
+		bomb = 0,
+		bio = 75,
+		rad = 0
+	)
+	siemens_coefficient = 1 //thin latex gloves, much more conductive than fabric gloves (basically a capacitor for AC)
 	permeability_coefficient = 0.01
-	germ_level = 0
-
-/obj/item/clothing/gloves/latex/modified
-	item_flags = ITEM_FLAG_PREMODIFIED
+	price_tag = 50
 
 /obj/item/clothing/gloves/latex/nitrile
 	name = "nitrile gloves"
-	desc = "Sterile nitrile gloves"
+	desc = "Sterile nitrile gloves."
 	icon_state = "nitrile"
-	item_state = "ngloves"
+	item_state = "nitrile"
+	spawn_blacklisted = TRUE
 
-/obj/item/clothing/gloves/latex/nitrile/modified
-	item_flags = ITEM_FLAG_PREMODIFIED
-
-/obj/item/clothing/gloves/duty
-	desc = "These brown duty gloves are made from a durable synthetic."
-	name = "work gloves"
-	icon_state = "work"
-	item_state = "wgloves"
-	siemens_coefficient = 0.50
-	armor = list(melee = 10, bullet = 10, laser = 10, energy = 5, bomb = 0, bio = 0, rad = 0)
-
-/obj/item/clothing/gloves/duty/modified
-	item_flags = ITEM_FLAG_PREMODIFIED
-
-/obj/item/clothing/gloves/tactical
-	desc = "These brown tactical gloves are made from a durable synthetic, and have hardened knuckles."
-	name = "tactical gloves"
-	icon_state = "work"
-	item_state = "wgloves"
-	force = 5
-	siemens_coefficient = 0.50
+/obj/item/clothing/gloves/botanic_leather
+	desc = "These leather work gloves protect against thorns, barbs, prickles, spikes and other harmful objects of floral origin."
+	name = "botanist's leather gloves"
+	icon_state = "leather"
+	item_state = "ggloves"
 	permeability_coefficient = 0.05
-	armor = list(melee = 30, bullet = 10, laser = 10, energy = 15, bomb = 20, bio = 0, rad = 0)
+	siemens_coefficient = 0.50 //thick work gloves
+	price_tag = 50
 
-/obj/item/clothing/gloves/guards
-	desc = "A pair of synthetic gloves and arm pads reinforced with armor plating."
-	name = "arm guards"
-	icon_state = "guards"
-	item_state = "guards"
-	body_parts_covered = HANDS|ARMS
-	w_class = ITEM_SIZE_NORMAL
-	siemens_coefficient = 0.7
-	permeability_coefficient = 0.03
-	armor = list(melee = 40, bullet = 40, laser = 40, energy = 25, bomb = 30, bio = 0, rad = 0)
+/obj/item/clothing/gloves/fingerless
+	name = "fingerless gloves"
+	desc = "Plain black gloves without fingertips for the hard working."
+	icon_state = "fingerless"
+	item_state = "fingerless"
+	clipped = TRUE
+	cold_protection = ARMS
+	min_cold_protection_temperature = GLOVES_MIN_COLD_PROTECTION_TEMPERATURE
+	heat_protection = ARMS
+	max_heat_protection_temperature = GLOVES_MAX_HEAT_PROTECTION_TEMPERATURE
+	price_tag = 10
 
+/obj/item/clothing/gloves/aerostatic
+	name = "red designer leather gloves"
+	desc = "Fancy red leather gloves from a designer brand."
+	icon_state = "aerostatic_gloves"
+	item_state = "aerostatic_gloves"
+	cold_protection = ARMS
+	min_cold_protection_temperature = GLOVES_MIN_COLD_PROTECTION_TEMPERATURE
+	heat_protection = ARMS
+	max_heat_protection_temperature = GLOVES_MAX_HEAT_PROTECTION_TEMPERATURE
+	style = STYLE_HIGH
+	price_tag = 100
+
+/obj/item/clothing/gloves/german
+	name = "Oberth Republic gloves"
+	desc = "Brown gloves."
+	icon_state = "germangloves"
+	item_state = "germangloves"
+	armor = list(
+		melee = 2,
+		bullet = 0,
+		energy = 6,
+		bomb = 0,
+		bio = 0,
+		rad = 0
+	)
+
+/obj/item/clothing/gloves/korund
+	name = "KULAK power gauntlet"
+	desc = "A pair of heavy gloves with left one dedicated to offensive use of electric shock. Requires external power supply from korund-sh-p carapace, and is just flexible enough to pull Maxim's trigger."
+	icon_state = "kilak_glove"
+	item_state = "kilak_glove"
+	armor = list(
+		melee = 4,
+		bullet = 4,
+		energy = 5,
+		bomb = 15, //basically an EOD suit
+		bio = 0,
+		rad = 0
+	)
+	spawn_blacklisted = TRUE
+
+/obj/item/clothing/gloves/knuckles
+	name = "knuckle gloves"
+	desc = "Gloves with additional reinforcment on the knuckles."
+	icon_state = "knuckles"
+	item_state = "knuckles"
+	style = STYLE_HIGH
+	armor = list(
+		melee = 4,
+		bullet = 1,
+		energy = 0,
+		bomb = 0,
+		bio = 0,
+		rad = 0
+	)
+	price_tag = 500
+
+/obj/item/clothing/gloves/dusters
+	name = "steel knuckle dusters"
+	desc = "More pain for them, less for you."
+	description_info = "Have to be worn in your gloves slot to increase your punch damage."
+	icon_state = "dusters"
+	item_state = "dusters"
+	var/punch_increase = 5
+	matter = list(MATERIAL_STEEL = 3)
+	price_tag = 20
+	spawn_blacklisted = TRUE
+
+/obj/item/clothing/gloves/dusters/silver
+	name = "silver knuckle dusters"
+	desc = "More pain for them, more bling for you."
+	icon_state = "dusters_silver"
+	item_state = "dusters_silver"
+	matter = list(MATERIAL_SILVER = 3)
+	price_tag = 40
+	style = STYLE_LOW
+
+/obj/item/clothing/gloves/dusters/plasteel
+	name = "plasteel knuckle dusters"
+	desc = "More pain for them, now doubled."
+	icon_state = "dusters_plasteel"
+	item_state = "dusters_plasteel"
+	punch_increase = 10
+	matter = list(MATERIAL_PLASTEEL = 3)
+	price_tag = 60
+
+/obj/item/clothing/gloves/dusters/gold
+	name = "golden knuckle dusters"
+	desc = "More pain for them, more style for you."
+	icon_state = "dusters_gold"
+	item_state = "dusters_gold"
+	punch_increase = 10
+	matter = list(MATERIAL_PLASTEEL = 3, MATERIAL_GOLD = 3)
+	price_tag = 100
+	style = STYLE_HIGH
+
+/obj/item/clothing/gloves/dusters/platinum
+	name = "spiked platinum knuckle dusters"
+	desc = "Hurt like hell, and stylish as well."
+	icon_state = "dusters_platinum"
+	item_state = "dusters_platinum"
+	punch_increase = 15
+	matter = list(MATERIAL_PLATINUM = 3, MATERIAL_PLASTEEL = 3, MATERIAL_STEEL = 2)
+	price_tag = 120
+	style = STYLE_HIGH
+
+/obj/item/clothing/gloves/dusters/gloves
+	name = "knuckle gloves"
+	desc = "Gloves with additional reinforcment on the knuckles. \
+	These have plasteel powder sewn into the knuckles, adding more kinetic energy to your punches."
+	icon_state = "knuckles"
+	item_state = "knuckles"
+	punch_increase = 10
+	style = STYLE_HIGH
+	armor = list(
+		melee = 4,
+		bullet = 1,
+		energy = 0,
+		bomb = 0,
+		bio = 0,
+		rad = 0
+	)
+	matter = list(MATERIAL_BIOMATTER = 10, MATERIAL_PLASTEEL = 3)
+	price_tag = 540
+
+/obj/item/clothing/gloves/dusters/New()
+	..()
+	RegisterSignal(src, COMSIG_CLOTH_EQUIPPED, PROC_REF(increase_punch_damage))
+	RegisterSignal(src, COMSIG_CLOTH_DROPPED, PROC_REF(decrease_punch_damage))
+
+/obj/item/clothing/gloves/dusters/proc/increase_punch_damage(mob/living/carbon/human/user)
+	SIGNAL_HANDLER
+	if(istype(user))
+		user.punch_damage_increase += punch_increase
+
+/obj/item/clothing/gloves/dusters/proc/decrease_punch_damage(mob/living/carbon/human/user)
+	SIGNAL_HANDLER
+	if(istype(user))
+		user.punch_damage_increase -= punch_increase

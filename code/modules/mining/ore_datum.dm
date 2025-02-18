@@ -1,26 +1,11 @@
 var/global/list/ore_data = list()
-var/global/list/ores_by_type = list()
-
-/hook/startup/proc/initialise_ore_data()
-	ensure_ore_data_initialised()
-	return 1
-
-/proc/ensure_ore_data_initialised()
-	if(ore_data && ore_data.len) return
-
-	for(var/oretype in subtypesof(/ore))
-		var/ore/O = new oretype()
-		ore_data[O.name] = O
-		ores_by_type[oretype] = O
 
 /ore
-	var/name              // Name of ore. Also used as a tag.
-	var/display_name      // Visible name of ore.
-	var/icon_tag          // Used for icon_state as "ore_[icon_tag]" and "rock_[icon_tag]"
-	var/material          // Name of associated mineral, if any
-	var/alloy             // Can alloy?
-	var/smelts_to         // Smelts to material; this is the name of the result material.
-	var/compresses_to     // Compresses to material; this is the name of the result material.
+	var/name
+	var/display_name
+	var/alloy
+	var/smelts_to
+	var/compresses_to
 	var/result_amount     // How much ore?
 	var/spread = 1	      // Does this type of deposit spread?
 	var/spread_chance     // Chance of spreading in any direction
@@ -32,22 +17,17 @@ var/global/list/ores_by_type = list()
 		"million" = 999
 		)
 	var/xarch_source_mineral = "iron"
-	var/list/origin_tech = list(TECH_MATERIAL = 1)
 
 /ore/New()
 	. = ..()
 	if(!display_name)
 		display_name = name
-	if(!material)
-		material = name
-	if(!icon_tag)
-		icon_tag = name
 
 /ore/uranium
-	name = "uranium"
+	name = ORE_URANIUM
 	display_name = "pitchblende"
-	smelts_to = "uranium"
-	result_amount = 5
+	smelts_to = MATERIAL_URANIUM
+	result_amount = 10
 	spread_chance = 10
 	ore = /obj/item/ore/uranium
 	scan_icon = "mineral_uncommon"
@@ -56,46 +36,42 @@ var/global/list/ores_by_type = list()
 		"million" = 704
 		)
 	xarch_source_mineral = "potassium"
-	origin_tech = list(TECH_MATERIAL = 5)
 
 /ore/hematite
-	name = "iron"
+	name = ORE_IRON
 	display_name = "hematite"
-	smelts_to = "iron"
+	smelts_to = MATERIAL_IRON
 	alloy = 1
-	result_amount = 5
+	result_amount = 10
 	spread_chance = 25
 	ore = /obj/item/ore/iron
 	scan_icon = "mineral_common"
 
 /ore/coal
-	name = "carbon"
+	name = ORE_CARBON
 	display_name = "raw carbon"
-	icon_tag = "coal"
-	smelts_to = "plastic"
+	smelts_to = MATERIAL_PLASTIC
 	alloy = 1
-	result_amount = 5
+	result_amount = 10
 	spread_chance = 25
 	ore = /obj/item/ore/coal
 	scan_icon = "mineral_common"
 
 /ore/glass
-	name = "sand"
+	name = ORE_SAND
 	display_name = "sand"
-	icon_tag = "glass"
-	smelts_to = "glass"
-	alloy = 1
-	compresses_to = "sandstone"
-	ore = /obj/item/ore/glass //Technically not needed since there's no glass ore vein, but consistency is nice
+	smelts_to = MATERIAL_GLASS
+	compresses_to = MATERIAL_SANDSTONE
 
-/ore/phoron
-	name = "phoron"
-	display_name = "phoron crystals"
-	compresses_to = "phoron"
+/ore/plasma
+	name = ORE_PLASMA
+	display_name = "plasma crystals"
+	compresses_to = MATERIAL_PLASMA
+	alloy = TRUE
 	//smelts_to = something that explodes violently on the conveyor, huhuhuhu
-	result_amount = 5
+	result_amount = 8
 	spread_chance = 25
-	ore = /obj/item/ore/phoron
+	ore = /obj/item/ore/plasma
 	scan_icon = "mineral_uncommon"
 	xarch_ages = list(
 		"thousand" = 999,
@@ -103,24 +79,22 @@ var/global/list/ores_by_type = list()
 		"billion" = 13,
 		"billion_lower" = 10
 		)
-	xarch_source_mineral = "phoron"
-	origin_tech = list(TECH_MATERIAL = 2)
+	xarch_source_mineral = "plasma"
 
 /ore/silver
-	name = "silver"
+	name = ORE_SILVER
 	display_name = "native silver"
-	smelts_to = "silver"
-	result_amount = 5
+	smelts_to = MATERIAL_SILVER
+	result_amount = 8
 	spread_chance = 10
 	ore = /obj/item/ore/silver
 	scan_icon = "mineral_uncommon"
-	origin_tech = list(TECH_MATERIAL = 3)
 
 /ore/gold
-	smelts_to = "gold"
-	name = "gold"
+	smelts_to = MATERIAL_GOLD
+	name = ORE_GOLD
 	display_name = "native gold"
-	result_amount = 5
+	result_amount = 8
 	spread_chance = 10
 	ore = /obj/item/ore/gold
 	scan_icon = "mineral_uncommon"
@@ -130,24 +104,22 @@ var/global/list/ores_by_type = list()
 		"billion" = 4,
 		"billion_lower" = 3
 		)
-	origin_tech = list(TECH_MATERIAL = 4)
 
 /ore/diamond
-	name = "diamond"
+	name = ORE_DIAMOND
 	display_name = "diamond"
-	compresses_to = "diamond"
+	compresses_to = MATERIAL_DIAMOND
 	result_amount = 5
 	spread_chance = 10
 	ore = /obj/item/ore/diamond
 	scan_icon = "mineral_rare"
 	xarch_source_mineral = "nitrogen"
-	origin_tech = list(TECH_MATERIAL = 6)
 
 /ore/platinum
-	name = "platinum"
+	name = ORE_PLATINUM
 	display_name = "raw platinum"
-	smelts_to = "platinum"
-	compresses_to = "osmium"
+	smelts_to = MATERIAL_PLATINUM
+	compresses_to = MATERIAL_OSMIUM
 	alloy = 1
 	result_amount = 5
 	spread_chance = 10
@@ -155,9 +127,11 @@ var/global/list/ores_by_type = list()
 	scan_icon = "mineral_rare"
 
 /ore/hydrogen
-	name = "mhydrogen"
+	name = ORE_HYDROGEN
 	display_name = "metallic hydrogen"
-	smelts_to = "tritium"
-	compresses_to = "mhydrogen"
-	ore = /obj/item/ore/hydrogen //Technically not needed since there's no hydrogen ore vein, but consistency is nice
+	smelts_to = MATERIAL_TRITIUM
+	compresses_to = MATERIAL_MHYDROGEN
 	scan_icon = "mineral_rare"
+	spread_chance = 5
+	result_amount = 5
+	ore = /obj/item/ore/hydrogen

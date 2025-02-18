@@ -5,16 +5,13 @@
 /obj/item/grown // Grown weapons
 	name = "grown_weapon"
 	icon = 'icons/obj/weapons.dmi'
+	spawn_tags = null
 	var/plantname
 	var/potency = 1
 
 /obj/item/grown/New(newloc,planttype)
-
 	..()
-
-	var/datum/reagents/R = new/datum/reagents(50)
-	reagents = R
-	R.my_atom = src
+	create_reagents(50)
 
 	//Handle some post-spawn var stuff.
 	if(planttype)
@@ -38,15 +35,17 @@
 	icon = 'icons/obj/trash.dmi'
 	icon_state = "corncob"
 	item_state = "corncob"
+	matter = list(MATERIAL_BIOMATTER = 4)
 	w_class = ITEM_SIZE_SMALL
 	throwforce = 0
 	throw_speed = 4
 	throw_range = 20
+	spawn_tags = SPAWN_TAG_JUNK
 
-/obj/item/corncob/attackby(obj/item/W as obj, mob/user as mob)
+/obj/item/corncob/attackby(obj/item/I, mob/user)
 	..()
-	if(istype(W, /obj/item/circular_saw) || istype(W, /obj/item/material/hatchet) || istype(W, /obj/item/material/kitchen/utensil/knife) || istype(W, /obj/item/material/knife) || istype(W, /obj/item/material/knife/ritual))
-		to_chat(user, "<span class='notice'>You use [W] to fashion a pipe out of the corn cob!</span>")
+	if(QUALITY_CUTTING in I.tool_qualities)
+		to_chat(user, SPAN_NOTICE("You use [I] to fashion a pipe out of the corn cob!"))
 		new /obj/item/clothing/mask/smokable/pipe/cobpipe (user.loc)
 		qdel(src)
 		return
@@ -57,7 +56,9 @@
 	icon = 'icons/obj/items.dmi'
 	icon_state = "banana_peel"
 	item_state = "banana_peel"
+	matter = list(MATERIAL_BIOMATTER = 4)
 	w_class = ITEM_SIZE_SMALL
 	throwforce = 0
 	throw_speed = 4
 	throw_range = 20
+	spawn_tags = SPAWN_TAG_JUNK_CLOWN

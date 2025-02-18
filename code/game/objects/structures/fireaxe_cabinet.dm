@@ -2,21 +2,22 @@
 	name = "fire axe cabinet"
 	desc = "There is small label that reads \"For Emergency use only\" along with details for safe use of the axe. As if."
 	icon_state = "fireaxe"
-	anchored = 1
-	density = 0
+	anchored = TRUE
+	density = FALSE
 
 	var/damage_threshold = 15
 	var/open
 	var/unlocked
 	var/shattered
-	var/obj/item/material/twohanded/fireaxe/fireaxe
+	var/obj/item/tool/fireaxe/fireaxe
+	req_one_access = list(access_moebius, access_heads, access_engine)
 
 /obj/structure/fireaxecabinet/attack_generic(var/mob/user, var/damage, var/attack_verb, var/wallbreaker)
 	attack_animation(user)
 	playsound(user, 'sound/effects/Glasshit.ogg', 50, 1)
-	visible_message("<span class='danger'>[user] [attack_verb] \the [src]!</span>")
+	visible_message(SPAN_DANGER("[user] [attack_verb] \the [src]!"))
 	if(damage_threshold > damage)
-		to_chat(user, "<span class='danger'>Your strike is deflected by the reinforced glass!</span>")
+		to_chat(user, SPAN_DANGER("Your strike is deflected by the reinforced glass!"))
 		return
 	if(shattered)
 		return
@@ -45,7 +46,7 @@
 
 /obj/structure/fireaxecabinet/attack_hand(var/mob/user)
 	if(!unlocked)
-		to_chat(user, "<span class='warning'>\The [src] is locked.</span>")
+		to_chat(user, SPAN_WARNING("\The [src] is locked."))
 		return
 	toggle_open(user)
 
@@ -56,11 +57,11 @@
 			return
 
 		if(!open)
-			to_chat(user, "<span class='warning'>\The [src] is closed.</span>")
+			to_chat(user, SPAN_WARNING("\The [src] is closed."))
 			return
 
 		if(!fireaxe)
-			to_chat(user, "<span class='warning'>\The [src] is empty.</span>")
+			to_chat(user, SPAN_WARNING("\The [src] is empty."))
 			return
 
 		fireaxe.forceMove(get_turf(user))
@@ -78,18 +79,23 @@
 
 /obj/structure/fireaxecabinet/attackby(var/obj/item/O, var/mob/user)
 
-	if(isMultitool(O))
+	if(istype(O, /obj/item/tool/multitool))
 		toggle_lock(user)
 		return
-
-	if(istype(O, /obj/item/material/twohanded/fireaxe))
+	if(istype(O, /obj/item/card/id))	
+		var/obj/item/card/id/ID = O
+		if(has_access(list(), req_one_access, ID.GetAccess()))
+			toggle_lock(user)
+		else
+			to_chat(user, SPAN_NOTICE("You try to unlock the cabinet, but nothing happens."))
+	if(istype(O, /obj/item/tool/fireaxe))
 		if(open)
 			if(fireaxe)
-				to_chat(user, "<span class='warning'>There is already \a [fireaxe] inside \the [src].</span>")
+				to_chat(user, SPAN_WARNING("There is already \a [fireaxe] inside \the [src]."))
 			else if(user.unEquip(O))
 				O.forceMove(src)
 				fireaxe = O
-				to_chat(user, "<span class='notice'>You place \the [fireaxe] into \the [src].</span>")
+				to_chat(user, SPAN_NOTICE("You place \the [fireaxe] into \the [src]."))
 				update_icon()
 			return
 

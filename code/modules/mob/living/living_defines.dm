@@ -8,70 +8,79 @@
 
 	var/hud_updateflag = 0
 
-	//Damage related vars, NOTE: THESE SHOULD ONLY BE MODIFIED BY PROCS // what a joke
-	//var/bruteloss = 0 //Brutal damage caused by brute force (punching, being clubbed by a toolbox ect... this also accounts for pressure damage)
-	//var/oxyloss = 0   //Oxygen depravation damage (no air in lungs)
-	//var/toxloss = 0   //Toxic damage caused by being poisoned or radiated
-	//var/fireloss = 0  //Burn damage caused by being way too hot, too cold or burnt.
-	//var/halloss = 0   //Hallucination damage. 'Fake' damage obtained through hallucinating or the holodeck. Sleeping should cause it to wear off.
+	var/life_cycles_before_sleep = 30
+	var/life_cycles_before_scan = 360
 
-	var/lisp = 0
-	var/staminaloss = 0
-	var/staminaexhaust = 250
-	var/tongueless = 0
+	var/stasis = FALSE
+	var/AI_inactive = FALSE
+
+	var/inventory_shown = 1
+
+	//Damage related vars, NOTE: THESE SHOULD ONLY BE MODIFIED BY PROCS
+	var/bruteloss = 0	//Brutal damage caused by brute force (punching, being clubbed by a toolbox ect... this also accounts for pressure damage)
+	var/oxyloss = 0	//Oxygen depravation damage (no air in lungs)
+	var/toxloss = 0	//Toxic damage caused by being poisoned or radiated
+	var/fireloss = 0	//Burn damage caused by being way too hot, too cold or burnt.
+	var/cloneloss = 0	//Damage caused by being cloned or ejected from the cloner early. slimes also deal cloneloss damage to victims
+	var/brainloss = 0	//'Retardation' damage caused by someone hitting you in the head with a bible or being infected with brainrot.
+	var/halloss = 0		//Hallucination damage. 'Fake' damage obtained through hallucinating or the holodeck. Sleeping should cause it to wear off.
+
+	var/injury_type = INJURY_TYPE_LIVING //Humanmob uses species instead
+	var/armor_divisor = 1 //Used for generic attacks
 
 	var/last_special = 0 //Used by the resist verb, likely used to prevent players from bypassing next_move by logging in/out.
 
-	var/t_phoron = null
-	var/t_oxygen = null
-	var/t_sl_gas = null
-	var/t_n2 = null
+	var/t_plasma
+	var/t_oxygen
+	var/t_sl_gas
+	var/t_n2
 
-	var/now_pushing = null
+	var/now_pushing
 	var/mob_bump_flag = 0
 	var/mob_swap_flags = 0
 	var/mob_push_flags = 0
 	var/mob_always_swap = 0
+	var/livmomentum = 0 //Used for advanced movement options.
+	var/move_to_delay = 4 //Delay for the automated movement.
+	var/can_burrow = FALSE //If true, this mob can travel around using the burrow network.
+	//When this mob spawns at roundstart, a burrow will be created near it if it can't find one
 
-	var/mob/living/cameraFollow = null
+	var/mob/living/cameraFollow
 	var/list/datum/action/actions = list()
+	var/step_count = 0
 
 	var/update_slimes = 1
+	var/is_busy = FALSE // Prevents stacking of certain actions, like resting and diving
+	var/silent 		// Can't talk. Value goes down every life proc.
 	var/on_fire = 0 //The "Are we on fire?" var
 	var/fire_stacks
 
 	var/failed_last_breath = 0 //This is used to determine if the mob failed a breath. If they did fail a brath, they will attempt to breathe each tick, otherwise just once per 4 ticks.
 	var/possession_candidate // Can be possessed by ghosts if unplayed.
 
-	var/eye_blind = null	//Carbon
-	var/eye_blurry = null	//Carbon
-	var/ear_damage = null	//Carbon
-	var/stuttering = null	//Carbon
-	var/slurring = null		//Carbon
-	var/slur_loop = FALSE
-	var/deaf_loop = FALSE
-	var/horror_loop = FALSE
+	var/eye_blind	//Carbon
+	var/eye_blurry	//Carbon
+	var/ear_damage	//Carbon
+	var/stuttering	//Carbon
+	var/slurring		//Carbon
+	var/slowdown = 0
 
-	var/job = null//Living
-	var/list/obj/aura/auras = null //Basically a catch-all aura/force-field thing.
+	var/job //Living
 
-	var/obj/screen/cells = null
-	var/list/in_vision_cones = list()
+	var/image/static_overlay // For static overlays on living mobs
+	mob_classification = CLASSIFICATION_ORGANIC
 
-	var/religion = "Nothing" //Leftover from anther time.
-	var/datum/trait/trait = null
-	var/fast_stripper = FALSE //whether or not you can turbostrip
-	var/doing_something = FALSE
+	var/list/chem_effects = list()
 
-	//This is for the screen. Yes I hate this. Yes I know it needs a refactor. No I don't care at the moment.
-	var/obj/screen/plane_master/blur/human_blur/HB = new
-	var/obj/screen/plane_master/blur/turf_blur/TB = new
-	var/obj/screen/plane_master/blur/wall_blur/WB = new
-	var/obj/screen/plane_master/blur/obj_blur/OB = new
-	var/obj/screen/plane_master/blur/above_turf_blur/AT = new
-	var/obj/screen/plane_master/blur/lhuman_blur/LB = new
-	var/obj/screen/plane_master/blur/mob_blur/MB = new
-	var/obj/screen/plane_master/blur/above_human_blur/AB = new
-	var/obj/screen/plane_master/blur/effects_blur/EB = new
-	var/obj/screen/plane_master/blur/plating_blur/plating_blur = new
-	var/obj/screen/plane_master/blur/above_obj_blur/AOB = new
+	//Used in living/recoil.dm
+	var/recoil = 0 //What our current recoil level is
+	var/recoil_reduction_timer
+	var/falls_mod = 1
+	var/mob_bomb_defense = 0	// protection from explosives
+	var/noise_coeff = 1 //noise coefficient
+
+	var/can_multiz_pb = FALSE
+	var/is_watching = FALSE
+
+	spawn_frequency = 10
+	bad_type = /mob/living

@@ -4,8 +4,8 @@
 	desc = "A high tech machine that is designed to read DNA samples properly."
 	icon = 'icons/obj/forensics.dmi'
 	icon_state = "dnaopen"
-	anchored = 1
-	density = 1
+	anchored = TRUE
+	density = TRUE
 
 	var/obj/item/forensics/swab/bloodsamp = null
 	var/closed = 0
@@ -18,11 +18,11 @@
 /obj/machinery/dnaforensics/attackby(var/obj/item/W, mob/user as mob)
 
 	if(bloodsamp)
-		to_chat(user, "<span class='warning'>There is already a sample in the machine.</span>")
+		to_chat(user, SPAN_WARNING("There is already a sample in the machine."))
 		return
 
 	if(closed)
-		to_chat(user, "<span class='warning'>Open the cover before inserting the sample.</span>")
+		to_chat(user, SPAN_WARNING("Open the cover before inserting the sample."))
 		return
 
 	var/obj/item/forensics/swab/swab = W
@@ -30,12 +30,12 @@
 		user.unEquip(W)
 		src.bloodsamp = swab
 		swab.loc = src
-		to_chat(user, "<span class='notice'>You insert \the [W] into \the [src].</span>")
+		to_chat(user, SPAN_NOTICE("You insert \the [W] into \the [src]."))
 	else
-		to_chat(user, "<span class='warning'>\The [src] only accepts used swabs.</span>")
+		to_chat(user, SPAN_WARNING("\The [src] only accepts used swabs."))
 		return
 
-/obj/machinery/dnaforensics/ui_interact(mob/user, ui_key = "main",var/datum/nanoui/ui = null)
+/obj/machinery/dnaforensics/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	if(stat & (NOPOWER)) return
 	if(user.stat || user.restrained()) return
 	var/list/data = list()
@@ -45,7 +45,7 @@
 	data["bloodsamp_desc"] = (bloodsamp ? (bloodsamp.desc ? bloodsamp.desc : "No information on record.") : "")
 	data["lidstate"] = closed
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data)
 	if (!ui)
 		ui = new(user, src, ui_key, "dnaforensics.tmpl", "QuikScan DNA Analyzer", 540, 326)
 		ui.set_initial_data(data)
@@ -67,12 +67,12 @@
 				if(closed == 1)
 					scanner_progress = 0
 					scanning = 1
-					to_chat(usr, "<span class='notice'>Scan initiated.</span>")
+					to_chat(usr, SPAN_NOTICE("Scan initiated."))
 					update_icon()
 				else
-					to_chat(usr, "<span class='notice'>Please close sample lid before initiating scan.</span>")
+					to_chat(usr, SPAN_NOTICE("Please close sample lid before initiating scan."))
 			else
-				to_chat(usr, "<span class='warning'>Insert an item to scan.</span>")
+				to_chat(usr, SPAN_WARNING("Insert an item to scan."))
 
 	if(href_list["ejectItem"])
 		if(bloodsamp)
@@ -99,11 +99,11 @@
 	last_process_worldtime = world.time
 
 /obj/machinery/dnaforensics/proc/complete_scan()
-	src.visible_message("<span class='notice'>\icon[src] makes an insistent chime.</span>", 2)
+	src.visible_message(SPAN_NOTICE("\icon[src] makes an insistent chime."), 2)
 	update_icon()
 	if(bloodsamp)
 		var/obj/item/paper/P = new(src)
-		P.SetName("[src] report #[++report_num]: [bloodsamp.name]")
+		P.name = "[src] report #[++report_num]: [bloodsamp.name]"
 		P.stamped = list(/obj/item/stamp)
 		P.overlays = list("paper_stamped")
 		//dna data itself
@@ -111,7 +111,7 @@
 		if(bloodsamp.dna != null)
 			data = "Spectometric analysis on provided sample has determined the presence of [bloodsamp.dna.len] strings of DNA.<br><br>"
 			for(var/blood in bloodsamp.dna)
-				data += "<span class='notice'>Blood type: [bloodsamp.dna[blood]]<br>\nDNA: [blood]</span><br><br>"
+				data += "\blue Blood type: [bloodsamp.dna[blood]]<br>\nDNA: [blood]<br><br>"
 		else
 			data += "No DNA found.<br>"
 		P.info = "<b>[src] analysis report #[report_num]</b><br>"
@@ -122,11 +122,8 @@
 		update_icon()
 	return
 
-/obj/machinery/dnaforensics/attack_ai(mob/user as mob)
-	ui_interact(user)
-
-/obj/machinery/dnaforensics/attack_hand(mob/user as mob)
-	ui_interact(user)
+/obj/machinery/dnaforensics/attack_hand(mob/user)
+	nano_ui_interact(user)
 
 /obj/machinery/dnaforensics/verb/toggle_lid()
 	set category = "Object"
@@ -137,7 +134,7 @@
 		return
 
 	if(scanning)
-		to_chat(usr, "<span class='warning'>You can't do that while [src] is scanning!</span>")
+		to_chat(usr, SPAN_WARNING("You can't do that while [src] is scanning!"))
 		return
 
 	closed = !closed

@@ -5,22 +5,36 @@
 */
 
 /datum/language
-	var/name = "an unknown language"  // Fluff name of language if any.
-	var/desc = "A language."          // Short description for 'Check Languages'.
-	var/speech_verb = "says"          // 'says', 'hisses', 'farts'.
-	var/ask_verb = "asks"             // Used when sentence ends in a ?
-	var/exclaim_verb = "exclaims"     // Used when sentence ends in a !
-	var/whisper_verb                  // Optional. When not specified speech_verb + quietly/softly is used instead.
-	var/signlang_verb = list("signs", "gestures") // list of emotes that might be displayed if this language has NONVERBAL or SIGNLANG flags
-	var/colour = "body"               // CSS style to use for strings in this language.
-	var/key = "x"                     // Character used to speak in language eg. :o for Unathi.
-	var/flags = 0                     // Various language flags.
-	var/native                        // If set, non-native speakers will have trouble speaking.
-	var/list/syllables                // Used when scrambling text for a non-speaker.
-	var/list/space_chance = 55        // Likelihood of getting a space in the random scramble string
-	var/machine_understands = 1       // Whether machines can parse and understand this language
+	var/name = "an unknown language"  			// Fluff name of language if any.
+	var/desc = "A language."          			// Short description for 'Check Languages'.
+	var/list/speech_verb = list("says")	   		// 'says', 'hisses', 'farts'.
+	var/list/ask_verb = list("asks")       		// Used when sentence ends in a ?
+	var/list/exclaim_verb = list("exclaims")	// Used when sentence ends in a !
+	var/list/whisper_verb = list("whispers")	// Optional. When not specified speech_verb + quietly/softly is used instead.
+	var/list/signlang_verb = list("signs") 		// list of emotes that might be displayed if this language has NONVERBAL or SIGNLANG flags
+	var/colour = "body"               			// CSS style to use for strings in this language.
+	var/key = "x"                     			// Character used to speak in language eg. :o for Unathi.
+	var/flags = 0                     			// Various language flags.
+	var/native                        			// If set, non-native speakers will have trouble speaking.
+	var/list/syllables                			// Used when scrambling text for a non-speaker.
+	var/list/space_chance = 55        			// Likelihood of getting a space in the random scramble string
+	var/machine_understands = 1 		  		// Whether machines can parse and understand this language
+	var/shorthand = "CO"						// Shorthand that shows up in chat for this language.
+
+	//Random name lists
+	var/name_lists = FALSE
+	var/first_names_male = list()
+	var/first_names_female = list()
+	var/last_names = list()
 
 /datum/language/proc/get_random_name(var/gender, name_count=2, syllable_count=4, syllable_divisor=2)
+	//This language has its own name lists
+	if (name_lists)
+		if(gender==FEMALE)
+			return capitalize(pick(first_names_female)) + " " + capitalize(pick(last_names))
+		else
+			return capitalize(pick(first_names_male)) + " " + capitalize(pick(last_names))
+
 	if(!syllables || !syllables.len)
 		if(gender==FEMALE)
 			return capitalize(pick(GLOB.first_names_female)) + " " + capitalize(pick(GLOB.last_names))
@@ -32,11 +46,67 @@
 
 	for(var/i = 0;i<name_count;i++)
 		new_name = ""
-		for(var/x = rand(Floor(syllable_count/syllable_divisor),syllable_count);x>0;x--)
+		for(var/x = rand(FLOOR(syllable_count/syllable_divisor, 1),syllable_count);x>0;x--)
 			new_name += pick(syllables)
 		full_name += " [capitalize(lowertext(new_name))]"
 
 	return "[trim(full_name)]"
+
+/datum/language/proc/get_random_first_name(gender, name_count=1, syllable_count=4, syllable_divisor=2)
+	//This language has its own name lists
+	if (name_lists)
+		if(gender==FEMALE)
+			return capitalize(pick(first_names_female))
+		else
+			return capitalize(pick(first_names_male))
+
+	if(!syllables || !syllables.len)
+		if(gender==FEMALE)
+			return capitalize(pick(GLOB.first_names_female))
+		else
+			return capitalize(pick(GLOB.first_names_male))
+
+	var/full_name = ""
+	var/new_name = ""
+
+	for(var/i = 0;i<name_count;i++)
+		new_name = ""
+		for(var/x = rand(FLOOR(syllable_count/syllable_divisor, 1),syllable_count);x>0;x--)
+			new_name += pick(syllables)
+		full_name += " [capitalize(lowertext(new_name))]"
+
+	return "[trim(full_name)]"
+
+/datum/language/proc/get_random_last_name(name_count=1, syllable_count=4, syllable_divisor=2)
+	//This language has its own name lists
+	if (name_lists)
+		return capitalize(pick(last_names))
+
+	if(!syllables || !syllables.len)
+		return capitalize(pick(GLOB.last_names))
+
+	var/full_name = ""
+	var/new_name = ""
+
+	for(var/i = 0;i<name_count;i++)
+		new_name = ""
+		for(var/x = rand(FLOOR(syllable_count/syllable_divisor, 1),syllable_count);x>0;x--)
+			new_name += pick(syllables)
+		full_name += "[capitalize(lowertext(new_name))]"
+
+	return "[trim(full_name)]"
+
+//A wrapper for the above that gets a random name and sets it onto the mob
+/datum/language/proc/set_random_name(var/mob/M, name_count=2, syllable_count=4, syllable_divisor=2)
+	var/mob/living/carbon/human/H = null
+	if (ishuman(M))
+		H = M
+
+	var/oldname = M.name
+	if (H)
+		oldname = H.real_name
+	M.fully_replace_character_name(oldname, get_random_name(M.get_gender(), name_count, syllable_count, syllable_divisor))
+
 
 /datum/language
 	var/list/scramble_cache = list()
@@ -53,11 +123,11 @@
 		scramble_cache[input] = n
 		return n
 
-	var/input_size = length(input)
+	var/input_size = length_char(input)
 	var/scrambled_text = ""
 	var/capitalize = 1
 
-	while(length(scrambled_text) < input_size)
+	while(length_char(scrambled_text) < input_size)
 		var/next = pick(syllables)
 		if(capitalize)
 			next = capitalize(next)
@@ -71,10 +141,10 @@
 			scrambled_text += " "
 
 	scrambled_text = trim(scrambled_text)
-	var/ending = copytext(scrambled_text, length(scrambled_text))
+	var/ending = copytext_char(scrambled_text, length(scrambled_text))
 	if(ending == ".")
-		scrambled_text = copytext(scrambled_text,1,length(scrambled_text)-1)
-	var/input_ending = copytext(input, input_size)
+		scrambled_text = copytext_char(scrambled_text, 1, -2)
+	var/input_ending = copytext_char(input, -1)
 	if(input_ending in list("!","?","."))
 		scrambled_text += input_ending
 
@@ -127,13 +197,11 @@
 /datum/language/proc/get_spoken_verb(var/msg_end)
 	switch(msg_end)
 		if("!")
-			return exclaim_verb
+			return pick(exclaim_verb)
 		if("?")
-			return ask_verb
-	return speech_verb
+			return pick(ask_verb)
 
-/datum/language/proc/can_speak_special(var/mob/speaker)
-	return 1
+	return pick(speech_verb)
 
 // Language handling.
 /mob/proc/add_language(var/language)
@@ -157,15 +225,12 @@
 		default_language = null
 	return ..()
 
+
+
+
 // Can we speak this language, as opposed to just understanding it?
 /mob/proc/can_speak(datum/language/speaking)
-	if(!speaking)
-		return 0
-
-	if (only_species_language && speaking != all_languages[species_language])
-		return 0
-
-	return (speaking.can_speak_special(src) && (universal_speak || (speaking && speaking.flags & INNATE) || speaking in src.languages))
+	return (universal_speak || (speaking && speaking.flags & INNATE) || (speaking in src.languages))
 
 /mob/proc/get_language_prefix()
 	return get_prefix_key(/decl/prefix/language)
@@ -179,41 +244,64 @@
 	set category = "IC"
 	set src = usr
 
+
 	var/dat = "<b><font size = 5>Known Languages</font></b><br/><br/>"
 
-	for(var/datum/language/L in languages)
-		if(!(L.flags & NONGLOBAL))
-			dat += "<b>[L.name] ([get_language_prefix()][L.key])</b><br/>[L.desc]<br/><br/>"
+	if(issilicon(src))
+		var/mob/living/silicon/silicon = src
+
+		if(silicon.default_language)
+			dat += "Current default language: [silicon.default_language] - <a href='byond://?src=\ref[src];default_lang=reset'>reset</a><br/><br/>"
+
+		for(var/datum/language/L in languages)
+			if(!(L.flags & NONGLOBAL))
+				var/default_str
+				if(L == silicon.default_language)
+					default_str = " - default - <a href='byond://?src=\ref[src];default_lang=reset'>reset</a>"
+				else
+					default_str = " - <a href='byond://?src=\ref[src];default_lang=\ref[L]'>set default</a>"
+
+				var/synth = (L in silicon.speech_synthesizer_langs)
+				dat += "<b>[L.name] ([get_language_prefix()][L.key])</b>[synth ? default_str : null]<br/>Speech Synthesizer: <i>[synth ? "YES" : "NOT SUPPORTED"]</i><br/>[L.desc]<br/><br/>"
+	else
+		for(var/datum/language/L in languages)
+			if(!(L.flags & NONGLOBAL))
+				dat += "<b>[L.name] ([get_language_prefix()][L.key])</b><br/>[L.desc]<br/><br/>"
 
 	src << browse(dat, "window=checklanguage")
-	return
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /mob/living/check_languages()
 	var/dat = "<b><font size = 5>Known Languages</font></b><br/><br/>"
 
 	if(default_language)
-		dat += "Current default language: [default_language]<br/><br/>"
+		dat += "Current default language: [default_language] - <a href='byond://?src=\ref[src];default_lang=reset'>reset</a><br/><br/>"
 
 	for(var/datum/language/L in languages)
 		if(!(L.flags & NONGLOBAL))
 			if(L == default_language)
-				dat += "<b>[L.name] ([get_language_prefix()][L.key])</b> - default - [L.desc]<br/><br/>"
-			else if (can_speak(L))
-				dat += "<b>[L.name] ([get_language_prefix()][L.key])</b> - <br/>[L.desc]<br/><br/>"
+				dat += "<b>[L.name] ([get_language_prefix()][L.key])</b> - default - <a href='byond://?src=\ref[src];default_lang=reset'>reset</a><br/>[L.desc]<br/><br/>"
 			else
-				dat += "<b>[L.name] ([get_language_prefix()][L.key])</b> - cannot speak!<br/>[L.desc]<br/><br/>"
+				dat += "<b>[L.name] ([get_language_prefix()][L.key])</b> - <a href='byond://?src=\ref[src];default_lang=\ref[L]'>set default</a><br/>[L.desc]<br/><br/>"
 
 	src << browse(dat, "window=checklanguage")
 
 /mob/living/Topic(href, href_list)
 	if(href_list["default_lang"])
 		if(href_list["default_lang"] == "reset")
-
-			if (species_language)
-				set_default_language(all_languages[species_language])
-			else
-				set_default_language(null)
-
+			set_default_language(null)
 		else
 			var/datum/language/L = locate(href_list["default_lang"])
 			if(L && (L in languages))

@@ -20,12 +20,6 @@
 	mode_flag = MODEFLAG_PHOTONIC
 	multiplier = 1.3
 
-/datum/shield_mode/em
-	mode_name = "Electro-Magnetic Shielding"
-	mode_desc = "This mode blocks various high-power emissions like electrical storms."
-	mode_flag = MODEFLAG_EM
-	multiplier = 1.3
-
 /datum/shield_mode/humanoids
 	mode_name = "Humanoid Lifeforms"
 	mode_desc = "This mode blocks various humanoid lifeforms. Does not affect fully synthetic humanoids."
@@ -64,14 +58,14 @@
 
 /datum/shield_mode/bypass
 	mode_name = "Diffuser Bypass"
-	mode_desc = "This mode disables the built-in safeties which allows the generator to counter effect of various shield diffusers. This tends to create a very large strain on the generator. Does not work with enabled safety protocols."
+	mode_desc = "This mode disables the built-in safeties which allows the generator to counter effect of various shield diffusers. This tends to create a very large strain on the generator."
 	mode_flag = MODEFLAG_BYPASS
 	multiplier = 3
 	hacked_only = 1
 
 /datum/shield_mode/overcharge
 	mode_name = "Field Overcharge"
-	mode_desc = "This mode polarises the field, causing damage on contact. Does not work with enabled safety protocols."
+	mode_desc = "This mode polarises the field, causing damage on contact. Very harmful to all life."
 	mode_flag = MODEFLAG_OVERCHARGE
 	multiplier = 3
 	hacked_only = 1

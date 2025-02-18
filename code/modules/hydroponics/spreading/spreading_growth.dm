@@ -1,100 +1,107 @@
 #define NEIGHBOR_REFRESH_TIME 100
+#define MIN_LIGHT_LIMIT 0.5
 
-/obj/effect/vine/proc/get_cardinal_neighbors()
+/obj/effect/plant/proc/get_cardinal_neighbors()
 	var/list/cardinal_neighbors = list()
-	for(var/check_dir in GLOB.cardinal)
-		var/turf/simulated/T = get_step(get_turf(src), check_dir)
+	for(var/check_dir in cardinal)
+		var/turf/T = get_step(get_turf(src), check_dir)
 		if(istype(T))
 			cardinal_neighbors |= T
 	return cardinal_neighbors
 
-/obj/effect/vine/proc/get_zlevel_neighbors()
-	var/list/zlevel_neighbors = list()
-
-	var/turf/start = loc
-	var/turf/up = GetAbove(loc)
-	var/turf/down = GetBelow(loc)
-
-	if(start && start.CanZPass(src, DOWN))
-		zlevel_neighbors += down
-	if(up && up.CanZPass(src, UP))
-		zlevel_neighbors += up
-
-	return zlevel_neighbors
-
-/obj/effect/vine/proc/update_neighbors()
+/obj/effect/plant/proc/update_neighbors()
 	// Update our list of valid neighboring turfs.
-
 	neighbors = list()
-
-	for(var/turf/simulated/floor in get_cardinal_neighbors())
+	var/list/tocheck = get_cardinal_neighbors()
+	for(var/turf/floor in tocheck)
+		var/turf/zdest = get_connecting_turf(floor, loc)//Handling zlevels
 		if(get_dist(parent, floor) > spread_distance)
 			continue
 
-		var/blocked = 0
-		for(var/obj/effect/vine/other in floor.contents)
-			if(other.seed == src.seed)
-				blocked = 1
-				break
-		if(blocked)
+		//We check zdest, not floor, for existing plants
+		if((locate(/obj/effect/plant) in zdest.contents) || (locate(/obj/effect/dead_plant) in zdest.contents))
+			if(!(seed.get_trait(TRAIT_INVASIVE)))//Invasive ones can invade onto other tiles
+				continue
+			var/obj/effect/plant/neighbor_plant = (locate(/obj/effect/plant) in zdest.contents)
+			if(neighbor_plant.seed.get_trait(TRAIT_INVASIVE))//If it's also invasive, don't invade (for better performance and plants not eating at itself)
+				continue
+
+		//We dont want to melt external walls and cause breaches
+		if(!near_external && floor.density)
+			if(!isnull(seed.chems["pacid"]))
+				spawn(rand(5,25)) floor.explosion_act(100, null)
+			continue
+		if(!Adjacent(floor))
 			continue
 
-		if(floor.density)
-			if(!isnull(seed.chems[/datum/reagent/acid/polyacid]))
-				spawn(rand(5,25)) floor.ex_act(3)
-			continue
+		//Space vines can grow through airlocks by forcing their way into tiny gaps
+		//There also can be special conditions handling
+		if (!floor.Enter(src))
 
-		if(!Adjacent(floor) || !floor.Enter(src))
-			continue
+			//Maintshooms cannot, spread trait must be 3 or more
+			if(seed.get_trait(TRAIT_SPREAD) < 3)
+				continue
+
+			//If these two are not the same then we're attempting to enter a portal or stairs
+			//We will allow it
+			if (zdest == floor)
+				var/obj/machinery/door/found_door = null
+				for (var/obj/machinery/door/D in floor)
+					if (!D || !istype(D) || !D.density || D.welded) //Can't grow through doors that are welded shut
+						continue
+
+					found_door = D
+
+				if (!found_door)
+					continue
+
+				var/can_pass = door_interaction(found_door, floor)
+				if(!can_pass)
+					continue
+
 
 		neighbors |= floor
-
-	neighbors |= get_zlevel_neighbors()
-
-	if(neighbors.len)
-		START_PROCESSING(SSvines, src) //if we have neighbours again, start processing
-
 	// Update all of our friends.
 	var/turf/T = get_turf(src)
-	for(var/obj/effect/vine/neighbor in range(1,src))
-		if(neighbor.seed == src.seed)
-			neighbor.neighbors -= T
+	for(var/obj/effect/plant/neighbor in range(1,src))
+		neighbor.neighbors -= T
 
-/obj/effect/vine/Process(var/grow = 1)
+
+/obj/effect/plant/proc/door_interaction(obj/machinery/door/door, turf/floor)
+	//We have to make sure that nothing ELSE aside from the door is blocking us
+	var/blocked = FALSE
+	for (var/obj/O in floor)
+		if (O == door)
+			continue
+
+		if (!O.CanPass(src, floor))
+			blocked = TRUE
+			break
+
+	if (blocked)
+		return FALSE
+	return TRUE
+
+//This silly special case override is needed to make vines work with portals.
+//Code is copied from /atoms_movable.dm, but a spawn call is removed, making it completely synchronous
+/obj/effect/plant/Bump(var/atom/A, yes)
+	if (A && yes)
+		A.last_bumped = world.time
+		A.Bumped(src)
+
+/obj/effect/plant/Process()
 	// Something is very wrong, kill ourselves.
-	if(!seed)
+	if(!seed || !loc)
 		die_off()
-		return 0
+		return PROCESS_KILL
 
 	for(var/obj/effect/effect/smoke/chem/smoke in view(1, src))
-		if(smoke.reagents.has_reagent(/datum/reagent/toxin/plantbgone))
+		if(smoke.reagents.has_reagent("plantbgone"))
 			die_off()
 			return
 
-	var/turf/simulated/T = get_turf(src)
-
-	if(grow)
-		// Handle life.
-		if(istype(T))
-			health -= seed.handle_environment(T,T.return_air(),null,1)
-		if(health < max_health)
-			health += 1
-			if(growth_threshold && !(health % growth_threshold))
-				update_icon()
-		if(health > max_health)
-			health = max_health
-		if(parent == src && health == max_health && !plant && istype(T) && !T.CanZPass(src, DOWN))
-			plant = new(T,seed)
-			plant.dir = src.dir
-			plant.transform = src.transform
-			plant.age = seed.get_trait(TRAIT_MATURATION)-1
-			plant.update_icon()
-			if(growth_type==0) //Vines do not become invisible.
-				set_invisibility(INVISIBILITY_MAXIMUM)
-			else
-				plant.layer = layer + 0.1
-	else
-		START_PROCESSING(SSvines, src)
+	// Handle life.
+	life()
 
 	if(buckled_mob)
 		seed.do_sting(buckled_mob,src)
@@ -102,108 +109,175 @@
 			seed.do_thorns(buckled_mob,src)
 
 	if(world.time >= last_tick+NEIGHBOR_REFRESH_TIME)
-		if(!grow)	last_tick = world.time
+		last_tick = world.time
 		update_neighbors()
 
 	if(sampled)
 		//Should be between 2-7 for given the default range of values for TRAIT_PRODUCTION
-		var/chance = max(1, round(15/seed.get_trait(TRAIT_PRODUCTION)))
+		var/chance = max(1, round(30/seed.get_trait(TRAIT_PRODUCTION)))
 		if(prob(chance))
 			sampled = 0
 
-	if(is_mature())
-		if(!buckled_mob)
-			var/mob/living/list/targets = targets_in_range()
-			if(targets && targets.len && prob(round(seed.get_trait(TRAIT_POTENCY)/4)))
-				entangle(pick(targets))
-
-		if(parent && parent.possible_children && neighbors.len && prob(spread_chance))
-			spread_to(pick(neighbors))
-			update_neighbors()
+	if(is_mature() && neighbors.len && prob(spread_chance))
+		spawn()
+			spread()
 
 	// We shouldn't have spawned if the controller doesn't exist.
-	check_health()
+	check_health(FALSE)//Dont want to update the icon every process
+	if(neighbors.len || health != max_health)
+		plant_controller.add_plant(src)
 
-	if(should_sleep())
-		STOP_PROCESSING(SSvines, src)
+	if (seed.get_trait(TRAIT_CHEM_SPRAYER) && !spray_cooldown)
+		var/turf/mainloc = get_turf(src)
+		for(var/mob/living/A in range(1,mainloc))
+			if(A.move_speed < 12)
+				HasProximity(A)
+				A.visible_message(SPAN_WARNING("[src] sprays something on [A.name]!"), SPAN_WARNING("[src] sprays something on you!"))
+				spray_cooldown = TRUE
+				spawn(10)
+					spray_cooldown = FALSE
 
-/obj/effect/vine/proc/should_sleep()
-	if(buckled_mob) //got a victim to fondle
-		return FALSE
-	if(neighbors.len) //got places to spread to
-		return FALSE
-	if(health < max_health) //got some growth to do
-		return FALSE
-	if(targets_in_range()) //got someone to grab
-		return FALSE
-	if(parent == src && !plant) //should settle down and spawn a tray
-		var/turf/simulated/T = get_turf(src)
-		if(T && !T.CanZPass(src, DOWN)) //yep we need to settle down here
-			return FALSE
-	return TRUE
-//spreading vines aren't created on their final turf.
-//Instead, they are created at their parent and then move to their destination.
-/obj/effect/vine/proc/spread_to(turf/target_turf)
-	var/obj/effect/vine/child = new(get_turf(src),seed,parent)
+	if(seed.get_trait(TRAIT_CHEMS) && reagents.get_free_space() && !chem_regen_cooldown)
+		for (var/reagent in seed.chems)
+			src.reagents.add_reagent(reagent, 1)
+		chem_regen_cooldown = TRUE
+		spawn(600)
+			chem_regen_cooldown = FALSE
 
+
+/obj/effect/plant/proc/life()
+	var/turf/T = get_turf(src)
+	if(istype(T))
+		health -= seed.handle_environment(T,T.return_air(),null,1)
+
+	// Maintshrooms will not grow in the light
+	if(seed.type == /datum/seed/mushroom/maintshroom && T.get_lumcount() > MIN_LIGHT_LIMIT)
+		return
+
+	if(health < max_health)
+		//Plants can grow through closed airlocks, but more slowly, since they have to force metal to make space
+		var/obj/machinery/door/D = (locate(/obj/machinery/door) in loc)
+		if (D)
+			health += RAND_DECIMAL(0,0.5)
+		else
+			health += RAND_DECIMAL(1,2.5)
+		refresh_icon()
+		if(health > max_health)
+			health = max_health
+	else if(health == max_health && !plant && (seed.type != /datum/seed/mushroom/maintshroom))
+		plant = new(T,seed)
+		plant.dir = src.dir
+		plant.transform = src.transform
+		plant.age = seed.get_trait(TRAIT_MATURATION)-1
+		plant.update_icon()
+		if(growth_type==0) //Vines do not become invisible.
+			invisibility = INVISIBILITY_MAXIMUM
+		else
+			plant.layer = layer + 0.1
+
+
+/obj/effect/plant/proc/spread()
+	//spread to 1-3 adjacent turfs depending on yield trait.
+	var/max_spread = between(1, round(seed.get_trait(TRAIT_YIELD)*3/14), 3)
+	max_spread = rand(1, max_spread)
+	for(var/i in 1 to max_spread)
+		sleep(rand(3,5))
+		if(!neighbors.len)
+			break
+		var/turf/target_turf = pick(neighbors)
+		target_turf = get_connecting_turf(target_turf, loc)
+		var/obj/effect/neighbor_plant = (locate(/obj/effect/plant) in target_turf.contents)
+		if(!neighbor_plant)
+			neighbor_plant = (locate(/obj/effect/dead_plant) in target_turf.contents)
+		if(neighbor_plant)//Not else, because if there's no dead plant either, it shouldn't run the check at all
+			visible_message("[src] takes over [neighbor_plant]!")
+			qdel(neighbor_plant)
+		var/obj/effect/plant/child = new type(get_turf(src),seed,src)
+		after_spread(child, target_turf)
+		// Update neighboring squares.
+		for(var/obj/effect/plant/neighbor in range(1,target_turf))
+			neighbor.neighbors -= target_turf
+
+
+//after creation act
+//by default, there goes an animation code
+/obj/effect/plant/proc/after_spread(obj/effect/plant/child, turf/target_turf)
 	spawn(1) // This should do a little bit of animation.
-		if(QDELETED(child))
-			return
-
-		//move out to the destination
-		child.anchored = 0
-		child.Move(target_turf)
-		child.anchored = 1
+		child.forceMove(target_turf)
 		child.update_icon()
 
-		//see if anything is there
-		for(var/thing in child.loc)
-			if(thing != child && istype(thing, /obj/effect/vine))
-				var/obj/effect/vine/other = thing
-				if(other.seed != child.seed)
-					other.vine_overrun(child.seed, src) //vine fight
-				qdel(child)
-				return
-			if(istype(thing, /obj/effect/dead_plant))
-				qdel(thing)
-				qdel(child)
-				return
-			if(isliving(thing) && (seed.get_trait(TRAIT_CARNIVOROUS) || (seed.get_trait(TRAIT_SPREAD) >= 2 && prob(round(seed.get_trait(TRAIT_POTENCY))))))
-				entangle(thing)
-				qdel(child)
-				return
 
-		// Update neighboring squares.
-		for(var/obj/effect/vine/neighbor in range(1, child.loc)) //can use the actual final child loc now
-			if(child.seed == neighbor.seed) //neighbors of different seeds will continue to try to overrun each other
-				neighbor.neighbors -= target_turf
+//Once created, the new vine moves to destination turf
+/obj/effect/plant/proc/handle_move(var/turf/origin, var/turf/destination)
+	//First of all lets ensure we still exist.
+	//We may have been deleted by another vine doing postmove cleanup
+	if (QDELETED(src))
+		return
 
-		child.finish_spreading()
+	//And lets make sure we haven't already moved
+	if (loc != origin)
+		return
 
-/obj/effect/vine/proc/wake_neighbors()
-	// This turf is clear now, let our buddies know.
-	for(var/turf/simulated/check_turf in (get_cardinal_neighbors() | get_zlevel_neighbors()))
-		if(!istype(check_turf))
-			continue
-		for(var/obj/effect/vine/neighbor in check_turf.contents)
-			neighbor.neighbors |= check_turf
-			START_PROCESSING(SSvines, neighbor)
+	//We un-anchor ourselves, so that we're exposed to effects like gravity and teleporting
+	anchored = FALSE
 
-/obj/effect/vine/proc/targets_in_range()
-	var/mob/list/targets = list()
-	for(var/turf/simulated/check_turf in (get_cardinal_neighbors() | get_zlevel_neighbors() | list(loc)))
-		if(!istype(check_turf))
-			continue
-		for(var/mob/living/M in check_turf.contents)
-			targets |= M
-	if(targets.len)
-		return targets
+	//Now we will attempt a normal movement, obeying all the normal rules
+	//This allows us to bump into portals and get teleported
+	Move(destination)
 
-/obj/effect/vine/proc/die_off()
+	/*Now we check if we went anywhere. We don't care about the return value of move, we do our own check
+	In the case of a portal, or falling through an openspace, or moving along stairs, Move may return false
+	but we've still gone somewhere. We will only consider it a failure if we're still where we started
+	*/
+	if (loc == origin)
+		//That failed, okay this time we're not asking
+		forceMove(destination)
+		//forceMove won't work properly with portals, so we only do it as a backup option
+
+
+	//Ok now we should definitely be somewhere
+	if (loc == origin)
+		//Welp, we give up.
+		//This shouldn't be possible, but if it somehow happens then this vine is toast
+		qdel(src)
+		return
+
+	//Ok we got somewhere, hooray
+	//Now we settle down
+	anchored = TRUE
+
+	//And do this
+	handle_postmove()
+
+//Now we clean up our arrival tile
+/obj/effect/plant/proc/handle_postmove()
+	for (var/obj/effect/plant/Bl in loc)
+		if (Bl != src)
+			qdel(Bl) //Lets make sure we don't get doubleblobs
+
+
+/obj/effect/plant/proc/die_off()
 	// Kill off our plant.
-	if(plant) plant.die()
-	update_neighbors()
-	wake_neighbors()
-	spawn(1) if(src) qdel(src)
+	if(plant)
+		plant.die()
 
+	//Nearby plants suffer a bit too, so they won't immediately grow back
+	spawn(2)
+		if (!QDELETED(src))
+			for (var/obj/effect/plant/P in orange(1, src))
+				P.health -= (P.max_health * 0.5)
+				P.check_health()
+
+	// This turf is clear now, let our buddies know.
+	for(var/turf/check_turf in get_cardinal_neighbors())
+		if(!istype(check_turf))
+			continue
+		for(var/obj/effect/plant/neighbor in check_turf.contents)
+			neighbor.neighbors |= check_turf
+			plant_controller.add_plant(neighbor)
+
+	spawn(1)
+		qdel(src)
+
+#undef MIN_LIGHT_LIMIT
 #undef NEIGHBOR_REFRESH_TIME

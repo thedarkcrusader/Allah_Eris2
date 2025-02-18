@@ -9,13 +9,16 @@
 	name = "space minimoog"
 	icon = 'icons/obj/musician.dmi'
 	icon_state = "minimoog"
-	anchored = 1
-	density = 1
+	anchored = TRUE
+	density = TRUE
 	var/datum/song/song
 	var/playing = 0
 	var/help = 0
 	var/edit = 1
 	var/repeat = 0
+
+/obj/structure/device/piano/get_fall_damage()
+	return FALL_GIB_DAMAGE
 
 /obj/structure/device/piano/New()
 	if(prob(50))
@@ -28,8 +31,6 @@
 		icon_state = "piano"
 
 /obj/structure/device/piano/proc/playnote(var/note as text)
-//	log_debug("Note: [note]")
-
 	var/soundfile
 	/*BYOND loads resource files at compile time if they are ''. This means you can't really manipulate them dynamically.
 	Tried doing it dynamically at first but its more trouble than its worth. Would have saved many lines tho.*/
@@ -205,8 +206,6 @@
 		if("Cn9")	soundfile = 'sound/piano/Cn9.ogg'
 		else		return
 
-//	sound_to(hearers(15, src), sound(soundfile))
-
 	var/turf/source = get_turf(src)
 	for(var/mob/M in hearers(15, source))
 		M.playsound_local(source, file(soundfile), 100, falloff = 5)
@@ -221,27 +220,22 @@
 			cur_acc[i] = "n"
 
 		for(var/line in song.lines)
-//			log_debug(line)
-
+			//world << line
 			for(var/beat in splittext(lowertext(line), ","))
-//				log_debug("beat: [beat]")
-
 				var/list/notes = splittext(beat, "/")
 				for(var/note in splittext(notes[1], "-"))
-//					log_debug("note: [note]")
-
 					if(!playing || !anchored)//If the piano is playing, or is loose
 						playing = 0
 						return
 					if(length(note) == 0)
 						continue
-//					log_debug("Parse: [copytext(note,1,2)]")
-
 					var/cur_note = text2ascii(note) - 96
 					if(cur_note < 1 || cur_note > 7)
 						continue
-					for(var/i=2 to length(note))
-						var/ni = copytext(note,i,i+1)
+					var/notelen = length(note)
+					var/ni = ""
+					for(var/i = length(note[1]) + 1, i <= notelen, i += length(ni))
+						ni = note[i]
 						if(!text2num(ni))
 							if(ni == "#" || ni == "b" || ni == "n")
 								cur_acc[cur_note] = ni
@@ -260,7 +254,7 @@
 	playing = 0
 	updateUsrDialog()
 
-/obj/structure/device/piano/attack_hand(var/mob/user as mob)
+/obj/structure/device/piano/attack_hand(var/mob/user)
 	if(!anchored)
 		return
 
@@ -305,7 +299,7 @@
 					Combined, an example is: <i>E-E4/4,/2,G#/8,B/8,E3-E4/4</i>
 					<br>
 					Lines may be up to 50 characters.<br>
-					A song may only contain up to 50 lines.<br>
+					A song may only contain up to 200 lines.<br>
 					"}
 		else
 			dat += "<A href='?src=\ref[src];help=2'>Show Help</A><BR>"
@@ -346,7 +340,7 @@
 			var/newline = html_encode(input("Enter your line: ", "Piano") as text|null)
 			if(!newline)
 				return
-			if(song.lines.len > 50)
+			if(song.lines.len > 200)
 				return
 			if(length(newline) > 50)
 				newline = copytext(newline, 1, 50)
@@ -385,11 +379,11 @@
 				if (!in_range(src, usr))
 					return
 
-				if(length(t) >= 3072)
+				if(length(t) >= 12000)
 					var/cont = input(usr, "Your message is too long! Would you like to continue editing it?", "", "yes") in list("yes", "no")
 					if(cont == "no")
 						break
-			while(length(t) > 3072)
+			while(length(t) > 12000)
 
 			//split into lines
 			spawn()
@@ -398,13 +392,13 @@
 				if(copytext(lines[1],1,6) == "BPM: ")
 					tempo = 600 / text2num(copytext(lines[1],6))
 					lines.Cut(1,2)
-				if(lines.len > 50)
-					to_chat(usr, "Too many lines!")
-					lines.Cut(51)
+				if(lines.len > 200)
+					to_chat(usr, SPAN_WARNING("Too many lines!"))
+					lines.Cut(201)
 				var/linenum = 1
 				for(var/l in lines)
 					if(length(l) > 50)
-						to_chat(usr, "Line [linenum] too long!")
+						to_chat(usr, SPAN_WARNING("Line [linenum] too long!"))
 						lines.Remove(l)
 					else
 						linenum++
@@ -417,25 +411,12 @@
 	updateUsrDialog()
 	return
 
-/obj/structure/device/piano/attackby(obj/item/O as obj, mob/user as mob)
-	if(isWrench(O))
-		if (anchored)
-			playsound(src.loc, 'sound/items/Ratchet.ogg', 50, 1)
-			to_chat(user, "<span class='notice'>You begin to loosen \the [src]'s casters...</span>")
-			if (do_after(user, 40, src))
-				user.visible_message( \
-					"[user] loosens \the [src]'s casters.", \
-					"<span class='notice'>You have loosened \the [src]. Now it can be pulled somewhere else.</span>", \
-					"You hear ratchet.")
-				src.anchored = 0
-		else
-			playsound(src.loc, 'sound/items/Ratchet.ogg', 50, 1)
-			to_chat(user, "<span class='notice'>You begin to tighten \the [src] to the floor...</span>")
-			if (do_after(user, 20, src))
-				user.visible_message( \
-					"[user] tightens \the [src]'s casters.", \
-					"<span class='notice'>You have tightened \the [src]'s casters. Now it can be played again</span>.", \
-					"You hear ratchet.")
-				src.anchored = 1
+/obj/structure/device/piano/attackby(var/obj/item/tool/tool, mob/user)
+	if (tool.use_tool(user, src, WORKTIME_NORMAL, QUALITY_BOLT_TURNING, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
+		anchored = !anchored
+		user.visible_message( \
+			"[user] [anchored ? "tightens" : "loosens"] \the [src]'s casters.", \
+			SPAN_NOTICE("You have [anchored ? "tightened" : "loosened"] \the [src]."), \
+			"You hear ratchet.")
 	else
 		..()

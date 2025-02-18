@@ -11,6 +11,7 @@ var/global/datum/ntnet/ntnet_global = new()
 	var/list/chat_channels = list()
 	var/list/fileservers = list()
 	var/list/email_accounts = list()				// I guess we won't have more than 999 email accounts active at once in single round, so this will do until Servers are implemented someday.
+	var/list/available_reports = list()             // A list containing one of each available report datums, used for the report editor program.
 	var/list/banned_nids = list()
 	// Amount of logs the system tries to keep in memory. Keep below 999 to prevent byond from acting weirdly.
 	// High values make displaying logs much laggier.
@@ -31,12 +32,13 @@ var/global/datum/ntnet/ntnet_global = new()
 /datum/ntnet/New()
 	if(ntnet_global && (ntnet_global != src))
 		ntnet_global = src // There can be only one.
-	for(var/obj/machinery/ntnet_relay/R in SSmachines.machinery)
+	for(var/obj/machinery/ntnet_relay/R in GLOB.machines)
 		relays.Add(R)
 		R.NTNet = src
 	build_software_lists()
-	//build_news_list()//News is fucking stupid but I guess if you want to include it again...
+	build_news_list()
 	build_emails_list()
+	build_reports_list()
 	add_log("NTNet logging system activated.")
 
 /datum/ntnet/proc/add_log_with_ids_check(var/log_string, var/obj/item/computer_hardware/network_card/source = null)
@@ -60,6 +62,11 @@ var/global/datum/ntnet/ntnet_global = new()
 				logs.Remove(L)
 			else
 				break
+
+/datum/ntnet/proc/get_computer_by_nid(var/NID)
+	for(var/obj/item/modular_computer/comp in SSobj.processing)
+		if(comp && comp.network_card && comp.network_card.identification_id == NID)
+			return comp
 
 /datum/ntnet/proc/check_banned(var/NID)
 	if(!relays || !relays.len)
@@ -125,6 +132,22 @@ var/global/datum/ntnet/ntnet_global = new()
 	for(var/F in subtypesof(/datum/computer_file/data/email_account/service))
 		new F()
 
+// Builds report list.
+/datum/ntnet/proc/build_reports_list()
+	available_reports = list()
+	for(var/F in typesof(/datum/computer_file/report))
+		var/datum/computer_file/report/type = F
+		if(initial(type.available_on_ntnet))
+			available_reports += new type
+
+/datum/ntnet/proc/fetch_reports(access)
+	if(!access)
+		return available_reports
+	. = list()
+	for(var/datum/computer_file/report/report in available_reports)
+		if(report.verify_access_edit(access))
+			. += report
+
 // Attempts to find a downloadable file according to filename var
 /datum/ntnet/proc/find_ntnet_file_by_name(var/filename)
 	for(var/datum/computer_file/program/P in available_station_software)
@@ -172,13 +195,99 @@ var/global/datum/ntnet/ntnet_global = new()
 			add_log("Configuration Updated. Wireless network firewall now [setting_communication ? "allows" : "disallows"] instant messaging and similar communication services.")
 		if(NTNET_SYSTEMCONTROL)
 			setting_systemcontrol = !setting_systemcontrol
-			add_log("Configuration Updated. Wireless network firewall now [setting_systemcontrol ? "allows" : "disallows"] remote control of [station_name()]'s systems.")
+			add_log("Configuration Updated. Wireless network firewall now [setting_systemcontrol ? "allows" : "disallows"] remote control of [station_name]'s systems.")
 
-/datum/ntnet/proc/does_email_exist(var/login)
+/datum/ntnet/proc/find_email_by_login(var/login)
 	for(var/datum/computer_file/data/email_account/A in ntnet_global.email_accounts)
 		if(A.login == login)
-			return 1
+			return A
 	return 0
 
+/datum/ntnet/proc/sort_email_list()
+	// improved bubble sort
+	if(ntnet_global.email_accounts.len > 1)
+		for(var/i = 1, i <= ntnet_global.email_accounts.len, i++)
+			var/flag = FALSE
+			for(var/j = 1, j <= ntnet_global.email_accounts.len - 1, j++)
+				var/datum/computer_file/data/email_account/EA = ntnet_global.email_accounts[j]
+				var/datum/computer_file/data/email_account/EA_NEXT = ntnet_global.email_accounts[j+1]
+				if(sorttext(EA.ownerName, EA_NEXT.ownerName) == -1)
+					flag = TRUE
+					ntnet_global.email_accounts.Swap(j,j+1)
+			if(!flag)
+				break
 
+// Assigning emails to mobs
 
+/datum/ntnet/proc/rename_email(mob/user, old_login, desired_name, domain)
+	var/datum/computer_file/data/email_account/account = find_email_by_login(old_login)
+	var/new_login = sanitize_for_email(desired_name)
+	new_login += "@[domain]"
+	if(new_login == old_login)
+		return	//If we aren't going to be changing the login, we quit silently.
+	if(find_email_by_login(new_login))
+		to_chat(user, "Your email could not be updated: the new username is invalid.")
+		return
+	account.ownerName = user.real_name
+	account.login = new_login
+	to_chat(user, "Your email account address has been changed to <b>[new_login]</b>. This information has also been placed into your notes.")
+	add_log("Email address changed for [user]: [old_login] changed to [new_login]")
+	if(user.mind)
+		user.mind.initial_email_login["login"] = new_login
+		user.mind.store_memory("Your email account address has been changed to [new_login].")
+
+	if(issilicon(user))
+		var/mob/living/silicon/S = user
+		var/datum/nano_module/email_client/my_client = S.get_subsystem_from_path(/datum/nano_module/email_client)
+		if(my_client)
+			my_client.stored_login = new_login
+			my_client.stored_password = account.password
+			my_client.log_in()
+	sort_email_list()
+
+//Used for initial email generation.
+/datum/ntnet/proc/create_email(mob/user, desired_name, domain)
+	desired_name = sanitize_for_email(desired_name)
+	var/login = "[desired_name]@[domain]"
+	// It is VERY unlikely that we'll have two players, in the same round, with the same name and branch, but still, this is here.
+	// If such conflict is encountered, a random number will be appended to the email address. If this fails too, no email account will be created.
+	if(find_email_by_login(login))
+		login = "[desired_name][random_id(/datum/computer_file/data/email_account/, 100, 999)]@[domain]"
+	// If even fallback login generation failed, just don't give them an email. The chance of this happening is astronomically low.
+	if(find_email_by_login(login))
+		to_chat(user, "You were not assigned an email address.")
+		user.mind.store_memory("You were not assigned an email address.")
+	else
+		var/datum/computer_file/data/email_account/EA = new/datum/computer_file/data/email_account()
+		EA.password = GenerateKey()
+		EA.login = login
+		EA.ownerName = user.real_name
+		to_chat(user, "Your email account address is <b>[EA.login]</b> and the password is <b>[EA.password]</b>. This information has also been placed into your notes.")
+		if(user.mind)
+			user.mind.initial_email_login["login"] = EA.login
+			user.mind.initial_email_login["password"] = EA.password
+			user.mind.store_memory("Your email account address is [EA.login] and the password is [EA.password].")
+		if(ishuman(user))
+			for(var/obj/item/modular_computer/C in user.GetAllContents())
+				var/datum/computer_file/program/email_client/P = C.getProgramByType(/datum/computer_file/program/email_client)
+				if(P)
+					P.stored_login = EA.login
+					P.stored_password = EA.password
+					P.update_email()
+		else if(issilicon(user))
+			var/mob/living/silicon/S = user
+			var/datum/nano_module/email_client/my_client = S.get_subsystem_from_path(/datum/nano_module/email_client)
+			if(my_client)
+				my_client.stored_login = EA.login
+				my_client.stored_password = EA.password
+				my_client.log_in()
+	sort_email_list()
+
+/mob/proc/create_or_rename_email(newname, domain)
+	if(!mind)
+		return
+	var/old_email = mind.initial_email_login["login"]
+	if(!old_email)
+		ntnet_global.create_email(src, newname, domain)
+	else
+		ntnet_global.rename_email(src, old_email, newname, domain)

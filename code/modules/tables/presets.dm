@@ -1,57 +1,112 @@
 /obj/structure/table/standard
 	icon_state = "plain_preview"
-	color = COLOR_OFF_WHITE
-	material = DEFAULT_TABLE_MATERIAL
+	color = "#EEEEEE"
+	New()
+		material = get_material_by_name(MATERIAL_PLASTIC)
+		..()
 
 /obj/structure/table/steel
 	icon_state = "plain_preview"
-	color = COLOR_GRAY40
-	material = DEFAULT_WALL_MATERIAL
+	color = "#666666"
+	New()
+		material = get_material_by_name(MATERIAL_STEEL)
+		..()
 
 /obj/structure/table/marble
 	icon_state = "stone_preview"
-	color = COLOR_GRAY80
-	material = "marble"
+	color = "#CCCCCC"
+	New()
+		material = get_material_by_name(MATERIAL_MARBLE)
+		..()
 
 /obj/structure/table/reinforced
 	icon_state = "reinf_preview"
-	color = COLOR_OFF_WHITE
-	material = DEFAULT_TABLE_MATERIAL
-	reinforced = DEFAULT_WALL_MATERIAL
+	color = "#EEEEEE"
+	New()
+		material = get_material_by_name(MATERIAL_PLASTIC)
+		reinforced = get_material_by_name(MATERIAL_STEEL)
+		..()
 
 /obj/structure/table/steel_reinforced
 	icon_state = "reinf_preview"
-	color = COLOR_GRAY40
-	material = DEFAULT_WALL_MATERIAL
-	reinforced = DEFAULT_WALL_MATERIAL
+	color = "#666666"
+	New()
+		material = get_material_by_name(MATERIAL_STEEL)
+		reinforced = get_material_by_name(MATERIAL_STEEL)
+		..()
+
+/obj/structure/table/holosteel_reinforced
+	icon_state = "holo_preview"
+	color = "#666666"
+	New()
+		material = get_material_by_name("holo[MATERIAL_STEEL]")
+		reinforced = get_material_by_name("holo[MATERIAL_STEEL]")
+		..()
 
 /obj/structure/table/woodentable
-	icon_state = "solid_preview"
-	color = COLOR_BROWN_ORANGE
-	material = "wood"
+	icon_state = "plain_preview"
+	color = "#824B28"
+	New()
+		material = get_material_by_name(MATERIAL_WOOD)
+		..()
 
 /obj/structure/table/gamblingtable
 	icon_state = "gamble_preview"
-	carpeted = 1
-	material = "wood"
+	New()
+		material = get_material_by_name(MATERIAL_WOOD)
+		custom_appearance = custom_table_appearance["Gambling"] //gambling carpet
+		..()
 
 /obj/structure/table/glass
 	icon_state = "plain_preview"
-	color = COLOR_DEEP_SKY_BLUE
+	color = "#00E1FF"
 	alpha = 77 // 0.3 * 255
-	material = "glass"
+	New()
+		material = get_material_by_name(MATERIAL_GLASS)
+		..()
 
-/obj/structure/table/glass/pglass
-	color = "#8f29a3"
-	material = "phglass"
+/obj/structure/table/plasmaglass
+	icon_state = "plain_preview"
+	color = "#FC2BC5"
+	alpha = 77 // 0.3 * 255
+	New()
+		material = get_material_by_name(MATERIAL_PLASMAGLASS)
+		..()
 
 /obj/structure/table/holotable
 	icon_state = "holo_preview"
-	color = COLOR_OFF_WHITE
-/obj/structure/table/holotable/New()
-	material = "holo[DEFAULT_TABLE_MATERIAL]"
-	..()
+	color = "#EEEEEE"
+	New()
+		material = get_material_by_name("holo[MATERIAL_PLASTIC]")
+		..()
 
 /obj/structure/table/holo_woodentable
 	icon_state = "holo_preview"
-	material = "holowood"
+	New()
+		material = get_material_by_name("holowood")
+		..()
+
+/obj/structure/table/bar_special
+	icon_state = "bar_table_preview"
+	New()
+		material = get_material_by_name(MATERIAL_STEEL)
+		custom_appearance = custom_table_appearance["Bar - special"] //bar table
+		reinforced = get_material_by_name(MATERIAL_STEEL)
+		..()
+
+/obj/structure/table/holobar_special
+	icon_state = "bar_table_preview"
+	New()
+		material = get_material_by_name("holo[MATERIAL_STEEL]")
+		custom_appearance = custom_table_appearance["Bar - special"] //bar table
+		reinforced = get_material_by_name("holo[MATERIAL_STEEL]")
+		..()
+
+/obj/structure/table/onestar
+	icon_state = "onestar_preview"
+	New()
+		material = get_material_by_name(MATERIAL_STEEL)
+		custom_appearance = custom_table_appearance["OneStar"] //one star table
+		reinforced = get_material_by_name(MATERIAL_STEEL)
+		name = "one star table"
+		..()

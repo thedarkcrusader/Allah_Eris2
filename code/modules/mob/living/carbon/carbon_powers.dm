@@ -1,3 +1,5 @@
+
+//FILE: Borer gets powers from this one once he Assumes Control
 //Brain slug proc for voluntary removal of control.
 /mob/living/carbon/proc/release_control()
 
@@ -5,87 +7,70 @@
 	set name = "Release Control"
 	set desc = "Release control of your host's body."
 
-	var/mob/living/simple_animal/borer/B = has_brain_worms()
+	var/mob/living/simple_animal/borer/B = get_brain_worms()
 
 	if(B && B.host_brain)
-		to_chat(src, "<span class='danger'>You withdraw your probosci, releasing control of [B.host_brain]</span>")
+		to_chat(src, "\red <B>You withdraw your probosci, releasing control of [B.host_brain]</B>")
 
-		B.detatch()
+		B.detach()
 
-		verbs -= /mob/living/carbon/proc/release_control
-		verbs -= /mob/living/carbon/proc/punish_host
-		verbs -= /mob/living/carbon/proc/spawn_larvae
+		add_verb(src, list(
+			/mob/living/carbon/human/proc/commune,
+			/mob/living/carbon/human/proc/psychic_whisper,
+			/mob/living/carbon/human/proc/tackle,
+			/mob/living/carbon/proc/spawn_larvae,
+			/mob/living/carbon/proc/talk_host))
 
 	else
-		to_chat(src, "<span class='danger'>ERROR NO BORER OR BRAINMOB DETECTED IN THIS MOB, THIS IS A BUG !</span>")
+		to_chat(src, "\red <B>ERROR NO BORER OR BRAINMOB DETECTED IN THIS MOB, THIS IS A BUG !</B>")
 
-//Brain slug proc for tormenting the host.
-/mob/living/carbon/proc/punish_host()
+//Brain slug proc for talking to the host.
+/mob/living/carbon/proc/talk_host()
 	set category = "Abilities"
-	set name = "Torment host"
-	set desc = "Punish your host with agony."
+	set name = "Talk to captive host"
+	set desc = "Talk to your captive host."
 
-	var/mob/living/simple_animal/borer/B = has_brain_worms()
+	var/mob/living/simple_animal/borer/B = get_brain_worms()
+	var/text = null
 
 	if(!B)
 		return
 
 	if(B.host_brain.ckey)
-		to_chat(src, "<span class='danger'>You send a punishing spike of psychic agony lancing into your host's brain.</span>")
-		if (!can_feel_pain())
-			to_chat(B.host_brain, "<span class='warning'>You feel a strange sensation as a foreign influence prods your mind.</span>")
-			to_chat(src, "<span class='danger'>It doesn't seem to be as effective as you hoped.</span>")
-		else
-			to_chat(B.host_brain, "<span class='danger'><FONT size=3>Horrific, burning agony lances through you, ripping a soundless scream from your trapped mind!</FONT></span>")
+		text = input("What would you like to say?", "Speak to captive host", null, null)
+		text = capitalize(sanitize(text))
+		if(!text) 
+			return
+		log_say("Borer said to its host [text]")
+
+		to_chat(src, "You say to your host: [text]")
+		to_chat(B.host_brain, "YOU say to yourself: [text]")
 
 /mob/living/carbon/proc/spawn_larvae()
 	set category = "Abilities"
 	set name = "Reproduce"
 	set desc = "Spawn several young."
 
-	var/mob/living/simple_animal/borer/B = has_brain_worms()
-
+	var/mob/living/simple_animal/borer/B = get_brain_worms()
+	var/reproduce_cost = (round(B.max_chemicals_inhost * 0.75))
 	if(!B)
 		return
 
-	if(B.chemicals >= 100)
-		to_chat(src, "<span class='danger'>Your host twitches and quivers as you rapidly excrete a larva from your sluglike body.</span>")
-		visible_message("<span class='danger'>\The [src] heaves violently, expelling a rush of vomit and a wriggling, sluglike creature!</span>")
-		B.chemicals -= 100
+	if(B.chemicals >= reproduce_cost)
+		to_chat(src, "\red <B>Your host twitches and quivers as you rapidly excrete a larva from your sluglike body.</B>")
+		visible_message("\red <B>[src] heaves violently, expelling a rush of vomit and a wriggling, sluglike creature!</B>")
+		B.chemicals -= reproduce_cost
 		B.has_reproduced = 1
+		if(istype(B.host, /mob/living/carbon/human/) && !B.host.isMonkey())// this is a mess but host's var grabs "[human_name] (mob/living/carbon/human/)"
+			B.borer_add_exp(25)
+		else
+			to_chat(src, SPAN_WARNING("You do not have anything to learn from this host. Find a human!"))
+
 
 		new /obj/effect/decal/cleanable/vomit(get_turf(src))
 		playsound(loc, 'sound/effects/splat.ogg', 50, 1)
-		new /mob/living/simple_animal/borer(get_turf(src), B.generation + 1)
+		new /mob/living/simple_animal/borer(get_turf(src))
 
 	else
-		to_chat(src, "<span class='warning'>You do not have enough chemicals stored to reproduce.</span>")
+		to_chat(src, "You do not have enough chemicals stored to reproduce. (You need [reproduce_cost]).")
 		return
-
-/**
- *  Attempt to devour victim
- *
- *  Returns TRUE on success, FALSE on failure
- */
-/mob/living/carbon/proc/devour(atom/movable/victim)
-	var/can_eat = can_devour(victim)
-	if(!can_eat)
-		return FALSE
-	var/eat_speed = 100
-	if(can_eat == DEVOUR_FAST)
-		eat_speed = 30
-	src.visible_message("<span class='danger'>\The [src] is attempting to devour \the [victim]!</span>")
-	var/mob/target = victim
-	if(isobj(victim))
-		target = src
-	if(!do_mob(src,target,eat_speed))
-		return FALSE
-	src.visible_message("<span class='danger'>\The [src] devours \the [victim]!</span>")
-	if(ismob(victim))
-		admin_attack_log(src, victim, "Devoured.", "Was devoured by.", "devoured")
-	else
-		src.drop_from_inventory(victim)
-	victim.forceMove(src)
-	src.stomach_contents.Add(victim)
-
-	return TRUE

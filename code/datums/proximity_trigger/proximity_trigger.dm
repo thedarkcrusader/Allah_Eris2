@@ -32,9 +32,6 @@ var/const/PROXIMITY_EXCLUDE_HOLDER_TURF = 1 // When acquiring turfs to monitor, 
 
 	var/decl/turf_selection/turf_selection
 
-/datum/proximity_trigger/line
-	turf_selection = /decl/turf_selection/line
-
 /datum/proximity_trigger/square
 	turf_selection = /decl/turf_selection/square
 
@@ -148,29 +145,3 @@ var/const/PROXIMITY_EXCLUDE_HOLDER_TURF = 1 // When acquiring turfs to monitor, 
 	. = turf_selection.get_turfs(holder, range_)
 	if(proximity_flags & PROXIMITY_EXCLUDE_HOLDER_TURF)
 		. -= get_turf(holder)
-
-
-/obj/item/proxy_debug
-	var/image/overlay
-	var/proxy_type
-
-/obj/item/proxy_debug/line
-	proxy_type = /datum/proximity_trigger/line
-
-/obj/item/proxy_debug/square
-	proxy_type = /datum/proximity_trigger/square
-
-/obj/item/proxy_debug/New()
-	..()
-	overlay = image('icons/misc/mark.dmi', icon_state = "x3")
-	var/datum/proximity_trigger/a = new proxy_type(src, /obj/item/proxy_debug/proc/turf_entered, /obj/item/proxy_debug/proc/update_turfs)
-	a.register_turfs()
-
-/obj/item/proxy_debug/proc/turf_entered(var/atom/A)
-	visible_message("[A] entered my range!")
-
-/obj/item/proxy_debug/proc/update_turfs(var/list/old_turfs, var/list/new_turfs)
-	for(var/turf/T in old_turfs)
-		T.overlays -= overlay
-	for(var/turf/T in new_turfs)
-		T.overlays += overlay

@@ -8,12 +8,12 @@
 	desc = "A solar directional tracker."
 	icon = 'icons/obj/power.dmi'
 	icon_state = "tracker"
-	anchored = 1
-	density = 1
-	use_power = 0
+	anchored = TRUE
+	density = TRUE
+	use_power = NO_POWER_USE
 
 	var/id = 0
-	var/sun_angle = 0		// sun angle as set by sun datum
+	var/sun_angle = 0		// sun angle as set by SSsun
 	var/obj/machinery/power/solar_control/control = null
 
 /obj/machinery/power/tracker/New(var/turf/loc, var/obj/item/solar_assembly/S)
@@ -23,7 +23,7 @@
 
 /obj/machinery/power/tracker/Destroy()
 	unset_control() //remove from control computer
-	..()
+	. = ..()
 
 //set the control of the tracker to a given computer if closer than SOLAR_MAX_DIST
 /obj/machinery/power/tracker/proc/set_control(var/obj/machinery/power/solar_control/SC)
@@ -43,7 +43,7 @@
 		S = new /obj/item/solar_assembly(src)
 		S.glass_type = /obj/item/stack/material/glass
 		S.tracker = 1
-		S.anchored = 1
+		S.anchored = TRUE
 	S.loc = src
 	update_icon()
 
@@ -57,27 +57,26 @@
 	if(powernet && (powernet == control.powernet)) //update if we're still in the same powernet
 		control.cdir = angle
 
-/obj/machinery/power/tracker/attackby(var/obj/item/W, var/mob/user)
+/obj/machinery/power/tracker/attackby(obj/item/I, mob/user)
 
-	if(isCrowbar(W))
-		playsound(src.loc, 'sound/machines/click.ogg', 50, 1)
-		user.visible_message("<span class='notice'>[user] begins to take the glass off the solar tracker.</span>")
-		if(do_after(user, 50,src))
+	if(QUALITY_PRYING in I.tool_qualities)
+		if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, QUALITY_PRYING, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
 			var/obj/item/solar_assembly/S = locate() in src
 			if(S)
 				S.loc = src.loc
 				S.give_glass()
-			playsound(src.loc, 'sound/items/Deconstruct.ogg', 50, 1)
-			user.visible_message("<span class='notice'>[user] takes the glass off the tracker.</span>")
+			user.visible_message(SPAN_NOTICE("[user] takes the glass off the tracker."))
 			qdel(src)
 		return
 	..()
 
 // Tracker Electronic
 
-/obj/item/tracker_electronics
-
+/obj/item/electronics/tracker
 	name = "tracker electronics"
+	desc = "A board that serves to turn a solar panel into a sun tracker."
 	icon = 'icons/obj/doors/door_assembly.dmi'
 	icon_state = "door_electronics"
+	matter = list(MATERIAL_STEEL = 10, MATERIAL_PLASTIC = 10, MATERIAL_SILVER = 2)
 	w_class = ITEM_SIZE_SMALL
+	price_tag = 120

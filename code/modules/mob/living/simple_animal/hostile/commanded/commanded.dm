@@ -1,23 +1,26 @@
+#define COMMANDED_STOP 6
+#define COMMANDED_FOLLOW 7
+
 /mob/living/simple_animal/hostile/commanded
 	name = "commanded"
 	stance = COMMANDED_STOP
 	melee_damage_lower = 0
 	melee_damage_upper = 0
-	density = 0
+	density = FALSE
+	attacktext = "swarmed"
 	var/list/command_buffer = list()
 	var/list/known_commands = list("stay", "stop", "attack", "follow")
 	var/mob/master = null //undisputed master. Their commands hold ultimate sway and ultimate power.
 	var/list/allowed_targets = list() //WHO CAN I KILL D:
-	var/retribution = 1 //whether or not they will attack us if we attack them like some kinda dick.
 
-/mob/living/simple_animal/hostile/commanded/hear_say(var/message, var/verb = "says", var/datum/language/language = null, var/alt_name = "", var/italics = 0, var/mob/speaker = null, var/sound/speech_sound, var/sound_vol)
-	if((weakref(speaker) in friends) || speaker == master)
+/mob/living/simple_animal/hostile/commanded/hear_say(var/message, var/verb = "says", var/datum/language/language, var/alt_name = "", var/italics = 0, var/mob/speaker = null, var/sound/speech_sound, var/sound_vol)
+	if((speaker in friends) || speaker == master)
 		command_buffer.Add(speaker)
 		command_buffer.Add(lowertext(html_decode(message)))
 	return 0
 
-/mob/living/simple_animal/hostile/commanded/hear_radio(var/message, var/verb="says", var/datum/language/language=null, var/part_a, var/part_b, var/part_c, var/mob/speaker = null, var/hard_to_hear = 0)
-	if((weakref(speaker) in friends) || speaker == master)
+/mob/living/simple_animal/hostile/commanded/hear_radio(var/message, var/verb="says", var/datum/language/language, var/part_a, var/part_b, var/mob/speaker = null, var/hard_to_hear = 0)
+	if((speaker in friends) || speaker == master)
 		command_buffer.Add(speaker)
 		command_buffer.Add(lowertext(html_decode(message)))
 	return 0
@@ -27,7 +30,7 @@
 		var/mob/speaker = command_buffer[1]
 		var/text = command_buffer[2]
 		var/filtered_name = lowertext(html_decode(name))
-		if(dd_hasprefix(text,filtered_name) || dd_hasprefix(text,"everyone") || dd_hasprefix(text, "everybody")) //in case somebody wants to command 8 bears at once.
+		if(dd_hasprefix(text,filtered_name))
 			var/substring = copytext(text,length(filtered_name)+1) //get rid of the name.
 			listen(speaker,substring)
 		command_buffer.Remove(command_buffer[1],command_buffer[2])
@@ -53,11 +56,6 @@
 			continue
 		if(isliving(A))
 			M = A
-		if(istype(A,/obj/mecha))
-			var/obj/mecha/mecha = A
-			if(!mecha.occupant)
-				continue
-			M = mecha.occupant
 		if(M && M.stat)
 			continue
 		if(mode == "specific")
@@ -66,7 +64,7 @@
 			stance = new_stance
 			return A
 		else
-			if(M == master || (weakref(M) in friends))
+			if(M == master || (M in friends))
 				continue
 			stance = new_stance
 			return A
@@ -77,6 +75,7 @@
 	if(!target_mob)
 		return
 	if(target_mob in ListTargets(10))
+		set_glide_size(DELAY2GLIDESIZE(move_to_delay))
 		walk_to(src,target_mob,1,move_to_delay)
 
 /mob/living/simple_animal/hostile/commanded/proc/commanded_stop() //basically a proc that runs whenever we are asked to stay put. Probably going to remain unused.
@@ -108,7 +107,7 @@
 	var/list/possible_targets = hearers(src,10)
 	. = list()
 	for(var/mob/M in possible_targets)
-		if(filter_friendlies && ((weakref(M) in friends) || M.faction == faction || M == master))
+		if(filter_friendlies && ((M in friends) || M.faction == faction || M == master))
 			continue
 		var/found = 0
 		if(findtext(text, "[M]"))
@@ -140,7 +139,6 @@
 /mob/living/simple_animal/hostile/commanded/proc/stay_command(var/mob/speaker,var/text)
 	target_mob = null
 	stance = COMMANDED_STOP
-	stop_automated_movement = 1
 	walk_to(src,0)
 	return 1
 
@@ -174,19 +172,19 @@
 /mob/living/simple_animal/hostile/commanded/hit_with_weapon(obj/item/O, mob/living/user, var/effective_force, var/hit_zone)
 	//if they attack us, we want to kill them. None of that "you weren't given a command so free kill" bullshit.
 	. = ..()
-	if(!. && retribution)
+	if(!.)
 		stance = HOSTILE_STANCE_ATTACK
 		target_mob = user
 		allowed_targets += user //fuck this guy in particular.
-		if(weakref(user) in friends) //We were buds :'(
-			friends -= weakref(user)
+		if(user in friends) //We were buds :'(
+			friends -= user
 
 
 /mob/living/simple_animal/hostile/commanded/attack_hand(mob/living/carbon/human/M as mob)
 	..()
-	if(M.a_intent == I_HURT && retribution) //assume he wants to hurt us.
+	if(M.a_intent == I_HURT) //assume he wants to hurt us.
 		target_mob = M
 		allowed_targets += M
 		stance = HOSTILE_STANCE_ATTACK
-		if(weakref(M) in friends)
-			friends -= weakref(M)
+		if(M in friends)
+			friends -= M

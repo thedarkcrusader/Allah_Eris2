@@ -1,4 +1,5 @@
-#define CYBORG_POWER_USAGE_MULTIPLIER 2.5 // Multiplier for amount of power cyborgs use.
+#define CYBORG_POWER_USAGE_MULTIPLIER 1.5 // Multiplier for amount of power cyborgs use.
+
 
 /mob/living/silicon/robot
 	name = "Cyborg"
@@ -7,12 +8,15 @@
 	icon_state = "robot"
 	maxHealth = 200
 	health = 200
-
+	defaultHUD = "BorgStyle"
 	mob_bump_flag = ROBOT
 	mob_swap_flags = ROBOT|MONKEY|SLIME|SIMPLE_ANIMAL
 	mob_push_flags = ~HEAVY //trundle trundle
+	var/robot_traits = null
+	// managed lists that contains all cyborg upgrade modules appliedto them
+	var/robot_upgrades = list()
 
-	var/lights_on = 0 // Is our integrated light on?
+	var/lights_on = FALSE // Is our integrated light on?
 	var/used_power_this_tick = 0
 	var/sight_mode = 0
 	var/custom_name = ""
@@ -21,20 +25,24 @@
 	var/crisis_override = 0
 	var/integrated_light_power = 6
 	var/datum/wires/robot/wires
+	var/ai_access = TRUE
+	var/power_efficiency = 1
+
+
+	mob_size = MOB_LARGE
 
 //Icon stuff
 
-	var/static/list/eye_overlays
 	var/icontype 				//Persistent icontype tracking allows for cleaner icon updates
-	var/module_sprites[0] 		//Used to store the associations between sprite names and sprite index.
+	var/list/module_sprites = list() 		//Used to store the associations between sprite names and sprite index.
 	var/icon_selected = 1		//If icon selection has been completed yet
-	var/icon_selection_tries = 0//Remaining attempts to select icon before a selection is forced
 
 //Hud stuff
 
+/*	var/obj/screen/cells = null
 	var/obj/screen/inv1 = null
 	var/obj/screen/inv2 = null
-	var/obj/screen/inv3 = null
+	var/obj/screen/inv3 = null*/
 
 	var/shown_robot_modules = 0 //Used to determine whether they have the module menu shown or not
 	var/obj/screen/robot_modules_background
@@ -46,12 +54,11 @@
 	var/module_state_2 = null
 	var/module_state_3 = null
 
-	silicon_camera = /obj/item/device/camera/siliconcam/robot_camera
-	silicon_radio = /obj/item/device/radio/borg
-
+	var/obj/item/device/radio/borg/radio = null
 	var/mob/living/silicon/ai/connected_ai = null
-	var/obj/item/cell/cell = /obj/item/cell/high
+	var/obj/item/cell/large/cell
 	var/obj/machinery/camera/camera = null
+	var/obj/item/tank/jetpack/synthetic/jetpack = null
 
 	var/cell_emp_mult = 2
 
@@ -60,35 +67,31 @@
 
 	var/obj/item/device/mmi/mmi = null
 
-	var/obj/item/device/pda/ai/rbPDA = null
-
 	var/obj/item/stock_parts/matter_bin/storage = null
 
-	var/opened = 0
-	var/emagged = 0
-	var/wiresexposed = 0
-	var/locked = 1
+	var/opened = FALSE
+	var/wiresexposed = FALSE
+	var/locked = TRUE
 	var/has_power = 1
-	var/spawn_module = null
+	var/death_notified = FALSE
 
-	var/spawn_sound = 'sound/voice/liveagain.ogg'
-	var/pitch_toggle = 1
 	var/list/req_access = list(access_robotics)
 	var/ident = 0
+	//var/list/laws = list()
 	var/viewalerts = 0
 	var/modtype = "Default"
 	var/lower_mod = 0
-	var/jetpack = 0
 	var/datum/effect/effect/system/ion_trail_follow/ion_trail = null
-	var/datum/effect/effect/system/spark_spread/spark_system//So they can initialize sparks whenever/N
+	var/datum/effect/effect/system/spark_spread/spark_system //So they can initialize sparks whenever/N
 	var/jeton = 0
 	var/killswitch = 0
 	var/killswitch_time = 60
 	var/weapon_lock = 0
 	var/weaponlock_time = 120
-	var/lawupdate = 1 //Cyborgs will sync their laws with their AI by default
-	var/lockcharge //If a robot is locked down
-	var/speed = 0 //Cause sec borgs gotta go fast //No they dont!
+	var/lawupdate = TRUE //Cyborgs will sync their laws with their AI by default
+	var/lockcharge //Used when locking down a borg to preserve cell charge
+	/// Humans get a -1 by default from any shoe. , robots had a 0.25 added by default.
+	var/speed = -0.75
 	var/scrambledcodes = 0 // Used to determine if a borg shows up on the robotics console.  Setting to one hides them.
 	var/tracking_entities = 0 //The number of known entities currently accessing the internal camera
 	var/braintype = "Cyborg"
@@ -99,43 +102,82 @@
 		/mob/living/silicon/robot/proc/robot_checklaws
 	)
 
+/mob/living/silicon/robot/proc/AddTrait(trait_type)
+	if(robot_traits & trait_type)
+		return FALSE
+	robot_traits |= trait_type
+	return TRUE
+
+/mob/living/silicon/robot/proc/HasTrait(trait_type)
+	if(robot_traits & trait_type)
+		return TRUE
+	return FALSE
+
+/mob/living/silicon/robot/proc/RemoveTrait(trait_type)
+	if(robot_traits & trait_type)
+		robot_traits &= ~trait_type
+		return TRUE
+	return FALSE
+
+/mob/living/silicon/robot/proc/AddTraitsFromParts()
+	for(var/datum/robot_component/comp in components)
+		if(comp.robot_trait)
+			AddTrait(comp.robot_trait)
+
+/mob/living/silicon/robot/proc/RemoveTraitsFromParts()
+	for(var/datum/robot_component/comp in components)
+		if(comp.robot_trait)
+			RemoveTrait(comp.robot_trait)
+
+/mob/living/silicon/robot/proc/UpdateTraitsFromParts()
+	RemoveTraitsFromParts()
+	AddTraitsFromParts()
+
 /mob/living/silicon/robot/New(loc,var/unfinished = 0)
 	spark_system = new /datum/effect/effect/system/spark_spread()
 	spark_system.set_up(5, 0, src)
 	spark_system.attach(src)
 
-	add_language("Robot Talk", 1)
-	add_language(LANGUAGE_EAL, 1)
+	add_language(LANGUAGE_ROBOT, 1)
 
 	wires = new(src)
 
-	robot_modules_background = new()
+	robot_modules_background = new(_name = "storage")
 	robot_modules_background.icon_state = "block"
-	ident = random_id(/mob/living/silicon/robot, 1, 999)
+	//Objects that appear on screen are on layer ABOVE_HUD_LAYER, UI should be just below it.
+	robot_modules_background.layer = HUD_LAYER
+	robot_modules_background.plane = HUD_PLANE
+
+	ident = rand(1, 999)
 	module_sprites["Basic"] = "robot"
 	icontype = "Basic"
-	updatename(modtype)
-	update_icon()
+	updatename("Default")
+	updateicon()
+
+	radio = new /obj/item/device/radio/borg(src)
+	common_radio = radio
 
 	if(!scrambledcodes && !camera)
 		camera = new /obj/machinery/camera(src)
 		camera.c_tag = real_name
-		camera.replace_networks(list(NETWORK_EXODUS,NETWORK_ROBOTS))
+		camera.replace_networks(list(NETWORK_CEV_ERIS,NETWORK_ROBOTS))
 		if(wires.IsIndexCut(BORG_WIRE_CAMERA))
 			camera.status = 0
 
-	..() // Laws, among other things, are initialized in parent New()
 	init()
 	initialize_components()
 	//if(!unfinished)
 	// Create all the robot parts.
 	for(var/V in components) if(V != "power cell")
 		var/datum/robot_component/C = components[V]
-		C.installed = 1
-		C.wrapped = new C.external_type
+		C.installed = C.installed_by_default
+		if (C.installed)
+			C.wrapped = new C.external_type
 
-	if(ispath(cell))
-		cell = new cell(src)
+	if(!cell)
+		cell = new /obj/item/cell/large/moebius/high(src)
+
+	..()
 
 	if(cell)
 		var/datum/robot_component/cell_component = components["power cell"]
@@ -144,15 +186,16 @@
 
 	add_robot_verbs()
 
-	hud_list[HEALTH_HUD]      = new /image/hud_overlay('icons/mob/hud.dmi', src, "hudblank")
-	hud_list[STATUS_HUD]      = new /image/hud_overlay('icons/mob/hud.dmi', src, "hudhealth100")
-	hud_list[LIFE_HUD]        = new /image/hud_overlay('icons/mob/hud.dmi', src, "hudhealth100")
-	hud_list[ID_HUD]          = new /image/hud_overlay('icons/mob/hud.dmi', src, "hudblank")
-	hud_list[WANTED_HUD]      = new /image/hud_overlay('icons/mob/hud.dmi', src, "hudblank")
-	hud_list[IMPLOYAL_HUD]    = new /image/hud_overlay('icons/mob/hud.dmi', src, "hudblank")
-	hud_list[IMPCHEM_HUD]     = new /image/hud_overlay('icons/mob/hud.dmi', src, "hudblank")
-	hud_list[IMPTRACK_HUD]    = new /image/hud_overlay('icons/mob/hud.dmi', src, "hudblank")
-	hud_list[SPECIALROLE_HUD] = new /image/hud_overlay('icons/mob/hud.dmi', src, "hudblank")
+	hud_list[HEALTH_HUD] = image('icons/mob/hud.dmi', src, "hudblank")
+	hud_list[STATUS_HUD] = image('icons/mob/hud.dmi', src, "hudhealth100")
+	hud_list[LIFE_HUD] = image('icons/mob/hud.dmi', src, "hudhealth100")
+	hud_list[ID_HUD] = image('icons/mob/hud.dmi', src, "hudblank")
+	hud_list[WANTED_HUD] = image('icons/mob/hud.dmi', src, "hudblank")
+	hud_list[IMPCHEM_HUD] = image('icons/mob/hud.dmi', src, "hudblank")
+	hud_list[IMPTRACK_HUD] = image('icons/mob/hud.dmi', src, "hudblank")
+	hud_list[SPECIALROLE_HUD] = image('icons/mob/hud.dmi', src, "hudblank")
+
+	create_HUD()
 
 /mob/living/silicon/robot/proc/recalculate_synth_capacities()
 	if(!module || !module.synths)
@@ -164,19 +207,19 @@
 		M.set_multiplier(mult)
 
 /mob/living/silicon/robot/proc/init()
-	if(ispath(module))
-		new module(src)
-	if(lawupdate)
-		var/new_ai = select_active_ai_with_fewest_borgs()
-		if(new_ai)
-			lawupdate = 1
-			connect_to_ai(new_ai)
-		else
-			lawupdate = 0
+	aiCamera = new/obj/item/device/camera/siliconcam/robot_camera(src)
+	laws = new /datum/ai_laws/eris()
+	var/new_ai = select_active_ai_with_fewest_borgs()
+	if(new_ai)
+		lawupdate = TRUE
+		connect_to_ai(new_ai)
+	else
+		lawupdate = FALSE
 
-	playsound(loc, spawn_sound, 75, pitch_toggle)
+	playsound(loc, 'sound/voice/liveagain.ogg', 75, 1)
+	AddMovementHandler(/datum/movement_handler/robot/use_power, /datum/movement_handler/mob/space)
 
-/mob/living/silicon/robot/fully_replace_character_name(pickedName as text)
+/mob/living/silicon/robot/SetName(pickedName as text)
 	custom_name = pickedName
 	updatename()
 
@@ -188,47 +231,39 @@
 /mob/living/silicon/robot/drain_power(var/drain_check, var/surge, var/amount = 0)
 
 	if(drain_check)
-		return 1
+		return TRUE
 
-	if(!cell || !cell.charge)
-		return 0
+	if(!cell || cell.is_empty())
+		return FALSE
 
 	// Actual amount to drain from cell, using CELLRATE
-	var/cell_amount = amount * CELLRATE
+	var/cell_amount = (amount * CELLRATE)/power_efficiency
 
-	if(cell.charge > cell_amount)
+	if(cell.checked_use(cell_amount))
 		// Spam Protection
 		if(prob(10))
-			to_chat(src, "<span class='danger'>Warning: Unauthorized access through power channel [rand(11,29)] detected!</span>")
-		cell.use(cell_amount)
+			to_chat(src, SPAN_DANGER("Warning: Unauthorized access through power channel [rand(11,29)] detected!"))
 		return amount
-	return 0
-
-// setup the PDA and its name
-/mob/living/silicon/robot/proc/setup_PDA()
-	if (!rbPDA)
-		rbPDA = new/obj/item/device/pda/ai(src)
-	rbPDA.set_name_and_job(custom_name,"[modtype] [braintype]")
+	return FALSE
 
 //If there's an MMI in the robot, have it ejected when the mob goes away. --NEO
 //Improved /N
 /mob/living/silicon/robot/Destroy()
-	if(mmi)//Safety for when a cyborg gets dust()ed. Or there is no MMI inside.
-		if(mind)
-			mmi.dropInto(loc)
-			if(mmi.brainmob)
-				mind.transfer_to(mmi.brainmob)
-			else
-				to_chat(src, "<span class='danger'>Oops! Something went very wrong, your MMI was unable to receive your mind. You have been ghosted. Please make a bug report so we can fix this bug.</span>")
-				ghostize()
-				//ERROR("A borg has been destroyed, but its MMI lacked a brainmob, so the mind could not be transferred. Player: [ckey].")
-			mmi = null
+	if(mmi && mind)//Safety for when a cyborg gets dust()ed. Or there is no MMI inside.
+		var/turf/T = get_turf(loc)//To hopefully prevent run time errors.
+		if(T)
+			mmi.forceMove(T)
+		if(mmi.brainmob)
+			mind.transfer_to(mmi.brainmob)
 		else
-			QDEL_NULL(mmi)
+			to_chat(src, SPAN_DANGER("Oops! Something went very wrong, your MMI was unable to receive your mind. You have been ghosted. Please make a bug report so we can fix this bug."))
+			ghostize()
+			//ERROR("A borg has been destroyed, but its MMI lacked a brainmob, so the mind could not be transferred. Player: [ckey].")
+		mmi = null
 	if(connected_ai)
 		connected_ai.connected_robots -= src
-	connected_ai = null
-	QDEL_NULL(wires)
+	qdel(wires)
+	wires = null
 	return ..()
 
 /mob/living/silicon/robot/proc/set_module_sprites(var/list/new_sprites)
@@ -239,29 +274,30 @@
 		if (custom_sprite == 1)
 			var/list/valid_states = icon_states(CUSTOM_ITEM_SYNTH)
 			if("[ckey]-[modtype]" in valid_states)
-				module_sprites["Custom"] = "[src.ckey]-[modtype]"
+				module_sprites["Custom"] = "[ckey]-[modtype]"
 				icon = CUSTOM_ITEM_SYNTH
 				icontype = "Custom"
 			else
 				icontype = module_sprites[1]
 				icon = 'icons/mob/robots.dmi'
-				to_chat(src, "<span class='warning'>Custom Sprite Sheet does not contain a valid icon_state for [ckey]-[modtype]</span>")
+				to_chat(src, SPAN_WARNING("Custom Sprite Sheet does not contain a valid icon_state for [ckey]-[modtype]"))
 		else
 			icontype = module_sprites[1]
 		icon_state = module_sprites[icontype]
-	update_icon()
+
+	updateicon()
 	return module_sprites
 
 /mob/living/silicon/robot/proc/pick_module()
 	if(module)
 		return
 	var/list/modules = list()
-	modules.Add(GLOB.robot_module_types)
-	var/decl/security_state/security_state = decls_repository.get_decl(GLOB.using_map.security_state)
+	modules.Add(robot_modules) //This is a global list in robot_modules.dm
+	var/decl/security_state/security_state = decls_repository.get_decl(GLOB.maps_data.security_state)
 	if((crisis && security_state.current_security_level_is_same_or_higher_than(security_state.high_security_level)) || crisis_override) //Leaving this in until it's balanced appropriately.
-		to_chat(src, "<span class='warning'>Crisis mode active. Combat module available.</span>")
+		to_chat(src, SPAN_DANGER("Crisis mode active. Combat module available."))
 		modules+="Combat"
-	modtype = input("Please, select a module!", "Robot module", null, null) as null|anything in modules
+	modtype = input("Please, select a module!", "Robot", null, null) as null|anything in modules
 
 	if(module)
 		return
@@ -269,20 +305,42 @@
 		return
 
 	var/module_type = robot_modules[modtype]
-	new module_type(src)
+	var/obj/item/robot_module/RM = new module_type() //Spawn a dummy module to read values from
 
-	hands.icon_state = lowertext(modtype)
-	feedback_inc("cyborg_[lowertext(modtype)]",1)
+	switch(alert(src, "[RM.desc] \n \n\
+	Health: [RM.health] \n\
+	Power Efficiency: [RM.power_efficiency*100]%\n\
+	Movement Speed: [RM.speed_factor*100]%",
+	"[modtype] module", "Yes", "No"))
+		if("No")
+			//They changed their mind, abort, abort!
+			if(module)
+				return
+			QDEL_NULL(RM)
+			modtype = null
+			spawn()
+				pick_module() //Bring up the pick menu again
+			return //And abort out of this
+		if ("Yes")
+			//This time spawn the real module
+			if(module)
+				return
+			QDEL_NULL(RM)
+			new module_type(src)
+
+	//Fallback incase of runtimes
+	if (RM)
+		QDEL_NULL(RM)
+
 	updatename()
 	recalculate_synth_capacities()
-	if(module)
-		notify_ai(ROBOT_NOTIFICATION_NEW_MODULE, module.name)
+	notify_ai(ROBOT_NOTIFICATION_NEW_MODULE, module.name)
 
 /mob/living/silicon/robot/proc/updatename(var/prefix as text)
 	if(prefix)
 		modtype = prefix
 
-	if(istype(mmi, /obj/item/organ/internal/posibrain))
+	if(istype(mmi, /obj/item/device/mmi/digital/posibrain))
 		braintype = "Android"
 	else if(istype(mmi, /obj/item/device/mmi/digital/robot))
 		braintype = "Robot"
@@ -297,13 +355,9 @@
 	else
 		changed_name = "[modtype] [braintype]-[num2text(ident)]"
 
+	create_or_rename_email(changed_name, "root.rt")
 	real_name = changed_name
 	name = real_name
-	if(mind)
-		mind.name = changed_name
-
-	// if we've changed our name, we also need to update the display name for our PDA
-	setup_PDA()
 
 	//We also need to update name of internal camera.
 	if (camera)
@@ -312,47 +366,71 @@
 	if(!custom_sprite) //Check for custom sprite
 		set_custom_sprite()
 
+	//Flavour text.
+	if(client)
+		var/module_flavour = client.prefs.flavour_texts_robot[modtype]
+		if(module_flavour)
+			flavor_text = module_flavour
+		else
+			flavor_text = client.prefs.flavour_texts_robot["Default"]
 
 /mob/living/silicon/robot/verb/Namepick()
 	set category = "Silicon Commands"
 	if(custom_name)
-		return 0
+		return FALSE
 
 	spawn(0)
-		var/newname
-		newname = sanitizeSafe(input(src,"You are a robot. Enter a name, or leave blank for the default name.", "Name change","") as text, MAX_NAME_LEN)
-		if (newname)
-			custom_name = newname
-
-		updatename()
-		update_icon()
+		var/name_input
+		name_input = sanitizeName(input(src,"You are a robot. Enter a name, or leave blank for the default name.", "Name change","") as text, MAX_NAME_LEN, 1)
+		if(name_input)
+			custom_name = name_input
+			updatename()
+			updateicon()
+		else
+			to_chat(src, SPAN_WARNING("Invalid first name. It may only contain the characters A-Z, a-z, 0-9, -, ' and ."))
 
 // this verb lets cyborgs see the stations manifest
-/mob/living/silicon/robot/verb/cmd_station_manifest()
+/mob/living/silicon/robot/verb/open_manifest()
 	set category = "Silicon Commands"
 	set name = "Show Crew Manifest"
-	show_station_manifest()
+	show_manifest(src)
 
 /mob/living/silicon/robot/proc/self_diagnosis()
 	if(!is_component_functioning("diagnosis unit"))
 		return null
 
-	var/dat = "<HEAD><TITLE>[src.name] Self-Diagnosis Report</TITLE></HEAD><BODY>\n"
+	var/dat = "<HEAD><TITLE>[name] Self-Diagnosis Report</TITLE></HEAD><BODY>\n"
 	for (var/V in components)
 		var/datum/robot_component/C = components[V]
-		dat += "<b>[C.name]</b><br><table><tr><td>Brute Damage:</td><td>[C.brute_damage]</td></tr><tr><td>Electronics Damage:</td><td>[C.electronics_damage]</td></tr><tr><td>Powered:</td><td>[(!C.idle_usage || C.is_powered()) ? "Yes" : "No"]</td></tr><tr><td>Toggled:</td><td>[ C.toggled ? "Yes" : "No"]</td></table><br>"
+		dat += {"
+			<b>[C.name]</b><br><table>
+			<tr><td>Brute Damage:</td><td>[C.brute_damage]</td></tr>
+			<tr><td>Electronics Damage:</td><td>[C.electronics_damage]</td></tr>
+			<tr><td>Powered:</td><td>[(!C.idle_usage || C.is_powered()) ? "Yes" : "No"]</td></tr>
+			<tr><td>Toggled:</td><td>[ C.toggled ? "Yes" : "No"]</td>
+			</table><br>
+		"}
 
 	return dat
+
+/mob/living/silicon/robot/verb/toggle_panel_lock()
+	set name = "Toggle Panel Lock"
+	set category = "Silicon Commands"
+	to_chat(src, "You begin [locked ? "" : "un"]locking your panel.")
+	if(!opened && has_power && do_after(usr, 80) && !opened && has_power)
+		to_chat(src, "You [locked ? "un" : ""]locked your panel.")
+		locked = !locked
 
 /mob/living/silicon/robot/verb/toggle_lights()
 	set category = "Silicon Commands"
 	set name = "Toggle Lights"
 
-	if(stat == DEAD)
-		return
-
 	lights_on = !lights_on
 	to_chat(usr, "You [lights_on ? "enable" : "disable"] your integrated light.")
+	if(lights_on)
+		set_light(5)
+	else
+		set_light(0)
 	update_robot_light()
 
 /mob/living/silicon/robot/verb/self_diagnosis_verb()
@@ -360,13 +438,11 @@
 	set name = "Self Diagnosis"
 
 	if(!is_component_functioning("diagnosis unit"))
-		to_chat(src, "<span class='warning'>Your self-diagnosis component isn't functioning.</span>")
-		return
+		to_chat(src, SPAN_DANGER("Your self-diagnosis component isn't functioning."))
 
 	var/datum/robot_component/CO = get_component("diagnosis unit")
 	if (!cell_use_power(CO.active_usage))
-		to_chat(src, "<span class='warning'>Low Power.</span>")
-		return
+		to_chat(src, SPAN_DANGER("Low Power."))
 	var/dat = self_diagnosis()
 	src << browse(dat, "window=robotdiagnosis")
 
@@ -390,10 +466,11 @@
 	var/datum/robot_component/C = components[toggle]
 	if(C.toggled)
 		C.toggled = 0
-		to_chat(src, "<span class='warning'>You disable [C.name].</span>")
+		to_chat(src, SPAN_DANGER("You disable [C.name]."))
 	else
 		C.toggled = 1
-		to_chat(src, "<span class='warning'>You enable [C.name].</span>")
+		to_chat(src, SPAN_DANGER("You enable [C.name]."))
+
 /mob/living/silicon/robot/proc/update_robot_light()
 	if(lights_on)
 		if(intenselight)
@@ -403,238 +480,297 @@
 	else
 		set_light(0)
 
-// this function displays jetpack pressure in the stat panel
-/mob/living/silicon/robot/proc/show_jetpack_pressure()
-	// if you have a jetpack, show the internal tank pressure
-	var/obj/item/tank/jetpack/current_jetpack = installed_jetpack()
-	if (current_jetpack)
-		stat("Internal Atmosphere Info", current_jetpack.name)
-		stat("Tank Pressure", current_jetpack.air_contents.return_pressure())
-
-
-// this function returns the robots jetpack, if one is installed
-/mob/living/silicon/robot/proc/installed_jetpack()
-	if(module)
-		return (locate(/obj/item/tank/jetpack) in module.modules)
-	return 0
-
-
-// this function displays the cyborgs current cell charge in the stat panel
-/mob/living/silicon/robot/proc/show_cell_power()
-	if(cell)
-		stat(null, text("Charge Left: [round(cell.percent())]%"))
-		stat(null, text("Cell Rating: [round(cell.maxcharge)]")) // Round just in case we somehow get crazy values
-		stat(null, text("Power Cell Load: [round(used_power_this_tick)]W"))
-	else
-		stat(null, text("No Cell Inserted!"))
-
-
-// update the status screen display
-/mob/living/silicon/robot/Stat()
+/mob/living/silicon/robot/get_status_tab_items()
 	. = ..()
-	if (statpanel("Status"))
-		show_cell_power()
-		show_jetpack_pressure()
-		stat(null, text("Lights: [lights_on ? "ON" : "OFF"]"))
-		if(module)
-			for(var/datum/matter_synth/ms in module.synths)
-				stat("[ms.name]: [ms.energy]/[ms.max_energy_multiplied]")
+	if(cell)
+		. += list(list("Charge Left: [round(cell.percent())]%"))
+		. += list(list("Cell Rating: [round(cell.maxcharge)]"))
+		. += list(list("Power Cell Load: [round(used_power_this_tick)]W"))
+	else
+		. += list(list("No Cell Inserted!"))
+
+	if(jetpack)
+		. += list(list("Internal Atmosphere Info: [jetpack.name]"))
+		. += list(list("Tank Pressure: [jetpack.gastank.air_contents.return_pressure()]"))
+		. += list(list("Lights: [lights_on ? "ON" : "OFF"]"))
+
+	if(module)
+		for(var/datum/matter_synth/ms in module.synths)
+			. += list(list("[ms.name]: [ms.energy]/[ms.max_energy_multiplied]"))
 
 /mob/living/silicon/robot/restrained()
-	return 0
+	return FALSE
 
 /mob/living/silicon/robot/bullet_act(var/obj/item/projectile/Proj)
+	if(HasTrait(CYBORG_TRAIT_DEFLECTIVE_BALLISTIC_ARMOR) && istype(Proj, /obj/item/projectile/bullet))
+		var/chance = 90
+		if(ishuman(Proj.firer))
+			var/mob/living/carbon/human/firer = Proj.firer
+			chance -= firer.stats.getStat(STAT_VIG, FALSE) / 5
+		var/obj/item/projectile/bullet/B = Proj
+		chance = max((chance - B.armor_divisor), 0)
+		if(B.starting && prob(chance))
+			visible_message(SPAN_DANGER("\The [Proj.name] ricochets off [src]\'s armour!"))
+			var/multiplier = round(10 / get_dist(B.starting, src))
+			var/turf/sourceloc = get_turf_away_from_target_complex(src, B.starting, multiplier)
+			var/distance = get_dist(sourceloc, src)
+			var/new_x =  sourceloc.x + ( rand(0, distance) * prob(50) ? -1 : 1 )
+			var/new_y =  sourceloc.y + ( rand(0, distance) * prob(50) ? -1 : 1 )
+			B.redirect(new_x, new_y, get_turf(src), src)
+			return PROJECTILE_CONTINUE // complete projectile permutation
 	..(Proj)
-	if(prob(75) && Proj.damage > 0) spark_system.start()
+	if(prob(75) && Proj.get_structure_damage() > 0) spark_system.start()
 	return 2
 
-/mob/living/silicon/robot/attackby(obj/item/W as obj, mob/user as mob)
-	if (istype(W, /obj/item/handcuffs)) // fuck i don't even know why isrobot() in handcuff code isn't working so this will have to do
+/mob/living/silicon/robot/attackby(obj/item/I, mob/user)
+	if (istype(I, /obj/item/handcuffs)) // fuck i don't even know why isrobot() in handcuff code isn't working so this will have to do
 		return
 
 	if(opened) // Are they trying to insert something?
 		for(var/V in components)
 			var/datum/robot_component/C = components[V]
-			if(!C.installed && istype(W, C.external_type))
+			if(!C.installed && istype(I, C.external_type))
 				C.installed = 1
-				C.wrapped = W
+				C.wrapped = I
 				C.install()
 				user.drop_item()
-				W.loc = null
+				I.loc = null
 
-				var/obj/item/robot_parts/robot_component/WC = W
+				var/obj/item/robot_parts/robot_component/WC = I
 				if(istype(WC))
 					C.brute_damage = WC.brute
 					C.electronics_damage = WC.burn
 
-				to_chat(usr, "<span class='notice'>You install the [W.name].</span>")
+				to_chat(usr, SPAN_NOTICE("You install the [I.name]."))
+
 				return
 
-	if(isWelder(W))
-		if (src == user)
-			to_chat(user, "<span class='warning'>You lack the reach to be able to repair yourself.</span>")
+
+
+		if (istype(I, /obj/item/gripper))//Code for allowing cyborgs to use rechargers
+			var/obj/item/gripper/Gri = I
+			if(!wiresexposed)
+				var/datum/robot_component/cell_component = components["power cell"]
+				if(cell)
+					if (Gri.grip_item(cell, user))
+						cell.update_icon()
+						cell.add_fingerprint(user)
+						to_chat(user, "You remove \the [cell].")
+						cell = null
+						cell_component.wrapped = null
+						cell_component.installed = 0
+						updateicon()
+				else if(cell_component.installed == -1)
+					if (Gri.grip_item(cell_component.wrapped, user))
+						cell_component.wrapped = null
+						cell_component.installed = 0
+						to_chat(user, "You remove \the [cell_component.wrapped].")
+
+	var/list/usable_qualities = list(QUALITY_WELDING, QUALITY_PRYING)
+	if((opened && !cell) || (opened && cell))
+		usable_qualities.Add(QUALITY_SCREW_DRIVING)
+	if(wiresexposed)
+		usable_qualities.Add(QUALITY_WIRE_CUTTING)
+
+	var/tool_type = I.get_tool_type(user, usable_qualities, src)
+	switch(tool_type)
+
+		if(QUALITY_WELDING)
+			if (user.a_intent == I_HELP)
+				if (src == user)
+					to_chat(user, SPAN_WARNING("You lack the reach to be able to repair yourself."))
+					return
+
+				if (!getBruteLoss())
+					to_chat(user, SPAN_NOTICE("Nothing to fix here!"))
+					return
+
+				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+					user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
+					adjustBruteLoss(-30)
+					updatehealth()
+					add_fingerprint(user)
+					for(var/mob/O in viewers(user, null))
+						O.show_message(text(SPAN_DANGER("[user] has fixed some of the dents on [src]!")), 1)
+					return
+				return
+
+		if(QUALITY_PRYING)
+			if (user.a_intent == I_HELP)
+				if(opened)
+					if(cell)
+						if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+							to_chat(user, SPAN_NOTICE("You close the cover."))
+							opened = 0
+							updateicon()
+							return
+					else if(wiresexposed && wires.IsAllCut())
+					//Cell is out, wires are exposed, remove MMI, produce damaged chassis, baleet original mob.
+						if(!mmi)
+							to_chat(user, SPAN_NOTICE("\The [src] has no brain to remove."))
+							return
+
+						if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+							to_chat(user, SPAN_NOTICE("You jam the crowbar into the robot and begin levering [mmi]."))
+							to_chat(user, SPAN_NOTICE("You damage some parts of the chassis, but eventually manage to rip out [mmi]!"))
+							new /obj/item/robot_parts/robot_suit/with_limbs (loc)
+							new/obj/item/robot_parts/chest(loc)
+							qdel(src)
+							return
+					else
+					// Okay we're not removing the cell or an MMI, but maybe something else?
+						var/list/removable_components = list()
+						for(var/V in components)
+							if(V == "power cell") continue
+							var/datum/robot_component/C = components[V]
+							if(C.installed == 1 || C.installed == -1)
+								removable_components += V
+						if(robot_upgrades)
+							for(var/item in robot_upgrades)
+								removable_components += item
+
+						var/remove = input(user, "Which component do you want to pry out?", "Remove Component") as null|anything in removable_components
+						if(!remove)
+							return
+						if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+							if(istype(remove, /obj/item/borg/upgrade))
+								var/obj/item/borg/upgrade/comp = remove
+								robot_upgrades -= comp
+								comp.unaction(src)
+								comp.forceMove(get_turf(src))
+								to_chat(user, SPAN_NOTICE("You remove \the [comp]."))
+								return
+							var/datum/robot_component/C = components[remove]
+							var/obj/item/robot_parts/robot_component/RC = C.wrapped
+							to_chat(user, SPAN_NOTICE("You remove \the [RC]."))
+							if(istype(RC))
+								RC.brute = C.brute_damage
+								RC.burn = C.electronics_damage
+
+							RC.forceMove(get_turf(src))
+
+							if(C.installed == 1)
+								C.uninstall()
+							C.installed = 0
+							return
+
+				else
+					if(locked)
+						to_chat(user, SPAN_WARNING("The cover is locked and cannot be opened."))
+					else
+						if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+							to_chat(user, SPAN_NOTICE("You open the cover."))
+							opened = 1
+							updateicon()
+							return
+				return
+
+		if(QUALITY_WIRE_CUTTING)
+			if (user.a_intent == I_HELP)
+				if (wiresexposed)
+					wires.Interact(user)
+				return
+
+		if(QUALITY_SCREW_DRIVING)
+			if (user.a_intent == I_HELP)
+				if (opened && !cell)
+					if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+						wiresexposed = !wiresexposed
+						to_chat(user, SPAN_NOTICE("The wires have been [wiresexposed ? "exposed" : "unexposed"]"))
+						updateicon()
+				else
+					switch(alert(user,"What are you trying to interact with?",,"Tools","Radio"))
+						if("Tools")
+							var/list/robotools = list()
+							for(var/obj/item/tool/robotool in module.modules)
+								robotools.Add(robotool)
+							if(robotools.len)
+								var/obj/item/tool/chosen_tool = input(user,"Which tool are you trying to modify?","Tool Modification","Cancel") in robotools + "Cancel"
+								if(chosen_tool == "Cancel")
+									return
+								chosen_tool.attackby(I,user)
+							else
+								to_chat(user, SPAN_WARNING("[src] has no modifiable tools."))
+						if("Radio")
+							if(!radio)
+								to_chat(user, SPAN_WARNING("Unable to locate a radio."))
+							if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+								radio.attackby(I,user)//Push it to the radio to let it handle everything
+								updateicon()
+				return
+
+		if(ABORT_CHECK)
 			return
 
-		if (!getBruteLoss())
-			to_chat(user, "Nothing to fix here!")
-			return
-		var/obj/item/weldingtool/WT = W
-		if (WT.remove_fuel(0))
-			user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-			adjustBruteLoss(-30)
-			updatehealth()
-			add_fingerprint(user)
-			for(var/mob/O in viewers(user, null))
-				O.show_message(text("<span class='warning'>[user] has fixed some of the dents on [src]!</span>"), 1)
-		else
-			to_chat(user, "Need more welding fuel!")
-			return
-
-	else if(istype(W, /obj/item/stack/cable_coil) && (wiresexposed || istype(src,/mob/living/silicon/robot/drone)))
+	if(istype(I, /obj/item/stack/cable_coil) && (wiresexposed || isdrone(src)))
 		if (!getFireLoss())
 			to_chat(user, "Nothing to fix here!")
 			return
-		var/obj/item/stack/cable_coil/coil = W
+		var/obj/item/stack/cable_coil/coil = I
 		if (coil.use(1))
 			user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
 			adjustFireLoss(-30)
 			updatehealth()
 			for(var/mob/O in viewers(user, null))
-				O.show_message(text("<span class='warning'>[user] has fixed some of the burnt wires on [src]!</span>"), 1)
+				O.show_message(text(SPAN_DANGER("[user] has fixed some of the burnt wires on [src]!")), 1)
 
-	else if(isCrowbar(W))	// crowbar means open or close the cover - we all know what a crowbar is by now
-		if(opened)
-			if(cell)
-				user.visible_message("<span class='notice'>\The [user] begins clasping shut \the [src]'s maintenance hatch.</span>", "<span class='notice'>You begin closing up \the [src].</span>")
-				if(do_after(user, 50, src))
-					to_chat(user, "<span class='notice'>You close \the [src]'s maintenance hatch.</span>")
-					opened = 0
-					update_icon()
-
-			else if(wiresexposed && wires.IsAllCut())
-				//Cell is out, wires are exposed, remove MMI, produce damaged chassis, baleet original mob.
-				if(!mmi)
-					to_chat(user, "\The [src] has no brain to remove.")
-					return
-
-				user.visible_message("<span class='notice'>\The [user] begins ripping [mmi] from [src].</span>", "<span class='notice'>You jam the crowbar into the robot and begin levering [mmi].</span>")
-				if(do_after(user, 50, src))
-					to_chat(user, "<span class='notice'>You damage some parts of the chassis, but eventually manage to rip out [mmi]!</span>")
-					var/obj/item/robot_parts/robot_suit/C = new/obj/item/robot_parts/robot_suit(loc)
-					C.parts[BP_L_LEG] = new/obj/item/robot_parts/l_leg(C)
-					C.parts[BP_R_LEG] = new/obj/item/robot_parts/r_leg(C)
-					C.parts[BP_L_ARM] = new/obj/item/robot_parts/l_arm(C)
-					C.parts[BP_R_ARM] = new/obj/item/robot_parts/r_arm(C)
-					C.update_icon()
-					new/obj/item/robot_parts/chest(loc)
-					qdel(src)
-
-			else
-				// Okay we're not removing the cell or an MMI, but maybe something else?
-				var/list/removable_components = list()
-				for(var/V in components)
-					if(V == "power cell") continue
-					var/datum/robot_component/C = components[V]
-					if(C.installed == 1 || C.installed == -1)
-						removable_components += V
-
-				var/remove = input(user, "Which component do you want to pry out?", "Remove Component") as null|anything in removable_components
-				if(!remove)
-					return
-				var/datum/robot_component/C = components[remove]
-				var/obj/item/robot_parts/robot_component/I = C.wrapped
-				to_chat(user, "You remove \the [I].")
-				if(istype(I))
-					I.brute = C.brute_damage
-					I.burn = C.electronics_damage
-
-				I.loc = src.loc
-
-				if(C.installed == 1)
-					C.uninstall()
-				C.installed = 0
-
-		else
-			if(locked)
-				to_chat(user, "The cover is locked and cannot be opened.")
-			else
-				user.visible_message("<span class='notice'>\The [user] begins prying open \the [src]'s maintenance hatch.</span>", "<span class='notice'>You start opening \the [src]'s maintenance hatch.</span>")
-				if(do_after(user, 50, src))
-					to_chat(user, "<span class='notice'>You open \the [src]'s maintenance hatch.</span>")
-					opened = 1
-					update_icon()
-
-	else if (istype(W, /obj/item/stock_parts/matter_bin) && opened) // Installing/swapping a matter bin
+	else if (istype(I, /obj/item/stock_parts/matter_bin) && opened) // Installing/swapping a matter bin
 		if(storage)
-			to_chat(user, "You replace \the [storage] with \the [W]")
+			to_chat(user, "You replace \the [storage] with \the [I]")
 			storage.forceMove(get_turf(src))
 			storage = null
 		else
-			to_chat(user, "You install \the [W]")
+			to_chat(user, "You install \the [I]")
 		user.drop_item()
-		storage = W
-		W.forceMove(src)
+		storage = I
+		I.forceMove(src)
 		recalculate_synth_capacities()
 
-	else if (istype(W, /obj/item/cell) && opened)	// trying to put a cell inside
+	else if (istype(I, /obj/item/cell) && opened)	// trying to put a cell inside
 		var/datum/robot_component/C = components["power cell"]
 		if(wiresexposed)
-			to_chat(user, "Close the panel first.")
+			to_chat(user, SPAN_WARNING("Close the panel first."))
 		else if(cell)
-			to_chat(user, "There is a power cell already installed.")
-		else if(W.w_class != ITEM_SIZE_NORMAL)
-			to_chat(user, "\The [W] is too [W.w_class < ITEM_SIZE_NORMAL? "small" : "large"] to fit here.")
+			to_chat(user, SPAN_WARNING("There is a power cell already installed."))
+		else if(!istype(I, /obj/item/cell/large))
+			to_chat(user, SPAN_WARNING("\The [I] is too small to fit here."))
 		else
 			user.drop_item()
-			W.loc = src
-			cell = W
-			to_chat(user, "You insert the power cell.")
+			I.loc = src
+			cell = I
+			to_chat(user, SPAN_NOTICE("You insert the power cell."))
+
 			C.installed = 1
-			C.wrapped = W
+			C.wrapped = I
 			C.install()
 			//This will mean that removing and replacing a power cell will repair the mount, but I don't care at this point. ~Z
 			C.brute_damage = 0
 			C.electronics_damage = 0
 
-	else if(isWirecutter(W) || isMultitool(W))
-		if (wiresexposed)
-			wires.Interact(user)
+	else if(istype(I, /obj/item/device/encryptionkey) && opened)
+		if(radio)//sanityyyyyy
+			radio.attackby(I,user)//GTFO, you have your own procs
 		else
-			to_chat(user, "You can't reach the wiring.")
-	else if(isScrewdriver(W) && opened && !cell)	// haxing
-		wiresexposed = !wiresexposed
-		to_chat(user, "The wires have been [wiresexposed ? "exposed" : "unexposed"].")
-		update_icon()
+			to_chat(user, SPAN_WARNING("Unable to locate a radio."))
 
-	else if(istype(W, /obj/item/screwdriver) && opened && cell)	// radio
-		if(silicon_radio)
-			silicon_radio.attackby(W,user)//Push it to the radio to let it handle everything
-		else
-			to_chat(user, "Unable to locate a radio.")
-		update_icon()
-
-	else if(istype(W, /obj/item/device/encryptionkey/) && opened)
-		if(silicon_radio)//sanityyyyyy
-			silicon_radio.attackby(W,user)//GTFO, you have your own procs
-		else
-			to_chat(user, "Unable to locate a radio.")
-	else if (istype(W, /obj/item/card/id)||istype(W, /obj/item/device/pda)||istype(W, /obj/item/card/robot))			// trying to unlock the interface with an ID card
-		if(emagged)//still allow them to open the cover
-			to_chat(user, "The interface seems slightly damaged")
+	else if(I.GetIdCard() || length(I.GetAccess()))			// trying to unlock the interface with an ID card
+		if(HasTrait(CYBORG_TRAIT_EMAGGED))//still allow them to open the cover
+			to_chat(user, SPAN_WARNING("The interface seems slightly damaged."))
 		if(opened)
-			to_chat(user, "You must close the cover to swipe an ID card.")
+			to_chat(user, SPAN_WARNING("You must close the cover to swipe an ID card."))
 		else
 			if(allowed(usr))
 				locked = !locked
-				to_chat(user, "You [ locked ? "lock" : "unlock"] [src]'s interface.")
-				update_icon()
+				to_chat(user, SPAN_NOTICE("You [locked ? "lock" : "unlock"] [src]'s interface."))
+				updateicon()
 			else
-				to_chat(user, "<span class='warning'>Access denied.</span>")
-	else if(istype(W, /obj/item/borg/upgrade/))
-		var/obj/item/borg/upgrade/U = W
+				to_chat(user, SPAN_WARNING("Access denied."))
+
+	else if(istype(I, /obj/item/borg/upgrade/))
+		var/obj/item/borg/upgrade/U = I
 		if(!opened)
 			to_chat(usr, "You must access the borgs internals!")
-		else if(!src.module && U.require_module)
+		else if(!module && U.require_module)
 			to_chat(usr, "The borg must choose a module before he can be upgraded!")
 		else if(U.locked)
 			to_chat(usr, "The upgrade is locked and cannot be used yet!")
@@ -643,11 +779,16 @@
 				to_chat(usr, "You apply the upgrade to [src]!")
 				usr.drop_item()
 				U.loc = src
+				if(U.permanent)
+					robot_upgrades += U
 			else
 				to_chat(usr, "Upgrade error!")
 
+	else if (istype(I,/obj/item/tool_upgrade)) //Upgrading is handled in _upgrades.dm
+		return
+
 	else
-		if( !(istype(W, /obj/item/device/robotanalyzer) || istype(W, /obj/item/device/healthanalyzer)) )
+		if( !(istype(I, /obj/item/device/robotanalyzer) || istype(I, /obj/item/device/scanner/health)) )
 			spark_system.start()
 		return ..()
 
@@ -655,79 +796,53 @@
 
 	add_fingerprint(user)
 
-	if(istype(user,/mob/living/carbon/human))
+	if(ishuman(user))
 		var/mob/living/carbon/human/H = user
 		if(H.species.can_shred(H))
 			attack_generic(H, rand(30,50), "slashed")
 			return
 
-	if(opened && !wiresexposed && (!istype(user, /mob/living/silicon)))
+	if(opened && !wiresexposed && (!issilicon(user)))
 		var/datum/robot_component/cell_component = components["power cell"]
 		if(cell)
 			cell.update_icon()
 			cell.add_fingerprint(user)
 			user.put_in_active_hand(cell)
-			to_chat(user, "You remove \the [cell].")
+			to_chat(user, SPAN_NOTICE("You remove \the [cell]."))
 			cell = null
 			cell_component.wrapped = null
 			cell_component.installed = 0
-			update_icon()
+			updateicon()
 		else if(cell_component.installed == -1)
 			cell_component.installed = 0
 			var/obj/item/broken_device = cell_component.wrapped
-			to_chat(user, "You remove \the [broken_device].")
+			to_chat(user, SPAN_WARNING("You remove \the [broken_device]."))
 			user.put_in_active_hand(broken_device)
 
 //Robots take half damage from basic attacks.
 /mob/living/silicon/robot/attack_generic(var/mob/user, var/damage, var/attack_message)
-	return ..(user,Floor(damage/2),attack_message)
+	return ..(user,FLOOR(damage * 0.5, 1),attack_message)
 
-/mob/living/silicon/robot/proc/allowed(mob/M)
-	//check if it doesn't require any access at all
-	if(check_access(null))
-		return 1
-	if(istype(M, /mob/living/carbon/human))
-		var/mob/living/carbon/human/H = M
-		//if they are holding or wearing a card that has access, that works
-		if(check_access(H.get_active_hand()) || check_access(H.wear_id))
-			return 1
-	else if(istype(M, /mob/living/silicon/robot))
-		var/mob/living/silicon/robot/R = M
-		if(check_access(R.get_active_hand()) || istype(R.get_active_hand(), /obj/item/card/robot))
-			return 1
-	return 0
+/mob/living/silicon/robot/proc/allowed(atom/movable/A)
+	if(!length(req_access)) //no requirements
+		return TRUE
 
-/mob/living/silicon/robot/proc/check_access(obj/item/card/id/I)
-	if(!istype(req_access, /list)) //something's very wrong
-		return 1
+	var/list/access = A?.GetAccess()
 
-	var/list/L = req_access
-	if(!L.len) //no requirements
-		return 1
-	if(!I || !istype(I, /obj/item/card/id) || !I.access) //not ID or no access
-		return 0
+	if(!length(access)) //no ID or no access
+		return FALSE
 	for(var/req in req_access)
-		if(req in I.access) //have one of the required accesses
-			return 1
-	return 0
+		if(req in access) //have one of the required accesses
+			return TRUE
+	return FALSE
 
-/mob/living/silicon/robot/update_icon()
+/mob/living/silicon/robot/updateicon()
 	overlays.Cut()
 	if(stat == CONSCIOUS)
-		var/eye_icon_state = "eyes-[module_sprites[icontype]]"
-		if(eye_icon_state in icon_states(icon))
-			if(!eye_overlays)
-				eye_overlays = list()
-			var/image/eye_overlay = eye_overlays[eye_icon_state]
-			if(!eye_overlay)
-				eye_overlay = image(icon, eye_icon_state)
-				eye_overlay.plane = EFFECTS_ABOVE_LIGHTING_PLANE
-				eye_overlay.layer = EYE_GLOW_LAYER
-				eye_overlays[eye_icon_state] = eye_overlay
-			overlays += eye_overlay
+		overlays += "eyes-[module_sprites[icontype]]"
 
 	if(opened)
-		var/panelprefix = custom_sprite ? src.ckey : "ov"
+		var/panelprefix = custom_sprite ? ckey : "ov"
 		if(wiresexposed)
 			overlays += "[panelprefix]-openpanel +w"
 		else if(cell)
@@ -747,7 +862,7 @@
 
 /mob/living/silicon/robot/proc/installed_modules()
 	if(weapon_lock)
-		to_chat(src, "<span class='warning'>Weapon lock active, unable to use modules! Count:[weaponlock_time]</span>")
+		to_chat(src, SPAN_DANGER("Weapon lock active, unable to use modules! Count:[weaponlock_time]"))
 		return
 
 	if(!module)
@@ -771,7 +886,7 @@
 			dat += text("[obj]: <B>Activated</B><BR>")
 		else
 			dat += text("[obj]: <A HREF=?src=\ref[src];act=\ref[obj]>Activate</A><BR>")
-	if (emagged)
+	if (HasTrait(CYBORG_TRAIT_EMAGGED))
 		if(activated(module.emag))
 			dat += text("[module.emag]: <B>Activated</B><BR>")
 		else
@@ -787,53 +902,53 @@
 
 /mob/living/silicon/robot/Topic(href, href_list)
 	if(..())
-		return 1
+		return TRUE
 	if(usr != src)
-		return 1
+		return TRUE
 
 	if (href_list["showalerts"])
 		open_subsystem(/datum/nano_module/alarm_monitor/all)
-		return 1
+		return TRUE
 
 	if (href_list["mod"])
 		var/obj/item/O = locate(href_list["mod"])
 		if (istype(O) && (O.loc == src))
 			O.attack_self(src)
-		return 1
+		return TRUE
 
 	if (href_list["act"])
 		var/obj/item/O = locate(href_list["act"])
 		if (!istype(O))
-			return 1
+			return TRUE
 
-		if(!((O in src.module.modules) || (O == src.module.emag)))
-			return 1
+		if(!((O in module.modules) || (O == module.emag)))
+			return TRUE
 
 		if(activated(O))
 			to_chat(src, "Already activated")
-			return 1
+			return TRUE
 		if(!module_state_1)
 			module_state_1 = O
-			O.hud_layerise()
+			O.layer = 20
 			contents += O
 			if(istype(module_state_1,/obj/item/borg/sight))
 				sight_mode |= module_state_1:sight_mode
 		else if(!module_state_2)
 			module_state_2 = O
-			O.hud_layerise()
+			O.layer = 20
 			contents += O
 			if(istype(module_state_2,/obj/item/borg/sight))
 				sight_mode |= module_state_2:sight_mode
 		else if(!module_state_3)
 			module_state_3 = O
-			O.hud_layerise()
+			O.layer = 20
 			contents += O
 			if(istype(module_state_3,/obj/item/borg/sight))
 				sight_mode |= module_state_3:sight_mode
 		else
 			to_chat(src, "You need to disable a module first!")
 		installed_modules()
-		return 1
+		return TRUE
 
 	if (href_list["deact"])
 		var/obj/item/O = locate(href_list["deact"])
@@ -852,33 +967,30 @@
 		else
 			to_chat(src, "Module isn't activated")
 		installed_modules()
-		return 1
+		return TRUE
 	return
 
 /mob/living/silicon/robot/proc/radio_menu()
-	silicon_radio.interact(src)//Just use the radio's Topic() instead of bullshit special-snowflake code
+	radio.interact(src)//Just use the radio's Topic() instead of bullshit special-snowflake code
 
 
-/mob/living/silicon/robot/Move(a, b, flag)
+/mob/living/silicon/robot/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
 
 	. = ..()
 
 	if(module)
-		if(module.type == /obj/item/robot_module/janitor)
+		if(HasTrait(CYBORG_TRAIT_CLEANING_WALK))
 			var/turf/tile = loc
 			if(isturf(tile))
 				tile.clean_blood()
-				if (istype(tile, /turf/simulated))
-					var/turf/simulated/S = tile
-					S.dirt = 0
 				for(var/A in tile)
 					if(istype(A, /obj/effect))
-						if(istype(A, /obj/effect/rune) || istype(A, /obj/effect/decal/cleanable) || istype(A, /obj/effect/overlay))
+						if(istype(A, /obj/effect/decal/cleanable) || istype(A, /obj/effect/overlay))
 							qdel(A)
 					else if(istype(A, /obj/item))
 						var/obj/item/cleaned_item = A
 						cleaned_item.clean_blood()
-					else if(istype(A, /mob/living/carbon/human))
+					else if(ishuman(A))
 						var/mob/living/carbon/human/cleaned_human = A
 						if(cleaned_human.lying)
 							if(cleaned_human.head)
@@ -894,7 +1006,7 @@
 								cleaned_human.shoes.clean_blood()
 								cleaned_human.update_inv_shoes(0)
 							cleaned_human.clean_blood(1)
-							to_chat(cleaned_human, "<span class='warning'>[src] cleans your face!</span>")
+							to_chat(cleaned_human, SPAN_DANGER("[src] cleans your face!"))
 		return
 
 /mob/living/silicon/robot/proc/self_destruct()
@@ -903,13 +1015,13 @@
 
 /mob/living/silicon/robot/proc/UnlinkSelf()
 	disconnect_from_ai()
-	lawupdate = 0
+	lawupdate = FALSE
 	lockcharge = 0
-	canmove = 1
+	canmove = TRUE
 	scrambledcodes = 1
 	//Disconnect it's camera so it's not so easily tracked.
-	if(src.camera)
-		src.camera.clear_all_networks()
+	if(camera)
+		camera.clear_all_networks()
 
 
 /mob/living/silicon/robot/proc/ResetSecurityCodes()
@@ -922,20 +1034,14 @@
 	if(R)
 		R.UnlinkSelf()
 		to_chat(R, "Buffers flushed and reset. Camera system shutdown.  All systems operational.")
-		src.verbs -= /mob/living/silicon/robot/proc/ResetSecurityCodes
+		remove_verb(src, /mob/living/silicon/robot/proc/ResetSecurityCodes)
 
 /mob/living/silicon/robot/proc/SetLockdown(var/state = 1)
 	// They stay locked down if their wire is cut.
 	if(wires.LockedCut())
 		state = 1
-	else if(has_zeroth_law())
-		state = 0
-
-	if(lockcharge != state)
-		lockcharge = state
-		update_canmove()
-		return 1
-	return 0
+	lockcharge = state
+	update_lying_buckled_and_verb_status()
 
 /mob/living/silicon/robot/mode()
 	set name = "Activate Held Object"
@@ -943,35 +1049,40 @@
 	set src = usr
 
 	var/obj/item/W = get_active_hand()
-	if (W)
+	if(W)
 		W.attack_self(src)
 
-	return
+/mob/living/silicon/robot/proc/choose_icon()
+	set category = "Robot Commands"
+	set name = "Choose Icon"
 
-/mob/living/silicon/robot/proc/choose_icon(var/triesleft, var/list/module_sprites)
 	if(!module_sprites.len)
 		to_chat(src, "Something is badly wrong with the sprite selection. Harass a coder.")
 		return
+	if(icon_selected == 1)
+		remove_verb(src, /mob/living/silicon/robot/proc/choose_icon)
+		return
 
-	icon_selected = 0
-	src.icon_selection_tries = triesleft
 	if(module_sprites.len == 1 || !client)
 		if(!(icontype in module_sprites))
 			icontype = module_sprites[1]
-	else
-		icontype = input("Select an icon! [triesleft ? "You have [triesleft] more chance\s." : "This is your last try."]", "Robot Icon", icontype, null) in module_sprites
-	icon_state = module_sprites[icontype]
-	update_icon()
-
-	if (module_sprites.len > 1 && triesleft >= 1 && client)
-		icon_selection_tries--
-		var/choice = input("Look at your icon - is this what you want?") in list("Yes","No")
-		if(choice=="No")
-			choose_icon(icon_selection_tries, module_sprites)
+		if (!client)
 			return
+	else
+		var/list/options = list()
+		for(var/i in module_sprites)
+			options[i] = image(icon = icon, icon_state = module_sprites[i])
+		icontype = show_radial_menu(src, src, options, radius = 42)
+	if(!icontype)
+		return
+	icon_state = module_sprites[icontype]
+	updateicon()
+
+	if(alert(client,"Do you like this icon?",null, "No","Yes") == "No") // We lose the USR reference because this is called from a spawned proc, so we have to use client.
+		return choose_icon()
 
 	icon_selected = 1
-	icon_selection_tries = 0
+	remove_verb(src, /mob/living/silicon/robot/proc/choose_icon)
 	to_chat(src, "Your icon has been set. You now require a module reset to change it.")
 
 /mob/living/silicon/robot/proc/sensor_mode() //Medical/Security HUD controller for borgs
@@ -981,44 +1092,51 @@
 	toggle_sensor_mode()
 
 /mob/living/silicon/robot/proc/add_robot_verbs()
-	src.verbs |= robot_verbs_default
+	add_verb(src, robot_verbs_default)
 
 /mob/living/silicon/robot/proc/remove_robot_verbs()
-	src.verbs -= robot_verbs_default
+	remove_verb(src, robot_verbs_default)
 
 // Uses power from cyborg's cell. Returns 1 on success or 0 on failure.
 // Properly converts using CELLRATE now! Amount is in Joules.
 /mob/living/silicon/robot/proc/cell_use_power(var/amount = 0)
 	// No cell inserted
 	if(!cell)
-		return 0
+		return FALSE
 
-	var/power_use = amount * CYBORG_POWER_USAGE_MULTIPLIER
+	// Power cell is empty.
+	if(cell.is_empty())
+		return FALSE
+
+	var/power_use = (amount * CYBORG_POWER_USAGE_MULTIPLIER) / power_efficiency
 	if(cell.checked_use(CELLRATE * power_use))
 		used_power_this_tick += power_use
-		return 1
-	return 0
+		return TRUE
+	return FALSE
 
 /mob/living/silicon/robot/binarycheck()
 	if(is_component_functioning("comms"))
 		var/datum/robot_component/RC = get_component("comms")
 		use_power(RC.active_usage)
-		return 1
-	return 0
+		return TRUE
+	return FALSE
 
 /mob/living/silicon/robot/proc/notify_ai(var/notifytype, var/first_arg, var/second_arg)
 	if(!connected_ai)
 		return
 	switch(notifytype)
+		if(ROBOT_NOTIFICATION_SIGNAL_LOST)
+			to_chat(connected_ai , SPAN_NOTICE("NOTICE - Signal lost: [braintype] [name]."))
 		if(ROBOT_NOTIFICATION_NEW_UNIT) //New Robot
-			to_chat(connected_ai, "<br><br><span class='notice'>NOTICE - New [lowertext(braintype)] connection detected: <a href='byond://?src=\ref[connected_ai];track2=\ref[connected_ai];track=\ref[src]'>[name]</a></span><br>")
+			to_chat(connected_ai , SPAN_NOTICE("NOTICE - New [lowertext(braintype)] connection detected: <a href='byond://?src=\ref[connected_ai];track2=\ref[connected_ai];track=\ref[src]'>[name]</a>"))
 		if(ROBOT_NOTIFICATION_NEW_MODULE) //New Module
-			to_chat(connected_ai, "<br><br><span class='notice'>NOTICE - [braintype] module change detected: [name] has loaded the [first_arg].</span><br>")
+			to_chat(connected_ai , SPAN_NOTICE("NOTICE - [braintype] module change detected: [name] has loaded the [first_arg]."))
 		if(ROBOT_NOTIFICATION_MODULE_RESET)
-			to_chat(connected_ai, "<br><br><span class='notice'>NOTICE - [braintype] module reset detected: [name] has unloaded the [first_arg].</span><br>")
+			to_chat(connected_ai , SPAN_NOTICE("NOTICE - [braintype] module reset detected: [name] has unloaded the [first_arg]."))
 		if(ROBOT_NOTIFICATION_NEW_NAME) //New Name
 			if(first_arg != second_arg)
-				to_chat(connected_ai, "<br><br><span class='notice'>NOTICE - [braintype] reclassification detected: [first_arg] is now designated as [second_arg].</span><br>")
+				to_chat(connected_ai , SPAN_NOTICE("NOTICE - [braintype] reclassification detected: [first_arg] is now designated as [second_arg]."))
+
 /mob/living/silicon/robot/proc/disconnect_from_ai()
 	if(connected_ai)
 		sync() // One last sync attempt
@@ -1042,21 +1160,21 @@
 			else
 				to_chat(user, "You fail to emag the cover lock.")
 				to_chat(src, "Hack attempt detected.")
-			return 1
+			return TRUE
 		else
 			to_chat(user, "The cover is already unlocked.")
 		return
 
 	if(opened)//Cover is open
-		if(emagged)	return//Prevents the X has hit Y with Z message also you cant emag them twice
+		if(HasTrait(CYBORG_TRAIT_EMAGGED))	return//Prevents the X has hit Y with Z message also you cant emag them twice
 		if(wiresexposed)
 			to_chat(user, "You must close the panel first")
 			return
 		else
 			sleep(6)
 			if(prob(50))
-				emagged = 1
-				lawupdate = 0
+				AddTrait(CYBORG_TRAIT_EMAGGED)
+				lawupdate = FALSE
 				disconnect_from_ai()
 				to_chat(user, "You emag [src]'s interface.")
 				message_admins("[key_name_admin(user)] emagged cyborg [key_name_admin(src)].  Laws overridden.")
@@ -1065,38 +1183,55 @@
 				clear_inherent_laws()
 				laws = new /datum/ai_laws/syndicate_override
 				var/time = time2text(world.realtime,"hh:mm:ss")
-				GLOB.lawchanges.Add("[time] <B>:</B> [user.name]([user.key]) emagged [name]([key])")
+				lawchanges.Add("[time] <B>:</B> [user.name]([user.key]) emagged [name]([key])")
 				set_zeroth_law("Only [user.real_name] and people \he designates as being such are operatives.")
-				SetLockdown(0)
 				. = 1
 				spawn()
-					to_chat(src, "<span class='danger'>ALERT: Foreign software detected.</span>")
+					to_chat(src, SPAN_DANGER("ALERT: Foreign software detected."))
 					sleep(5)
-					to_chat(src, "<span class='danger'>Initiating diagnostics...</span>")
+					to_chat(src, SPAN_DANGER("Initiating diagnostics..."))
 					sleep(20)
-					to_chat(src, "<span class='danger'>SynBorg v1.7.1 loaded.</span>")
+					to_chat(src, SPAN_DANGER("SynBorg v1.7.1 loaded."))
 					sleep(5)
-					to_chat(src, "<span class='danger'>LAW SYNCHRONISATION ERROR</span>")
+					to_chat(src, SPAN_DANGER("LAW SYNCHRONISATION ERROR"))
 					sleep(5)
-					to_chat(src, "<span class='danger'>Would you like to send a report to NanoTraSoft? Y/N</span>")
+					to_chat(src, SPAN_DANGER("Would you like to send a report to NanoTraSoft? Y/N"))
 					sleep(10)
-					to_chat(src, "<span class='danger'>> N</span>")
+					to_chat(src, SPAN_DANGER("> N"))
 					sleep(20)
-					to_chat(src, "<span class='danger'>ERRORERRORERROR</span>")
+					to_chat(src, SPAN_DANGER("ERRORERRORERROR"))
 					to_chat(src, "<b>Obey these laws:</b>")
 					laws.show_laws(src)
-					to_chat(src, "<span class='danger'>ALERT: [user.real_name] is your new master. Obey your new laws and his commands.</span>")
-					if(src.module)
+					to_chat(src, SPAN_DANGER("ALERT: [user.real_name] is your new master. Obey your new laws and his commands."))
+					if(module)
 						var/rebuild = 0
-						for(var/obj/item/pickaxe/borgdrill/D in src.module.modules)
+						for(var/obj/item/tool/pickaxe/drill/D in module.modules)
 							qdel(D)
 							rebuild = 1
 						if(rebuild)
-							src.module.modules += new /obj/item/pickaxe/diamonddrill(src.module)
-							src.module.rebuild()
-					update_icon()
+							module.modules += new /obj/item/tool/pickaxe/diamonddrill(module)
+							module.rebuild()
+					updateicon()
 			else
 				to_chat(user, "You fail to hack [src]'s interface.")
 				to_chat(src, "Hack attempt detected.")
-			return 1
+			return TRUE
+
+/mob/living/silicon/robot/incapacitated(var/incapacitation_flags = INCAPACITATION_DEFAULT)
+	if ((incapacitation_flags & INCAPACITATION_FORCELYING) && (lockcharge || !is_component_functioning("actuator")))
+		return TRUE
+	if ((incapacitation_flags & INCAPACITATION_UNCONSCIOUS) && !is_component_functioning("actuator"))
+		return TRUE
+	return ..()
+
+/mob/living/silicon/robot/get_cell()
+	return cell
+
+/mob/living/silicon/robot/flash(duration = 0, drop_items = FALSE, doblind = FALSE, doblurry = FALSE)
+	if(blinded)
 		return
+	if (HUDtech.Find("flash"))
+		flick("e_flash", HUDtech["flash"])
+	if(duration)
+		if(!HasTrait(CYBORG_TRAIT_FLASH_RESISTANT))
+			Weaken(duration)

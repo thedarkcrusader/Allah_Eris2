@@ -1,9 +1,9 @@
 /datum/preferences
-	var/list/preference_values
+	var/list/preference_values = list()
 
 /datum/category_item/player_setup_item/player_global/settings
 	name = "Settings"
-	sort_order = 4
+	sort_order = 5
 
 /datum/category_item/player_setup_item/player_global/settings/load_preferences(var/savefile/S)
 	from_file(S["lastchangelog"], pref.lastchangelog)
@@ -85,7 +85,6 @@
 	. += "</table>"
 
 	return jointext(., "")
-	return
 
 /datum/category_item/player_setup_item/player_global/settings/OnTopic(var/href,var/list/href_list, var/mob/user)
 	var/mob/pref_mob = preference_mob()
@@ -106,7 +105,7 @@
 		else
 			return null
 	else
-		log_error("Client is lacking preferences: [log_info_line(src)]")
+		error("Client is lacking preferences: [log_info_line(src)]")
 
 /client/proc/set_preference(var/preference, var/set_preference)
 	var/datum/client_preference/cp = get_client_preference(preference)
@@ -127,7 +126,7 @@
 	if(!cp)
 		return FALSE
 
-	var/next_option = next_in_list(prefs.preference_values[cp.key], cp.options)
+	var/next_option = next_list_item(prefs.preference_values[cp.key], cp.options)
 	return set_preference(preference, next_option)
 
 /mob/proc/get_preference_value(var/preference)

@@ -3,6 +3,7 @@
 	desc = "Swipe your ID card to make purchases electronically."
 	icon = 'icons/obj/device.dmi'
 	icon_state = "eftpos"
+	w_class = ITEM_SIZE_SMALL
 	var/machine_id = ""
 	var/eftpos_name = "Default EFTPOS scanner"
 	var/transaction_locked = 0
@@ -14,14 +15,14 @@
 
 /obj/item/device/eftpos/New()
 	..()
-	machine_id = "[station_name()] EFTPOS #[num_financial_terminals++]"
+	machine_id = "[station_name] EFTPOS #[num_financial_terminals++]"
 	access_code = rand(1111,111111)
 	spawn(0)
 		print_reference()
 
 		//create a short manual as well
 		var/obj/item/paper/R = new(src.loc)
-		R.SetName("Steps to success: Correct EFTPOS Usage")
+		R.name = "Steps to success: Correct EFTPOS Usage"
 		/*
 		R.info += "<b>When first setting up your EFTPOS device:</b>"
 		R.info += "1. Memorise your EFTPOS command code (provided with all EFTPOS devices).<br>"
@@ -64,7 +65,7 @@
 
 /obj/item/device/eftpos/proc/print_reference()
 	var/obj/item/paper/R = new(src.loc)
-	R.SetName("Reference: [eftpos_name]")
+	R.name = "Reference: [eftpos_name]"
 	R.info = "<b>[eftpos_name] reference</b><br><br>"
 	R.info += "Access code: [access_code]<br><br>"
 	R.info += "<b>Do not lose or misplace this code.</b><br>"
@@ -80,7 +81,7 @@
 	var/obj/item/smallDelivery/D = new(R.loc)
 	R.loc = D
 	D.wrapped = R
-	D.SetName("small parcel - 'EFTPOS access code'")
+	D.name = "small parcel - 'EFTPOS access code'"
 
 /obj/item/device/eftpos/attack_self(mob/user as mob)
 	if(get_dist(src,user) <= 1)
@@ -90,7 +91,7 @@
 			dat += "<a href='?src=\ref[src];choice=toggle_lock'>Back[transaction_paid ? "" : " (authentication required)"]</a><br><br>"
 
 			dat += "Transaction purpose: <b>[transaction_purpose]</b><br>"
-			dat += "Value: <b>T[transaction_amount]</b><br>"
+			dat += "Value: <b>[transaction_amount][CREDS]</b><br>"
 			dat += "Linked account: <b>[linked_account ? linked_account.owner_name : "None"]</b><hr>"
 			if(transaction_paid)
 				dat += "<i>This transaction has been processed successfully.</i><hr>"
@@ -101,7 +102,7 @@
 			dat += "<a href='?src=\ref[src];choice=toggle_lock'>Lock in new transaction</a><br><br>"
 
 			dat += "<a href='?src=\ref[src];choice=trans_purpose'>Transaction purpose: [transaction_purpose]</a><br>"
-			dat += "Value: <a href='?src=\ref[src];choice=trans_value'>T[transaction_amount]</a><br>"
+			dat += "Value: <a href='?src=\ref[src];choice=trans_value'>[transaction_amount][CREDS]</a><br>"
 			dat += "Linked account: <a href='?src=\ref[src];choice=link_account'>[linked_account ? linked_account.owner_name : "None"]</a><hr>"
 			dat += "<a href='?src=\ref[src];choice=change_code'>Change access code</a><br>"
 			dat += "<a href='?src=\ref[src];choice=change_id'>Change EFTPOS ID</a><br>"
@@ -122,7 +123,7 @@
 	else if (istype(O, /obj/item/spacecash/ewallet))
 		var/obj/item/spacecash/ewallet/E = O
 		if (linked_account)
-			if(!linked_account.suspended)
+			if(linked_account.is_valid())
 				if(transaction_locked && !transaction_paid)
 					if(transaction_amount <= E.worth)
 						playsound(src, 'sound/machines/chime.ogg', 50, 1)
@@ -131,8 +132,10 @@
 
 						//transfer the money
 						E.worth -= transaction_amount
-						var/datum/transaction/T = new(E.owner_name, (transaction_purpose ? transaction_purpose : "None supplied."), transaction_amount, machine_id)
-						linked_account.do_transaction(T)
+
+						//create entry in the EFTPOS linked account transaction log
+						var/datum/transaction/T = new(transaction_amount, E.owner_name, transaction_purpose ? transaction_purpose : "None supplied.", machine_id)
+						T.apply_to(linked_account)
 					else
 						to_chat(usr, "\icon[src]<span class='warning'>\The [O] doesn't have that much money!</span>")
 			else
@@ -169,7 +172,7 @@
 				var/attempt_pin = input("Enter pin code", "Account pin") as num
 				linked_account = attempt_account_access(attempt_account_num, attempt_pin, 1)
 				if(linked_account)
-					if(linked_account.suspended)
+					if(!linked_account.is_valid())
 						linked_account = null
 						to_chat(usr, "\icon[src]<span class='warning'>Account has been suspended.</span>")
 				else
@@ -209,7 +212,7 @@
 				var/obj/item/I = usr.get_active_hand()
 				if (istype(I, /obj/item/card))
 					var/obj/item/card/id/C = I
-					if(access_cent_captain in C.access || access_hop in C.access || access_captain in C.access)
+					if(access_cent_captain in C.access || (access_hop in C.access) || (access_captain in C.access))
 						access_code = 0
 						to_chat(usr, "\icon[src]<span class='info'>Access code reset to 0.</span>")
 				else if (istype(I, /obj/item/card/emag))
@@ -227,7 +230,7 @@
 			usr.visible_message("<span class='info'>\The [usr] swipes \the [ID_container] through \the [src].</span>")
 		if(transaction_locked && !transaction_paid)
 			if(linked_account)
-				if(!linked_account.suspended)
+				if(linked_account.is_valid())
 					var/attempt_pin = ""
 					var/datum/money_account/D = get_account(C.associated_account_number)
 					if(D.security_level)
@@ -235,18 +238,22 @@
 						D = null
 					D = attempt_account_access(C.associated_account_number, attempt_pin, 2)
 					if(D)
-						if(!D.suspended)
+						if(D.is_valid())
 							if(transaction_amount <= D.money)
 								playsound(src, 'sound/machines/chime.ogg', 50, 1)
 								src.visible_message("\icon[src] \The [src] chimes.")
 								transaction_paid = 1
 
 								//transfer the money
-								var/datum/transaction/T = new("[linked_account.owner_name] (via [eftpos_name])", transaction_purpose, -transaction_amount, machine_id)
-								D.do_transaction(T)
-
-								T = new(D.owner_name, transaction_purpose, transaction_amount, machine_id)
-								linked_account.do_transaction(T)
+								//create entries in the two account transaction logs
+								var/datum/transaction/T = new(-transaction_amount, "[linked_account.owner_name] (via [eftpos_name])", transaction_purpose, machine_id)
+								T.apply_to(D)
+								//
+								T = new(
+									transaction_amount, D.owner_name,
+									transaction_purpose, machine_id
+								)
+								T.apply_to(linked_account)
 							else
 								to_chat(usr, "\icon[src]<span class='warning'>You don't have that much money!</span>")
 						else
@@ -257,16 +264,16 @@
 					to_chat(usr, "\icon[src]<span class='warning'>Connected account has been suspended.</span>")
 			else
 				to_chat(usr, "\icon[src]<span class='warning'>EFTPOS is not connected to an account.</span>")
-	else if (istype(I, /obj/item/card/emag))
-		if(transaction_locked)
-			if(transaction_paid)
-				to_chat(usr, "\icon[src]<span class='info'>You stealthily swipe \the [I] through \the [src].</span>")
-				transaction_locked = 0
-				transaction_paid = 0
-			else
-				usr.visible_message("<span class='info'>\The [usr] swipes a card through \the [src].</span>")
-				playsound(src, 'sound/machines/chime.ogg', 50, 1)
-				src.visible_message("\icon[src] \The [src] chimes.")
-				transaction_paid = 1
 
-	//emag?
+//emag?
+/obj/item/device/eftpos/emag_act(var/remaining_charges, var/mob/user, var/emag_source)
+	if(transaction_locked)
+		if(transaction_paid)
+			to_chat(usr, "\icon[src]<span class='info'>You stealthily swipe \the [emag_source] through \the [src].</span>")
+			transaction_locked = 0
+			transaction_paid = 0
+		else
+			usr.visible_message("<span class='info'>\The [usr] swipes a card through \the [src].</span>")
+			playsound(src, 'sound/machines/chime.ogg', 50, 1)
+			src.visible_message("\icon[src] \The [src] chimes.")
+			transaction_paid = 1

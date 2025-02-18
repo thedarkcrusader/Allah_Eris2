@@ -4,57 +4,58 @@
 	icon = 'icons/obj/janitor.dmi'
 	icon_state = "cleaner"
 	item_state = "cleaner"
-	item_flags = ITEM_FLAG_NO_BLUDGEON
-	atom_flags = ATOM_FLAG_OPEN_CONTAINER
+	flags = NOBLUDGEON
+	reagent_flags = OPENCONTAINER
 	slot_flags = SLOT_BELT
 	throwforce = 3
 	w_class = ITEM_SIZE_SMALL
 	throw_speed = 2
 	throw_range = 10
 	amount_per_transfer_from_this = 10
-	unacidable = 1 //plastic
-	possible_transfer_amounts = "5;10" //Set to null instead of list, if there is only one.
+	unacidable = TRUE //plastic
+	possible_transfer_amounts = list(5,10) //Set to null instead of list, if there is only one.
+	matter = list(MATERIAL_PLASTIC = 2)
+	volume = 250
 	var/spray_size = 3
 	var/list/spray_sizes = list(1,3)
-	var/step_delay = 10 // lower is faster
-	volume = 250
 
-/obj/item/reagent_containers/spray/New()
-	..()
+/obj/item/reagent_containers/spray/Initialize()
+	. = ..()
 	src.verbs -= /obj/item/reagent_containers/verb/set_APTFT
 
 /obj/item/reagent_containers/spray/afterattack(atom/A as mob|obj, mob/user as mob, proximity)
-	if(istype(A, /obj/item/storage) || istype(A, /obj/structure/table) || istype(A, /obj/structure/closet) || istype(A, /obj/item/reagent_containers) || istype(A, /obj/structure/sink) || istype(A, /obj/structure/janitorialcart))
-		return
-
-	if(istype(A, /spell))
-		return
-
 	if(proximity)
 		if(standard_dispenser_refill(user, A))
 			return
 
+	if(loc != user)
+		return ..()
+
+	if(istype(A, /obj/item/reagent_containers) || istype(A, /obj/structure/sink))
+		return ..()
+
 	if(reagents.total_volume < amount_per_transfer_from_this)
-		to_chat(user, "<span class='notice'>\The [src] is empty!</span>")
+		to_chat(user, SPAN_NOTICE("\The [src] is empty!"))
 		return
 
 	Spray_at(A, user, proximity)
 
-	user.setClickCooldown(DEFAULT_QUICK_COOLDOWN)
+	playsound(src.loc, 'sound/effects/spray2.ogg', 50, 1, -6)
 
-	if(reagents.has_reagent(/datum/reagent/acid))
+	user.setClickCooldown(4)
+
+	if(reagents.has_reagent("sacid"))
 		message_admins("[key_name_admin(user)] fired sulphuric acid from \a [src].")
 		log_game("[key_name(user)] fired sulphuric acid from \a [src].")
-	if(reagents.has_reagent(/datum/reagent/acid/polyacid))
+	if(reagents.has_reagent("pacid"))
 		message_admins("[key_name_admin(user)] fired Polyacid from \a [src].")
 		log_game("[key_name(user)] fired Polyacid from \a [src].")
-	if(reagents.has_reagent(/datum/reagent/lube))
+	if(reagents.has_reagent("lube"))
 		message_admins("[key_name_admin(user)] fired Space lube from \a [src].")
 		log_game("[key_name(user)] fired Space lube from \a [src].")
 	return
 
 /obj/item/reagent_containers/spray/proc/Spray_at(atom/A as mob|obj, mob/user as mob, proximity)
-	playsound(src.loc, 'sound/effects/spray2.ogg', 50, 1, -6)
 	if (A.density && proximity)
 		A.visible_message("[usr] sprays [A] with [src].")
 		reagents.splash(A, amount_per_transfer_from_this)
@@ -67,20 +68,20 @@
 				return
 			reagents.trans_to_obj(D, amount_per_transfer_from_this)
 			D.set_color()
-			D.set_up(my_target, spray_size, step_delay)
+			D.set_up(my_target, spray_size, 10)
 	return
 
 /obj/item/reagent_containers/spray/attack_self(var/mob/user)
 	if(!possible_transfer_amounts)
 		return
-	amount_per_transfer_from_this = next_in_list(amount_per_transfer_from_this, cached_number_list_decode(possible_transfer_amounts))
-	spray_size = next_in_list(spray_size, spray_sizes)
-	to_chat(user, "<span class='notice'>You adjusted the pressure nozzle. You'll now use [amount_per_transfer_from_this] units per spray.</span>")
+	amount_per_transfer_from_this = next_list_item(amount_per_transfer_from_this, possible_transfer_amounts)
+	spray_size = next_list_item(spray_size, spray_sizes)
+	to_chat(user, SPAN_NOTICE("You adjusted the pressure nozzle. You'll now use [amount_per_transfer_from_this] units per spray."))
 
-/obj/item/reagent_containers/spray/examine(mob/user)
-	if(..(user, 0) && loc == user)
-		to_chat(user, "[round(reagents.total_volume)] unit\s left.")
-	return
+/obj/item/reagent_containers/spray/examine(mob/user, extra_description = "")
+	if(get_dist(user, src) < 2)
+		extra_description += "\n[round(reagents.total_volume)] units left."
+	..(user, extra_description)
 
 /obj/item/reagent_containers/spray/verb/empty()
 
@@ -91,57 +92,40 @@
 	if (alert(usr, "Are you sure you want to empty that?", "Empty Bottle:", "Yes", "No") != "Yes")
 		return
 	if(isturf(usr.loc))
-		to_chat(usr, "<span class='notice'>You empty \the [src] onto the floor.</span>")
+		to_chat(usr, SPAN_NOTICE("You empty \the [src] onto the floor."))
 		reagents.splash(usr.loc, reagents.total_volume)
 
 //space cleaner
 /obj/item/reagent_containers/spray/cleaner
 	name = "space cleaner"
 	desc = "BLAM!-brand non-foaming space cleaner!"
-	step_delay = 6
+	preloaded_reagents = list("cleaner" = 250)
 
-/obj/item/reagent_containers/spray/cleaner/warfare
-	name = "trench cleaner"
-	desc = "Something has to get rid of the practitioner's leftovers."
-
-/obj/item/reagent_containers/spray/cleaner/New()
-	..()
-	reagents.add_reagent(/datum/reagent/space_cleaner, volume)
+/obj/item/reagent_containers/spray/cleaner/drone
+	volume = 50
+	preloaded_reagents = list("cleaner" = 50)
 
 /obj/item/reagent_containers/spray/sterilizine
 	name = "sterilizine"
 	desc = "Great for hiding incriminating bloodstains and sterilizing scalpels."
-
-/obj/item/reagent_containers/spray/sterilizine/New()
-	..()
-	reagents.add_reagent(/datum/reagent/sterilizine, volume)
-
-/obj/item/reagent_containers/spray/hair_remover
-	name = "hair remover"
-	desc = "Very effective at removing hair, feathers, spines and horns."
-
-/obj/item/reagent_containers/spray/hair_remover/New()
-	..()
-	reagents.add_reagent(/datum/reagent/toxin/hair_remover, volume)
+	preloaded_reagents = list("sterilizine" = 250)
 
 /obj/item/reagent_containers/spray/pepper
 	name = "pepperspray"
-	desc = "Manufactured by Uhang Inc., it fires a mist of condensed capsaicin to blind and down an opponent quickly."
+	desc = "Manufactured by UhangInc, used to blind and down an opponent quickly."
 	icon = 'icons/obj/weapons.dmi'
 	icon_state = "pepperspray"
 	item_state = "pepperspray"
 	possible_transfer_amounts = null
-	volume = 60
+	price_tag = 300
+	volume = 40
 	var/safety = 1
-	step_delay = 1
+	preloaded_reagents = list("condensedcapsaicin" = 40)
 
-/obj/item/reagent_containers/spray/pepper/New()
-	..()
-	reagents.add_reagent(/datum/reagent/capsaicin/condensed, 60)
-
-/obj/item/reagent_containers/spray/pepper/examine(mob/user)
-	if(..(user, 1))
-		to_chat(user, "The safety is [safety ? "on" : "off"].")
+/obj/item/reagent_containers/spray/pepper/examine(mob/user, extra_description = "")
+	if(get_dist(user, src) < 2)
+		extra_description += "\nThe safety is [safety ? "on" : "off"]."
+	..(user, extra_description)
 
 /obj/item/reagent_containers/spray/pepper/attack_self(var/mob/user)
 	safety = !safety
@@ -160,25 +144,23 @@
 	icon_state = "sunflower"
 	item_state = "sunflower"
 	amount_per_transfer_from_this = 1
-	possible_transfer_amounts = null
-	volume = 10
-
-/obj/item/reagent_containers/spray/waterflower/New()
-	..()
-	reagents.add_reagent(/datum/reagent/water, 10)
+	possible_transfer_amounts = list(1, 5, 10)
+	preloaded_reagents = list("water" = 50)
 
 /obj/item/reagent_containers/spray/chemsprayer
 	name = "chem sprayer"
 	desc = "A utility used to spray large amounts of reagent in a given area."
-	icon = 'icons/obj/gun.dmi'
+	icon = 'icons/obj/weapons.dmi'
+	description_info = "Holds 600 units, sprays 30 per use."
+	description_antag = "Can be used to spray acid or lube"
 	icon_state = "chemsprayer"
 	item_state = "chemsprayer"
 	throwforce = 3
-	w_class = ITEM_SIZE_LARGE
+	w_class = ITEM_SIZE_NORMAL
+	matter = list(MATERIAL_STEEL = 20, MATERIAL_PLASTIC = 4)
 	possible_transfer_amounts = null
 	volume = 600
 	origin_tech = list(TECH_COMBAT = 3, TECH_MATERIAL = 3, TECH_ENGINEERING = 3)
-	step_delay = 8
 
 /obj/item/reagent_containers/spray/chemsprayer/Spray_at(atom/A as mob|obj)
 	var/direction = get_dir(src, A)
@@ -207,15 +189,23 @@
 	icon_state = "plantbgone"
 	item_state = "plantbgone"
 	volume = 100
-
-/obj/item/reagent_containers/spray/plantbgone/New()
-	..()
-	reagents.add_reagent(/datum/reagent/toxin/plantbgone, 100)
+	preloaded_reagents = list("plantbgone" = 100)
 
 /obj/item/reagent_containers/spray/plantbgone/afterattack(atom/A as mob|obj, mob/user as mob, proximity)
 	if(!proximity) return
 
 	if(istype(A, /obj/effect/blob)) // blob damage in blob code
 		return
-
 	..()
+
+
+/obj/item/reagent_containers/spray/vvd40
+	name = "VVD-40"
+	desc = "Relic of ancient times, rumoured to fix anything duct tape can't."
+	icon = 'icons/obj/tools.dmi'
+	icon_state = "rejuvenating_agent_spray"
+	volume = 100
+	preloaded_reagents = list("rejuvenating_agent" = 50)
+	spawn_blacklisted = TRUE
+	rarity_value = 40
+	spawn_tags = SPAWN_TAG_TOOL

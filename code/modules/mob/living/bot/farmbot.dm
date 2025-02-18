@@ -22,171 +22,205 @@
 
 	var/obj/structure/reagent_dispensers/watertank/tank
 
-/mob/living/bot/farmbot/New(var/newloc, var/newTank)
-	..(newloc)
-	if(!newTank)
-		newTank = new /obj/structure/reagent_dispensers/watertank(src)
-	tank = newTank
-	tank.forceMove(src)
+	var/attacking = 0
+	var/list/path = list()
+	var/atom/target
+	var/frustration = 0
 
-/mob/living/bot/farmbot/premade
-	name = "Old Ben"
-	on = 0
-
-/mob/living/bot/farmbot/GetInteractTitle()
-	. = "<head><title>Farmbot controls</title></head>"
-	. += "<b>Automatic Hyrdoponic Assisting Unit v1.0</b>"
-
-/mob/living/bot/farmbot/GetInteractStatus()
+/mob/living/bot/farmbot/Initialize()
 	. = ..()
-	. += "<br>Water tank: "
-	if(tank)
-		. += "[tank.reagents.total_volume]/[tank.reagents.maximum_volume]"
+	tank = locate() in contents
+	if(!tank)
+		tank = new /obj/structure/reagent_dispensers/watertank(src)
+
+/mob/living/bot/farmbot/attack_hand(var/mob/user as mob)
+	. = ..()
+	if(.)
+		return
+	var/dat = ""
+	dat += "<TT><B>Automatic Hyrdoponic Assisting Unit v1.0</B></TT><BR><BR>"
+	dat += "Status: <A href='?src=\ref[src];power=1'>[on ? "On" : "Off"]</A><BR>"
+	dat += "Water Tank: "
+	if (tank)
+		dat += "[tank.reagents.total_volume]/[tank.reagents.maximum_volume]"
 	else
-		. += "error: not found"
+		dat += "Error: Watertank not found"
+	dat += "<br>Behaviour controls are [locked ? "locked" : "unlocked"]<hr>"
+	if(!locked)
+		dat += "<TT>Watering controls:<br>"
+		dat += "Water plants : <A href='?src=\ref[src];water=1'>[waters_trays ? "Yes" : "No"]</A><BR>"
+		dat += "Refill watertank : <A href='?src=\ref[src];refill=1'>[refills_water ? "Yes" : "No"]</A><BR>"
+		dat += "<br>Weeding controls:<br>"
+		dat += "Weed plants: <A href='?src=\ref[src];weed=1'>[uproots_weeds ? "Yes" : "No"]</A><BR>"
+		dat += "<br>Nutriment controls:<br>"
+		dat += "Replace fertilizer: <A href='?src=\ref[src];replacenutri=1'>[replaces_nutriment ? "Yes" : "No"]</A><BR>"
+		dat += "<br>Plant controls:<br>"
+		dat += "Collect produce: <A href='?src=\ref[src];collect=1'>[collects_produce ? "Yes" : "No"]</A><BR>"
+		dat += "Remove dead plants: <A href='?src=\ref[src];removedead=1'>[removes_dead ? "Yes" : "No"]</A><BR>"
+		dat += "</TT>"
 
-/mob/living/bot/farmbot/GetInteractPanel()
-	. = "Water plants : <a href='?src=\ref[src];command=water'>[waters_trays ? "Yes" : "No"]</a>"
-	. += "<br>Refill watertank : <a href='?src=\ref[src];command=refill'>[refills_water ? "Yes" : "No"]</a>"
-	. += "<br>Weed plants: <a href='?src=\ref[src];command=weed'>[uproots_weeds ? "Yes" : "No"]</a>"
-	. += "<br>Replace fertilizer: <a href='?src=\ref[src];command=replacenutri'>[replaces_nutriment ? "Yes" : "No"]</a>"
-	. += "<br>Collect produce: <a href='?src=\ref[src];command=collect'>[collects_produce ? "Yes" : "No"]</a>"
-	. += "<br>Remove dead plants: <a href='?src=\ref[src];command=removedead'>[removes_dead ? "Yes" : "No"]</a>"
-
-/mob/living/bot/farmbot/GetInteractMaintenance()
-	. = "Plant identifier status: "
-	switch(emagged)
-		if(0)
-			. += "<a href='?src=\ref[src];command=emag'>Normal</a>"
-		if(1)
-			. += "<a href='?src=\ref[src];command=emag'>Scrambled (DANGER)</a>"
-		if(2)
-			. += "ERROROROROROR-----"
-
-/mob/living/bot/farmbot/ProcessCommand(var/mob/user, var/command, var/href_list)
-	..()
-	if(CanAccessPanel(user))
-		switch(command)
-			if("water")
-				waters_trays = !waters_trays
-			if("refill")
-				refills_water = !refills_water
-			if("weed")
-				uproots_weeds = !uproots_weeds
-			if("replacenutri")
-				replaces_nutriment = !replaces_nutriment
-			if("collect")
-				collects_produce = !collects_produce
-			if("removedead")
-				removes_dead = !removes_dead
-
-	if(CanAccessMaintenance(user))
-		switch(command)
-			if("emag")
-				if(emagged < 2)
-					emagged = !emagged
+	user << browse("<HEAD><TITLE>Farmbot v1.0 controls</TITLE></HEAD>[dat]", "window=autofarm")
+	onclose(user, "autofarm")
+	return
 
 /mob/living/bot/farmbot/emag_act(var/remaining_charges, var/mob/user)
 	. = ..()
 	if(!emagged)
 		if(user)
-			to_chat(user, "<span class='notice'>You short out [src]'s plant identifier circuits.</span>")
-			ignore_list |= user
-		emagged = 2
+			to_chat(user, SPAN_NOTICE("You short out [src]'s plant identifier circuits."))
+		spawn(rand(30, 50))
+			visible_message(SPAN_WARNING("[src] buzzes oddly."))
+			playsound(loc, "robot_talk_heavy", 100, 0, 0)
+			emagged = 1
 		return 1
+
+/mob/living/bot/farmbot/Topic(href, href_list)
+	if(..())
+		return
+	usr.machine = src
+	add_fingerprint(usr)
+	if((href_list["power"]) && (access_scanner.allowed(usr)))
+		if(on)
+			turn_off()
+		else
+			turn_on()
+
+	if(locked)
+		return
+
+	if(href_list["water"])
+		waters_trays = !waters_trays
+	else if(href_list["refill"])
+		refills_water = !refills_water
+	else if(href_list["weed"])
+		uproots_weeds = !uproots_weeds
+	else if(href_list["replacenutri"])
+		replaces_nutriment = !replaces_nutriment
+	else if(href_list["collect"])
+		collects_produce = !collects_produce
+	else if(href_list["removedead"])
+		removes_dead = !removes_dead
+
+	attack_hand(usr)
+	return
 
 /mob/living/bot/farmbot/update_icons()
 	if(on && action)
 		icon_state = "farmbot_[action]"
 	else
 		icon_state = "farmbot[on]"
+	..()
 
-/mob/living/bot/farmbot/handleRegular()
+/mob/living/bot/farmbot/Life()
+	..()
+	if(!on)
+		return
 	if(emagged && prob(1))
 		flick("farmbot_broke", src)
+	if(client)
+		return
 
-/mob/living/bot/farmbot/handleAdjacentTarget()
-	UnarmedAttack(target)
-
-/mob/living/bot/farmbot/lookForTargets()
-	if(emagged)
-		for(var/mob/living/carbon/human/H in view(7, src))
-			target = H
-			return
+	if(target)
+		if(Adjacent(target))
+			UnarmedAttack(target)
+			path = list()
+			target = null
+		else
+			if(path.len && frustration < 5)
+				if(path[1] == loc)
+					path -= path[1]
+				if(path.len)
+					var/t = step_towards(src, path[1])
+					if(t)
+						path -= path[1]
+					else
+						++frustration
+			else
+				path = list()
+				target = null
 	else
-		for(var/obj/machinery/portable_atmospherics/hydroponics/tray in view(7, src))
-			if(confirmTarget(tray))
-				target = tray
-				return
-		if(!target && refills_water && tank && tank.reagents.total_volume < tank.reagents.maximum_volume)
-			for(var/obj/structure/sink/source in view(7, src))
-				target = source
-				return
-
-/mob/living/bot/farmbot/calcTargetPath() // We need to land NEXT to the tray, because the tray itself is impassable
-	for(var/trayDir in list(NORTH, SOUTH, EAST, WEST))
-		target_path = AStar(get_turf(loc), get_step(get_turf(target), trayDir), /turf/proc/CardinalTurfsWithAccess, /turf/proc/Distance, 0, max_target_dist, id = botcard)
-		if(target_path)
-			break
-	if(!target_path)
-		ignore_list |= target
-		target = null
-		target_path = list()
-	return
-
-/mob/living/bot/farmbot/stepToTarget() // Same reason
-	var/turf/T = get_turf(target)
-	if(!target_path.len || !T.Adjacent(target_path[target_path.len]))
-		calcTargetPath()
-	makeStep(target_path)
-	return
+		if(emagged)
+			for(var/mob/living/carbon/human/H in view(7, src))
+				target = H
+				break
+		else
+			for(var/obj/machinery/portable_atmospherics/hydroponics/tray in view(7, src))
+				if(process_tray(tray))
+					target = tray
+					frustration = 0
+					break
+			if(!target && refills_water && tank && tank.reagents.total_volume < tank.reagents.maximum_volume)
+				for(var/obj/structure/sink/source in view(7, src))
+					target = source
+					frustration = 0
+					break
+		if(target)
+			var/t = get_dir(target, src) // Turf with the tray is impassable, so a* can't navigate directly to it
+			path = AStar(loc, get_step(target, t), /turf/proc/CardinalTurfsWithAccess, /turf/proc/Distance, 0, 30, id = botcard)
+			if(!path)
+				path = list()
 
 /mob/living/bot/farmbot/UnarmedAttack(var/atom/A, var/proximity)
 	if(!..())
 		return
-	if(busy)
+	if(attacking)
 		return
 
 	if(istype(A, /obj/machinery/portable_atmospherics/hydroponics))
 		var/obj/machinery/portable_atmospherics/hydroponics/T = A
-		var/t = confirmTarget(T)
+		var/t = process_tray(T)
 		switch(t)
 			if(0)
 				return
 			if(FARMBOT_COLLECT)
-				action = "water" // Needs a better one
+				action = "collect"
 				update_icons()
 				visible_message("<span class='notice'>[src] starts [T.dead? "removing the plant from" : "harvesting"] \the [A].</span>")
-				busy = 1
+				playsound(loc, "robot_talk_heavy", 100, 0, 0)
+				var/message = pick("I WILL GATHER.", "TIME FOR THE HARVEST.", "YOURE TIME HAS COME.", "WHAT YOU SOW IS WHAT YOU REAP.", "PLOW IT UP.", "IT'S THE HARVEST MOON.", "THE HEART OF PERFECT FARMING", "THE CREAM OF THE CROP.")
+				say(message)
+				attacking = 1
 				if(do_after(src, 30, A))
 					visible_message("<span class='notice'>[src] [T.dead? "removes the plant from" : "harvests"] \the [A].</span>")
 					T.attack_hand(src)
 			if(FARMBOT_WATER)
 				action = "water"
 				update_icons()
-				visible_message("<span class='notice'>[src] starts watering \the [A].</span>")
-				busy = 1
+				visible_message(SPAN_NOTICE("[src] starts watering \the [A]."))
+				playsound(loc, "robot_talk_heavy", 100, 0, 0)
+				var/message = pick("WATER IS LIFE.", "YOU NEED WATER. I GIVE WATER.", "THOUSANDS LIVE WITHOUT LOVE, NOBODY WITHOUT WATER.", "NO WATER, NO LIFE. NO BLUE, NO GREEN.", "WATER IS THE DRIVING FORCE OF ALL NATURE.", "WATER CAN FLOW, OR IT CAN CRASH. BE WATER, MY FRIEND.", "KEEP CALM AND LOVE WATER", "WATER: THE ORIGINAL NO CALORIE DRINK.", "LIFE STARTS WITH WATER.")
+				say(message)
+				attacking = 1
 				if(do_after(src, 30, A))
 					playsound(loc, 'sound/effects/slosh.ogg', 25, 1)
-					visible_message("<span class='notice'>[src] waters \the [A].</span>")
+					visible_message(SPAN_NOTICE("[src] waters \the [A]."))
+					playsound(loc, "robot_talk_heavy", 100, 0, 0)
 					tank.reagents.trans_to(T, 100 - T.waterlevel)
 			if(FARMBOT_UPROOT)
 				action = "hoe"
 				update_icons()
-				visible_message("<span class='notice'>[src] starts uprooting the weeds in \the [A].</span>")
-				busy = 1
+				visible_message(SPAN_NOTICE("[src] starts uprooting the weeds in \the [A]."))
+				playsound(loc, "robot_talk_heavy", 100, 0, 0)
+				var/message = pick("I WILL PURGE THIS.", "YOU HAVE NO PLACE HERE.", "WEEDS ARE STUBBORN. WEEDS ARE INDEPENDENT. WEEDS ARE NOT TOLERATED.", "ONCE WEEDS GROW ROOTS, THEY ARE HARDER TO DIG UP.", "NO PLACE FOR PESTS.")
+				say(message)
+				attacking = 1
 				if(do_after(src, 30, A))
-					visible_message("<span class='notice'>[src] uproots the weeds in \the [A].</span>")
+					visible_message(SPAN_NOTICE("[src] uproots the weeds in \the [A]."))
+					playsound(loc, "robot_talk_heavy", 100, 0, 0)
 					T.weedlevel = 0
 			if(FARMBOT_NUTRIMENT)
 				action = "fertile"
 				update_icons()
-				visible_message("<span class='notice'>[src] starts fertilizing \the [A].</span>")
-				busy = 1
+				visible_message(SPAN_NOTICE("[src] starts fertilizing \the [A]."))
+				playsound(loc, "robot_talk_heavy", 100, 0, 0)
+				var/message = pick("MUST FEED YOU.", "YOU HAVE TO GROW BIG.", "DEATH IS GOOD. IT'S FERTILIZING.", "PLANTS WOULD RATHER BE DEFECATED ON THAN BE LOVED.", "ONLY NATURAL INGREDIENTS.")
+				say(message)
+				attacking = 1
 				if(do_after(src, 30, A))
-					visible_message("<span class='notice'>[src] fertilizes \the [A].</span>")
-					T.reagents.add_reagent(/datum/reagent/ammonia, 10)
-		busy = 0
+					visible_message(SPAN_NOTICE("[src] waters \the [A]."))
+					playsound(loc, "robot_talk_heavy", 100, 0, 0)
+					T.reagents.add_reagent("ammonia", 10)
+		attacking = 0
 		action = ""
 		update_icons()
 		T.update_icon()
@@ -195,43 +229,49 @@
 			return
 		action = "water"
 		update_icons()
-		visible_message("<span class='notice'>[src] starts refilling its tank from \the [A].</span>")
-		busy = 1
+		visible_message(SPAN_NOTICE("[src] starts refilling its tank from \the [A]."))
+		playsound(loc, "robot_talk_heavy", 100, 0, 0)
+		attacking = 1
 		while(do_after(src, 10) && tank.reagents.total_volume < tank.reagents.maximum_volume)
-			tank.reagents.add_reagent(/datum/reagent/water, 10)
+			tank.reagents.add_reagent("water", 10)
 			if(prob(5))
 				playsound(loc, 'sound/effects/slosh.ogg', 25, 1)
-		busy = 0
+		attacking = 0
 		action = ""
 		update_icons()
-		visible_message("<span class='notice'>[src] finishes refilling its tank.</span>")
+		visible_message(SPAN_NOTICE("[src] finishes refilling its tank."))
+		playsound(loc, "robot_talk_heavy", 100, 0, 0)
 	else if(emagged && ishuman(A))
 		var/action = pick("weed", "water")
-		busy = 1
+		attacking = 1
 		spawn(50) // Some delay
-			busy = 0
+			attacking = 0
 		switch(action)
 			if("weed")
 				flick("farmbot_hoe", src)
 				do_attack_animation(A)
 				if(prob(50))
-					visible_message("<span class='danger'>[src] swings wildly at [A] with a minihoe, missing completely!</span>")
+					visible_message(SPAN_DANGER("[src] swings wildly at [A] with a minihoe, missing completely!"))
+					playsound(loc, "robot_talk_heavy", 100, 0, 0)
 					return
 				var/t = pick("slashed", "sliced", "cut", "clawed")
 				A.attack_generic(src, 5, t)
+				playsound(loc, "robot_talk_heavy", 200, 0, 0)
+				var/message = pick("I WILL PURGE THIS.", "YOU HAVE NO PLACE HERE.")
+				say(message)
 			if("water")
 				flick("farmbot_water", src)
-				visible_message("<span class='danger'>[src] splashes [A] with water!</span>")
-				tank.reagents.splash(A, 100)
+				visible_message(SPAN_DANGER("[src] splashes [A] with water!")) // That's it. RP effect.
 
 /mob/living/bot/farmbot/explode()
-	visible_message("<span class='danger'>[src] blows apart!</span>")
+	visible_message(SPAN_DANGER("[src] blows apart!"))
+	playsound(loc, "robot_talk_heavy", 100, 2, 0)
 	var/turf/Tsec = get_turf(src)
 
-	new /obj/item/material/minihoe(Tsec)
+	new /obj/item/tool/minihoe(Tsec)
 	new /obj/item/reagent_containers/glass/bucket(Tsec)
 	new /obj/item/device/assembly/prox_sensor(Tsec)
-	new /obj/item/device/analyzer/plant_analyzer(Tsec)
+	new /obj/item/device/scanner/plant(Tsec)
 
 	if(tank)
 		tank.loc = Tsec
@@ -245,22 +285,8 @@
 	qdel(src)
 	return
 
-/mob/living/bot/farmbot/confirmTarget(var/atom/targ)
-	if(!..())
-		return 0
-
-	if(emagged && ishuman(targ))
-		if(targ in view(world.view, src))
-			return 1
-		return 0
-
-	if(istype(targ, /obj/structure/sink))
-		if(!tank || tank.reagents.total_volume >= tank.reagents.maximum_volume)
-			return 0
-		return 1
-
-	var/obj/machinery/portable_atmospherics/hydroponics/tray = targ
-	if(!istype(tray))
+/mob/living/bot/farmbot/proc/process_tray(var/obj/machinery/portable_atmospherics/hydroponics/tray)
+	if(!tray || !istype(tray))
 		return 0
 
 	if(tray.closed_system || !tray.seed)
@@ -269,7 +295,7 @@
 	if(tray.dead && removes_dead || tray.harvest && collects_produce)
 		return FARMBOT_COLLECT
 
-	else if(refills_water && tray.waterlevel < 40 && !tray.reagents.has_reagent(/datum/reagent/water))
+	else if(refills_water && tray.waterlevel < 40 && !tray.reagents.has_reagent("water"))
 		return FARMBOT_WATER
 
 	else if(uproots_weeds && tray.weedlevel > 3)
@@ -289,16 +315,13 @@
 	icon_state = "water_arm"
 	var/build_step = 0
 	var/created_name = "Farmbot"
-	var/obj/tank
 	w_class = ITEM_SIZE_NORMAL
 
-/obj/item/farmbot_arm_assembly/New(var/newloc, var/theTank)
-	..(newloc)
-	if(!theTank) // If an admin spawned it, it won't have a watertank it, so lets make one for em!
-		tank = new /obj/structure/reagent_dispensers/watertank(src)
-	else
-		tank = theTank
-		tank.forceMove(src)
+/obj/item/farmbot_arm_assembly/Initialize()
+	. = ..()
+	var tank = locate(/obj/structure/reagent_dispensers/watertank) in contents
+	if(!tank)
+		new /obj/structure/reagent_dispensers/watertank(src)
 
 
 /obj/structure/reagent_dispensers/watertank/attackby(var/obj/item/robot_parts/S, mob/user as mob)
@@ -306,39 +329,49 @@
 		..()
 		return
 
+	var/obj/item/farmbot_arm_assembly/A = new /obj/item/farmbot_arm_assembly(loc)
+
 	to_chat(user, "You add the robot arm to [src].")
+	playsound(src.loc, 'sound/effects/insert.ogg', 50, 1)
+	loc = A //Place the water tank into the assembly, it will be needed for the finished bot
 	user.drop_from_inventory(S)
 	qdel(S)
-	new /obj/item/farmbot_arm_assembly(loc, src)
 
 /obj/item/farmbot_arm_assembly/attackby(obj/item/W as obj, mob/user as mob)
 	..()
-	if((istype(W, /obj/item/device/analyzer/plant_analyzer)) && (build_step == 0))
+	if((istype(W, /obj/item/device/scanner/plant)) && (build_step == 0))
 		build_step++
 		to_chat(user, "You add the plant analyzer to [src].")
-		SetName("farmbot assembly")
+		playsound(src.loc, 'sound/effects/insert.ogg', 50, 1)
+		name = "farmbot assembly"
 		user.remove_from_mob(W)
 		qdel(W)
 
 	else if((istype(W, /obj/item/reagent_containers/glass/bucket)) && (build_step == 1))
 		build_step++
 		to_chat(user, "You add a bucket to [src].")
-		SetName("farmbot assembly with bucket")
+		playsound(src.loc, 'sound/effects/insert.ogg', 50, 1)
+		name = "farmbot assembly with bucket"
 		user.remove_from_mob(W)
 		qdel(W)
 
-	else if((istype(W, /obj/item/material/minihoe)) && (build_step == 2))
+	else if((istype(W, /obj/item/tool/minihoe)) && (build_step == 2))
 		build_step++
 		to_chat(user, "You add a minihoe to [src].")
-		SetName("farmbot assembly with bucket and minihoe")
+		playsound(src.loc, 'sound/effects/insert.ogg', 50, 1)
+		name = "farmbot assembly with bucket and minihoe"
 		user.remove_from_mob(W)
 		qdel(W)
 
-	else if((isprox(W)) && (build_step == 3))
+	else if((isproxsensor(W)) && (build_step == 3))
 		build_step++
 		to_chat(user, "You complete the Farmbot! Beep boop.")
-		var/mob/living/bot/farmbot/S = new /mob/living/bot/farmbot(get_turf(src), tank)
-		S.SetName(created_name)
+		playsound(src.loc, 'sound/effects/insert.ogg', 50, 1)
+		var/mob/living/bot/farmbot/S = new /mob/living/bot/farmbot(get_turf(src))
+		for(var/obj/structure/reagent_dispensers/watertank/wTank in contents)
+			wTank.loc = S
+			S.tank = wTank
+		S.name = created_name
 		user.remove_from_mob(W)
 		qdel(W)
 		qdel(src)

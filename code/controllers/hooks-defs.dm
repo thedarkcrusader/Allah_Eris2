@@ -1,10 +1,4 @@
 /**
- * Global init hook.
- * Called in global_init.dm when the server is initialized.
- */
-/hook/global_init
-
-/**
  * Startup hook.
  * Called in world.dm when the server starts.
  */
@@ -23,12 +17,6 @@
 /hook/roundend
 
 /**
- * Shutdown hook.
- * Called in world.dm when world/Del is called.
- */
-/hook/shutdown
-
-/**
  * Death hook.
  * Called in death.dm when someone dies.
  * Parameters: var/mob/living/carbon/human, var/gibbed
@@ -45,7 +33,7 @@
 /**
  * Debrained hook.
  * Called in brain_item.dm when someone gets debrained.
- * Parameters: var/obj/item/organ/internal/brain
+ * Parameters: var/obj/item/organ/internal/vital/brain
  */
 /hook/debrain
 
@@ -55,13 +43,6 @@
  * Parameters: var/mob/living/silicon/robot
  */
 /hook/borgify
-
-/**
- * Podman hook.
- * Called in podmen.dm when someone is brought back as a Diona.
- * Parameters: var/mob/living/carbon/alien/diona
- */
-/hook/harvest_podman
 
 /**
  * Payroll revoked hook.

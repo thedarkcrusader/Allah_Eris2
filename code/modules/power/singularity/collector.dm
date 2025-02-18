@@ -1,157 +1,155 @@
-//This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:33
-var/global/list/rad_collectors = list()
+GLOBAL_LIST_EMPTY(rad_collectors)
 
 /obj/machinery/power/rad_collector
-	name = "Radiation Collector Array"
-	desc = "A device which uses radiation and phoron to produce power."
+	name = "radiation collector array"
+	desc = "A device which uses Hawking Radiation and plasma to produce power."
 	icon = 'icons/obj/singularity.dmi'
 	icon_state = "ca"
-	anchored = 0
-	density = 1
+	anchored = FALSE
+	density = TRUE
 	req_access = list(access_engine_equip)
-//	use_power = 0
-	var/obj/item/tank/phoron/P = null
+
+	var/obj/item/tank/plasma/P = null
 	var/last_power = 0
 	var/last_power_new = 0
-	var/active = 0
-	var/locked = 0
+	var/active = FALSE
+	var/locked = FALSE
 	var/drainratio = 1
 
-/obj/machinery/power/rad_collector/New()
-	..()
-	rad_collectors += src
+/obj/machinery/power/rad_collector/Initialize()
+	. = ..()
+	GLOB.rad_collectors += src
 
 /obj/machinery/power/rad_collector/Destroy()
-	rad_collectors -= src
-	. = ..()
+	QDEL_NULL(P)
+	GLOB.rad_collectors -= src
+	return ..()
 
 /obj/machinery/power/rad_collector/Process()
 	//so that we don't zero out the meter if the SM is processed first.
 	last_power = last_power_new
 	last_power_new = 0
 
-	if(P && active)
-		var/rads = radiation_repository.get_rads_at_turf(get_turf(src))
-		if(rads)
-			receive_pulse(rads * 5) //Maths is hard
 
 	if(P)
-		if(P.air_contents.gas["phoron"] == 0)
+		if(P.air_contents.gas["plasma"] == 0)
 			investigate_log("<font color='red'>out of fuel</font>.","singulo")
 			eject()
 		else
-			P.air_contents.adjust_gas("phoron", -0.001*drainratio)
+			P.air_contents.adjust_gas("plasma", -0.001*drainratio)
 	return
 
 
-/obj/machinery/power/rad_collector/attack_hand(mob/user as mob)
+/obj/machinery/power/rad_collector/attack_hand(mob/user)
 	if(anchored)
-		if(!src.locked)
+		if(!locked)
 			toggle_power()
-			user.visible_message("[user.name] turns the [src.name] [active? "on":"off"].", \
-			"You turn the [src.name] [active? "on":"off"].")
-			investigate_log("turned [active?"<font color='green'>on</font>":"<font color='red'>off</font>"] by [user.key]. [P?"Fuel: [round(P.air_contents.gas["phoron"]/0.29)]%":"<font color='red'>It is empty</font>"].","singulo")
-			return
+			user.visible_message(
+				SPAN_NOTICE("[user] turns [src] [active? "on" : "off"]."),
+				SPAN_NOTICE("You turn [src] [active ? "on" : "off"].")
+				)
+			investigate_log("turned [active?"<font color='green'>on</font>":"<font color='red'>off</font>"] by [user.key]. [P?"Fuel: [round(P.air_contents.gas["plasma"]/0.29)]%":"<font color='red'>It is empty</font>"].","singulo")
 		else
-			to_chat(user, "<span class='warning'>The controls are locked!</span>")
-			return
+			to_chat(user, SPAN_WARNING("The controls are locked!"))
+		return
 	..()
 
 
-/obj/machinery/power/rad_collector/attackby(obj/item/W, mob/user)
-	if(istype(W, /obj/item/tank/phoron))
-		if(!src.anchored)
-			to_chat(user, "<span class='warning'>The [src] needs to be secured to the floor first.</span>")
-			return 1
-		if(src.P)
-			to_chat(user, "<span class='warning'>There's already a phoron tank loaded.</span>")
-			return 1
-		user.drop_item()
-		src.P = W
-		W.loc = src
-		update_icons()
-		return 1
-	else if(isCrowbar(W))
-		if(P && !src.locked)
-			eject()
-			return 1
-	else if(isWrench(W))
+/obj/machinery/power/rad_collector/attackby(obj/item/I, mob/user)
+
+	var/list/usable_qualities = list()
+	if(P && !src.locked)
+		usable_qualities.Add(QUALITY_PRYING)
+	if(!P)
+		usable_qualities.Add(QUALITY_BOLT_TURNING)
+
+	var/tool_type = I.get_tool_type(user, usable_qualities, src)
+	switch(tool_type)
+		if(QUALITY_PRYING)
+			if(P && !locked)
+				if(I.use_tool(user, src, WORKTIME_NORMAL, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+					eject()
+			return
+
+		if(QUALITY_BOLT_TURNING)
+			if(!P)
+				if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+					anchored = !anchored
+					user.visible_message(
+						SPAN_NOTICE("[user] [anchored ? "secures" : "unsecures"] [src]."),
+						SPAN_NOTICE("You [anchored ? "secure" : "undo"] the external bolts."),
+						"You hear a ratchet")
+					if(anchored)
+						connect_to_network()
+					else
+						disconnect_from_network()
+			return
+
+		if(ABORT_CHECK)
+			return
+
+	if(istype(I, /obj/item/tank/plasma))
+		if(!anchored)
+			to_chat(user, SPAN_WARNING("[src] needs to be secured to the floor first."))
+			return
 		if(P)
-			to_chat(user, "<span class='notice'>Remove the phoron tank first.</span>")
-			return 1
-		for(var/obj/machinery/power/rad_collector/R in get_turf(src))
-			if(R != src)
-				to_chat(user, "<span class='warning'>You cannot install more than one collector on the same spot.</span>")
-				return 1
-		playsound(src.loc, 'sound/items/Ratchet.ogg', 75, 1)
-		src.anchored = !src.anchored
-		user.visible_message("[user.name] [anchored? "secures":"unsecures"] the [src.name].", \
-			"You [anchored? "secure":"undo"] the external bolts.", \
-			"You hear a ratchet")
-		if(anchored)
-			connect_to_network()
-		else
-			disconnect_from_network()
-		return 1
-	else if(istype(W, /obj/item/card/id)||istype(W, /obj/item/device/pda))
-		if (src.allowed(user))
+			to_chat(user, SPAN_WARNING("[src] already has a plasma tank loaded."))
+			return
+		user.drop_item()
+		P = I
+		I.forceMove(src)
+		update_icons()
+		return
+
+	else if(istype(I, /obj/item/card/id)||istype(I, /obj/item/modular_computer))
+		if(allowed(user))
 			if(active)
-				src.locked = !src.locked
-				to_chat(user, "The controls are now [src.locked ? "locked." : "unlocked."]")
+				locked = !locked
+				to_chat(user, SPAN_NOTICE("The controls are now [locked ? "locked" : "unlocked"]."))
 			else
-				src.locked = 0 //just in case it somehow gets locked
-				to_chat(user, "<span class='warning'>The controls can only be locked when the [src] is active</span>")
+				locked = FALSE //just in case it somehow gets locked
+				to_chat(user, SPAN_WARNING("The controls can only be locked when [src] is active."))
 		else
-			to_chat(user, "<span class='warning'>Access denied!</span>")
-		return 1
+			to_chat(user, SPAN_WARNING("Access denied!"))
+		return
 	return ..()
 
-/obj/machinery/power/rad_collector/examine(mob/user)
-	if (..(user, 3))
-		to_chat(user, "The meter indicates that \the [src] is collecting [last_power] W.")
-		return 1
+/obj/machinery/power/rad_collector/examine(mob/user, extra_description = "")
+	extra_description += "The meter indicates that [src] is collecting [last_power] W."
+	..(user, extra_description)
 
-/obj/machinery/power/rad_collector/ex_act(severity)
-	switch(severity)
-		if(2, 3)
-			eject()
-	return ..()
+/obj/machinery/power/rad_collector/take_damage(amount)
+	if(amount > 50)
+		eject()
+	. = ..()
 
-/obj/machinery/power/rad_collector/return_air()
-	if(P)
-		return P.return_air()
 
 /obj/machinery/power/rad_collector/proc/eject()
-	locked = 0
-	var/obj/item/tank/phoron/Z = src.P
-	if (!Z)
+	locked = FALSE
+	if (!P)
 		return
-	Z.forceMove(get_turf(src))
-	Z.reset_plane_and_layer()
-	src.P = null
+	P.forceMove(drop_location())
+	P = null
 	if(active)
 		toggle_power()
 	else
 		update_icons()
 
-/obj/machinery/power/rad_collector/proc/receive_pulse(var/pulse_strength)
+/obj/machinery/power/rad_collector/proc/receive_pulse(pulse_strength)
 	if(P && active)
-		var/power_produced = 0
-		power_produced = P.air_contents.gas["phoron"]*pulse_strength*20
+		var/power_produced = P.air_contents.gas["plasma"]*pulse_strength*20
 		add_avail(power_produced)
 		last_power_new = power_produced
-		return
-	return
 
 
 /obj/machinery/power/rad_collector/proc/update_icons()
 	overlays.Cut()
 	if(P)
-		overlays += image('icons/obj/singularity.dmi', "ptank")
+		overlays += "ptank"
 	if(stat & (NOPOWER|BROKEN))
 		return
 	if(active)
-		overlays += image('icons/obj/singularity.dmi', "on")
+		overlays += "on"
 
 
 /obj/machinery/power/rad_collector/proc/toggle_power()
@@ -163,4 +161,6 @@ var/global/list/rad_collectors = list()
 		icon_state = "ca"
 		flick("ca_deactive", src)
 	update_icons()
-	return
+
+/obj/machinery/power/rad_collector/anchored
+	anchored = TRUE

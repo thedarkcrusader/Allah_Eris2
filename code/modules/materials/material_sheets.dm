@@ -1,28 +1,29 @@
 // Stacked resources. They use a material datum for a lot of inherited values.
 /obj/item/stack/material
-	force = 5.0
-	throwforce = 5
-	w_class = ITEM_SIZE_LARGE
+	force = WEAPON_FORCE_NORMAL
+	throwforce = WEAPON_FORCE_NORMAL
+	w_class = ITEM_SIZE_NORMAL
+	icon = 'icons/obj/stack/material.dmi'
 	throw_speed = 3
 	throw_range = 3
-	max_amount = 60
-	center_of_mass = null
-	randpixel = 3
+	max_amount = 120
+	bad_type = /obj/item/stack/material
 
-	var/default_type = DEFAULT_WALL_MATERIAL
+	var/default_type = MATERIAL_STEEL
 	var/material/material
-	var/perunit = SHEET_MATERIAL_AMOUNT
 	var/apply_colour //temp pending icon rewrite
 
 /obj/item/stack/material/Initialize()
 	. = ..()
+	pixel_x = rand(0,10)-5
+	pixel_y = rand(0,10)-5
+
 	if(!default_type)
-		default_type = DEFAULT_WALL_MATERIAL
+		default_type = MATERIAL_STEEL
 	material = get_material_by_name("[default_type]")
 	if(!material)
 		return INITIALIZE_HINT_QDEL
 
-	recipes = material.get_recipes()
 	stacktype = material.stack_type
 	if(islist(material.stack_origin_tech))
 		origin_tech = material.stack_origin_tech.Copy()
@@ -31,35 +32,39 @@
 		color = material.icon_colour
 
 	if(material.conductive)
-		obj_flags |= OBJ_FLAG_CONDUCTIBLE
-	else
-		obj_flags &= (~OBJ_FLAG_CONDUCTIBLE)
+		flags |= CONDUCT
 
 	matter = material.get_matter()
 	update_strings()
 
+/obj/item/stack/material/attack_self(mob/living/user)
+	user.craft_menu()
+
 /obj/item/stack/material/get_material()
 	return material
+
+/obj/item/stack/material/proc/get_default_type()
+	return default_type
 
 /obj/item/stack/material/proc/update_strings()
 	// Update from material datum.
 	singular_name = material.sheet_singular_name
 
 	if(amount>1)
-		SetName("[material.use_name] [material.sheet_plural_name]")
+		name = "[material.use_name] [material.sheet_plural_name]"
 		desc = "A stack of [material.use_name] [material.sheet_plural_name]."
 		gender = PLURAL
 	else
-		SetName("[material.use_name] [material.sheet_singular_name]")
+		name = "[material.use_name] [material.sheet_singular_name]"
 		desc = "A [material.sheet_singular_name] of [material.use_name]."
 		gender = NEUTER
 
-/obj/item/stack/material/use(var/used)
+/obj/item/stack/material/use(used)
 	. = ..()
 	update_strings()
 	return
 
-/obj/item/stack/material/transfer_to(obj/item/stack/S, var/tamount=null, var/type_verified)
+/obj/item/stack/material/transfer_to(obj/item/stack/S, tamount=null, type_verified)
 	var/obj/item/stack/material/M = S
 	if(!istype(M) || material.name != M.material.name)
 		return 0
@@ -68,12 +73,12 @@
 	if(M) M.update_strings()
 	return transfer
 
-/obj/item/stack/material/attack_self(var/mob/user)
+/obj/item/stack/material/attack_self(mob/user)
 	if(!material.build_windows(user, src))
 		..()
 
-/obj/item/stack/material/attackby(var/obj/item/W, var/mob/user)
-	if(isCoil(W))
+/obj/item/stack/material/attackby(obj/item/W, mob/user)
+	if(istype(W,/obj/item/stack/cable_coil))
 		material.build_wired_product(user, W, src)
 		return
 	else if(istype(W, /obj/item/stack/rods))
@@ -81,236 +86,349 @@
 		return
 	return ..()
 
+/obj/item/stack/material/add(extra)
+	..()
+	update_strings()
+
+
 /obj/item/stack/material/iron
 	name = "iron"
-	icon_state = "sheet-silver"
-	default_type = "iron"
-	apply_colour = 1
+	icon_state = "sheet-iron"
+	default_type = MATERIAL_IRON
+	price_tag = 2
+	novariants = FALSE
+
+/obj/item/stack/material/iron/random
+	rand_min = 3
+	rand_max = 30
+	spawn_tags = SPAWN_TAG_MATERIAL_RESOURCES
+	rarity_value = 45
+
+/obj/item/stack/material/iron/full
+	amount = 120
 
 /obj/item/stack/material/sandstone
 	name = "sandstone brick"
 	icon_state = "sheet-sandstone"
-	default_type = "sandstone"
+	default_type = MATERIAL_SANDSTONE
+	price_tag = 1
+	novariants = FALSE
 
 /obj/item/stack/material/marble
 	name = "marble brick"
 	icon_state = "sheet-marble"
-	default_type = "marble"
-
-/obj/item/stack/material/marble/ten
-	amount = 10
-
-/obj/item/stack/material/marble/fifty
-	amount = 50
+	default_type = MATERIAL_MARBLE
+	novariants = FALSE
 
 /obj/item/stack/material/diamond
 	name = "diamond"
 	icon_state = "sheet-diamond"
-	default_type = "diamond"
+	default_type = MATERIAL_DIAMOND
+	price_tag = 100
+	novariants = FALSE
 
-/obj/item/stack/material/diamond/ten
-	amount = 10
+/obj/item/stack/material/diamond/random
+	rand_min = 1
+	rand_max = 8
+	spawn_tags = SPAWN_TAG_MATERIAL_RESOURCES_RARE
+	rarity_value = 90
+
+/obj/item/stack/material/diamond/full
+	amount = 120
+	spawn_blacklisted = TRUE
 
 /obj/item/stack/material/uranium
-	name = "uranium"
+	name = MATERIAL_URANIUM
 	icon_state = "sheet-uranium"
-	default_type = "uranium"
+	default_type = MATERIAL_URANIUM
+	price_tag = 50
+	novariants = FALSE
 
-/obj/item/stack/material/uranium/ten
-	amount = 10
+/obj/item/stack/material/uranium/random
+	rand_min = 2
+	rand_max = 15
+	spawn_tags = SPAWN_TAG_MATERIAL_RESOURCES_RARE
+	rarity_value = 90
 
-/obj/item/stack/material/phoron
-	name = "solid phoron"
-	icon_state = "sheet-phoron"
-	default_type = "phoron"
+/obj/item/stack/material/uranium/full
+	amount = 120
+	spawn_blacklisted = TRUE
 
-/obj/item/stack/material/phoron/ten
-	amount = 10
+/obj/item/stack/material/plasma
+	name = "solid plasma"
+	icon_state = "sheet-plasma"
+	default_type = MATERIAL_PLASMA
+	price_tag = 30
+	novariants = FALSE
 
-/obj/item/stack/material/phoron/fifty
-	amount = 50
+/obj/item/stack/material/plasma/random
+	rand_min = 3
+	rand_max = 20
+	spawn_tags = SPAWN_TAG_MATERIAL_RESOURCES
+	rarity_value = 30
+
+/obj/item/stack/material/plasma/full
+	amount = 120
+	spawn_blacklisted = TRUE
 
 /obj/item/stack/material/plastic
 	name = "plastic"
 	icon_state = "sheet-plastic"
-	default_type = "plastic"
+	default_type = MATERIAL_PLASTIC
+	price_tag = 2
+	novariants = FALSE
 
-/obj/item/stack/material/plastic/ten
-	amount = 10
+/obj/item/stack/material/plastic/random
+	rand_min = 3
+	rand_max = 30
+	rarity_value = 10
+	spawn_tags = SPAWN_TAG_MATERIAL_BUILDING
 
-/obj/item/stack/material/plastic/fifty
-	amount = 50
+/obj/item/stack/material/plastic/full
+	amount = 120
 
 /obj/item/stack/material/gold
 	name = "gold"
 	icon_state = "sheet-gold"
-	default_type = "gold"
+	default_type = MATERIAL_GOLD
+	price_tag = 50
+	novariants = FALSE
 
-/obj/item/stack/material/gold/ten
-	amount = 10
+/obj/item/stack/material/gold/random
+	rand_min = 2
+	rand_max = 15
+	spawn_tags = SPAWN_TAG_MATERIAL_RESOURCES_RARE
+	rarity_value = 45
+
+/obj/item/stack/material/gold/full
+	amount = 120
+	spawn_blacklisted = TRUE
 
 /obj/item/stack/material/silver
-	name = "silver"
+	name = MATERIAL_SILVER
 	icon_state = "sheet-silver"
-	default_type = "silver"
+	default_type = MATERIAL_SILVER
+	price_tag = 40
+	novariants = FALSE
 
-/obj/item/stack/material/silver/ten
-	amount = 10
+/obj/item/stack/material/silver/random
+	rand_min = 3
+	rand_max = 30
+	spawn_tags = SPAWN_TAG_MATERIAL_RESOURCES_RARE
+	rarity_value = 45
+
+/obj/item/stack/material/silver/full
+	amount = 120
+	spawn_blacklisted = TRUE
 
 //Valuable resource, cargo can sell it.
 /obj/item/stack/material/platinum
 	name = "platinum"
-	icon_state = "sheet-adamantine"
-	default_type = "platinum"
+	icon_state = "sheet-platinum"
+	default_type = MATERIAL_PLATINUM
+	price_tag = 80
+	novariants = FALSE
 
-/obj/item/stack/material/platinum/ten
-	amount = 10
+/obj/item/stack/material/platinum/random
+	rand_min = 1
+	rand_max = 10
+	//spawn_tags = SPAWN_TAG_MATERIAL_RESOURCES_RARE
+	//rarity_value = 45
+
+/obj/item/stack/material/platinum/full
+	amount = 120
+	spawn_blacklisted = TRUE
 
 //Extremely valuable to Research.
 /obj/item/stack/material/mhydrogen
 	name = "metallic hydrogen"
-	icon_state = "sheet-mythril"
-	default_type = "mhydrogen"
+	icon_state = "sheet-hydrogen"
+	default_type = MATERIAL_MHYDROGEN
+	price_tag = 50
+	novariants = FALSE
 
-/obj/item/stack/material/mhydrogen/ten
-	amount = 10
+/obj/item/stack/material/mhydrogen/full
+	amount = 120
+	spawn_blacklisted = TRUE
 
 //Fuel for MRSPACMAN generator.
 /obj/item/stack/material/tritium
 	name = "tritium"
 	icon_state = "sheet-silver"
-	default_type = "tritium"
+	default_type = MATERIAL_TRITIUM
 	apply_colour = 1
+	price_tag = 50
+	novariants = FALSE
 
-/obj/item/stack/material/tritium/ten
-	amount = 10
-
-/obj/item/stack/material/tritium/fifty
-	amount = 50
+/obj/item/stack/material/tritium/full
+	amount = 120
+	spawn_blacklisted = TRUE
 
 /obj/item/stack/material/osmium
 	name = "osmium"
 	icon_state = "sheet-silver"
-	default_type = "osmium"
+	default_type = MATERIAL_OSMIUM
 	apply_colour = 1
+	price_tag = 50
+	novariants = FALSE
 
-/obj/item/stack/material/osmium/ten
-	amount = 10
-
-/obj/item/stack/material/ocp
-	name = "osmium-carbide plasteel"
-	icon_state = "sheet-plasteel"
-	item_state = "sheet-metal"
-	default_type = "osmium-carbide plasteel"
-	apply_colour = 1
-
-/obj/item/stack/material/ocp/ten
-	amount = 10
-
-/obj/item/stack/material/ocp/fifty
-	amount = 50
-
-// Fusion fuel.
-/obj/item/stack/material/deuterium
-	name = "deuterium"
-	icon_state = "sheet-silver"
-	default_type = "deuterium"
-	apply_colour = 1
-
-/obj/item/stack/material/deuterium/fifty
-	amount = 50
+/obj/item/stack/material/osmium/full
+	amount = 120
+	spawn_blacklisted = TRUE
 
 /obj/item/stack/material/steel
-	name = DEFAULT_WALL_MATERIAL
+	name = MATERIAL_STEEL
 	icon_state = "sheet-metal"
-	default_type = DEFAULT_WALL_MATERIAL
+	default_type = MATERIAL_STEEL
+	price_tag = 2
+	novariants = FALSE
 
-/obj/item/stack/material/steel/ten
-	amount = 10
+//A stack which starts with the max amount
+/obj/item/stack/material/steel/full
+	amount = 120
 
-/obj/item/stack/material/steel/fifty
-	amount = 50
+/obj/item/stack/material/steel/random
+	rand_min = 3
+	rand_max = 30
+	spawn_tags = SPAWN_TAG_MATERIAL_RESOURCES_BULDING
+	rarity_value = 10
 
 /obj/item/stack/material/plasteel
 	name = "plasteel"
 	icon_state = "sheet-plasteel"
 	item_state = "sheet-metal"
-	default_type = "plasteel"
+	default_type = MATERIAL_PLASTEEL
+	price_tag = 30
+	novariants = FALSE
 
-/obj/item/stack/material/plasteel/ten
-	amount = 10
+/obj/item/stack/material/plasteel/random
+	rand_min = 3
+	rand_max = 20
+	spawn_tags = SPAWN_TAG_MATERIAL_BUILDING
+	rarity_value = 18
 
-/obj/item/stack/material/plasteel/fifty
-	amount = 50
+/obj/item/stack/material/plasteel/full
+	amount = 120
 
 /obj/item/stack/material/wood
 	name = "wooden plank"
 	icon_state = "sheet-wood"
-	default_type = "wood"
+	default_type = MATERIAL_WOOD
+	price_tag = 20
+	novariants = FALSE
 
-/obj/item/stack/material/wood/ten
-	amount = 10
+/obj/item/stack/material/wood/random
+	rand_min = 3
+	rand_max = 30
+	rarity_value = 10
+	spawn_tags = SPAWN_TAG_MATERIAL_BUILDING
 
-/obj/item/stack/material/wood/fifty
-	amount = 50
+/obj/item/stack/material/wood/full
+	amount = 120
 
 /obj/item/stack/material/cloth
 	name = "cloth"
 	icon_state = "sheet-cloth"
-	default_type = "cloth"
+	default_type = MATERIAL_CLOTH
+	price_tag = 20
+	novariants = FALSE
 
 /obj/item/stack/material/cardboard
 	name = "cardboard"
 	icon_state = "sheet-card"
-	default_type = "cardboard"
+	default_type = MATERIAL_CARDBOARD
+	price_tag = 5
+	rarity_value = 6.66
+	spawn_tags = SPAWN_TAG_JUNK
+	novariants = FALSE
 
-/obj/item/stack/material/cardboard/ten
-	amount = 10
+/obj/item/stack/material/cardboard/random
+	rand_min = 5
+	rand_max = 50
+	rarity_value = 10
+	spawn_tags = SPAWN_TAG_MATERIAL_BUILDING
 
-/obj/item/stack/material/cardboard/fifty
-	amount = 50
+/obj/item/stack/material/cardboard/full
+	amount = 120
 
 /obj/item/stack/material/leather
 	name = "leather"
 	desc = "The by-product of mob grinding."
 	icon_state = "sheet-leather"
-	default_type = "leather"
+	default_type = MATERIAL_LEATHER
+	price_tag = 10
 
 /obj/item/stack/material/glass
-	name = "glass"
+	name = MATERIAL_GLASS
 	icon_state = "sheet-glass"
-	default_type = "glass"
+	default_type = MATERIAL_GLASS
+	price_tag = 2
+	novariants = FALSE
 
-/obj/item/stack/material/glass/ten
-	amount = 10
+/obj/item/stack/material/glass/random
+	rand_min = 3
+	rand_max = 30
+	spawn_tags = SPAWN_TAG_MATERIAL_BUILDING
+	rarity_value = 12.5
 
-/obj/item/stack/material/glass/fifty
-	amount = 50
+/obj/item/stack/material/glass/full
+	amount = 120
 
 /obj/item/stack/material/glass/reinforced
 	name = "reinforced glass"
 	icon_state = "sheet-rglass"
-	default_type = "rglass"
+	default_type = MATERIAL_RGLASS
+	novariants = FALSE
 
-/obj/item/stack/material/glass/reinforced/ten
-	amount = 10
-
-/obj/item/stack/material/glass/reinforced/fifty
-	amount = 50
-
-/obj/item/stack/material/glass/phoronglass
+/obj/item/stack/material/glass/plasmaglass
 	name = "borosilicate glass"
-	desc = "This sheet is special platinum-glass alloy designed to withstand large temperatures."
+	desc = "This sheet is special plasma-glass alloy designed to withstand large temperatures"
 	singular_name = "borosilicate glass sheet"
-	icon_state = "sheet-phoronglass"
-	default_type = "phglass"
+	icon_state = "sheet-plasmaglass"
+	default_type = MATERIAL_PLASMAGLASS
+	price_tag = 10
+	novariants = FALSE
 
-/obj/item/stack/material/glass/phoronrglass
+/obj/item/stack/material/glass/plasmaglass/random
+	rand_min = 3
+	rand_max = 30
+	//spawn_tags = SPAWN_TAG_MATERIAL_RESOURCES_RARE
+	//rarity_value = 50
+
+/obj/item/stack/material/glass/plasmarglass
 	name = "reinforced borosilicate glass"
-	desc = "This sheet is special platinum-glass alloy designed to withstand large temperatures. It is reinforced with few rods."
+	desc = "This sheet is special plasma-glass alloy designed to withstand large temperatures. It is reinforced with few rods."
 	singular_name = "reinforced borosilicate glass sheet"
-	icon_state = "sheet-phoronrglass"
-	default_type = "rphglass"
+	icon_state = "sheet-plasmarglass"
+	default_type = MATERIAL_RPLASMAGLASS
+	price_tag = 12
+	novariants = FALSE
 
-/obj/item/stack/material/glass/phoronrglass/ten
-	amount = 10
+/obj/item/stack/material/biomatter
+	name = "biomatter"
+	desc = "An another by-product of mob grinding. Feels soft and... Strange."
+	singular_name = "biomatter sheet"
+	icon_state = "sheet-biomatter"
+	default_type = MATERIAL_BIOMATTER
+	price_tag = 5
+	novariants = FALSE
+	var/biomatter_in_sheet = BIOMATTER_PER_SHEET // defined in solidifier.dm
+
+/obj/item/stack/material/biomatter/random
+	rand_min = 5
+	rand_max = 25
+	spawn_tags = SPAWN_TAG_MATERIAL
+	rarity_value = 10
+
+/obj/item/stack/material/biomatter/full
+	amount = 120
+
+/obj/item/stack/material/compressed
+	name = "compressed matter"
+	desc = "Useful matter that has been compressed and squeezed into cartridges."
+	singular_name = "compressed matter cartridge"
+	icon = 'icons/obj/ammo.dmi'
+	icon_state = "rcd"
+	item_state = "rcdammo"
+	default_type = MATERIAL_COMPRESSED
+	price_tag = 30

@@ -1,36 +1,28 @@
 /obj/item/device/radio/intercom
-	name = "intercom (General)"
+	name = "ship intercom (General)"
 	desc = "Talk through this."
 	icon_state = "intercom"
-	randpixel = 0
-	anchored = 1
-	w_class = ITEM_SIZE_HUGE
+	anchored = TRUE
+	spawn_tags = null
+	slot_flags = null
+	w_class = ITEM_SIZE_BULKY
 	canhear_range = 2
-	atom_flags = ATOM_FLAG_NO_BLOOD
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
-	layer = ABOVE_WINDOW_LAYER
+	flags = CONDUCT | NOBLOODY
 	var/number = 0
-	var/last_tick //used to delay the powercheck
-
-/obj/item/device/radio/intercom/get_storage_cost()
-	return ITEM_SIZE_NO_CONTAINER
+	var/area/linked_area
 
 /obj/item/device/radio/intercom/custom
-	name = "intercom (Custom)"
+	name = "ship intercom (Custom)"
 	broadcasting = 0
 	listening = 0
 
 /obj/item/device/radio/intercom/interrogation
-	name = "intercom (Interrogation)"
+	name = "ship intercom (Interrogation)"
 	frequency  = 1449
 
 /obj/item/device/radio/intercom/private
-	name = "intercom (Private)"
+	name = "ship intercom (Private)"
 	frequency = AI_FREQ
-
-/obj/item/device/radio/intercom/specops
-	name = "\improper Spec Ops intercom"
-	frequency = ERT_FREQ
 
 /obj/item/device/radio/intercom/department
 	canhear_range = 5
@@ -38,65 +30,39 @@
 	listening = 1
 
 /obj/item/device/radio/intercom/department/medbay
-	name = "intercom (Medbay)"
+	name = "ship intercom (Medbay)"
 	frequency = MED_I_FREQ
 
 /obj/item/device/radio/intercom/department/security
-	name = "intercom (Security)"
+	name = "ship intercom (Security)"
 	frequency = SEC_I_FREQ
 
-/obj/item/device/radio/intercom/entertainment
-	name = "entertainment intercom"
-	frequency = ENT_FREQ
-	canhear_range = 4
+/obj/item/device/radio/intercom/New()
+	..()
+	loop_area_check()
 
-/obj/item/device/radio/intercom/Initialize()
-	. = ..()
-	START_PROCESSING(SSobj, src)
+/obj/item/device/radio/intercom/department/medbay/New()
+	..()
+	internal_channels = default_medbay_channels.Copy()
 
-/obj/item/device/radio/intercom/department/medbay/Initialize()
-	. = ..()
-	internal_channels = GLOB.default_medbay_channels.Copy()
-
-/obj/item/device/radio/intercom/department/security/Initialize()
-	. = ..()
+/obj/item/device/radio/intercom/department/security/New()
+	..()
 	internal_channels = list(
 		num2text(PUB_FREQ) = list(),
 		num2text(SEC_I_FREQ) = list(access_security)
 	)
 
-/obj/item/device/radio/intercom/entertainment/Initialize()
-	. = ..()
-	internal_channels = list(
-		num2text(PUB_FREQ) = list(),
-		num2text(ENT_FREQ) = list()
-	)
 
 /obj/item/device/radio/intercom/syndicate
 	name = "illicit intercom"
-	desc = "Talk through this. Evilly."
-	frequency = RED_FREQ
+	desc = "Talk through this. Evilly"
+	frequency = SYND_FREQ
 	subspace_transmission = 1
 	syndie = 1
 
-/obj/item/device/radio/intercom/syndicate/Initialize()
-	. = ..()
-	internal_channels[num2text(RED_FREQ)] = list(access_syndicate)
-
-/obj/item/device/radio/intercom/raider
-	name = "illicit intercom"
-	desc = "Pirate radio, but not in the usual sense of the word."
-	frequency = BLUE_FREQ
-	subspace_transmission = 1
-	syndie = 1
-
-/obj/item/device/radio/intercom/raider/Initialize()
-	. = ..()
-	internal_channels[num2text(BLUE_FREQ)] = list(access_syndicate)
-
-/obj/item/device/radio/intercom/Destroy()
-	STOP_PROCESSING(SSobj, src)
-	return ..()
+/obj/item/device/radio/intercom/syndicate/New()
+	..()
+	internal_channels[num2text(SYND_FREQ)] = list(access_syndicate)
 
 /obj/item/device/radio/intercom/attack_ai(mob/user as mob)
 	src.add_fingerprint(user)
@@ -123,42 +89,48 @@
 
 	return canhear_range
 
-/obj/item/device/radio/intercom/Process()
-	if(((world.timeofday - last_tick) > 30) || ((world.timeofday - last_tick) < 0))
-		last_tick = world.timeofday
+/obj/item/device/radio/intercom/proc/change_status()
+	SIGNAL_HANDLER
+	on = linked_area.powered(STATIC_EQUIP)
+	icon_state = on ? "intercom" : "intercom-p"
 
-		if(!src.loc)
-			on = 0
-		else
-			var/area/A = get_area(src)
-			if(!A)
-				on = 0
-			else
-				on = A.powered(EQUIP) // set "on" to the power status
+/obj/item/device/radio/intercom/proc/loop_area_check()
+	var/area/target_area = get_area(src)
+	if(!target_area?.apc)
+		addtimer(CALLBACK(src, PROC_REF(loop_area_check)), 30 SECONDS, TIMER_STOPPABLE) // We don't proces if there is no APC , no point in doing so is there ?
+		return FALSE
+	linked_area = target_area
+	RegisterSignal(target_area, COMSIG_AREA_APC_DELETED, PROC_REF(on_apc_removal))
+	RegisterSignal(target_area, COMSIG_AREA_APC_POWER_CHANGE, PROC_REF(change_status))
 
-		if(!on)
-			icon_state = "intercom-p"
-		else
-			icon_state = "intercom"
+/obj/item/device/radio/intercom/proc/on_apc_removal()
+	SIGNAL_HANDLER
+	UnregisterSignal(linked_area , COMSIG_AREA_APC_DELETED)
+	UnregisterSignal(linked_area, COMSIG_AREA_APC_POWER_CHANGE)
+	linked_area = null
+	on = FALSE
+	icon_state = "intercom-p"
+	addtimer(CALLBACK(src, PROC_REF(loop_area_check)), 30 SECONDS)
 
 /obj/item/device/radio/intercom/broadcasting
 	broadcasting = 1
 
 /obj/item/device/radio/intercom/locked
-	var/locked_frequency
+    var/locked_frequency
 
-/obj/item/device/radio/intercom/locked/set_frequency()
-	..(locked_frequency)
+/obj/item/device/radio/intercom/locked/set_frequency(var/frequency)
+	if(frequency == locked_frequency)
+		..(locked_frequency)
 
 /obj/item/device/radio/intercom/locked/list_channels()
 	return ""
 
 /obj/item/device/radio/intercom/locked/ai_private
 	name = "\improper AI intercom"
-	locked_frequency = AI_FREQ
+	frequency = AI_FREQ
 	broadcasting = 1
 	listening = 1
 
 /obj/item/device/radio/intercom/locked/confessional
 	name = "confessional intercom"
-	locked_frequency = 1480
+	frequency = 1480

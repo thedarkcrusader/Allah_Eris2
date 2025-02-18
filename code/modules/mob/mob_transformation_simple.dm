@@ -4,8 +4,8 @@
 //Note that this proc does NOT do MMI related stuff!
 /mob/proc/change_mob_type(var/new_type = null, var/turf/location = null, var/new_name = null as text, var/delete_old_mob = 0 as num, var/subspecies)
 
-	if(istype(src,/mob/new_player))
-		to_chat(usr, "<span class='warning'>Cannot convert players who have not entered yet.</span>")
+	if(isnewplayer(src))
+		to_chat(usr, "\red cannot convert players who have not entered yet.")
 		return
 
 	if(!new_type)
@@ -19,7 +19,7 @@
 		return
 
 	if( new_type == /mob/new_player )
-		to_chat(usr, "<span class='warning'>cannot convert into a new_player mob type.</span>")
+		to_chat(usr, "\red cannot convert into a new_player mob type.")
 		return
 
 	var/mob/M
@@ -34,21 +34,18 @@
 		return
 
 	if( istext(new_name) )
-		M.SetName(new_name)
+		M.name = new_name
 		M.real_name = new_name
 	else
-		M.SetName(src.name)
+		M.name = src.name
 		M.real_name = src.real_name
-
-	if(src.dna)
-		M.dna = src.dna.Clone()
 
 	if(mind)
 		mind.transfer_to(M)
 	else
 		M.key = key
 
-	if(subspecies && istype(M,/mob/living/carbon/human))
+	if(subspecies && ishuman(M))
 		var/mob/living/carbon/human/H = M
 		H.set_species(subspecies)
 

@@ -41,18 +41,16 @@
 /obj/item/device/lightreplacer
 
 	name = "light replacer"
-	desc = "A lightweight automated device, capable of interfacing with and rapidly replacing standard light installations."
-	description_info = "Examine or use this item to see how many lights are remaining. You can feed it lightbulbs or sheets of glass to refill it."
-	description_fluff = "Can you believe they used to have to screw lightbulbs in by hand?"
-	description_antag = "Using a cryptographic sequencer on this device will cause it to overload each light it replaces; when turned on, the new lights will explode!"
+	desc = "A device to automatically replace lights. Refill with working lightbulbs or sheets of glass."
 
 	icon = 'icons/obj/janitor.dmi'
 	icon_state = "lightreplacer0"
 	item_state = "electronic"
 
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
+	flags = CONDUCT
 	slot_flags = SLOT_BELT
 	origin_tech = list(TECH_MAGNET = 3, TECH_MATERIAL = 2)
+	matter = list(MATERIAL_STEEL = 1, MATERIAL_PLASTIC = 1, MATERIAL_GLASS = 1)
 
 	var/max_uses = 32
 	var/uses = 32
@@ -64,22 +62,22 @@
 	failmsg = "The [name]'s refill light blinks red."
 	..()
 
-/obj/item/device/lightreplacer/examine(mob/user)
+/obj/item/device/lightreplacer/examine(mob/user, extra_description = "")
 	if(..(user, 2))
-		to_chat(user, "It has [uses] light\s remaining.")
+		to_chat(user, "It has [uses] lights remaining.")
 
 /obj/item/device/lightreplacer/attackby(obj/item/W, mob/user)
-	if(istype(W, /obj/item/stack/material) && W.get_material_name() == "glass")
+	if(istype(W, /obj/item/stack/material) && W.get_material_name() == MATERIAL_GLASS)
 		var/obj/item/stack/G = W
 		if(uses >= max_uses)
-			to_chat(user, "<span class='warning'>[src.name] is full.</span>")
+			to_chat(user, SPAN_WARNING("[src.name] is full."))
 			return
 		else if(G.use(1))
 			AddUses(16) //Autolathe converts 1 sheet into 16 lights.
-			to_chat(user, "<span class='notice'>You insert a piece of glass into \the [src.name]. You have [uses] light\s remaining.</span>")
+			to_chat(user, SPAN_NOTICE("You insert a piece of glass into \the [src.name]. You have [uses] light\s remaining."))
 			return
 		else
-			to_chat(user, "<span class='warning'>You need one sheet of glass to replace lights.</span>")
+			to_chat(user, SPAN_WARNING("You need one sheet of glass to replace lights."))
 
 	if(istype(W, /obj/item/light))
 		var/obj/item/light/L = W
@@ -121,26 +119,54 @@
 
 /obj/item/device/lightreplacer/proc/Charge(var/mob/user, var/amount = 1)
 	charge += amount
-	if(charge > 6)
+	if(charge > 3)
 		AddUses(1)
 		charge = 0
 
 /obj/item/device/lightreplacer/proc/ReplaceLight(var/obj/machinery/light/target, var/mob/living/U)
 
-	if(target.get_status() == LIGHT_OK)
-		to_chat(U, "There is a working [target.get_fitting_name()] already inserted.")
-	else if(!CanUse(U))
-		to_chat(U, failmsg)
-	else if(Use(U))
-		to_chat(U, "<span class='notice'>You replace the [target.get_fitting_name()] with the [src].</span>")
+	if(target.status != LIGHT_OK)
+		if(CanUse(U))
+			if(!Use(U)) return
+			to_chat(U, SPAN_NOTICE("You replace the [target.fitting] with the [src]."))
 
-		if(target.lightbulb)
-			target.remove_bulb()
+			if(target.status != LIGHT_EMPTY)
 
-		var/obj/item/light/L = new target.light_type()
-		L.rigged = emagged
-		target.insert_bulb(L)
+				var/obj/item/light/L1 = new target.light_type(target.loc)
+				L1.status = target.status
+				L1.rigged = target.rigged
+				L1.brightness_range = target.brightness_range
+				L1.brightness_power = target.brightness_power
+				L1.brightness_color = target.brightness_color
+				L1.switchcount = target.switchcount
+				target.switchcount = 0
+				L1.update()
 
+				target.status = LIGHT_EMPTY
+				target.update()
+
+			var/obj/item/light/L2 = new target.light_type()
+
+			target.status = L2.status
+			target.switchcount = L2.switchcount
+			target.rigged = emagged
+			target.brightness_range = L2.brightness_range
+			target.brightness_power = L2.brightness_power
+			target.brightness_color = L2.brightness_color
+			target.on = target.has_power()
+			target.update()
+			qdel(L2)
+
+			if(target.on && target.rigged)
+				target.explode()
+			return
+
+		else
+			to_chat(U, failmsg)
+			return
+	else
+		to_chat(U, "There is a working [target.fitting] already inserted.")
+		return
 
 /obj/item/device/lightreplacer/emag_act(var/remaining_charges, var/mob/user)
 	emagged = !emagged

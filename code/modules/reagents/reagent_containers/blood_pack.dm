@@ -1,114 +1,80 @@
 /obj/item/storage/box/bloodpacks
-	name = "blood packs box"
+	name = "blood packs bags"
 	desc = "This box contains blood packs."
 	icon_state = "sterile"
-	startswith = list(/obj/item/reagent_containers/ivbag = 7)
+	rarity_value = 10
+	prespawned_content_amount = 7
+	prespawned_content_type = /obj/item/reagent_containers/blood
 
-/obj/item/reagent_containers/ivbag
-	name = "\improper IV bag"
-	desc = "Flexible bag for IV injectors."
-	icon = 'icons/obj/bloodpack.dmi'
-	icon_state = "empty"
-	w_class = ITEM_SIZE_SMALL
-	volume = 120
-	possible_transfer_amounts = "0.2;1;2"
-	amount_per_transfer_from_this = REM
-	atom_flags = ATOM_FLAG_OPEN_CONTAINER
-
-	var/mob/living/carbon/human/attached
-
-/obj/item/reagent_containers/ivbag/Destroy()
-	STOP_PROCESSING(SSobj,src)
-	attached = null
-	. = ..()
-
-/obj/item/reagent_containers/ivbag/on_reagent_change()
-	update_icon()
-	if(reagents.total_volume > volume/2)
-		w_class = ITEM_SIZE_NORMAL
-	else
-		w_class = ITEM_SIZE_SMALL
-
-/obj/item/reagent_containers/attackby(obj/item/W as obj, mob/user as mob)
-
-/obj/item/reagent_containers/ivbag/update_icon()
-	overlays.Cut()
-	var/percent = round(reagents.total_volume / volume * 100)
-	if(reagents.total_volume)
-		var/image/filling = image('icons/obj/bloodpack.dmi', "[round(percent,25)]")
-		filling.color = reagents.get_color()
-		overlays += filling
-	overlays += image('icons/obj/bloodpack.dmi', "top")
-	if(attached)
-		overlays += image('icons/obj/bloodpack.dmi', "dongle")
-
-/obj/item/reagent_containers/ivbag/MouseDrop(over_object, src_location, over_location)
-	if(!CanMouseDrop(over_object))
-		return
-	if(!ismob(loc))
-		return
-	if(attached)
-		visible_message("\The [attached] is taken off \the [src]")
-		attached = null
-	else if(ishuman(over_object))
-		visible_message("<span class = 'warning'>\The [usr] starts hooking \the [over_object] up to \the [src].</span>")
-		if(do_after(usr, 30))
-			to_chat(usr, "You hook \the [over_object] up to \the [src].")
-			attached = over_object
-			START_PROCESSING(SSobj,src)
-	update_icon()
-
-/obj/item/reagent_containers/ivbag/Process()
-	if(!ismob(loc))
-		return PROCESS_KILL
-
-	if(attached)
-		if(!loc.Adjacent(attached))
-			attached = null
-			visible_message("\The [attached] detaches from \the [src]")
-			update_icon()
-			return PROCESS_KILL
-	else
-		return PROCESS_KILL
-
-	var/mob/M = loc
-	if(M.l_hand != src && M.r_hand != src)
-		return
-
-	if(!reagents.total_volume)
-		return
-
-	reagents.trans_to_mob(attached, amount_per_transfer_from_this, CHEM_BLOOD)
-	update_icon()
-
-/obj/item/reagent_containers/ivbag/nanoblood/New()
-	..()
-	reagents.add_reagent(/datum/reagent/nanoblood, volume)
-
-/obj/item/reagent_containers/ivbag/blood
+/obj/item/reagent_containers/blood
 	name = "blood pack"
-	var/blood_type = null
+	desc = "Contains blood used for transfusion."
+	icon = 'icons/obj/bloodpack.dmi'
+	icon_state = "bloodpack"
+	matter = list(MATERIAL_PLASTIC = 0.5)
+	volume = 200
+	reagent_flags = OPENCONTAINER
+	filling_states = "25;50;75;100"
+	bad_type = /obj/item/reagent_containers/blood
+	var/blood_type
 
-/obj/item/reagent_containers/ivbag/blood/New()
-	..()
+/obj/item/reagent_containers/blood/Initialize()
+	. = ..()
 	if(blood_type)
-		name = "blood pack [blood_type]"
-		reagents.add_reagent(/datum/reagent/blood, volume, list("donor" = null, "blood_DNA" = null, "blood_type" = blood_type, "trace_chem" = null, "virus2" = list(), "antibodies" = list()))
+		reagents.add_reagent("blood", 200, list("donor"=null,"viruses"=null,"blood_DNA"=null,"blood_type"=blood_type,"resistances"=null,"trace_chem"=null))
 
-/obj/item/reagent_containers/ivbag/blood/APlus
-	blood_type = "A+"
 
-/obj/item/reagent_containers/ivbag/blood/AMinus
-	blood_type = "A-"
+/obj/item/reagent_containers/blood/on_reagent_change()
+	..()
+	update_name()
 
-/obj/item/reagent_containers/ivbag/blood/BPlus
-	blood_type = "B+"
 
-/obj/item/reagent_containers/ivbag/blood/BMinus
-	blood_type = "B-"
+/obj/item/reagent_containers/blood/update_icon()
+	cut_overlays()
 
-/obj/item/reagent_containers/ivbag/blood/OPlus
-	blood_type = "O+"
+	if(!reagents || !reagents.total_volume)
+		return
 
-/obj/item/reagent_containers/ivbag/blood/OMinus
-	blood_type = "O-"
+	var/has_blood
+	for(var/datum/reagent/current in reagents.reagent_list)
+		if(current.id == "blood")
+			has_blood = TRUE
+
+	if(!has_blood)
+		var/mutable_appearance/filling = mutable_appearance(icon, "[icon_state][get_filling_state()]")
+		filling.color = reagents.get_color()
+		add_overlay(filling)
+	else
+		var/mutable_appearance/filling = mutable_appearance(icon, "[icon_state]-blood[get_filling_state()]")
+		add_overlay(filling)
+
+/obj/item/reagent_containers/blood/proc/update_name()
+	var/list/data = reagents.get_data("blood")
+	if(data)
+		blood_type = data["blood_type"]
+		name = "blood pack ([blood_type])"
+	else
+		name = "blood pack"
+
+#define bloodtypeandpackname(bloodtype) name = "blood pack ("+bloodtype+")"; blood_type = bloodtype;
+/obj/item/reagent_containers/blood/APlus
+	bloodtypeandpackname("A+")
+
+/obj/item/reagent_containers/blood/AMinus
+	bloodtypeandpackname("A-")
+
+/obj/item/reagent_containers/blood/BPlus
+	bloodtypeandpackname("B+")
+
+/obj/item/reagent_containers/blood/BMinus
+	bloodtypeandpackname("B-")
+
+/obj/item/reagent_containers/blood/OPlus
+	bloodtypeandpackname("O+")
+
+/obj/item/reagent_containers/blood/OMinus
+	bloodtypeandpackname("O-")
+
+/obj/item/reagent_containers/blood/empty
+	spawn_tags = SPAWN_TAG_JUNK
+	rarity_value = 20

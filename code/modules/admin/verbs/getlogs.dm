@@ -18,6 +18,7 @@
 //Permissions expire at the end of each round.
 //Runtimes can be used to meta or spot game-crashing exploits so it's advised to only grant coders that
 //you trust access. Also, it may be wise to ensure that they are not going to play in the current round.
+//allows us to give access to runtime logs to somebody
 /client/proc/giveruntimelog()
 	set name = ".giveruntimelog"
 	set desc = "Give somebody access to any session logfiles saved to the /log/runtime/ folder."
@@ -27,26 +28,20 @@
 		to_chat(src, "<font color='red'>Only Admins may use this command.</font>")
 		return
 
-	var/client/target = input(src,"Choose somebody to grant access to the server's runtime logs (permissions expire at the end of each round):","Grant Permissions",null) as null|anything in GLOB.clients
+	var/client/target = input(src,"Choose somebody to grant access to the server's runtime logs (permissions expire at the end of each round):","Grant Permissions",null) as null|anything in clients
 	if(!istype(target,/client))
 		to_chat(src, "<font color='red'>Error: giveruntimelog(): Client not found.</font>")
 		return
 
-	target.verbs |= /client/proc/getruntimelog
+	add_verb(target, /client/proc/getruntimelog)
 	to_chat(target, "<font color='red'>You have been granted access to runtime logs. Please use them responsibly or risk being banned.</font>")
-	return
-
 
 //This proc allows download of runtime logs saved within the data/logs/ folder by dreamdeamon.
 //It works similarly to show-server-log.
 /client/proc/getruntimelog()
-	set name = "Get Runtime Log"
+	set name = ".getruntimelog"
 	set desc = "Retrieve any session logfiles saved by dreamdeamon."
-	set category = "Admin"
-
-	if(!src.holder)
-		to_chat(src, "<font color='red'>Only Admins may use this command.</font>")
-		return
+	set category = null
 
 	var/path = browse_files("data/logs/runtime/")
 	if(!path)
@@ -56,21 +51,15 @@
 		return
 
 	message_admins("[key_name_admin(src)] accessed file: [path]")
-	src << run(file(path))
+	src << run( file(path) )
 	to_chat(src, "Attempting to send file, this may take a fair few minutes if the file is very large.")
-	return
-
 
 //This proc allows download of past server logs saved within the data/logs/ folder.
 //It works similarly to show-server-log.
 /client/proc/getserverlog()
-	set name = "Get Server Log"
+	set name = ".getserverlog"
 	set desc = "Fetch logfiles from data/logs"
-	set category = "Admin"
-
-	if(!src.holder)
-		to_chat(src, "<font color='red'>Only Admins may use this command.</font>")
-		return
+	set category = null
 
 	var/path = browse_files("data/logs/")
 	if(!path)
@@ -80,10 +69,8 @@
 		return
 
 	message_admins("[key_name_admin(src)] accessed file: [path]")
-	src << run(file(path))
+	src << run( file(path) )
 	to_chat(src, "Attempting to send file, this may take a fair few minutes if the file is very large.")
-	return
-
 
 //Other log stuff put here for the sake of organisation
 
@@ -93,16 +80,10 @@
 	set name = "Show Server Log"
 	set desc = "Shows today's server log."
 
-	var/path = "data/logs/[time2text(world.realtime,"YYYY/MM-Month/DD-Day")].log"
-	if( fexists(path) )
-		src << run(file(path))
-	else
-		to_chat(src, "<font color='red'>Error: view_txt_log(): File not found/Invalid path([path]).</font>")
-		return
-	feedback_add_details("admin_verb","VTL") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
-	return
+	src << run(diary)
 
 //Shows today's attack log
+//shows the server combat-log, doesn't do anything presently
 /datum/admins/proc/view_atk_log()
 	set category = "Admin"
 	set name = "Show Server Attack Log"
@@ -110,10 +91,8 @@
 
 	var/path = "data/logs/[time2text(world.realtime,"YYYY/MM-Month/DD-Day")] Attack.log"
 	if( fexists(path) )
-		src << run(file(path))
+		src << run( file(path) )
 	else
 		to_chat(src, "<font color='red'>Error: view_atk_log(): File not found/Invalid path([path]).</font>")
 		return
-	usr << run(file(path))
-	feedback_add_details("admin_verb","SSAL") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
-	return
+	usr << run( file(path) )

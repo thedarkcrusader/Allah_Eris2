@@ -1,7 +1,6 @@
 /obj/item/sample
 	name = "forensic sample"
 	icon = 'icons/obj/forensics.dmi'
-	item_flags = ITEM_FLAG_NO_PRINT
 	w_class = ITEM_SIZE_TINY
 	var/list/evidence = list()
 
@@ -25,8 +24,8 @@
 	if(!supplied.evidence || !supplied.evidence.len)
 		return 0
 	evidence |= supplied.evidence
-	SetName("[initial(name)] (combined)")
-	to_chat(user, "<span class='notice'>You transfer the contents of \the [supplied] into \the [src].</span>")
+	name = "[initial(name)] (combined)"
+	to_chat(user, SPAN_NOTICE("You transfer the contents of \the [supplied] into \the [src]."))
 	return 1
 
 /obj/item/sample/print/merge_evidence(var/obj/item/sample/supplied, var/mob/user)
@@ -37,13 +36,9 @@
 			evidence[print] = stringmerge(evidence[print],supplied.evidence[print])
 		else
 			evidence[print] = supplied.evidence[print]
-	SetName("[initial(name)] (combined)")
-	to_chat(user, "<span class='notice'>You overlay \the [src] and \the [supplied], combining the print records.</span>")
+	name = "[initial(name)] (combined)"
+	to_chat(user, SPAN_NOTICE("You overlay \the [src] and \the [supplied], combining the print records."))
 	return 1
-
-/obj/item/sample/resolve_attackby(atom/A, mob/user, var/click_params)
-	// Fingerprints will be handled in after_attack() to not mess up the samples taken
-	return A.attackby(src, user, click_params)
 
 /obj/item/sample/attackby(var/obj/O, var/mob/user)
 	if(O.type == src.type)
@@ -72,13 +67,13 @@
 		return
 	var/mob/living/carbon/human/H = user
 	if(H.gloves)
-		to_chat(user, "<span class='warning'>Take \the [H.gloves] off first.</span>")
+		to_chat(user, SPAN_WARNING("Take \the [H.gloves] off first."))
 		return
 
-	to_chat(user, "<span class='notice'>You firmly press your fingertips onto the card.</span>")
+	to_chat(user, SPAN_NOTICE("You firmly press your fingertips onto the card."))
 	var/fullprint = H.get_full_print()
 	evidence[fullprint] = fullprint
-	SetName("[initial(name)] (\the [H])")
+	name = "[initial(name)] (\the [H])"
 	icon_state = "fingerprint1"
 
 /obj/item/sample/print/attack(var/mob/living/M, var/mob/user)
@@ -92,30 +87,30 @@
 	var/mob/living/carbon/human/H = M
 
 	if(H.gloves)
-		to_chat(user, "<span class='warning'>\The [H] is wearing gloves.</span>")
+		to_chat(user, SPAN_WARNING("\The [H] is wearing gloves."))
 		return 1
 
 	if(user != H && H.a_intent != I_HELP && !H.lying)
-		user.visible_message("<span class='danger'>\The [user] tries to take prints from \the [H], but they move away.</span>")
+		user.visible_message(SPAN_DANGER("\The [user] tries to take prints from \the [H], but they move away."))
 		return 1
 
-	if(user.zone_sel.selecting == BP_R_HAND || user.zone_sel.selecting == BP_L_HAND)
+	if(user.targeted_organ == BP_R_ARM || user.targeted_organ == BP_L_ARM)
 		var/has_hand
-		var/obj/item/organ/external/O = H.organs_by_name[BP_R_HAND]
+		var/obj/item/organ/external/O = H.organs_by_name[BP_R_ARM]
 		if(istype(O) && !O.is_stump())
 			has_hand = 1
 		else
-			O = H.organs_by_name[BP_L_HAND]
+			O = H.organs_by_name[BP_L_ARM]
 			if(istype(O) && !O.is_stump())
 				has_hand = 1
 		if(!has_hand)
-			to_chat(user, "<span class='warning'>They don't have any hands.</span>")
+			to_chat(user, SPAN_WARNING("They don't have any hands."))
 			return 1
 		user.visible_message("[user] takes a copy of \the [H]'s fingerprints.")
 		var/fullprint = H.get_full_print()
 		evidence[fullprint] = fullprint
 		copy_evidence(src)
-		SetName("[initial(name)] (\the [H])")
+		name = "[initial(name)] (\the [H])"
 		icon_state = "fingerprint1"
 		return 1
 	return 0
@@ -125,9 +120,6 @@
 		for(var/print in supplied.fingerprints)
 			evidence[print] = supplied.fingerprints[print]
 		supplied.fingerprints.Cut()
-
-/obj/item/forensics
-	item_flags = ITEM_FLAG_NO_PRINT
 
 /obj/item/forensics/sample_kit
 	name = "fiber collection kit"
@@ -147,17 +139,13 @@
 /obj/item/forensics/sample_kit/afterattack(var/atom/A, var/mob/user, var/proximity)
 	if(!proximity)
 		return
+	add_fingerprint(user)
 	if(can_take_sample(user, A))
 		take_sample(user,A)
-		. = 1
+		return 1
 	else
-		to_chat(user, "<span class='warning'>You are unable to locate any [evidence_type]s on \the [A].</span>")
-		. = ..()
-	A.add_fingerprint(user)
-
-/obj/item/forensics/sample_kit/MouseDrop(atom/over)
-	if(ismob(src.loc) && CanMouseDrop(over))
-		afterattack(over, usr, TRUE)
+		to_chat(user, SPAN_WARNING("You are unable to locate any [evidence_type]s on \the [A]."))
+		return ..()
 
 /obj/item/forensics/sample_kit/powder
 	name = "fingerprint powder"

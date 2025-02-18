@@ -1,9 +1,15 @@
+
+// Variables to not even show in the list.
+// step_* and bound_* are here because they literally break the game and do nothing else.
+// parent_type is here because it's pointless to show in VV.
+/var/list/view_variables_hide_vars = list("bound_x", "bound_y", "bound_height", "bound_width", "bounds", "parent_type", "step_x", "step_y", "step_size", "queued_priority", "gc_destroyed", "is_processing")
 // Variables not to expand the lists of. Vars is pointless to expand, and overlays/underlays cannot be expanded.
 /var/list/view_variables_dont_expand = list("overlays", "underlays", "vars")
 // Variables that runtime if you try to test associativity of the lists they contain by indexing
-/var/list/view_variables_no_assoc = list("verbs", "contents","screen","images")
+/var/list/view_variables_no_assoc = list("verbs", "contents","screen","images", "vis_contents", "vis_locs")
 
 // Acceptable 'in world', as VV would be incredibly hampered otherwise
+//allows us to -see- the variables of any instance in the game. +VAREDIT needed to modify
 /client/proc/debug_variables(datum/D in world)
 	set category = "Debug"
 	set name = "View Variables"
@@ -15,19 +21,25 @@
 		return
 
 	var/icon/sprite
-	if(istype(D, /atom))
-		var/atom/A = D
-		if(A.icon && A.icon_state)
-			sprite = icon(A.icon, A.icon_state)
-			usr << browse_rsc(sprite, "view_vars_sprite.png")
+	var/hash
 
-	send_rsc(usr,'code/js/view_variables.js', "view_variables.js")
+	var/no_icon = FALSE
+
+	if(istype(D, /atom))
+		sprite = getFlatIcon(D)
+		if(sprite)
+			hash = md5(sprite)
+			src << browse_rsc(sprite, "vv[hash].png")
+		else
+			no_icon = TRUE
+
+	usr << browse_rsc('code/js/view_variables.js', "view_variables.js")
 
 	var/html = {"
 		<html>
 		<head>
 			<script src='view_variables.js'></script>
-			<title>[D] (\ref[D] - [D.type])</title>
+			<title>[D] ([REF(D)]) = [D.type]"</title>
 			<style>
 				body { font-family: Verdana, sans-serif; font-size: 9pt; }
 				.value { font-family: "Courier New", monospace; font-size: 8pt; }
@@ -38,7 +50,7 @@
 				<table width='100%'><tr>
 					<td width='50%'>
 						<table align='center' width='100%'><tr>
-							[sprite ? "<td><img src='view_vars_sprite.png'></td>" : ""]
+							[no_icon ? "\[NO ICON\]" : "<td><img src='vv[hash].png'></td>"]
 							<td><div align='center'>[D.get_view_variables_header()]</div></td>
 						</tr></table>
 						<div align='center'>
@@ -100,12 +112,15 @@
 
 
 /proc/make_view_variables_var_list(datum/D)
-	. = list()
-	var/list/variables = D.get_variables()
+	. = ""
+	var/list/variables = list()
+	for(var/x in D.vars)
+		if(x in view_variables_hide_vars)
+			continue
+		variables += x
 	variables = sortList(variables)
 	for(var/x in variables)
-		. += make_view_variables_var_entry(D, x, D.get_variable_value(x))
-	return jointext(., null)
+		. += make_view_variables_var_entry(D, x, D.vars[x])
 
 /proc/make_view_variables_value(value, varname = "*")
 	var/vtext = ""
@@ -148,7 +163,11 @@
 	var/ecm = null
 
 	if(D)
-		ecm = D.make_view_variables_variable_entry(varname, value)
+		ecm = {"
+			(<a href='?_src_=vars;datumedit=\ref[D];varnameedit=[varname]'>E</a>)
+			(<a href='?_src_=vars;datumchange=\ref[D];varnamechange=[varname]'>C</a>)
+			(<a href='?_src_=vars;datummass=\ref[D];varnamemass=[varname]'>M</a>)
+			"}
 
 	var/valuestr = make_view_variables_value(value, varname)
 

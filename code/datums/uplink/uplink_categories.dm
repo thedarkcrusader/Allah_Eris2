@@ -45,5 +45,8 @@
 /datum/uplink_category/badassery
 	name = "Badassery"
 
+/datum/uplink_category/neotheology
+	name = "NeoTheology"
+
 /datum/uplink_category/telecrystals
 	name = "Telecrystals"

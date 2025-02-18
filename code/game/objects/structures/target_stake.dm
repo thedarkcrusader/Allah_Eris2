@@ -4,20 +4,20 @@
 	desc = "A thin platform with negatively-magnetized wheels."
 	icon = 'icons/obj/objects.dmi'
 	icon_state = "target_stake"
-	density = 1
-	w_class = ITEM_SIZE_NO_CONTAINER
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
+	density = TRUE
+	w_class = ITEM_SIZE_HUGE
+	flags = CONDUCT
 	var/obj/item/target/pinned_target // the current pinned target
 
-	Move()
+	Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
 		..()
 		// Move the pinned target along with the stake
 		if(pinned_target in view(3, src))
-			pinned_target.loc = loc
+			pinned_target.forceMove(loc, glide_size_override=glide_size_override)
 
 		else // Sanity check: if the pinned target can't be found in immediate view
 			pinned_target = null
-			set_density(1)
+			density = TRUE
 
 	attackby(obj/item/W as obj, mob/user as mob)
 		// Putting objects on the stake. Most importantly, targets
@@ -25,11 +25,11 @@
 			return // get rid of that pinned target first!
 
 		if(istype(W, /obj/item/target))
-			set_density(0)
-			W.set_density(1)
+			density = FALSE
+			W.density = TRUE
 			user.remove_from_mob(W)
-			W.forceMove(loc)
-			W.layer = ABOVE_OBJ_LAYER
+			W.loc = loc
+			W.layer = 3.1
 			pinned_target = W
 			to_chat(user, "You slide the target into the stake.")
 		return
@@ -37,8 +37,8 @@
 	attack_hand(mob/user as mob)
 		// taking pinned targets off!
 		if(pinned_target)
-			set_density(1)
-			pinned_target.set_density(0)
+			density = TRUE
+			pinned_target.density = FALSE
 			pinned_target.layer = OBJ_LAYER
 
 			pinned_target.loc = user.loc

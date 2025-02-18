@@ -1,5 +1,5 @@
 #define SAVEFILE_VERSION_MIN	8
-#define SAVEFILE_VERSION_MAX	17
+#define SAVEFILE_VERSION_MAX	18
 
 /datum/preferences/proc/load_path(ckey,filename="preferences.sav")
 	if(!ckey)	return
@@ -8,6 +8,10 @@
 
 /datum/preferences/proc/load_preferences()
 	if(!path)				return 0
+	if(!check_cooldown())
+		if(istype(client))
+			to_chat(client, SPAN_WARNING("You're attempting to load your preferences a little too fast. Wait half a second, then try again."))
+		return 0
 	if(!fexists(path))		return 0
 	var/savefile/S = new /savefile(path)
 	if(!S)					return 0
@@ -20,6 +24,10 @@
 
 /datum/preferences/proc/save_preferences()
 	if(!path)				return 0
+	if(!check_cooldown())
+		if(istype(client))
+			to_chat(client, SPAN_WARNING("You're attempting to save your preferences a little too fast. Wait half a second, then try again."))
+		return 0
 	var/savefile/S = new /savefile(path)
 	if(!S)					return 0
 	S.cd = "/"
@@ -31,7 +39,13 @@
 
 /datum/preferences/proc/load_character(slot)
 	if(!path)				return 0
+	if(!check_cooldown())
+		if(istype(client))
+			to_chat(client, SPAN_WARNING("You're attempting to load your character a little too fast. Wait half a second, then try again."))
+		return 0
+
 	if(!fexists(path))		return 0
+
 	var/savefile/S = new /savefile(path)
 	if(!S)					return 0
 	S.cd = "/"
@@ -46,11 +60,11 @@
 		S["default_slot"] << default_slot
 
 	if(slot != SAVE_RESET)
-		S.cd = GLOB.using_map.character_load_path(S, slot)
+		S.cd = GLOB.maps_data.character_load_path(S, slot)
 		player_setup.load_character(S)
 	else
 		player_setup.load_character(S)
-		S.cd = GLOB.using_map.character_load_path(S, default_slot)
+		S.cd = GLOB.maps_data.character_load_path(S, default_slot)
 
 	loaded_character = S
 
@@ -58,9 +72,13 @@
 
 /datum/preferences/proc/save_character()
 	if(!path)				return 0
+	if(!check_cooldown())
+		if(istype(client))
+			to_chat(client, SPAN_WARNING("You're attempting to save your character a little too fast. Wait half a second, then try again."))
+		return 0
 	var/savefile/S = new /savefile(path)
 	if(!S)					return 0
-	S.cd = GLOB.using_map.character_save_path(default_slot)
+	S.cd = GLOB.maps_data.character_save_path(default_slot)
 
 	S["version"] << SAVEFILE_VERSION_MAX
 	player_setup.save_character(S)

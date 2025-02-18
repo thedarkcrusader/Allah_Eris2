@@ -2,13 +2,10 @@
 /mob/living/simple_animal/corgi
 	name = "\improper corgi"
 	real_name = "corgi"
-	desc = "It's a corgi."
+	desc = "A corgi."
 	icon_state = "corgi"
-	icon_living = "corgi"
-	icon_dead = "corgi_dead"
-	speak = list("YAP", "Woof!", "Bark!", "AUUUUUU")
+	item_state = "corgi"
 	speak_emote = list("barks", "woofs")
-	emote_hear = list("barks", "woofs", "yaps","pants")
 	emote_see = list("shakes its head", "shivers")
 	speak_chance = 1
 	turns_per_move = 10
@@ -18,84 +15,61 @@
 	response_disarm = "bops"
 	response_harm   = "kicks"
 	see_in_dark = 5
-	mob_size = 8
+	mob_size = MOB_SMALL
+	max_nutrition = 250//Dogs are insatiable eating monsters. This scales with their mob size too
+	stomach_size_mult = 30
+	seek_speed = 6
 	possession_candidate = 1
 	holder_type = /obj/item/holder/corgi
+	sanity_damage = -1
 	var/obj/item/inventory_head
 	var/obj/item/inventory_back
+
+/mob/living/simple_animal/corgi/New()
+	..()
+	nutrition = max_nutrition * 0.3//Ian doesn't start with a full belly so will be hungry at roundstart
 
 //IAN! SQUEEEEEEEEE~
 /mob/living/simple_animal/corgi/Ian
 	name = "Ian"
 	real_name = "Ian"	//Intended to hold the name without altering it.
 	gender = MALE
-	desc = "It's a corgi."
-	var/turns_since_scan = 0
-	var/obj/movement_target
+	desc = "A corgi."
 	response_help  = "pets"
 	response_disarm = "bops"
 	response_harm   = "kicks"
+	spawn_frequency = 0//unique
+	sanity_damage = -2 // ery cute , gives people a reason to carry him
 
-/mob/living/simple_animal/corgi/Ian/Life()
+/mob/living/simple_animal/corgi/Life()
 	..()
 
-	//Feeding, chasing food, FOOOOODDDD
 	if(!stat && !resting && !buckled)
-		turns_since_scan++
-		if(turns_since_scan > 5)
-			turns_since_scan = 0
-			if((movement_target) && !(isturf(movement_target.loc) || ishuman(movement_target.loc) ))
-				movement_target = null
-				stop_automated_movement = 0
-			if( !movement_target || !(movement_target.loc in oview(src, 3)) )
-				movement_target = null
-				stop_automated_movement = 0
-				for(var/obj/item/reagent_containers/food/snacks/S in oview(src,3))
-					if(isturf(S.loc) || ishuman(S.loc))
-						movement_target = S
-						break
-			if(movement_target)
-				stop_automated_movement = 1
-				step_to(src,movement_target,1)
-				sleep(3)
-				step_to(src,movement_target,1)
-				sleep(3)
-				step_to(src,movement_target,1)
-
-				if(movement_target)		//Not redundant due to sleeps, Item can be gone in 6 decisecomds
-					if (movement_target.loc.x < src.x)
-						set_dir(WEST)
-					else if (movement_target.loc.x > src.x)
-						set_dir(EAST)
-					else if (movement_target.loc.y < src.y)
-						set_dir(SOUTH)
-					else if (movement_target.loc.y > src.y)
-						set_dir(NORTH)
-					else
-						set_dir(SOUTH)
-
-					if(isturf(movement_target.loc) )
-						UnarmedAttack(movement_target)
-					else if(ishuman(movement_target.loc) && prob(20))
-						visible_emote("stares at the [movement_target] that [movement_target.loc] has with sad puppy eyes.")
-
 		if(prob(1))
-			visible_emote(pick("dances around.","chases their tail."))
+			var/msg2 = (pick("dances around","chases their tail"))
+			src.visible_message("<span class='name'>[src]</span> [msg2].")
 			spawn(0)
 				for(var/i in list(1,2,4,8,4,2,1,2,4,8,4,2,1,2,4,8,4,2))
 					set_dir(i)
 					sleep(1)
 
+/mob/living/simple_animal/corgi/beg(atom/thing, atom/holder)
+	visible_emote("stares at the [thing] that [holder] has with sad puppy eyes.")
+
 /obj/item/reagent_containers/food/snacks/meat/corgi
 	name = "Corgi meat"
 	desc = "Tastes like... well you know..."
+	spawn_blacklisted = TRUE//antag_item_targets
 
-/mob/living/simple_animal/corgi/attackby(var/obj/item/O as obj, var/mob/user as mob)  //Marker -Agouri
+/mob/living/simple_animal/corgi/attackby(obj/item/O, mob/user)  //Marker -Agouri
 	if(istype(O, /obj/item/newspaper))
 		if(!stat)
-			for(var/mob/M in viewers(user, null))
-				if ((M.client && !( M.blinded )))
-					M.show_message("<span class='notice'>[user] baps [name] on the nose with the rolled up [O]</span>")
+			visible_message(SPAN_NOTICE("[user] baps [name] on the nose with the rolled up [O.name]."))
+			scan_interval = max_scan_interval//discipline your dog to make it stop stealing food for a while
+			movement_target = null
+			foodtarget = 0
+			stop_automated_movement = 0
+			turns_since_scan = 0
 			spawn(0)
 				for(var/i in list(1,2,4,8,4,2,1,2))
 					set_dir(i)
@@ -129,37 +103,33 @@
 /mob/living/simple_animal/corgi/puppy
 	name = "\improper corgi puppy"
 	real_name = "corgi"
-	desc = "It's a corgi puppy."
+	desc = "A corgi puppy."
 	icon_state = "puppy"
-	icon_living = "puppy"
-	icon_dead = "puppy_dead"
 
 //pupplies cannot wear anything.
 /mob/living/simple_animal/corgi/puppy/Topic(href, href_list)
 	if(href_list["remove_inv"] || href_list["add_inv"])
-		to_chat(usr, "<span class='warning'>You can't fit this on [src]</span>")
+		to_chat(usr, "\red You can't fit this on [src]")
 		return
 	..()
+
 
 //LISA! SQUEEEEEEEEE~
 /mob/living/simple_animal/corgi/Lisa
 	name = "Lisa"
 	real_name = "Lisa"
 	gender = FEMALE
-	desc = "It's a corgi with a cute pink bow."
+	desc = "A corgi with a cute pink bow."
 	icon_state = "lisa"
-	icon_living = "lisa"
-	icon_dead = "lisa_dead"
 	response_help  = "pets"
 	response_disarm = "bops"
 	response_harm   = "kicks"
-	var/turns_since_scan = 0
 	var/puppies = 0
 
 //Lisa already has a cute bow!
 /mob/living/simple_animal/corgi/Lisa/Topic(href, href_list)
 	if(href_list["remove_inv"] || href_list["add_inv"])
-		to_chat(usr, "<span class='warning'>[src] already has a cute bow!</span>")
+		to_chat(usr, "\red [src] already has a cute bow!")
 		return
 	..()
 
@@ -189,7 +159,8 @@
 
 
 		if(prob(1))
-			visible_emote(pick("dances around","chases her tail"))
+			var/msg3 = (pick("dances around","chases her tail"))
+			src.visible_message("<span class='name'>[src]</span> [msg3].")
 			spawn(0)
 				for(var/i in list(1,2,4,8,4,2,1,2,4,8,4,2,1,2,4,8,4,2))
 					set_dir(i)

@@ -5,42 +5,42 @@
 	name = "unloading machine"
 	icon = 'icons/obj/machines/mining_machines.dmi'
 	icon_state = "unloader"
-	density = 1
-	anchored = 1.0
-	var/obj/machinery/mineral/input = null
-	var/obj/machinery/mineral/output = null
+	density = TRUE
+	anchored = TRUE
+	var/unload_amt = 20
+	var/input_dir = null
+	var/output_dir = null
 
 
 /obj/machinery/mineral/unloading_machine/New()
 	..()
-	spawn( 5 )
-		for (var/dir in GLOB.cardinal)
-			src.input = locate(/obj/machinery/mineral/input, get_step(src, dir))
-			if(src.input) break
-		for (var/dir in GLOB.cardinal)
-			src.output = locate(/obj/machinery/mineral/output, get_step(src, dir))
-			if(src.output) break
-		return
-	return
+	spawn()
+		//Locate our output and input machinery.
+		var/obj/marker = null
+		marker = locate(/obj/landmark/machinery/input) in range(1, loc)
+		if(marker)
+			input_dir = get_dir(src, marker)
+		marker = locate(/obj/landmark/machinery/output) in range(1, loc)
+		if(marker)
+			output_dir = get_dir(src, marker)
 
 /obj/machinery/mineral/unloading_machine/Process()
-	if (src.output && src.input)
-		if (locate(/obj/structure/ore_box, input.loc))
-			var/obj/structure/ore_box/BOX = locate(/obj/structure/ore_box, input.loc)
+	if(output_dir && input_dir)
+		var/turf/input = get_step(src, input_dir)
+		var/obj/structure/ore_box/BOX = locate() in input
+		if(BOX)
+			var/turf/output = get_step(src, output_dir)
 			var/i = 0
-			for (var/obj/item/ore/O in BOX.contents)
-				BOX.contents -= O
-				O.loc = output.loc
-				i++
-				if (i>=10)
+			for(var/obj/item/ore/O in BOX.contents)
+				O.forceMove(output)
+				if(++i>=unload_amt)
 					return
-		if (locate(/obj/item, input.loc))
-			var/obj/item/O
-			var/i
-			for (i = 0; i<10; i++)
-				O = locate(/obj/item, input.loc)
-				if (O)
-					O.loc = src.output.loc
+
+		if(locate(/obj/item/ore) in input)
+			var/obj/item/ore/O
+			for(var/i = 0; i<unload_amt; i++)
+				O = locate(/obj/item/ore) in input
+				if(O)
+					O.forceMove(get_step(src, output_dir))
 				else
-					return
-	return
+					break

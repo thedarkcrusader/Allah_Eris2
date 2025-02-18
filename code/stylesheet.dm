@@ -1,7 +1,7 @@
 client/script = {"<style>
 body					{font-family: Verdana, sans-serif;}
 
-h1, h2, h3, h4, h5, h6	{color: #0059ea;font-family: Georgia, Verdana, sans-serif;}
+h1, h2, h3, h4, h5, h6	{color: #0000ff;font-family: Georgia, Verdana, sans-serif;}
 
 em						{font-style: normal;font-weight: bold;}
 
@@ -12,20 +12,19 @@ em						{font-style: normal;font-weight: bold;}
 						{color: #638500;}
 
 .prefix					{font-weight: bold;}
-.log_message			{color: #386aff;	font-weight: bold;}
+.log_message			{color: #386AFF;	font-weight: bold;}
 
 /* OOC */
 .ooc					{font-weight: bold;}
 .ooc img.text_tag		{width: 32px; height: 10px;}
 
-.ooc .everyone			{color: #AAAAAA;}
-.ooc .looc				{color: #3a9696;}
+.ooc .everyone			{color: #002eb8;}
+.ooc .looc				{color: #3A9696;}
 .ooc .elevated			{color: #2e78d9;}
 .ooc .moderator			{color: #184880;}
 .ooc .developer			{color: #1b521f;}
-.ooc .admin				{color: #ffffff;}
+.ooc .admin				{color: #b82e00;}
 
-.staffwarn				{color: #ff0000; font-weight:bold; font-size: 150%;}
 /* Admin: Private Messages */
 .pm  .howto				{color: #ff0000;	font-weight: bold;		font-size: 200%;}
 .pm  .in				{color: #ff0000;}
@@ -35,82 +34,74 @@ em						{font-style: normal;font-weight: bold;}
 /* Admin: Channels */
 .mod_channel			{color: #735638;	font-weight: bold;}
 .mod_channel .admin		{color: #b82e00;	font-weight: bold;}
-.admin_channel			{color: #9611d4;	font-weight: bold;}
+.admin_channel			{color: #9611D4;	font-weight: bold;}
+.adminticket			{color: #386AFF;	font-weight: bold;}
 
 /* Radio: Misc */
-.deadsay				{color: #8337e8;}
+.deadsay				{color: #530FAD;}
+.angelsay				{color: #ffaa00;}
 .radio					{color: #008000;}
 .deptradio				{color: #ff00ff;}	/* when all other department colors fail */
 .newscaster				{color: #750000;}
 
 /* Radio Channels */
-.comradio				{color: #2251ad;}
-.syndradio				{color: #8c3f40;}
-.centradio				{color: #5c5c8a;}
-.airadio				{color: #ff00ff;}
-.entradio				{color: #339966;}
+.comradio				{color: #193A7A;}
+.syndradio				{color: #6D3F40;}
+.centradio				{color: #5C5C8A;}
+.airadio				{color: #FF00FF;}
+.ntradio				{color: #D4AF37;}
 
-.secradio				{color: #e20000;}
-.engradio				{color: #ce7b00;}
-.medradio				{color: #00a87d;}
+.secradio				{color: #A30000;}
+.engradio				{color: #A66300;}
+.medradio				{color: #0081A3;}
 .sciradio				{color: #993399;}
-.supradio				{color: #a07429;}
+.supradio				{color: #5F4519;}
 .srvradio				{color: #6eaa2c;}
-.expradio				{color: #a3a332;}
-.inqradio				{color: #707070;}
 
 /* Miscellaneous */
 .name					{font-weight: bold;}
 .say					{}
 .alert					{color: #ff0000;}
-h1.alert, h2.alert		{color: #ffffff;}
+h1.alert, h2.alert		{color: #000000;}
 
 .emote					{font-style: italic;}
 
 /* Game Messages */
 
 .attack					{color: #ff0000;}
-.moderate				{color: #cc0000;}
+.moderate				{color: #CC0000;}
 .disarm					{color: #990000;}
 .passive				{color: #660000;}
 
 .danger					{color: #ff0000; font-weight: bold;}
 .warning				{color: #ff0000; font-style: italic;}
-.boldannounce			{color: #ff0000; font-weight: bold;}
 .rose					{color: #ff5050;}
-.info					{color: #0077cc;}
-.binfo					{color: #0077cc; font-weight: bold;}
-.notice					{color: #0059ea;}
-.bnotice				{color: #0059ea; font-weight: bold;}
+.info					{color: #0000CC;}
+.notice					{color: #000099;}
 .alium					{color: #00ff00;}
-.cult					{color: #800080; font-weight: bold; font-style: italic;}
+.revolution				{color: #B00030; font-weight: bold; font-style: italic;}
+.revolution_alert		{color: #B00030; font-weight: bold; font-style: italic; font-size: 200%;}
 
 .reflex_shoot			{color: #000099; font-style: italic;}
 
 /* Languages */
 
 .alien					{color: #543354;}
-.tajaran				{color: #803b56;}
-.tajaran_signlang		{color: #941c1c;}
-.skrell					{color: #00ced1;}
-.soghun					{color: #228b22;}
-.nabber_lang			{color: #525252;}
-.solcom					{color: #22228b;}
-.changeling				{color: #800080;}
-.vox					{color: #aa00aa;}
-.rough					{font-family: "Trebuchet MS", cursive#386891, sans-serif;}
+.monkey					{color: #22228B;}
+.rough					{font-family: Trebuchet MS, cursive, sans-serif;}
 .say_quote				{font-family: Georgia, Verdana, sans-serif;}
-.terran					{color: #9c250b;}
-.moon					{color: #422863;}
-.spacer					{color: #ff6600;}
+.russian				{color: #635d17}
+.serbian				{color: #Ad6f1d}
+.jive					{color: #666666}
+.german					{color: #001FFF}
+.neohongo               {color: #993399}
+.latin                  {color: #deb63d}
 
-.red_team				{color: #b27676;}
-.blue_team				{color: #76abb2;}
+.interface				{color: #330033;}
 
-.interface				{color: #bf00bf;}
-
-.good                   {color: #4f7529; font-weight: bold;}
+.good                   {color: #4f8529; font-weight: bold;}
 .bad                    {color: #ee0000; font-weight: bold;}
+.neutral 				{color: #555555; font-weight: bold;}
 
 BIG IMG.icon 			{width: 32px; height: 32px;}
 

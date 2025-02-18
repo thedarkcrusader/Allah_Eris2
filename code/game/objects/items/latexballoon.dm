@@ -1,6 +1,6 @@
 /obj/item/latexballon
 	name = "latex glove"
-	desc = "A latex glove, usually used as a balloon."
+	desc = "A latex glove, now filled with air as an oddly-shaped balloon."
 	icon_state = "latexballon"
 	item_state = "lgloves"
 	force = 0
@@ -21,19 +21,17 @@
 /obj/item/latexballon/proc/burst()
 	if (!air_contents)
 		return
-	playsound(src, 'sound/weapons/gunshot/gunshot.ogg', 100, 1)
+	playsound(src, 'sound/weapons/Gunshot.ogg', 100, 1)
 	icon_state = "latexballon_bursted"
 	item_state = "lgloves"
 	loc.assume_air(air_contents)
 
-/obj/item/latexballon/ex_act(severity)
+/obj/item/latexballon/take_damage(amount)
+	. = ..()
+	if(QDELETED(src))
+		return 0
 	burst()
-	switch(severity)
-		if (1)
-			qdel(src)
-		if (2)
-			if (prob(50))
-				qdel(src)
+	return 0
 
 /obj/item/latexballon/bullet_act()
 	burst()
@@ -44,5 +42,5 @@
 	return
 
 /obj/item/latexballon/attackby(obj/item/W as obj, mob/user as mob)
-	if (W.can_puncture())
+	if (can_puncture(W))
 		burst()

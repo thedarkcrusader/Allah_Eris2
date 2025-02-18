@@ -1,31 +1,12 @@
 #define DEFAULT_SEED "glowshroom"
 #define VINE_GROWTH_STAGES 5
 
-/proc/spacevine_infestation(var/potency_min=70, var/potency_max=100, var/maturation_min=5, var/maturation_max=15)
-	spawn() //to stop the secrets panel hanging
-		var/turf/T = pick_subarea_turf(/area/hallway , list(/proc/is_station_turf, /proc/not_turf_contains_dense_objects))
-		if(T)
-			var/datum/seed/seed = plant_controller.create_random_seed(1)
-			seed.set_trait(TRAIT_SPREAD,2)             // So it will function properly as vines.
-			seed.set_trait(TRAIT_POTENCY,rand(potency_min, potency_max)) // 70-100 potency will help guarantee a wide spread and powerful effects.
-			seed.set_trait(TRAIT_MATURATION,rand(maturation_min, maturation_max))
-			seed.set_trait(TRAIT_HARVEST_REPEAT, 1)
-			seed.set_trait(TRAIT_STINGS, 1)
-			seed.set_trait(TRAIT_CARNIVOROUS,2)
 
-			seed.display_name = "strange plants" //more thematic for the vine infestation event
-
-			//make vine zero start off fully matured
-			new /obj/effect/vine(T,seed, start_matured = 1)
-
-			log_and_message_admins("Spacevines spawned in \the [get_area(T)]", location = T)
-			return
-		log_and_message_admins("<span class='notice'>Event: Spacevines failed to find a viable turf.</span>")
 
 /obj/effect/dead_plant
-	anchored = 1
+	anchored = TRUE
 	opacity = 0
-	density = 0
+	density = FALSE
 	color = DEAD_PLANT_COLOUR
 
 /obj/effect/dead_plant/attack_hand()
@@ -33,72 +14,105 @@
 
 /obj/effect/dead_plant/attackby()
 	..()
-	for(var/obj/effect/vine/neighbor in range(1))
+	for(var/obj/effect/plant/neighbor in range(1))
 		neighbor.update_neighbors()
 	qdel(src)
 
-/obj/effect/vine
-	name = "vine"
-	anchored = 1
+/obj/effect/plant
+	name = "plant"
+	anchored = TRUE
 	opacity = 0
-	density = 0
+	density = FALSE
 	icon = 'icons/obj/hydroponics_growing.dmi'
-	icon_state = ""
-	plane = OBJ_PLANE
-	layer = OBJ_LAYER
-	pass_flags = PASS_FLAG_TABLE
+	icon_state = "bush4-1"
+	layer = 3
+	pass_flags = PASSTABLE
 	mouse_opacity = 1
+	reagent_flags = DRAINABLE
 
-	var/health = 10
-	var/max_health = 100
+	var/health = 5
+	var/max_health = 60
 	var/growth_threshold = 0
 	var/growth_type = 0
 	var/max_growth = 0
 	var/list/neighbors = list()
-	var/obj/effect/vine/parent
+	var/obj/effect/plant/parent
 	var/datum/seed/seed
 	var/sampled = 0
-	var/floor = 0
-	var/possible_children = 20
-	var/spread_chance = 30
-	var/spread_distance = 4
+	var/atom/wall_mount = null
+	var/spread_chance = 40
+	var/spread_distance = 3
 	var/evolve_chance = 2
 	var/mature_time		//minimum maturation time
 	var/last_tick = 0
 	var/obj/machinery/portable_atmospherics/hydroponics/soil/invisible/plant
+	var/spray_cooldown = FALSE
+	var/chem_regen_cooldown = FALSE
+	var/near_external = FALSE
 
-/obj/effect/vine/single
+/obj/effect/plant/Destroy()
+	if(plant_controller)
+		plant_controller.remove_plant(src)
+	for(var/obj/effect/plant/neighbor in range(1,src))
+		plant_controller.add_plant(neighbor)
+	if(seed.type == /datum/seed/mushroom/maintshroom)
+		GLOB.all_maintshrooms -= src
+	. = ..()
+
+
+/obj/effect/plant/single
 	spread_chance = 0
 
-/obj/effect/vine/New(var/newloc, var/datum/seed/newseed, var/obj/effect/vine/newparent, var/start_matured = 0)
+/obj/effect/plant/New(var/newloc, var/datum/seed/newseed, var/obj/effect/plant/newparent)
+	..()
+
 	if(!newparent)
 		parent = src
 	else
 		parent = newparent
-		parent.possible_children = max(0, parent.possible_children - 1)
-	seed = newseed
-	if(start_matured)
-		mature_time = 0
-		health = max_health
-	..()
-
-/obj/effect/vine/Initialize()
-	. = ..()
 
 	if(!plant_controller)
-		log_error("<span class='danger'>Plant controller does not exist and [src] requires it. Aborting.</span>")
-		return INITIALIZE_HINT_QDEL
-	if(!istype(seed))
-		seed = plant_controller.seeds[DEFAULT_SEED]
+		sleep(250) // ugly hack, should mean roundstart plants are fine.
+	if(!plant_controller)
+		to_chat(world, SPAN_DANGER("Plant controller does not exist and [src] requires it. Aborting."))
+		qdel(src)
+		return
+
+	if(!istype(newseed))
+		newseed = plant_controller.seeds[DEFAULT_SEED]
+	seed = newseed
 	if(!seed)
-		return INITIALIZE_HINT_QDEL
+		qdel(src)
+		return
+
 	name = seed.display_name
 	max_health = round(seed.get_trait(TRAIT_ENDURANCE)/2)
-	if(seed.get_trait(TRAIT_SPREAD) == GROWTH_VINES)
-		mouse_opacity = 2
+	if(seed.get_trait(TRAIT_SPREAD)>=2)
+		layer = LOW_OBJ_LAYER
 		max_growth = VINE_GROWTH_STAGES
 		growth_threshold = max_health/VINE_GROWTH_STAGES
-		growth_type = seed.get_growth_type()
+		icon = 'icons/obj/hydroponics_vines.dmi'
+		growth_type = 2 // Vines by default.
+		if(seed.type == /datum/seed/mushroom/maintshroom)
+			growth_type = 0 // this is maintshroom
+			density = FALSE
+			GLOB.all_maintshrooms += src
+		else if(seed.get_trait(TRAIT_CARNIVOROUS) == 2)
+			growth_type = 1 // WOOOORMS.
+		else if(!(seed.seed_noun in list("seeds","pits")))
+			if(seed.seed_noun == "nodes")
+				growth_type = 3 // Biomass
+			else
+				growth_type = 4 // Mold
+
+		if (growth_type != 4 && !(seed.get_trait(TRAIT_WALL_HUGGER)))
+			//Random rotation for vines
+			//Disabled for mold because it looks bad
+			//0 is in here several times to weight it a bit more towards normal
+			var/rot = pick(list(0,0,0, 90, 180, -90))
+			var/matrix/M = matrix()
+			M.Turn(rot)
+			transform = M
 	else
 		max_growth = seed.growth_stages
 		growth_threshold = max_health/seed.growth_stages
@@ -108,187 +122,205 @@
 
 	mature_time = world.time + seed.get_trait(TRAIT_MATURATION) + 15 //prevent vines from maturing until at least a few seconds after they've been created.
 	spread_chance = seed.get_trait(TRAIT_POTENCY)
-	spread_distance = (growth_type ? round(spread_chance*0.6) : round(spread_chance*0.3))
-	possible_children = seed.get_trait(TRAIT_POTENCY)
+	spread_distance = ((growth_type>0) ? round(spread_chance) : round(spread_chance*0.5))
 	update_icon()
 
-	START_PROCESSING(SSvines, src)
+	if(seed.get_trait(TRAIT_CHEMS) > 0)
+		src.create_reagents(5*(seed.chems.len))
+		for (var/reagent in seed.chems)
+			src.reagents.add_reagent(reagent, 5)
 
-/obj/effect/vine/Destroy()
-	wake_neighbors()
-	STOP_PROCESSING(SSvines, src)
-	return ..()
+	spawn(2) // Plants will sometimes be spawned in the turf adjacent to the one they need to end up in, for the sake of correct dir/etc being set.
+		if(seed.get_trait(TRAIT_WALL_HUGGER))
+			set_dir(calc_dir())
+		update_icon()
+		plant_controller.add_plant(src)
 
-// Plants will sometimes be spawned in the turf adjacent to the one they need to end up in, for the sake of correct dir/etc being set.
-/obj/effect/vine/proc/finish_spreading()
-	set_dir(calc_dir())
-	update_icon()
-	START_PROCESSING(SSvines, src)
-	// Some plants eat through plating.
-	if(islist(seed.chems) && !isnull(seed.chems[/datum/reagent/acid/polyacid]))
-		var/turf/T = get_turf(src)
-		T.ex_act(prob(80) ? 3 : 2)
+		// Some plants eat through plating.
+		if(islist(seed.chems) && !isnull(seed.chems["pacid"]))
+			var/turf/T = get_turf(src)
+			//Lets make acid plants not cause random breaches
 
-/obj/effect/vine/update_icon()
-	overlays.Cut()
-	var/growth = growth_threshold ? min(max_growth, round(health/growth_threshold)) : 1
-	var/at_fringe = get_dist(src,parent)
-	if(spread_distance > 5)
-		if(at_fringe >= spread_distance-3)
-			max_growth = max(2,max_growth-1)
-		if(at_fringe >= spread_distance-2)
-			max_growth = max(1,max_growth-1)
+			//Check for external tiles around it
+			for (var/turf/U in range(T, 2))
+				if (turf_is_external(U))
+					near_external = TRUE
+					break
 
-	growth = max(1,max_growth)
+			//If we're not near to any external tiles, then we can melt stuff
+			if (!near_external)
+				T.explosion_act(prob(80) ? 50 : 100, null)
 
-	var/ikey = "\ref[seed]-plant-[growth]"
-	if(!plant_controller.plant_icon_cache[ikey])
-		plant_controller.plant_icon_cache[ikey] = seed.get_icon(growth)
-	overlays += plant_controller.plant_icon_cache[ikey]
+/obj/effect/plant/update_icon()
+	//TODO: should really be caching this.
+	refresh_icon()
 
-	if(growth > 2 && growth == max_growth)
-		layer = (seed && seed.force_layer) ? seed.force_layer : ABOVE_OBJ_LAYER
-		if(growth_type in list(GROWTH_VINES,GROWTH_BIOMASS))
-			set_opacity(1)
-		if(islist(seed.chems) && !isnull(seed.chems[/datum/reagent/woodpulp]))
-			set_density(1)
-			set_opacity(1)
-
-	if((!density || !opacity) && seed.get_trait(TRAIT_LARGE))
-		set_density(1)
-		set_opacity(1)
-	else
-		layer = (seed && seed.force_layer) ? seed.force_layer : ABOVE_OBJ_LAYER
-		set_density(0)
-
-	if(!growth_type && !floor)
-		src.transform = null
-		var/matrix/M = matrix()
-		// should make the plant flush against the wall it's meant to be growing from.
-		M.Translate(0,-(rand(12,14)))
-		switch(dir)
-			if(WEST)
-				M.Turn(90)
-			if(NORTH)
-				M.Turn(180)
-			if(EAST)
-				M.Turn(270)
-		src.transform = M
-
+	var/icon_colour = seed.get_trait(TRAIT_PLANT_COLOUR)
+	if(icon_colour)
+		color = icon_colour
 	// Apply colour and light from seed datum.
 	if(seed.get_trait(TRAIT_BIOLUM))
-		set_light(1+round(seed.get_trait(TRAIT_POTENCY)/20), l_color = seed.get_trait(TRAIT_BIOLUM_COLOUR))
+		var/clr
+		if(seed.get_trait(TRAIT_BIOLUM_COLOUR))
+			clr = seed.get_trait(TRAIT_BIOLUM_COLOUR)
+		set_light(1+round(seed.get_trait(TRAIT_POTENCY)/20), l_color = clr)
+		return
 	else
 		set_light(0)
 
-/obj/effect/vine/proc/calc_dir()
+/obj/effect/plant/proc/refresh_icon()
+	if (growth_threshold == 0)
+		error("growth_threshold is somehow 0, probably never got redefined. Qdeling to prevent repeat logs")
+		qdel(src)
+		return
+	var/growth = max(1,min(max_growth,round(health/growth_threshold)))
+	var/at_fringe = dist3D(src,parent)
+	if(spread_distance > 5)
+		if(at_fringe >= (spread_distance-3))
+			max_growth--
+		if(at_fringe >= (spread_distance-2))
+			max_growth--
+	max_growth = max(1,max_growth)
+	if(growth_type > 0)
+		switch(growth_type)
+			if(1)
+				icon_state = "worms"
+			if(2)
+				icon_state = "vines-[growth]"
+			if(3)
+				icon_state = "mass-[growth]"
+			if(4)
+				icon_state = "mold-[growth]"
+	else
+		icon_state = "[seed.get_trait(TRAIT_PLANT_ICON)]-[growth]"
+
+	if(growth>2 && growth == max_growth)
+		layer = (seed && seed.force_layer) ? seed.force_layer : 5
+		if(seed.type != /datum/seed/mushroom/maintshroom)
+			set_opacity(TRUE)
+		if(islist(seed.chems) && !isnull(seed.chems["woodpulp"]))
+			density = TRUE
+	else
+		layer = (seed && seed.force_layer) ? seed.force_layer : 5
+		density = FALSE
+
+
+var/list/global/cutoff_plant_icons = list()
+//Used for wall hugger plants. Retrieves or creates an icon used for plants growing on the north side of a wall
+//This allows them to be cutoff and appear to draw under the wall
+
+/obj/effect/plant/proc/get_cutoff_plant_icon(var/icon_base)
+	if (!icon_base)
+		return icon //This is not unlikely
+
+	//We retrieve things from this global list first, used as a cache to prevent repeating this expensive icon work
+	if (cutoff_plant_icons[icon_base])
+		return cutoff_plant_icons[icon_base]
+
+	//Ok it doesnt exist yet, lets make it
+
+	//First we need an empty icon to hold the finished result
+	var/icon/I = new()
+
+	//We will loop through each of the five iconstates of a plant
+	for (var/i = 1; i <= 5; i++)
+		//For each state, we create an icon containing only that state
+		var/icon/J = new(icon, "[icon_base]-[i]")
+
+		//We blend the blank icon with it with an offset that will chop 12 pixels off the bottom
+		J.Blend(new /icon('icons/obj/hydroponics_vines.dmi', "blank"),ICON_MULTIPLY, y=WALL_HUG_OFFSET-31)
+
+		//Finally we'll insert this new icon into the container we made
+		I.Insert(J, "[icon_base]-[i]")
+
+	//We're done, it's made, now store it
+	cutoff_plant_icons[icon_base] = I
+
+	//And return it so we can use it immediately
+	return I
+
+
+//Used for plants that grow on walls
+/obj/effect/plant/proc/calc_dir()
 	set background = 1
+	pixel_x = 0
+	pixel_y = 0
 	var/turf/T = get_turf(src)
 	if(!istype(T)) return
 
-	var/direction = 16
+	var/direction = UP
 
-	for(var/wallDir in GLOB.cardinal)
+	for(var/wallDir in cardinal)
 		var/turf/newTurf = get_step(T,wallDir)
-		if(newTurf && newTurf.density)
+		if(newTurf.is_wall)
 			direction |= wallDir
 
-	for(var/obj/effect/vine/shroom in T.contents)
+	for(var/obj/effect/plant/shroom in T.contents)
 		if(shroom == src)
 			continue
-		if(shroom.floor) //special
-			direction &= ~16
+		if(!shroom.wall_mount) //special
+			direction &= ~UP
 		else
 			direction &= ~shroom.dir
 
 	var/list/dirList = list()
 
-	for(var/i=1,i<=16,i <<= 1)
+	for(var/i=1,i<=UP,i <<= 1)
 		if(direction & i)
 			dirList += i
 
 	if(dirList.len)
 		var/newDir = pick(dirList)
-		if(newDir == 16)
-			floor = 1
+		if(newDir == UP)
 			newDir = 1
+		else
+			wall_mount = get_step(loc, newDir)
+			var/matrix/M = matrix()
+			// should make the plant flush against the wall it's meant to be growing from.
+
+			//M.Translate(0,offset)
+
+			switch(newDir)
+				if(WEST)
+					M.Turn(90)
+				if(NORTH)
+					M.Turn(180)
+					offset_to(wall_mount, WALL_HUG_OFFSET*0.5) //Due to perspective, there's more space to the north
+					//So plants that hug a north wall will be offset 50% more
+				if(EAST)
+					M.Turn(270)
+			src.transform = M
+
+			if (newDir == SOUTH)
+				//Lets cutoff part of the plant
+				icon = get_cutoff_plant_icon(seed.get_trait(TRAIT_PLANT_ICON))
+
+
+			offset_to(wall_mount, WALL_HUG_OFFSET)
+
 		return newDir
 
-	floor = 1
+	wall_mount = null
 	return 1
 
-/obj/effect/vine/attackby(var/obj/item/W, var/mob/user)
 
-	user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-	START_PROCESSING(SSvines, src)
 
-	if(isWirecutter(W) || istype(W, /obj/item/scalpel))
-		if(sampled)
-			to_chat(user, "<span class='warning'>You cannot take another sample from \the [src].</span>")
-			return
-		if(!is_mature())
-			to_chat(user, "<span class='warning'>\The [src] is not mature enough to yield a sample yet.</span>")
-			return
-		if(!seed)
-			to_chat(user, "<span class='warning'>There is nothing to take a sample from.</span>")
-			return
-		seed.harvest(user,0,1)
-		health -= (rand(3,5)*5)
-		sampled = 1
-	else
-		..()
-		var/damage = W.force
-		if(W.edge)
-			damage *= 2
-		health -= damage
-		playsound(get_turf(src), W.hitsound, 100, 1)
-	check_health()
-
-//handles being overrun by vines - note that attacker_parent may be null in some cases
-/obj/effect/vine/proc/vine_overrun(datum/seed/attacker_seed, obj/effect/plant/attacker_parent)
-	var/aggression = 0
-	aggression += (attacker_seed.get_trait(TRAIT_CARNIVOROUS) - seed.get_trait(TRAIT_CARNIVOROUS))
-	aggression += (attacker_seed.get_trait(TRAIT_SPREAD) - seed.get_trait(TRAIT_SPREAD))
-
-	var/resiliance
-	if(is_mature())
-		resiliance = 0
-		switch(seed.get_trait(TRAIT_ENDURANCE))
-			if(30 to 70)
-				resiliance = 1
-			if(70 to 95)
-				resiliance = 2
-			if(95 to INFINITY)
-				resiliance = 3
-	else
-		resiliance = -2
-		if(seed.get_trait(TRAIT_ENDURANCE) >= 50)
-			resiliance = -1
-	aggression -= resiliance
-
-	if(aggression > 0)
-		health -= aggression*5
-		check_health()
-
-/obj/effect/vine/ex_act(severity)
-	switch(severity)
-		if(1.0)
-			die_off()
-			return
-		if(2.0)
-			if (prob(50))
-				die_off()
-				return
-		if(3.0)
-			if (prob(5))
-				die_off()
-				return
-		else
-	return
-
-/obj/effect/vine/proc/check_health()
+/obj/effect/plant/proc/check_health(var/iconupdate = TRUE)
 	if(health <= 0)
 		die_off()
+	else
+		update_icon()
 
-/obj/effect/vine/proc/is_mature()
-	return (health >= (max_health/3) && world.time > mature_time)
+/obj/effect/plant/proc/is_mature()
+	return (health >= (max_health*0.8) && world.time > mature_time)
+
+
+/obj/effect/plant/examine(mob/user, extra_description = "")
+	if(seed.get_trait(TRAIT_CHEMS))
+		if(!reagents.total_volume)
+			extra_description += SPAN_NOTICE("It looks totally dried.")
+		else if(!reagents.get_free_space())
+			extra_description += SPAN_NOTICE("It looks juicy.")
+		else
+			extra_description += SPAN_NOTICE("It looks a bit dry.")
+	..(user, extra_description)

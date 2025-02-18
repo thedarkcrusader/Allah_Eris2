@@ -2,7 +2,9 @@
 	var/list/silicon_subsystems_by_name = list()
 	var/list/silicon_subsystems = list(
 		/datum/nano_module/alarm_monitor/all,
-		/datum/nano_module/law_manager
+		/datum/nano_module/law_manager,
+		/datum/nano_module/email_client,
+		/datum/nano_module/crew_monitor
 	)
 
 /mob/living/silicon/ai/New()
@@ -15,7 +17,8 @@
 
 /mob/living/silicon/robot/syndicate
 	silicon_subsystems = list(
-		/datum/nano_module/law_manager
+		/datum/nano_module/law_manager,
+		/datum/nano_module/email_client
 	)
 
 /mob/living/silicon/Destroy()
@@ -61,30 +64,51 @@
 	SSS.Click(given)
 	return TRUE
 
-/mob/living/silicon/verb/activate_subsystem(var/datum/silicon_subsystem_name in silicon_subsystems_by_name)
+/mob/living/silicon/proc/show_crew_sensors()
+	set name = "Show Crew Sensors"
+	set desc = "Track crew gps beacons"
+
+	open_subsystem(/datum/nano_module/crew_monitor)
+
+/mob/living/silicon/proc/show_email()
+	set name = "Show Emails"
+	set desc = "Open email subsystem"
+
+	open_subsystem(/datum/nano_module/email_client)
+
+/mob/living/silicon/proc/show_alerts()
+	set name = "Show Alerts"
+	set desc = "Open alerts monitor system"
+	open_subsystem(/datum/nano_module/alarm_monitor/all)
+
+/mob/living/silicon/proc/activate_subsystem()
 	set name = "Subsystems"
 	set desc = "Activates the given subsystem"
 	set category = "Silicon Commands"
 
-	var/stat_silicon_subsystem/SSS = silicon_subsystems_by_name[silicon_subsystem_name]
+	var/subsystem = input(src, "Choose a sybsystem:", "Subsystems") as null|anything in silicon_subsystems_by_name
+	var/stat_silicon_subsystem/SSS = silicon_subsystems_by_name[subsystem]
+
 	if(istype(SSS))
 		SSS.Click()
 
-/mob/living/silicon/Stat()
+/mob/living/silicon/get_status_tab_items()
 	. = ..()
-	if(!.)
-		return
-	if(!silicon_subsystems.len)
-		return
-	if(!statpanel("Subsystems"))
-		return
 	for(var/subsystem_type in silicon_subsystems)
 		var/stat_silicon_subsystem/SSS = silicon_subsystems[subsystem_type]
-		stat(SSS)
+		. += list(list(SSS.subsystem.name))
+
+/mob/living/silicon/proc/get_subsystem_from_path(subsystem_type)
+	var/stat_silicon_subsystem/SSS = silicon_subsystems[subsystem_type]
+	if(!istype(SSS))
+		return 0
+	if(!istype(SSS.subsystem, subsystem_type))
+		return 0
+	return SSS.subsystem
 
 /stat_silicon_subsystem
 	parent_type = /atom/movable
-	simulated = 0
+	simulated = FALSE
 	var/ui_state
 	var/datum/nano_module/subsystem
 
@@ -103,6 +127,6 @@
 
 /stat_silicon_subsystem/Click(var/mob/given = usr)
 	if (istype(given))
-		subsystem.ui_interact(given, state = ui_state)
+		subsystem.nano_ui_interact(given, state = ui_state)
 	else
-		subsystem.ui_interact(usr, state = ui_state)
+		subsystem.nano_ui_interact(usr, state = ui_state)

@@ -2,11 +2,11 @@
 
 /obj/item/device/violin
 	name = "space violin"
-	desc = "A wooden musical instrument with four strings and a bow. \"The devil went down to space, he was looking for an assistant to grief.\"."
+	desc = "A wooden musical instrument with four strings and a bow. \"The devil went down to space, he was looking for an assistant to grief.\""
 	icon = 'icons/obj/musician.dmi'
 	icon_state = "violin"
 	item_state = "violin"
-	force = 10
+	force = WEAPON_FORCE_NORMAL
 	var/datum/song/song
 	var/playing = 0
 	var/help = 0
@@ -14,8 +14,7 @@
 	var/repeat = 0
 
 /obj/item/device/violin/proc/playnote(var/note as text)
-//	log_debug("Note: [note]")
-
+	//world << "Note: [note]"
 	var/soundfile
 	/*BYOND loads resource files at compile time if they are ''. This means you can't really manipulate them dynamically.
 	Tried doing it dynamically at first but its more trouble than its worth. Would have saved many lines tho.*/
@@ -191,7 +190,7 @@
 		if("Cn9")	soundfile = 'sound/violin/Cn9.mid'
 		else		return
 
-	sound_to(hearers(15, get_turf(src)), sound(soundfile))
+	hearers(15, get_turf(src)) << sound(soundfile)
 
 /obj/item/device/violin/proc/playsong()
 	do
@@ -202,22 +201,18 @@
 			cur_acc[i] = "n"
 
 		for(var/line in song.lines)
-//			log_debug(line)
-
+			//world << line
 			for(var/beat in splittext(lowertext(line), ","))
-//				log_debug("beat: [beat]")
-
+				//world << "beat: [beat]"
 				var/list/notes = splittext(beat, "/")
 				for(var/note in splittext(notes[1], "-"))
-//					log_debug("note: [note]")
-
+					//world << "note: [note]"
 					if(!playing || !isliving(loc))//If the violin is playing, or isn't held by a person
 						playing = 0
 						return
 					if(length(note) == 0)
 						continue
-//					log_debug("Parse: [copytext(note,1,2)]")
-
+					//world << "Parse: [copytext(note,1,2)]"
 					var/cur_note = text2ascii(note) - 96
 					if(cur_note < 1 || cur_note > 7)
 						continue
@@ -293,8 +288,7 @@
 	onclose(user, "violin")
 
 /obj/item/device/violin/Topic(href, href_list)
-	if(..())
-		return 1
+
 	if(!in_range(src, usr) || issilicon(usr) || !isliving(usr) || !usr.canmove || usr.restrained())
 		usr << browse(null, "window=violin;size=700x300")
 		onclose(usr, "violin")
@@ -392,6 +386,7 @@
 				song.lines = lines
 				song.tempo = tempo
 
+	add_fingerprint(usr)
 	for(var/mob/M in viewers(1, loc))
 		if((M.client && M.machine == src))
 			attack_self(M)

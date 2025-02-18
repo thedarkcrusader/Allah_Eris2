@@ -12,16 +12,17 @@
 	if(istype(I, /obj/item/clothing/accessory))
 
 		if(!valid_accessory_slots || !valid_accessory_slots.len)
-			to_chat(usr, "<span class='warning'>You cannot attach accessories of any kind to \the [src].</span>")
+			to_chat(usr, SPAN_WARNING("You cannot attach accessories of any kind to \the [src]."))
 			return
 
 		var/obj/item/clothing/accessory/A = I
-		if(can_attach_accessory(A))
-			user.drop_item()
-			attach_accessory(user, A)
-			return
+		if(can_attach_accessory(A) && user.unEquip(A, src))
+			accessories += A
+			A.on_attached(src, user)
+			src.verbs |= /obj/item/clothing/proc/removetie_verb
+			src.update_wear_icon()
 		else
-			to_chat(user, "<span class='warning'>You cannot attach more accessories of this type to [src].</span>")
+			to_chat(user, SPAN_WARNING("You cannot attach more accessories of this type to [src]."))
 		return
 
 	if(accessories.len)
@@ -30,45 +31,6 @@
 		return
 
 	..()
-
-/obj/item/clothing/attack_hand(var/mob/user)
-	//only forward to the attached accessory if the clothing is equipped (not in a storage)
-	if(accessories.len && src.loc == user)
-		for(var/obj/item/clothing/accessory/A in accessories)
-			A.attack_hand(user)
-		return
-	return ..()
-
-/obj/item/clothing/MouseDrop(var/obj/over_object)
-	if (!over_object || !(ishuman(usr) || issmall(usr)))
-		return
-
-	//makes sure that the clothing is equipped so that we can't drag it into our hand from miles away.
-	if (!(src.loc == usr))
-		return
-
-	if (usr.incapacitated(INCAPACITATION_STUNNED|INCAPACITATION_RESTRAINED|INCAPACITATION_KNOCKOUT))
-		return
-
-	if (!usr.unEquip(src))
-		return
-
-	switch(over_object.name)
-		if("r_hand")
-			usr.put_in_r_hand(src)
-		if("l_hand")
-			usr.put_in_l_hand(src)
-	src.add_fingerprint(usr)
-/*
-/obj/item/clothing/examine(var/mob/user)
-	. = ..(user)
-	for(var/obj/item/clothing/accessory/A in accessories)
-		to_chat(user, "\icon[A] \A [A] is attached to it.")
-*/
-/obj/item/clothing/proc/update_accessory_slowdown()
-	slowdown_accessory = 0
-	for(var/obj/item/clothing/accessory/A in accessories)
-		slowdown_accessory += A.slowdown
 
 /**
  *  Attach accessory A to src
@@ -79,25 +41,45 @@
 /obj/item/clothing/proc/attach_accessory(mob/user, obj/item/clothing/accessory/A)
 	accessories += A
 	A.on_attached(src, user)
-	//src.verbs |= /obj/item/clothing/proc/removetie_verb
-	update_accessory_slowdown()
-	update_clothing_icon()
+	src.verbs |= /obj/item/clothing/proc/removetie_verb
+	src.update_wear_icon()
+
+/obj/item/clothing/attack_hand(var/mob/user)
+	//only forward to the attached accessory if the clothing is equipped (not in a storage)
+	if(accessories.len && src.loc == user)
+		for(var/obj/item/clothing/accessory/A in accessories)
+			A.attack_hand(user)
+		return
+	return ..()
+
+/obj/item/clothing/examine(mob/user, extra_description = "")
+	if(LAZYLEN(accessories))
+		for(var/obj/item/clothing/accessory/A in accessories)
+			extra_description += "\n\A [A] is attached to it."
+	..(user, extra_description)
 
 /obj/item/clothing/proc/remove_accessory(mob/user, obj/item/clothing/accessory/A)
 	if(!(A in accessories))
 		return
-	A.on_removed(user)
-	accessories -= A
-	update_accessory_slowdown()
-	update_clothing_icon()
+
+	if(!(A.isRemovable))
+		to_chat(user, SPAN_WARNING("Removing this accessory would ruin it."))
+	else
+		A.on_removed(user)
+		accessories -= A
+		update_wear_icon()
+	return
 
 /obj/item/clothing/proc/removetie_verb()
 	set name = "Remove Accessory"
 	set category = "Object"
 	set src in usr
-	if(!istype(usr, /mob/living)) return
-	if(usr.stat) return
-	if(!accessories.len) return
+	if(!isliving(usr))
+		return
+	if(usr.stat)
+		return
+	if(!accessories.len)
+		return
 	var/obj/item/clothing/accessory/A
 	if(accessories.len > 1)
 		A = input("Select an accessory to remove from [src]") as null|anything in accessories

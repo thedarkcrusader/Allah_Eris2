@@ -3,24 +3,24 @@
 
 	icon = 'icons/obj/stationobjs.dmi'
 	icon_state = "pipe_d"
-	density = 1
+	density = TRUE
 	var/obj/structure/cable/last_piece
 	var/obj/item/stack/cable_coil/cable
 	var/max_cable = 100
-	var/on = 0
+	var/on = FALSE
 
 /obj/machinery/cablelayer/New()
 	cable = new(src)
 	cable.amount = 100
 	..()
 
-/obj/machinery/cablelayer/Move(new_turf,M_Dir)
-	..()
-	layCable(new_turf,M_Dir)
+/obj/machinery/cablelayer/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
+	. = ..()
+	layCable(NewLoc, Dir)
 
 /obj/machinery/cablelayer/attack_hand(mob/user as mob)
 	if(!cable&&!on)
-		to_chat(user, "<span class='warning'>\The [src] doesn't have any cable loaded.</span>")
+		to_chat(user, SPAN_WARNING("\The [src] doesn't have any cable loaded."))
 		return
 	on=!on
 	user.visible_message("\The [user] [!on?"dea":"a"]ctivates \the [src].", "You switch [src] [on? "on" : "off"]")
@@ -31,12 +31,12 @@
 
 		var/result = load_cable(O)
 		if(!result)
-			to_chat(user, "<span class='warning'>\The [src]'s cable reel is full.</span>")
+			to_chat(user, SPAN_WARNING("\The [src]'s cable reel is full."))
 		else
 			to_chat(user, "You load [result] lengths of cable into [src].")
 		return
 
-	if(isWirecutter(O))
+	if(istype(O, /obj/item/tool/wirecutters))
 		if(cable && cable.amount)
 			var/m = round(input(usr,"Please specify the length of cable to cut","Cut cable",min(cable.amount,30)) as num, 1)
 			m = min(m, cable.amount)
@@ -47,11 +47,11 @@
 				var/obj/item/stack/cable_coil/CC = new (get_turf(src))
 				CC.amount = m
 		else
-			to_chat(usr, "<span class='warning'>There's no more cable on the reel.</span>")
+			to_chat(usr, SPAN_WARNING("There's no more cable on the reel."))
 
-/obj/machinery/cablelayer/examine(mob/user)
-	. = ..()
-	to_chat(user, "\The [src]'s cable reel has [cable.amount] length\s left.")
+/obj/machinery/cablelayer/examine(mob/user, extra_description = "")
+	extra_description += "\The [src]'s cable reel has [cable.amount] length\s left."
+	..(user, extra_description)
 
 /obj/machinery/cablelayer/proc/load_cable(var/obj/item/stack/cable_coil/CC)
 	if(istype(CC) && CC.amount)
@@ -82,8 +82,8 @@
 	last_piece = null
 
 /obj/machinery/cablelayer/proc/dismantleFloor(var/turf/new_turf)
-	if(istype(new_turf, /turf/simulated/floor))
-		var/turf/simulated/floor/T = new_turf
+	if(istype(new_turf, /turf/floor))
+		var/turf/floor/T = new_turf
 		if(!T.is_plating())
 			T.make_plating(!(T.broken || T.burnt))
 	return new_turf.is_plating()
@@ -105,13 +105,13 @@
 	NC.cableColor("red")
 	NC.d1 = 0
 	NC.d2 = fdirn
-	NC.update_icon()
+	NC.updateicon()
 
 	var/datum/powernet/PN
 	if(last_piece && last_piece.d2 != M_Dir)
 		last_piece.d1 = min(last_piece.d2, M_Dir)
 		last_piece.d2 = max(last_piece.d2, M_Dir)
-		last_piece.update_icon()
+		last_piece.updateicon()
 		PN = last_piece.powernet
 
 	if(!PN)

@@ -8,12 +8,20 @@
 		{{/if}}
 		{{if data.type == "search"}}
 			<div class='itemLabel'>
-				Location:
+				Name/Location:
 			</div>
 		{{/if}}
 		<div class='itemContent'>
 			{{:data.warrantname}}
 		</div>
+		{{if data.type == "arrest"}}
+			<div class='itemLabel'>
+				Job:
+			</div>
+			<div class='itemContent'>
+				{{:data.warrantjob}}
+			</div>
+		{{/if}}
 	</div>
 	<div class='item'>
 		{{if data.type == "arrest"}}
@@ -45,11 +53,11 @@
 		<div class='itemContent'>
 			<table>
 				{{if data.type == "arrest"}}
-					<tr><td>{{:helper.link('Edit Name', null, {'editwarrantname' : 1})}}{{:helper.link('Custom Name', null, {'editwarrantnamecustom' : 1})}}
+					<tr><td>{{:helper.link('Edit Name/Job', null, {'editwarrantname' : 1})}}{{:helper.link('Custom Name/Job', null, {'editwarrantnamecustom' : 1})}}
 					<tr><td>{{:helper.link('Edit Charges', null, {'editwarrantcharges' : 1})}}
 				{{/if}}
 				{{if data.type == "search"}}
-					<tr><td>{{:helper.link('Edit Location', null, {'editwarrantnamecustom' : 1})}}
+					<tr><td>{{:helper.link('Edit Name/Location', null, {'editwarrantnamelocation' : 1})}}
 					<tr><td>{{:helper.link('Edit Reason', null, {'editwarrantcharges' : 1})}}	
 				{{/if}}
 				<tr><td>{{:helper.link('Authorize', null, {'editwarrantauth' : 1})}}

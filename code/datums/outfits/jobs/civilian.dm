@@ -1,5 +1,8 @@
 /decl/hierarchy/outfit/job/assistant
-	name = OUTFIT_JOB_NAME("Assistant")
+	name = OUTFIT_JOB_NAME(ASSISTANT_TITLE)
+	suit = /obj/item/clothing/suit/storage/ass_jacket
+	uniform = /obj/item/clothing/under/rank/assistant
+	r_pocket = /obj/item/spacecash/bundle/vagabond
 
 /decl/hierarchy/outfit/job/service
 	l_ear = /obj/item/device/radio/headset/headset_service
@@ -8,58 +11,33 @@
 /decl/hierarchy/outfit/job/service/bartender
 	name = OUTFIT_JOB_NAME("Bartender")
 	uniform = /obj/item/clothing/under/rank/bartender
-	id_type = /obj/item/card/id/civilian/bartender
-	pda_type = /obj/item/device/pda/bar
+	head = /obj/item/clothing/head/that
+	id_type = /obj/item/card/id/white
+	pda_type = /obj/item/modular_computer/pda/club_worker
+	backpack_contents = list(/obj/item/ammo_casing/shotgun/beanbag = 4)
+
+
+/decl/hierarchy/outfit/job/service/waiter
+	name = OUTFIT_JOB_NAME("Waiter")
+	uniform = /obj/item/clothing/under/waiter
+	id_type = /obj/item/card/id/white
+	pda_type = /obj/item/modular_computer/pda/club_worker
 
 /decl/hierarchy/outfit/job/service/chef
 	name = OUTFIT_JOB_NAME("Chef")
 	uniform = /obj/item/clothing/under/rank/chef
 	suit = /obj/item/clothing/suit/chef
 	head = /obj/item/clothing/head/chefhat
-	id_type = /obj/item/card/id/civilian/chef
-	pda_type = /obj/item/device/pda/chef
+	id_type = /obj/item/card/id/ltgrey
+	pda_type = /obj/item/modular_computer/pda
 
-/decl/hierarchy/outfit/job/service/gardener
-	name = OUTFIT_JOB_NAME("Gardener")
-	uniform = /obj/item/clothing/under/rank/hydroponics
-	suit = /obj/item/clothing/suit/apron
-	gloves = /obj/item/clothing/gloves/thick/botany
-	r_pocket = /obj/item/device/analyzer/plant_analyzer
-	id_type = /obj/item/card/id/civilian/botanist
-	pda_type = /obj/item/device/pda/botanist
-
-/decl/hierarchy/outfit/job/service/gardener/New()
-	..()
-	backpack_overrides[/decl/backpack_outfit/backpack]      = /obj/item/storage/backpack/hydroponics
-	backpack_overrides[/decl/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/satchel_hyd
-	backpack_overrides[/decl/backpack_outfit/messenger_bag] = /obj/item/storage/backpack/messenger/hyd
-
-/decl/hierarchy/outfit/job/service/janitor
-	name = OUTFIT_JOB_NAME("Janitor")
-	uniform = /obj/item/clothing/under/rank/janitor
-	id_type = /obj/item/card/id/civilian/janitor
-	pda_type = /obj/item/device/pda/janitor
-
-/decl/hierarchy/outfit/job/librarian
-	name = OUTFIT_JOB_NAME("Librarian")
-	uniform = /obj/item/clothing/under/suit_jacket/red
-	id_type = /obj/item/card/id/civilian/librarian
-	pda_type = /obj/item/device/pda/librarian
-
-/decl/hierarchy/outfit/job/internal_affairs_agent
-	name = OUTFIT_JOB_NAME("Internal affairs agent")
-	l_ear = /obj/item/device/radio/headset/ia
-	uniform = /obj/item/clothing/under/rank/internalaffairs
-	suit = /obj/item/clothing/suit/storage/toggle/suit/black
-	shoes = /obj/item/clothing/shoes/brown
-	glasses = /obj/item/clothing/glasses/sunglasses/big
-	l_hand = /obj/item/storage/briefcase
-	id_type = /obj/item/card/id/civilian/internal_affairs_agent
-	pda_type = /obj/item/device/pda/lawyer
-
-/decl/hierarchy/outfit/job/chaplain
-	name = OUTFIT_JOB_NAME("Chaplain")
-	uniform = /obj/item/clothing/under/rank/chaplain
-	l_hand = /obj/item/storage/bible
-	id_type = /obj/item/card/id/civilian/chaplain
-	pda_type = /obj/item/device/pda/chaplain
+/decl/hierarchy/outfit/job/service/artist
+	name = OUTFIT_JOB_NAME("Club Artist")
+	uniform = /obj/item/clothing/under/rank/artist
+	//suit = /obj/item/clothing/suit/artist
+	shoes = /obj/item/clothing/shoes/artist_shoes
+	head = /obj/item/clothing/head/beret/artist
+	glasses = /obj/item/clothing/glasses/artist
+	mask = /obj/item/clothing/mask/gas/artist_hat
+	l_pocket = /obj/item/bikehorn
+	backpack_contents = list(/obj/item/bananapeel = 1, /obj/item/storage/fancy/crayons = 1, /obj/item/toy/waterflower = 1, /obj/item/stamp/clown = 1, /obj/item/handcuffs/fake = 1)

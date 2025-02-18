@@ -1,7 +1,7 @@
 
 //the researchable camera circuit that can connect to any camera network
 
-/obj/item/circuitboard/camera
+/obj/item/electronics/circuitboard/camera
 	//name = "Circuit board (Camera)"
 	var/secured = 1
 	var/authorised = 0
@@ -14,7 +14,7 @@
 		possibleNets["Engineering"] = access_ce
 		possibleNets["SS13"] = access_hos
 		possibleNets["Mining"] = access_mining
-		possibleNets["Cargo"] = access_qm
+		possibleNets["Cargo"] = access_merchant
 		possibleNets["Research"] = access_rd
 		possibleNets["Medbay"] = access_cmo
 		..()
@@ -38,7 +38,7 @@
 
 	attackby(var/obj/item/I, var/mob/user)//if(health > 50)
 		..()
-		if(isScrewdriver(I))
+		else if(istype(I,/obj/item/tool/screwdriver))
 			secured = !secured
 			user.visible_message("<span class='notice'>The [src] can [secured ? "no longer" : "now"] be modified.</span>")
 			updateBuildPath()
@@ -87,9 +87,8 @@
 		else if( href_list["auth"] )
 			var/mob/M = usr
 			var/obj/item/card/id/I = M.equipped()
-			if (istype(I, /obj/item/device/pda))
-				var/obj/item/device/pda/pda = I
-				I = pda.id
+			if (istype(I, /obj/item/modular_computer))
+				I = I.GetIdCard()
 			if (I && istype(I))
 				if(access_captain in I.access)
 					authorised = 1
@@ -102,14 +101,14 @@
 		updateDialog()
 
 	updateDialog()
-		if(istype(src.loc,/mob))
+		if(ismob(src.loc))
 			attack_self(src.loc)
 
-/obj/item/circuitboard/camera/emag_act(var/remaining_charges, var/mob/user)
+/obj/item/electronics/circuitboard/camera/emag_act(var/remaining_charges, mob/user)
 	if(network)
 		authorised = 1
-		to_chat(user, "<span class='notice'>You authorised the circuit network!</span>")
+		user << SPAN_NOTICE("You authorised the circuit network!")
 		updateDialog()
 		return 1
 	else
-		to_chat(user, "<span class='warning'>You must select a camera network circuit!</span>")
+		user << SPAN_WARNING("You must select a camera network circuit!")

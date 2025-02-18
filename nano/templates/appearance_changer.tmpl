@@ -1,3 +1,15 @@
+{{if data.change_name}}
+    <div class="item">
+        <div class="itemLabelNarrow">
+            Name:
+        </div>
+		<div class="itemContentWide">
+			{{:helper.link('Random', null, { 'name' : 'random'}, null, null)}}
+			{{:helper.link('Custom', null, { 'name' : 'custom'}, null, null)}}
+        </div>
+    </div>
+{{/if}}
+
 {{if data.change_race}}
     <div class="item">
         <div class="itemLabelNarrow">
@@ -17,8 +29,20 @@
             Gender:
         </div>
         <div class="itemContentWide">
-            {{for data.genders}}
-                {{:helper.link(value.gender_name, null, { 'gender' : value.gender_key}, null, data.gender == value.gender_key ? 'selected' : null)}}
+            {{:helper.link('Male', null, { 'gender' : 'male'}, null, data.gender == 'male' ? 'selected' : null)}}
+            {{:helper.link('Female', null, { 'gender' : 'female'}, null, data.gender == 'female' ? 'selected' : null)}}
+        </div>
+    </div>
+{{/if}}
+
+{{if data.change_build}}
+    <div class="item">
+        <div class="itemLabelNarrow">
+            Body Build:
+        </div>
+		<div class="itemContentWide">
+            {{for data.builds}}
+                {{:helper.link(value, null, { 'build' : value}, null, value == data.build ? 'selected' : null)}}
             {{/for}}
         </div>
     </div>

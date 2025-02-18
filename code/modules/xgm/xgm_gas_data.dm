@@ -15,8 +15,6 @@
 	var/list/overlay_limit = list()
 	//Flags.
 	var/list/flags = list()
-	//Products created when burned. For fuel only for now (not oxidizers)
-	var/list/burn_product = list()
 
 /decl/xgm_gas
 	var/id = ""
@@ -24,11 +22,10 @@
 	var/specific_heat = 20	// J/(mol*K)
 	var/molar_mass = 0.032	// kg/mol
 
-	var/tile_overlay = null
-	var/overlay_limit = null
+	var/tile_overlay
+	var/overlay_limit
 
 	var/flags = 0
-	var/burn_product = "carbon_dioxide"
 
 /hook/startup/proc/generateGasData()
 	gas_data = new
@@ -43,11 +40,26 @@
 		gas_data.specific_heat[gas.id] = gas.specific_heat
 		gas_data.molar_mass[gas.id] = gas.molar_mass
 		if(gas.tile_overlay)
-			var/image/I = image('icons/effects/tile_effects.dmi', gas.tile_overlay, FLY_LAYER)
-			I.appearance_flags = RESET_COLOR
-			gas_data.tile_overlay[gas.id] = I
-		if(gas.overlay_limit) gas_data.overlay_limit[gas.id] = gas.overlay_limit
+			gas_data.tile_overlay[gas.id] = gas.tile_overlay
+		if(gas.overlay_limit)
+			gas_data.overlay_limit[gas.id] = gas.overlay_limit
 		gas_data.flags[gas.id] = gas.flags
-		gas_data.burn_product[gas.id] = gas.burn_product
 
 	return 1
+
+/obj/effect/gas_overlay
+	name = "gas"
+	desc = "You shouldn't be clicking this."
+	icon = 'icons/effects/tile_effects.dmi'
+	icon_state = "generic"
+	layer = GASFIRE_LAYER
+	appearance_flags = PIXEL_SCALE | RESET_COLOR
+	mouse_opacity = 0
+	var/gas_id
+
+/obj/effect/gas_overlay/Initialize(mapload, gas)
+	. = ..()
+	gas_id = gas
+	if(gas_data.tile_overlay[gas_id])
+		icon_state = gas_data.tile_overlay[gas_id]
+		//color = gas_data.tile_overlay_color[gas_id]

@@ -1,70 +1,66 @@
 /obj/item/pen/crayon/red
 	icon_state = "crayonred"
-	colour = "#da0000"
-	shadeColour = "#810c0c"
+	colour = "#DA0000"
+	shadeColour = "#810C0C"
 	colourName = "red"
 
 /obj/item/pen/crayon/orange
 	icon_state = "crayonorange"
-	colour = "#ff9300"
-	shadeColour = "#a55403"
+	colour = "#FF9300"
+	shadeColour = "#A55403"
 	colourName = "orange"
 
 /obj/item/pen/crayon/yellow
 	icon_state = "crayonyellow"
-	colour = "#fff200"
+	colour = "#FFF200"
 	shadeColour = "#886422"
 	colourName = "yellow"
 
 /obj/item/pen/crayon/green
 	icon_state = "crayongreen"
-	colour = "#a8e61d"
-	shadeColour = "#61840f"
+	colour = "#A8E61D"
+	shadeColour = "#61840F"
 	colourName = "green"
 
 /obj/item/pen/crayon/blue
 	icon_state = "crayonblue"
-	colour = "#00b7ef"
-	shadeColour = "#0082a8"
+	colour = "#00B7EF"
+	shadeColour = "#0082A8"
 	colourName = "blue"
 
 /obj/item/pen/crayon/purple
 	icon_state = "crayonpurple"
-	colour = "#da00ff"
-	shadeColour = "#810cff"
+	colour = "#DA00FF"
+	shadeColour = "#810CFF"
 	colourName = "purple"
-
-/obj/item/pen/crayon/random/Initialize()
-	..()
-	var/crayon_type = pick(subtypesof(/obj/item/pen/crayon) - /obj/item/pen/crayon/random)
-	new crayon_type(loc)
-	return INITIALIZE_HINT_QDEL
 
 /obj/item/pen/crayon/mime
 	icon_state = "crayonmime"
 	desc = "A very sad-looking crayon."
-	colour = "#ffffff"
+	colour = "#FFFFFF"
 	shadeColour = "#000000"
 	colourName = "mime"
 	uses = 0
+	grindable = FALSE
 
 /obj/item/pen/crayon/mime/attack_self(mob/living/user as mob) //inversion
-	if(colour != "#ffffff" && shadeColour != "#000000")
-		colour = "#ffffff"
+	if(colour != "#FFFFFF" && shadeColour != "#000000")
+		colour = "#FFFFFF"
 		shadeColour = "#000000"
 		to_chat(user, "You will now draw in white and black with this crayon.")
 	else
 		colour = "#000000"
-		shadeColour = "#ffffff"
+		shadeColour = "#FFFFFF"
 		to_chat(user, "You will now draw in black and white with this crayon.")
 	return
 
 /obj/item/pen/crayon/rainbow
 	icon_state = "crayonrainbow"
-	colour = "#fff000"
-	shadeColour = "#000fff"
+	colour = "#FFF000"
+	shadeColour = "#000FFF"
 	colourName = "rainbow"
 	uses = 0
+	grindable = FALSE
 
 /obj/item/pen/crayon/rainbow/attack_self(mob/living/user as mob)
 	colour = input(user, "Please select the main colour.", "Crayon colour") as color
@@ -73,7 +69,7 @@
 
 /obj/item/pen/crayon/afterattack(atom/target, mob/user as mob, proximity)
 	if(!proximity) return
-	if(istype(target,/turf/simulated/floor))
+	if(istype(target,/turf/floor))
 		var/drawtype = input("Choose what you'd like to draw.", "Crayon scribbles") in list("graffiti","rune","letter","arrow")
 		switch(drawtype)
 			if("letter")
@@ -93,19 +89,19 @@
 			if(uses)
 				uses--
 				if(!uses)
-					to_chat(user, "<span class='warning'>You used up your crayon!</span>")
+					to_chat(user, SPAN_WARNING("You used up your crayon!"))
 					qdel(src)
 	return
 
 /obj/item/pen/crayon/attack(mob/living/carbon/M as mob, mob/user as mob)
 	if(istype(M) && M == user)
 		to_chat(M, "You take a bite of the crayon and swallow it.")
-		M.nutrition += 1
-		M.reagents.add_reagent(/datum/reagent/crayon_dust,min(5,uses)/3)
+		M.adjustNutrition(1)
+		M.ingested.add_reagent("crayon_dust",min(5,uses)/3)
 		if(uses)
 			uses -= 5
 			if(uses <= 0)
-				to_chat(M, "<span class='warning'>You ate your crayon!</span>")
+				to_chat(M, SPAN_WARNING("You ate your crayon!"))
 				qdel(src)
 	else
 		..()

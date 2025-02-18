@@ -1,44 +1,49 @@
-{{if data.state == 0}} <!-- Not processing-->
-	<div class='item'>
-		{{:helper.link('Activate Biogenerator', null, {"action": "activate"}, null)}}
-	</div>
-	<div class='item'>
-		{{:helper.link('Detach Container', null, {"action": "detach"}, null)}}
-	</div>
-	Biomass: {{:data.points}} points
-	<HR>
-	{{for data.types :type:type_index}}
-		<h2> {{:type.type_name}}</h2>
-		{{for type.products :product:product_index}}
-			<div class='item'>
-				<div class='itemContent'>
-					{{:helper.link('Generate (' + product.cost + ' points)', 'cart', {"action": "create", "type" : type.type_name, "product_index": product.product_index}, data.points>=product.cost? null: "disabled")}}
-					<span> {{:product.name}}</span>
-				</div>
-			</div>
-			{{empty}}
-			No items available!
-		{{/for}}
-		<HR>
-	{{empty}}
-	No items available!
-	{{/for}}
-{{/if}}
-{{if data.state == 1}} <!-- Processing -->
-	<span style='color: red'>Biogenerator is processing! Please wait...</span>
-{{/if}}	
-{{if data.state == 2}} <!-- No beaker -->
-	<span style='color: red'>No beaker inside. Please insert a beaker.</span>
-{{/if}}	
-{{if data.state == 3}} <!-- Creation is complete -->
-	Creation is complete.<br>
-	<div class='item'>
-		{{:helper.link('Return to menu', 'arrowreturn-1-w', {"action" : "return"})}}
-	</div>
-{{/if}}	
-{{if data.state == 4}}
-	<span style='color: red'>Error: No produce inside.</span><BR>Please, put produce into reactor.<BR>
-	<div class='item'>
-		{{:helper.link('Return to menu', 'arrowreturn-1-w', {"action" : "return"})}}
-	</div>
+<!-- 
+Title: Biogenerator
+Used In File(s): \code\game\machinery\biogenerator.dm
+ -->
+<h2>Biogenerator</h2>
+ <div class='itemLabel'>Useable Biomass: </div> <div class='itemContent'>{{:data.points}}g</div> 
+{{if data.menustat=="menu"}}
+    {{if data.beaker!=null}}
+        {{:helper.link('Activate Biogenerator', 'arrowreturnthick-1-s', { "action" : "activate" })}}
+        {{:helper.link('Detach Container', 'arrowreturnthick-1-s', { "action" : "detach" })}}
+        <div class='item'>
+            {{for data.recipes}}
+                {{if value.is_category}}
+                    <h3>{{:value.name}}</h3>
+                {{else}}
+                    <div class='itemLabel'>{{:value.name}}</div> 
+                    <div class='itemContent'>{{:helper.link(value.cost, 'eject', {'action' : 'create', 'item' : value.name})}}
+                    {{if value.allow_multiple}}
+                        {{:helper.link('X5', 'eject', {'action' : 'create', 'item' : 'value.name'})}}
+                    {{/if}}
+                    </div>
+                {{/if}}
+            {{empty}}
+                No items available!
+            {{/for}}
+        </div>
+    {{else}}
+        <div class='item'>
+            <div class="notice">No beaker inside. Please insert a beaker.</div>
+        </div>
+    {{/if}}
+{{else data.menustat== "nopoints"}}
+    <div class='item'>
+        You do not have biomass to create products.<BR>
+        Please, put growns into bioreactor and activate it.
+    </div>
+    {{:helper.link('Return to menu', 'arrowreturnthick-1-s', { 'action' : 'menu' })}}
+{{else data.menustat== "complete"}}
+    <div class='item'>
+        Operation complete.
+    </div>
+    {{:helper.link('Return to menu', 'arrowreturnthick-1-s', { 'action' : 'menu' })}}
+{{else data.menustat== "void"}}
+    <div class='item'>
+        <div class="notice">Error: No growns inside.</div>
+        Please, put growns into bioreactor.
+    </div>
+    {{:helper.link('Return to menu', 'arrowreturnthick-1-s', { 'action' : 'menu' })}}
 {{/if}}

@@ -4,25 +4,25 @@
 	icon_state = "electropack0"
 	item_state = "electropack"
 	frequency = 1449
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
+	flags = CONDUCT
 	slot_flags = SLOT_BACK
 	w_class = ITEM_SIZE_HUGE
 
-	matter = list(DEFAULT_WALL_MATERIAL = 10000,"glass" = 2500)
+	matter = list(MATERIAL_STEEL = 8, MATERIAL_PLASTIC = 2)
 
 	var/code = 2
 
 /obj/item/device/radio/electropack/attack_hand(mob/user as mob)
 	if(src == user.back)
-		to_chat(user, "<span class='notice'>You need help taking this off!</span>")
+		to_chat(user, SPAN_NOTICE("You need help taking this off!"))
 		return
 	..()
 
 /obj/item/device/radio/electropack/attackby(obj/item/W as obj, mob/user as mob)
 	..()
-	if(istype(W, /obj/item/clothing/head/helmet))
+	if(istype(W, /obj/item/clothing/head/armor/helmet))
 		if(!b_stat)
-			to_chat(user, "<span class='notice'>[src] is not ready to be attached!</span>")
+			to_chat(user, SPAN_NOTICE("[src] is not ready to be attached!"))
 			return
 		var/obj/item/assembly/shock_kit/A = new /obj/item/assembly/shock_kit( user )
 		A.icon = 'icons/obj/assemblies.dmi'
@@ -38,12 +38,14 @@
 		A.part2 = src
 
 		user.put_in_hands(A)
+		A.add_fingerprint(user)
 
 /obj/item/device/radio/electropack/Topic(href, href_list)
 	//..()
 	if(usr.stat || usr.restrained())
 		return
-	if(((istype(usr, /mob/living/carbon/human) && ((!( ticker ) || (ticker && ticker.mode != "monkey")) && usr.contents.Find(src))) || (usr.contents.Find(master) || (in_range(src, usr) && istype(loc, /turf)))))
+
+	if(usr.contents.Find(master) || (isturf(loc) &&  in_range(src, usr)))
 		usr.set_machine(src)
 		if(href_list["freq"])
 			var/new_frequency = sanitize_frequency(frequency + text2num(href_list["freq"]))
@@ -59,14 +61,14 @@
 					on = !( on )
 					icon_state = "electropack[on]"
 		if(!( master ))
-			if(istype(loc, /mob))
+			if(ismob(loc))
 				attack_self(loc)
 			else
 				for(var/mob/M in viewers(1, src))
 					if(M.client)
 						attack_self(M)
 		else
-			if(istype(master.loc, /mob))
+			if(ismob(master.loc))
 				attack_self(master.loc)
 			else
 				for(var/mob/M in viewers(1, master))
@@ -91,7 +93,7 @@
 				sleep(50)
 				if(M)
 					M.moved_recently = 0
-		to_chat(M, "<span class='danger'>You feel a sharp shock!</span>")
+		to_chat(M, SPAN_DANGER("You feel a sharp shock!"))
 		var/datum/effect/effect/system/spark_spread/s = new /datum/effect/effect/system/spark_spread
 		s.set_up(3, 1, M)
 		s.start()
@@ -104,7 +106,7 @@
 
 /obj/item/device/radio/electropack/attack_self(mob/user as mob, flag1)
 
-	if(!istype(user, /mob/living/carbon/human))
+	if(!ishuman(user))
 		return
 	user.set_machine(src)
 	var/dat = {"<TT>

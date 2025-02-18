@@ -10,10 +10,12 @@
 	var/datum/computer/file/embedded_program/docking/multi/docking_program
 
 /obj/machinery/embedded_controller/radio/docking_port_multi/New()
-	..()
+	. = ..()
 	docking_program = new/datum/computer/file/embedded_program/docking/multi(src)
 	program = docking_program
 
+/obj/machinery/embedded_controller/radio/docking_port_multi/Initialize()
+	.=..()
 	var/list/names = splittext(child_names_txt, ";")
 	var/list/tags = splittext(child_tags_txt, ";")
 
@@ -22,7 +24,7 @@
 			child_names[tags[i]] = names[i]
 
 
-/obj/machinery/embedded_controller/radio/docking_port_multi/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/nano_ui/master_ui = null, var/datum/topic_state/state = GLOB.default_state)
+/obj/machinery/embedded_controller/radio/docking_port_multi/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	var/data[0]
 
 	var/list/airlocks[child_names.len]
@@ -35,10 +37,10 @@
 		"airlocks" = airlocks,
 	)
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 
 	if (!ui)
-		ui = new(user, src, ui_key, "multi_docking_console.tmpl", name, 470, 290, state = state)
+		ui = new(user, src, ui_key, "multi_docking_console.tmpl", name, 470, 290)
 		ui.set_initial_data(data)
 		ui.open()
 		ui.set_auto_update(1)
@@ -60,7 +62,7 @@
 	airlock_program = new/datum/computer/file/embedded_program/airlock/multi_docking(src)
 	program = airlock_program
 
-/obj/machinery/embedded_controller/radio/airlock/docking_port_multi/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/nano_ui/master_ui = null, var/datum/topic_state/state = GLOB.default_state)
+/obj/machinery/embedded_controller/radio/airlock/docking_port_multi/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	var/data[0]
 
 	data = list(
@@ -73,10 +75,10 @@
 		"override_enabled" = airlock_program.override_enabled,
 	)
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 
 	if (!ui)
-		ui = new(user, src, ui_key, "docking_airlock_console.tmpl", name, 470, 290, state = state)
+		ui = new(user, src, ui_key, "docking_airlock_console.tmpl", name, 470, 290)
 		ui.set_initial_data(data)
 		ui.open()
 		ui.set_auto_update(1)
@@ -86,21 +88,12 @@
 		return
 
 	usr.set_machine(src)
+	src.add_fingerprint(usr)
 
-	var/clean = 0
-	switch(href_list["command"])	//anti-HTML-hacking checks
-		if("cycle_ext")
-			clean = 1
-		if("cycle_int")
-			clean = 1
-		if("force_ext")
-			clean = 1
-		if("force_int")
-			clean = 1
-		if("abort")
-			clean = 1
-		if("toggle_override")
-			clean = 1
+	var/clean = FALSE
+	switch(href_list["command"])
+		if("cycle_ext", "cycle_int", "force_ext", "force_int", "abort", "toggle_override")
+			clean = TRUE
 
 	if(clean)
 		program.receive_user_command(href_list["command"])
@@ -112,18 +105,16 @@
 /*** DEBUG VERBS ***
 
 /datum/computer/file/embedded_program/docking/multi/proc/print_state()
-	log_debug("id_tag: [id_tag]")
-	log_debug("dock_state: [dock_state]")
-	log_debug("control_mode: [control_mode]")
-	log_debug("tag_target: [tag_target]")
-	log_debug("response_sent: [response_sent]")
+	to_chat(world, "id_tag: [id_tag]")
+	to_chat(world, "dock_state: [dock_state]")
+	to_chat(world, "control_mode: [control_mode]")
+	to_chat(world, "tag_target: [tag_target]")
+	to_chat(world, "response_sent: [response_sent]")
 
 /datum/computer/file/embedded_program/docking/multi/post_signal(datum/signal/signal, comm_line)
-	log_debug("Program [id_tag] sent a message!")
-
+	to_chat(world, "Program [id_tag] sent a message!")
 	print_state()
-	log_debug("[id_tag] sent command \"[signal.data["command"]]\" to \"[signal.data["recipient"]]\"")
-
+	to_chat(world, "[id_tag] sent command \"[signal.data["command"]]\" to \"[signal.data["recipient"]]\"")
 	..(signal)
 
 /obj/machinery/embedded_controller/radio/docking_port_multi/verb/view_state()

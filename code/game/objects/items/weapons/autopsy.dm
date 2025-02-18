@@ -4,26 +4,30 @@
 
 /obj/item/autopsy_scanner
 	name = "autopsy scanner"
-	desc = "Used to gather information on wounds."
+	desc = "Extracts information on wounds."
 	icon = 'icons/obj/autopsy_scanner.dmi'
 	icon_state = ""
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
+	flags = CONDUCT
 	w_class = ITEM_SIZE_SMALL
 	origin_tech = list(TECH_MATERIAL = 1, TECH_BIO = 1)
+	rarity_value = 50
 	var/list/datum/autopsy_data_scanner/wdata = list()
-	var/list/chemtraces = list()
-	var/target_name = null
-	var/timeofdeath = null
+	var/list/datum/autopsy_data_scanner/chemtraces = list()
+	var/target_name
+	var/timeofdeath
+
+/obj/item/paper/autopsy_report
+	var/list/autopsy_data
 
 /datum/autopsy_data_scanner
-	var/weapon = null // this is the DEFINITE weapon type that was used
+	var/weapon // this is the DEFINITE weapon type that was used
 	var/list/organs_scanned = list() // this maps a number of scanned organs to
 									 // the wounds to those organs with this data's weapon type
 	var/organ_names = ""
 
 /datum/autopsy_data
-	var/weapon = null
-	var/pretend_weapon = null
+	var/weapon
+	var/pretend_weapon
 	var/damage = 0
 	var/hits = 0
 	var/time_inflicted = 0
@@ -37,20 +41,15 @@
 		W.time_inflicted = time_inflicted
 		return W
 
-/obj/item/autopsy_scanner/proc/add_data(var/obj/item/organ/external/O)
-	if(!O.autopsy_data.len) return
+/obj/item/autopsy_scanner/proc/add_data(var/obj/item/organ/external/O, mob/living/carbon/user)
+	if(!O.autopsy_data.len && !O.trace_chemicals.len) return
 
 	for(var/V in O.autopsy_data)
 		var/datum/autopsy_data/W = O.autopsy_data[V]
 
 		if(!W.pretend_weapon)
-			/*
-			// the more hits, the more likely it is that we get the right weapon type
-			if(prob(50 + W.hits * 10 + W.damage))
-			*/
-
-			// Buffing this stuff up for now!
-			if(1)
+			var/error_chance = (user.stats.getStat(STAT_BIO) * 4) //always success at BIO 25
+			if(prob(error_chance))
 				W.pretend_weapon = W.weapon
 			else
 				W.pretend_weapon = pick("mechanical toolbox", "wirecutters", "revolver", "crowbar", "fire extinguisher", "tomato soup", "oxygen tank", "emergency oxygen tank", "laser", "bullet")
@@ -71,11 +70,19 @@
 		qdel(D.organs_scanned[O.name])
 		D.organs_scanned[O.name] = W.copy()
 
-/obj/item/autopsy_scanner/proc/print_data()
+	for(var/V in O.trace_chemicals)
+		if(O.trace_chemicals[V] > 0 && !chemtraces.Find(V))
+			chemtraces += V
+
+/obj/item/autopsy_scanner/verb/print_data()
 	set category = "Object"
+	set src in view(usr, 1)
 	set name = "Print Data"
-	if(usr.stat || !(istype(usr,/mob/living/carbon/human)))
-		to_chat(usr, "No.")
+	if(usr.stat)
+		to_chat(usr, "You must be conscious to do that!")
+		return
+
+	if (!usr.IsAdvancedToolUser())
 		return
 
 	var/scan_data = ""
@@ -145,49 +152,57 @@
 			scan_data += "<br>"
 
 	for(var/mob/O in viewers(usr))
-		O.show_message("<span class='notice'>\The [src] rattles and prints out a sheet of paper.</span>", 1)
+		O.show_message(SPAN_NOTICE("\The [src] rattles and prints out a sheet of paper."), 1)
 
 	sleep(10)
 
-	var/obj/item/paper/P = new(usr.loc)
-	P.SetName("Autopsy Data ([target_name])")
+	var/obj/item/paper/autopsy_report/P = new(usr.loc)
+	P.name = "Autopsy Data ([target_name])"
 	P.info = "<tt>[scan_data]</tt>"
+	P.autopsy_data = list() // Copy autopsy data for science tool
+	for(var/wdata_idx in wdata)
+		var/datum/autopsy_data_scanner/D = wdata[wdata_idx]
+		for(var/wound_idx in D.organs_scanned)
+			var/datum/autopsy_data/W = D.organs_scanned[wound_idx]
+			P.autopsy_data += W.copy()
 	P.icon_state = "paper_words"
 
-	if(istype(usr,/mob/living/carbon))
-		// place the item in the usr's hand if possible
-		usr.put_in_hands(P)
+	// place the item in the usr's hand if possible
+	usr.put_in_hands(P)
+	usr.setClickCooldown(DEFAULT_ATTACK_COOLDOWN*4) //To stop people spamclicking and generating tons of paper
 
-/obj/item/autopsy_scanner/RightClick(mob/user)
-	if(CanPhysicallyInteract(user))
-		if(src == user.get_active_hand())
-			print_data()
-
-/obj/item/autopsy_scanner/do_surgery(mob/living/carbon/human/M, mob/living/user)
+/obj/item/autopsy_scanner/attack(mob/living/carbon/human/M, mob/living/carbon/user)
 	if(!istype(M))
-		return 0
+		return
+
+	if(!can_operate(M, user) == CAN_OPERATE_ALL)
+		to_chat(user, SPAN_WARNING("You need to lay the cadaver down on a table first!"))
+		return
 
 	if(target_name != M.name)
 		target_name = M.name
 		src.wdata = list()
 		src.chemtraces = list()
 		src.timeofdeath = null
-		to_chat(user, "<span class='notice'>A new patient has been registered. Purging data for previous patient.</span>")
+		to_chat(user, SPAN_NOTICE("A new patient has been registered. Purging data for previous patient."))
 
 	src.timeofdeath = M.timeofdeath
 
-	var/obj/item/organ/external/S = M.get_organ(user.zone_sel.selecting)
+	var/obj/item/organ/external/S = M.get_organ(user.targeted_organ)
 	if(!S)
-		to_chat(usr, "<span class='warning'>You can't scan this body part.</span>")
+		to_chat(usr, SPAN_WARNING("You can't scan this body part."))
 		return
-	if(!S.open())
-		to_chat(usr, "<span class='warning'>You have to cut [S] open first!</span>")
+	if(!S.open)
+		to_chat(usr, SPAN_WARNING("You have to cut the limb open first!"))
 		return
-	M.visible_message("<span class='notice'>\The [user] scans the wounds on [M]'s [S.name] with [src]</span>")
-
-	src.add_data(S)
-	for(var/T in M.chem_doses)
-		var/datum/reagent/R = T
-		chemtraces += initial(R.name)
+	for(var/mob/O in viewers(M))
+		O.show_message(SPAN_NOTICE("\The [user] scans the wounds on [M.name]'s [S.name] with \the [src]"), 1)
+	SEND_SIGNAL_OLD(user, COMSING_AUTOPSY, M)
+	if(user.mind && user.mind.assigned_job && (user.mind.assigned_job.department in GLOB.department_moebius))
+		GLOB.moebius_autopsies_mobs |= M
+	src.add_data(S, user)
 
 	return 1
+
+/obj/item/autopsy_scanner/attack_self()
+	print_data()

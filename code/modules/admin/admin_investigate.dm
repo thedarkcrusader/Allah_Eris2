@@ -23,18 +23,19 @@
 	if(!message)	return
 	var/F = investigate_subject2file(subject)
 	if(!F)	return
-	to_chat(F, "<small>[time_stamp()] \ref[src] ([x],[y],[z])</small> || [src] [message]<br>")
+	F << "<small>[time2text(world.timeofday,"hh:mm")] \ref[src] ([x],[y],[z])</small> || [src] [message]<br>"
 
 //ADMINVERBS
-/client/proc/investigate_show( subject in list("hrefs","notes","singulo","telesci") )
+//various admintools for investigation. Such as a singulo grief-log
+/client/proc/investigate_show(subject in list("hrefs","notes","singulo","telesci","atmos","chemistry"))
 	set name = "Investigate"
 	set category = "Admin"
 	if(!holder)	return
 	switch(subject)
-		if("singulo", "telesci")			//general one-round-only stuff
+		if("singulo", "telesci", "atmos", "chemistry")			//general one-round-only stuff
 			var/F = investigate_subject2file(subject)
 			if(!F)
-				to_chat(src, "<span class='warning'>Error: admin_investigate: [INVESTIGATE_DIR][subject] is an invalid path or cannot be accessed.</span>")
+				to_chat(src, "<font color='red'>Error: admin_investigate: [INVESTIGATE_DIR][subject] is an invalid path or cannot be accessed.</font>")
 				return
 			src << browse(F,"window=investigate[subject];size=800x300")
 
@@ -43,8 +44,8 @@
 				if(href_logfile)
 					src << browse(href_logfile,"window=investigate[subject];size=800x300")
 				else
-					to_chat(src, "<span class='warning'>Error: admin_investigate: No href logfile found.</span>")
+					to_chat(src, "<font color='red'>Error: admin_investigate: No href logfile found.</font>")
 					return
 			else
-				to_chat(src, "<span class='warning'>Error: admin_investigate: Href Logging is not on.</span>")
+				to_chat(src, "<font color='red'>Error: admin_investigate: Href Logging is not on.</font>")
 				return

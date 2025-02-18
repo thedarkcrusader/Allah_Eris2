@@ -1,41 +1,158 @@
-// Code taken from /vg/station.
-
-// Examples
 /*
-	-- Will call the proc for all computers in the world, thats dir is 2.
-	CALL ex_act(1) ON /obj/machinery/computer IN world WHERE dir == 2
-	-- Will open a window with a list of all the closets in the world, with a link to VV them.
-	SELECT /obj/structure/closet/secure_closet/security/cargo IN world WHERE icon_off == "secoff"
-	-- Will change all the tube lights to green, and flicker them. The semicolon is important to separate the consecutive querys, but is not required for standard one-query use.
-	UPDATE /obj/machinery/light SET color = "#0F0" WHERE icon_state == "tube1"; CALL flicker(1) ON /obj/machinery/light
-	-- Will delete all pickaxes. "IN world" is not required.
-	DELETE /obj/item/pickaxe
+	Welcome admins, badmins and coders alike, to Structured Datum Query Language.
+	SDQL allows you to powerfully run code on batches of objects (or single objects, it's still unmatched even there.)
+	When I say "powerfully" I mean it you're in for a ride.
 
-	--You can use operators other than ==, such as >, <=, != and etc..
+	Ok so say you want to get a list of every mob. How does one do this?
+	"SELECT /mob"
+	This will open a list of every object in world that is a /mob.
+	And you can VV them if you need.
 
-	--Lists can be done through [], so say UPDATE /mob SET client.color = [1, 0.75, ...].
+	What if you want to get every mob on a *specific z-level*?
+	"SELECT /mob WHERE z == 4"
+
+	What if you want to select every mob on even numbered z-levels?
+	"SELECT /mob WHERE z % 2 == 0"
+
+	Can you see where this is going? You can select objects with an arbitrary expression.
+	These expressions can also do variable access and proc calls (yes, both on-object and globals!)
+	Keep reading!
+
+	Ok. What if you want to get every machine in the SSmachine process list? Looping through world is kinda slow.
+
+	"SELECT * IN SSmachines.machinery"
+
+	Here "*" as type functions as a wildcard.
+	We know everything in the global SSmachines.machinery list is a machine.
+
+	You can specify "IN <expression>" to return a list to operate on.
+	This can be any list that you can wizard together from global variables and global proc calls.
+	Every variable/proc name in the "IN" block is global.
+	It can also be a single object, in which case the object is wrapped in a list for you.
+	So yeah SDQL is unironically better than VV for complex single-object operations.
+
+	You can of course combine these.
+	"SELECT * IN SSmachines.machinery WHERE z == 4"
+	"SELECT * IN SSmachines.machinery WHERE stat & 2" // (2 is NOPOWER, can't use defines from SDQL. Sorry!)
+	"SELECT * IN SSmachines.machinery WHERE stat & 2 && z == 4"
+
+	The possibilities are endless (just don't crash the server, ok?).
+
+	Oh it gets better.
+
+	You can use "MAP <expression>" to run some code per object and use the result. For example:
+
+	"SELECT /obj/machinery/power/smes MAP [charge / capacity * 100, RCon_tag, src]"
+
+	This will give you a list of all the APCs, their charge AND RCon tag. Useful eh?
+
+	[] being a list here. Yeah you can write out lists directly without > lol lists in VV. Color matrix shenanigans inbound.
+
+	After the "MAP" segment is executed, the rest of the query executes as if it's THAT object you just made (here the list).
+	Yeah, by the way, you can chain these MAP / WHERE things FOREVER!
+
+	"SELECT /mob WHERE client MAP client WHERE holder MAP holder"
+
+	What if some dumbass admin spawned a bajillion spiders and you need to kill them all?
+	Oh yeah you'd rather not delete all the spiders in maintenace. Only that one room the spiders were spawned in.
+
+	"DELETE /mob/living/carbon/superior_animal/giant_spider WHERE loc.loc == marked"
+
+	Here I used VV to mark the area they were in, and since loc.loc = area, voila.
+	Only the spiders in a specific area are gone.
+
+	Or you know if you want to catch spiders that crawled into lockers too (how even?)
+
+	"DELETE /mob/living/carbon/superior_animal/giant_spider WHERE global.get_area(src) == marked"
+
+	What else can you do?
+
+	Well suppose you'd rather gib those spiders instead of simply flat deleting them...
+
+	"CALL gib() ON /mob/living/carbon/superior_animal/giant_spider WHERE global.get_area(src) == marked"
+
+	Or you can have some fun..
+
+	"CALL forceMove(marked) ON /mob/living/carbon/superior_animal"
+
+	You can also run multiple queries sequentially:
+
+	"CALL forceMove(marked) ON /mob/living/carbon/superior_animal; CALL gib() ON /mob/living/carbon/superior_animal"
+
+	And finally, you can directly modify variables on objects.
+
+	"UPDATE /mob WHERE client SET client.color = [0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]"
+
+	Don't crash the server, OK?
+
+	A quick recommendation: before you run something like a DELETE or another query.. Run it through SELECT first.
+	You'd rather not gib every player on accident.
+	Or crash the server.
+
+	By the way, queries are slow and take a while. Be patient.
+	They don't hang the entire server though.
+
+	With great power comes great responsability.
+
+	Here's a slightly more formal quick reference.
+
+	The 4 queries you can do are:
+
+	"SELECT <selectors>"
+	"CALL <proc call> ON <selectors>"
+	"UPDATE <selectors> SET var=<value>,var2=<value>"
+	"DELETE <selectors>"
+
+	"<selectors>" in this context is "<type> [IN <source>] [chain of MAP/WHERE modifiers]"
+
+	"IN" (or "FROM", that works too but it's kinda weird to read),
+	is the list of objects to work on. This defaults to world if not provided.
+	But doing something like "IN GLOB.living_mob_list" is quite handy and can optimize your query.
+	All names inside the IN block are global scope, so you can do GLOB.living_mob_list (a global var) easily.
+	You can also run it on a single object. Because SDQL is that convenient even for single operations.
+
+	<type> filters out objects of, well, that type easily. "*" is a wildcard and just takes everything in the source list.
+
+	And then there's the MAP/WHERE chain.
+	These operate on each individual object being ran through the query.
+	They're both expressions like IN, but unlike it the expression is scoped *on the object*.
+	So if you do "WHERE z == 4", this does "src.z", effectively.
+	If you want to access global variables, you can do `global.living_mob_list`.
+	Same goes for procs.
+
+	MAP "changes" the object into the result of the expression.
+	WHERE "drops" the object if the expression is falsey (0, null or "")
+
+	What can you do inside expressions?
+
+	* Proc calls
+	* Variable reads
+	* Literals (numbers, strings, type paths, etc...)
+	* \ref referencing: {0x30000cc} grabs the object with \ref [0x30000cc]
+	* Lists: [a, b, c] or [a: b, c: d]
+	* Math and stuff.
+	* A few special variables: src (the object currently scoped on), usr (your mob), marked (your marked datum), global(global scope)
 */
 
 // Used by update statements, this is to handle shit like preventing editing the /datum/admins though SDQL but WITHOUT +PERMISSIONS.
 // Assumes the variable actually exists.
 /datum/proc/SDQL_update(var/const/var_name, var/new_value)
 	vars[var_name] = new_value
-	return 1
+	return TRUE
 
-/client/proc/SDQL2_query(var/query_text as message)
+/client/proc/SDQL2_query(query_text as message)
 	set category = "Debug"
-
-	if(!check_rights(R_DEBUG))  // Shouldn't happen... but just to be safe.
-		message_admins("<span class='warning'>ERROR: Non-admin [usr.key] attempted to execute the following SDQL query: [query_text]</span>")
-		log_admin("Non-admin [usr.key] attempted to execute the following SDQL query: [query_text]!")
-		return
+	if(!check_rights(R_DEBUG))  //Shouldn't happen... but just to be safe.
+		message_admins("\red ERROR: Non-admin [usr.key] attempted to execute a SDQL query!")
+		log_admin("Non-admin [usr.key] attempted to execute a SDQL query!")
 
 	if(!query_text || length(query_text) < 1)
 		return
 
 	var/query_log = "[key_name(src)] executed SDQL query: \"[query_text]\"."
-	to_world_log(query_log)
-	log_and_message_admins(query_log)
+	world.log << query_log
+	message_admins(query_log)
+	log_game(query_log)
 	sleep(-1) // Incase the server crashes due to a huge query, we allow the server to log the above things (it might just delay it).
 
 	var/list/query_list = SDQL2_tokenize(query_text)
@@ -45,13 +162,12 @@
 
 	var/list/querys = SDQL_parse(query_list)
 
-	if(!querys || querys.len < 1)
+	if (!querys || querys.len < 1)
 		return
 
 	try
 		for(var/list/query_tree in querys)
-			var/list/from_objs = list()
-			var/list/select_types = list()
+			var/list/object_selectors = list()
 
 			switch(query_tree[1])
 				if("explain")
@@ -59,31 +175,12 @@
 					return
 
 				if("call")
-					if("on" in query_tree)
-						select_types = query_tree["on"]
-					else
-						return
+					object_selectors = query_tree["on"]
 
 				if("select", "delete", "update")
-					select_types = query_tree[query_tree[1]]
+					object_selectors = query_tree[query_tree[1]]
 
-
-			from_objs = SDQL_from_objs(query_tree["from"])
-			CHECK_TICK
-
-			var/list/objs = list()
-
-			for(var/type in select_types)
-				objs += SDQL_get_all(type, from_objs)
-				CHECK_TICK
-
-			if("where" in query_tree)
-				var/objs_temp = objs
-				objs = list()
-				for(var/datum/d in objs_temp)
-					if(SDQL_expression(d, query_tree["where"]))
-						objs += d
-					CHECK_TICK
+			var/list/objs = SDQL_from_object_selectors(object_selectors)
 
 			switch(query_tree[1])
 				if("call")
@@ -91,38 +188,36 @@
 						SDQL_var(d, query_tree["call"][1], source = d)
 						CHECK_TICK
 
+					to_chat(usr, "SDQL Query done")
+
 				if("delete")
 					for(var/datum/d in objs)
 						qdel(d)
 						CHECK_TICK
 
+					to_chat(usr, "SDQL Query done")
+
 				if("select")
-					var/text = ""
-					for(var/datum/t in objs)
-						text += "<A HREF='?_src_=vars;Vars=\ref[t]'>\ref[t]</A>"
-						if(istype(t, /atom))
-							var/atom/a = t
-
-							if(a.x)
-								text += ": [t] at ([a.x], [a.y], [a.z])<br>"
-
-							else if(a.loc && a.loc.x)
-								text += ": [t] in [a.loc] at ([a.loc.x], [a.loc.y], [a.loc.z])<br>"
-
-							else
-								text += ": [t]<br>"
-
-						else
-							text += ": [t]<br>"
+					var/list/text_list = list()
+					for (var/t in objs)
+						SDQL_print(t, text_list)
+						text_list += "<br>"
 						CHECK_TICK
-					if(!text)
-						text = "No results found."
-					show_browser(usr, text, "window=SDQL-result")
+
+					var/text = text_list.Join()
+
+					if (text)
+						var/static/result_offset = 0
+						usr << browse(text, "window=SDQL-result-[result_offset++]")
+					else
+						to_chat(usr, "Query finished without any results.")
 
 				if("update")
 					if("set" in query_tree)
 						var/list/set_list = query_tree["set"]
-						for(var/datum/d in objs)
+						for(var/d in objs)
+							if (!is_proper_datum(d))
+								continue
 							for(var/list/sets in set_list)
 								var/datum/temp = d
 								var/i = 0
@@ -130,6 +225,7 @@
 									if(++i == sets.len)
 										if(istype(temp, /turf) && (v == "x" || v == "y" || v == "z"))
 											break
+
 
 										temp.SDQL_update(v, SDQL_expression(d, set_list[sets]))
 										break
@@ -142,12 +238,12 @@
 
 							CHECK_TICK
 
-			to_chat(usr, "<span class='notice'>Query executed on [objs.len] object\s.</span>")
-	catch(var/exception/e)
-		to_chat(usr, "<span class='danger'>An exception has occured during the execution of your query and your query has been aborted.</span>")
+					to_chat(usr, "SDQL Query done")
+
+	catch (var/exception/e)
+		to_chat(usr, SPAN_DANGER("An exception has occured during the execution of your query and your query has been aborted."))
 		to_chat(usr, "exception name: [e.name]")
 		to_chat(usr, "file/line: [e.file]/[e.line]")
-		return
 
 /proc/SDQL_parse(list/query_list)
 	var/datum/SDQL_parser/parser = new()
@@ -171,7 +267,7 @@
 				querys[querys_pos] = parsed_tree
 				querys_pos++
 			else //There was an error so don't run anything, and tell the user which query has errored.
-				to_chat(usr, "<span class='danger'>Parsing error on [querys_pos]\th query. Nothing was executed.</span>")
+				to_chat(usr, SPAN_DANGER("Parsing error on [querys_pos]\th query. Nothing was executed."))
 				return list()
 			query_tree = list()
 			do_parse = 0
@@ -223,7 +319,11 @@
 	if (!islist(location) && location != world)
 		location = list(location)
 
-	type = text2path(type)
+	if (type == "*")
+		for (var/x in location)
+			out += x
+
+		return out
 
 	if(ispath(type, /mob))
 		for(var/mob/d in location)
@@ -258,7 +358,38 @@
 	return out
 
 
-/proc/SDQL_expression(datum/object, list/expression, start = 1)
+/proc/SDQL_from_object_selectors(list/tree)
+	var/type = tree[1]
+	var/list/from = tree[2]
+
+	var/list/objs = SDQL_from_objs(from)
+	CHECK_TICK
+	objs = SDQL_get_all(type, objs)
+	CHECK_TICK
+
+	// 1 and 2 are type and FROM.
+	var/i = 3
+	while (i <= tree.len)
+		var/key = tree[i++]
+		var/list/expression = tree[i++]
+		switch (key)
+			if ("map")
+				for (var/j = 1 to objs.len)
+					var/x = objs[j]
+					objs[j] = SDQL_expression(x, expression)
+					CHECK_TICK
+
+			if ("where")
+				var/list/out = list()
+				for (var/x in objs)
+					if (SDQL_expression(x, expression))
+						out += x
+					CHECK_TICK
+				objs = out
+
+	return objs
+
+/proc/SDQL_expression(object, list/expression, start = 1)
 	var/result = 0
 	var/val
 
@@ -289,6 +420,8 @@
 					result |= val
 				if("^")
 					result ^= val
+				if("%")
+					result %= val
 				if("=", "==")
 					result = (result == val)
 				if("!=", "<>")
@@ -306,14 +439,14 @@
 				if("or", "||")
 					result = (result || val)
 				else
-					to_chat(usr, "<span class='warning'>SDQL2: Unknown op [op]</span>")
+					to_chat(usr, SPAN_WARNING("SDQL2: Unknown op [op]"))
 					result = null
 		else
 			result = val
 
 	return result
 
-/proc/SDQL_value(datum/object, list/expression, start = 1)
+/proc/SDQL_value(object, list/expression, start = 1)
 	var/i = start
 	var/val = null
 
@@ -344,6 +477,9 @@
 	else if(isnum(expression[i]))
 		val = expression[i]
 
+	else if(ispath(expression[i]))
+		val = expression[i]
+
 	else if(copytext(expression[i], 1, 2) in list("'", "\""))
 		val = copytext(expression[i], 2, length(expression[i]))
 
@@ -370,28 +506,32 @@
 
 	return list("val" = val, "i" = i)
 
-/proc/SDQL_var(datum/object, list/expression, start = 1, source)
+/proc/SDQL_var(object, list/expression, start = 1, source)
 	var/v
 	var/static/list/exclude = list("usr", "src", "marked", "global")
 	var/long = start < expression.len
+	var/datum/D
+	if (is_proper_datum(object))
+		D = object
 
 	if (object == world && (!long || expression[start + 1] == ".") && !(expression[start] in exclude))
-		v = readglobal(expression[start])
+		v = global.vars[expression[start]]
 
 	else if (expression [start] == "{" && long)
 		if (lowertext(copytext(expression[start + 1], 1, 3)) != "0x")
-			to_chat(usr, "<span class='danger'>Invalid pointer syntax: [expression[start + 1]]</span>")
+			to_chat(usr, SPAN_DANGER("Invalid pointer syntax: [expression[start + 1]]"))
 			return null
 		v = locate("\[[expression[start + 1]]]")
 		if (!v)
-			to_chat(usr, "<span class='danger'>Invalid pointer: [expression[start + 1]]</span>")
+			to_chat(usr, SPAN_DANGER("Invalid pointer: [expression[start + 1]]"))
 			return null
 		start++
+		long = start < expression.len
 
-	else if ((!long || expression[start + 1] == ".") && (expression[start] in object.vars))
-		v = object.vars[expression[start]]
+	else if (D != null && (!long || expression[start + 1] == ".") && (expression[start] in D.vars))
+		v = D.vars[expression[start]]
 
-	else if (long && expression[start + 1] == ":" && hascall(object, expression[start]))
+	else if (D != null && long && expression[start + 1] == ":" && hascall(D, expression[start]))
 		v = expression[start]
 
 	else if (!long || expression[start + 1] == ".")
@@ -423,8 +563,8 @@
 		else if (expression[start + 1] == "\[" && islist(v))
 			var/list/L = v
 			var/index = SDQL_expression(source, expression[start + 2])
-			if (isnum(index) && (!IsInteger(index) || L.len < index))
-				to_chat(usr, "<span class='danger'>Invalid list index: [index]</span>")
+			if (isnum(index) && (!ISINTEGER(index) || L.len < index))
+				to_chat(usr, SPAN_DANGER("Invalid list index: [index]"))
 				return null
 
 			return L[index]
@@ -432,7 +572,7 @@
 	return v
 
 
-/proc/SDQL_function(var/datum/object, var/procname, var/list/arguments, source)
+/proc/SDQL_function(var/object, var/procname, var/list/arguments, source)
 	set waitfor = FALSE
 
 	var/list/new_args = list()
@@ -492,7 +632,7 @@
 
 		else if(char == "'")
 			if(word != "")
-				to_chat(usr, "<span class='warning'>SDQL2: You have an error in your SDQL syntax, unexpected ' in query: \"<font color=gray>[query_text]</font>\" following \"<font color=gray>[word]</font>\". Please check your syntax, and try again.</span>")
+				to_chat(usr, SPAN_WARNING("SDQL2: You have an error in your SDQL syntax, unexpected ' in query: \"<font color=gray>[query_text]</font>\" following \"<font color=gray>[word]</font>\". Please check your syntax, and try again."))
 				return null
 
 			word = "'"
@@ -512,7 +652,7 @@
 					word += char
 
 			if(i > len)
-				to_chat(usr, "<span class='warning'>SDQL2: You have an error in your SDQL syntax, unmatched ' in query: \"<font color=gray>[query_text]</font>\". Please check your syntax, and try again.</span>")
+				to_chat(usr, SPAN_WARNING("SDQL2: You have an error in your SDQL syntax, unmatched ' in query: \"<font color=gray>[query_text]</font>\". Please check your syntax, and try again."))
 				return null
 
 			query_list += "[word]'"
@@ -520,7 +660,7 @@
 
 		else if(char == "\"")
 			if(word != "")
-				to_chat(usr, "<span class='warning'>SDQL2: You have an error in your SDQL syntax, unexpected \" in query: \"<font color=gray>[query_text]</font>\" following \"<font color=gray>[word]</font>\". Please check your syntax, and try again.</span>")
+				to_chat(usr, SPAN_WARNING("SDQL2: You have an error in your SDQL syntax, unexpected \" in query: \"<font color=gray>[query_text]</font>\" following \"<font color=gray>[word]</font>\". Please check your syntax, and try again."))
 				return null
 
 			word = "\""
@@ -540,7 +680,7 @@
 					word += char
 
 			if(i > len)
-				to_chat(usr, "<span class='warning'>SDQL2: You have an error in your SDQL syntax, unmatched \" in query: \"<font color=gray>[query_text]</font>\". Please check your syntax, and try again.</span>")
+				to_chat(usr, SPAN_WARNING("SDQL2: You have an error in your SDQL syntax, unmatched \" in query: \"<font color=gray>[query_text]</font>\". Please check your syntax, and try again."))
 				return null
 
 			query_list += "[word]\""
@@ -552,3 +692,47 @@
 	if(word != "")
 		query_list += word
 	return query_list
+
+
+/proc/is_proper_datum(object)
+	return istype(object, /datum) || istype(object, /client)
+
+/proc/SDQL_print(object, list/text_list)
+	if (is_proper_datum(object))
+		text_list += "<A HREF='?_src_=vars;Vars=\ref[object]'>\ref[object]</A>"
+		if(istype(object, /atom))
+			var/atom/a = object
+
+			if(a.x)
+				text_list += ": [object] at ([a.x], [a.y], [a.z])"
+
+			else if(a.loc && a.loc.x)
+				text_list += ": [object] in [a.loc] at ([a.loc.x], [a.loc.y], [a.loc.z])"
+
+			else
+				text_list += ": [object]"
+
+		else
+			text_list += ": [object]"
+
+	else if (islist(object))
+		var/list/L = object
+		var/first = TRUE
+		text_list += "\["
+		for (var/x in L)
+			if (!first)
+				text_list += ", "
+			first = FALSE
+			SDQL_print(x, text_list)
+			if (!isnull(x) && !isnum(x) && L[x] != null)
+				text_list += " -> "
+				SDQL_print(L[L[x]])
+
+		text_list += "]"
+
+	else
+		if (isnull(object))
+			text_list += "NULL"
+
+		else
+			text_list += "[object]"

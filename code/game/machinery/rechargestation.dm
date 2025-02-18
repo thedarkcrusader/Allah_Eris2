@@ -3,15 +3,16 @@
 	desc = "A heavy duty rapid charging system, designed to quickly recharge cyborg power reserves."
 	icon = 'icons/obj/objects.dmi'
 	icon_state = "borgcharger0"
-	density = 1
-	anchored = 1
-	use_power = 1
+	density = TRUE
+	anchored = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 50
-	var/mob/living/occupant = null
-	var/obj/item/cell/cell = null
+	circuit = /obj/item/electronics/circuitboard/recharge_station
+	var/mob/occupant = null
+	var/obj/item/cell/large/cell
 	var/icon_update_tick = 0	// Used to rebuild the overlay only once every 10 ticks
 	var/charging = 0
-
+	var/efficiency = 0.9
 	var/charging_power			// W. Power rating used for charging the cyborg. 120 kW if un-upgraded
 	var/restore_power_active	// W. Power drawn from APC when an occupant is charging. 40 kW if un-upgraded
 	var/restore_power_passive	// W. Power drawn from APC when idle. 7 kW if un-upgraded
@@ -21,20 +22,10 @@
 	var/weld_power_use = 2300	// power used per point of brute damage repaired. 2.3 kW ~ about the same power usage of a handheld arc welder
 	var/wire_power_use = 500	// power used per point of burn damage repaired.
 
-/obj/machinery/recharge_station/New()
-	..()
+	var/exit_timer
 
-	component_parts = list()
-	component_parts += new /obj/item/circuitboard/recharge_station(src)
-	component_parts += new /obj/item/stock_parts/manipulator(src)
-	component_parts += new /obj/item/stock_parts/manipulator(src)
-	component_parts += new /obj/item/stock_parts/capacitor(src)
-	component_parts += new /obj/item/stock_parts/capacitor(src)
-	component_parts += new /obj/item/cell/high(src)
-	component_parts += new /obj/item/stack/cable_coil(src, 5)
-
-	RefreshParts()
-
+/obj/machinery/recharge_station/Initialize()
+	. = ..()
 	update_icon()
 
 /obj/machinery/recharge_station/proc/has_cell_power()
@@ -62,7 +53,7 @@
 		// Calculating amount of power to draw
 		recharge_amount = (occupant ? restore_power_active : restore_power_passive) * CELLRATE
 
-		recharge_amount = cell.give(recharge_amount)
+		recharge_amount = cell.give(recharge_amount* efficiency)
 		use_power(recharge_amount / CELLRATE)
 
 	if(icon_update_tick >= 10)
@@ -80,52 +71,32 @@
 
 	if(!has_cell_power())
 		return 0
-	if(src.use_power == 1)
+	if(use_power == 1)
 		cell.use(idle_power_usage * CELLRATE)
-	else if(src.use_power >= 2)
+	else if(use_power >= 2)
 		cell.use(active_power_usage * CELLRATE)
 	return 1
 
 //Processes the occupant, drawing from the internal power cell if needed.
 /obj/machinery/recharge_station/proc/process_occupant()
-	// Check whether the mob is compatible
-	if(!isrobot(occupant) && !ishuman(occupant))
-		return
-
-	// If we have repair capabilities, repair any damage.
-	if(weld_rate && occupant.getBruteLoss() && cell.checked_use(weld_power_use * weld_rate * CELLRATE))
-		occupant.adjustBruteLoss(-weld_rate)
-	if(wire_rate && occupant.getFireLoss() && cell.checked_use(wire_power_use * wire_rate * CELLRATE))
-		occupant.adjustFireLoss(-wire_rate)
-
-	var/obj/item/cell/target
 	if(isrobot(occupant))
 		var/mob/living/silicon/robot/R = occupant
-		target = R.cell
+
 		if(R.module)
 			R.module.respawn_consumable(R, charging_power * CELLRATE / 250) //consumables are magical, apparently
-		// If we are capable of repairing damage, reboot destroyed components and allow them to be repaired for very large power spike.
-		var/list/damaged = R.get_damaged_components(1,1,1)
-		if(damaged.len && wire_rate && weld_rate)
-			for(var/datum/robot_component/C in damaged)
-				if((C.installed == -1) && cell.checked_use(100 KILOWATTS * CELLRATE))
-					C.repair()
+		if(R.cell && !R.cell.fully_charged())
+			var/diff = min(R.cell.maxcharge - R.cell.charge, charging_power * CELLRATE) // Capped by charging_power / tick
+			var/charge_used = cell.use(diff)
+			R.cell.give(charge_used*efficiency)
 
-	if(ishuman(occupant))
-		var/mob/living/carbon/human/H = occupant
-		var/obj/item/organ/internal/cell/potato = H.internal_organs_by_name[BP_CELL]
-		if(potato)
-			target = potato.cell
+		//Lastly, attempt to repair the cyborg if enabled
+		if(weld_rate && R.getBruteLoss() && cell.checked_use(weld_power_use * weld_rate * CELLRATE))
+			R.adjustBruteLoss(-weld_rate)
+		if(wire_rate && R.getFireLoss() && cell.checked_use(wire_power_use * wire_rate * CELLRATE))
+			R.adjustFireLoss(-wire_rate)
 
-	if(target && !target.fully_charged())
-		var/diff = min(target.maxcharge - target.charge, charging_power * CELLRATE) // Capped by charging_power / tick
-		var/charge_used = cell.use(diff)
-		target.give(charge_used)
-
-
-/obj/machinery/recharge_station/examine(mob/user)
-	. = ..(user)
-	to_chat(user, "The charge meter reads: [round(chargepercentage())]%")
+/obj/machinery/recharge_station/examine(mob/user, extra_description = "")
+	..(user, "The charge meter reads: [round(chargepercentage())]%")
 
 /obj/machinery/recharge_station/proc/chargepercentage()
 	if(!cell)
@@ -133,7 +104,9 @@
 	return cell.percent()
 
 /obj/machinery/recharge_station/relaymove(mob/user as mob)
-	if(user.stat)
+	if(user.incapacitated())
+		return
+	if(world.time < exit_timer)
 		return
 	go_out()
 	return
@@ -146,14 +119,16 @@
 		cell.emp_act(severity)
 	..(severity)
 
-/obj/machinery/recharge_station/attackby(var/obj/item/O as obj, var/mob/user as mob)
-	if(!occupant)
-		if(default_deconstruction_screwdriver(user, O))
-			return
-		if(default_deconstruction_crowbar(user, O))
-			return
-		if(default_part_replacement(user, O))
-			return
+/obj/machinery/recharge_station/attackby(var/obj/item/I, var/mob/user as mob)
+	if(occupant)
+		to_chat(user, SPAN_NOTICE("You cant do anything with [src] while someone inside of it."))
+		return
+
+	if(default_deconstruction(I, user))
+		return
+
+	if(default_part_replacement(I, user))
+		return
 
 	..()
 
@@ -167,7 +142,7 @@
 			cap_rating += P.rating
 		if(istype(P, /obj/item/stock_parts/manipulator))
 			man_rating += P.rating
-	cell = locate(/obj/item/cell) in component_parts
+	cell = locate(/obj/item/cell/large) in component_parts
 
 	charging_power = 40000 + 40000 * cap_rating
 	restore_power_active = 10000 + 15000 * cap_rating
@@ -219,11 +194,8 @@
 	go_in(R)
 
 /obj/machinery/recharge_station/proc/go_in(var/mob/M)
-
-
 	if(occupant)
 		return
-
 	if(!hascell(M))
 		return
 
@@ -232,17 +204,14 @@
 	M.forceMove(src)
 	occupant = M
 	update_icon()
+	exit_timer = world.time + 10 //magik numbers, yey
 	return 1
 
 /obj/machinery/recharge_station/proc/hascell(var/mob/M)
 	if(isrobot(M))
 		var/mob/living/silicon/robot/R = M
-		return (R.cell)
-	if(ishuman(M))
-		var/mob/living/carbon/human/H = M
-		if(H.isSynthetic()) // FBPs and IPCs
+		if(R.cell)
 			return 1
-		return H.internal_organs_by_name["cell"]
 	return 0
 
 /obj/machinery/recharge_station/proc/go_out()
@@ -271,4 +240,19 @@
 	set name = "Enter Recharger"
 	set src in oview(1)
 
+	if(!usr.incapacitated())
+		return
 	go_in(usr)
+
+/obj/machinery/recharge_station/MouseDrop_T(var/mob/target, var/mob/user)
+	if(!CanMouseDrop(target, user))
+		return
+	if(!istype(target,/mob/living/silicon))
+		return
+	if(target.buckled)
+		to_chat(user, "<span class='warning'>Unbuckle the robot before attempting to move it.</span>")
+		return
+	user.visible_message("<span class='notice'>\The [user] started hauling \the [target] into \the [src].</span>",
+							"<span class='notice'>You started hauling \the [target] into \the [src].</span>")
+	if(user.stat != DEAD && do_after(user,rand(150,200),src))
+		go_in(target, user)

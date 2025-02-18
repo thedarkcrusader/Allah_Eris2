@@ -1,6 +1,11 @@
 /datum/wires/radio
 	holder_type = /obj/item/device/radio
 	wire_count = 3
+	descriptions = list(
+		new /datum/wire_description(WIRE_SIGNAL, "Power"),
+		new /datum/wire_description(WIRE_RECEIVE, "Reciever"),
+		new /datum/wire_description(WIRE_TRANSMIT, "Transmitter")
+	)
 
 var/const/WIRE_SIGNAL = 1
 var/const/WIRE_RECEIVE = 2
@@ -24,7 +29,7 @@ var/const/WIRE_TRANSMIT = 4
 
 		if(WIRE_TRANSMIT)
 			R.broadcasting = !R.broadcasting && !IsIndexCut(WIRE_SIGNAL)
-	SSnanoui.update_uis(holder)
+	SSnano.update_uis(holder)
 
 /datum/wires/radio/UpdateCut(var/index, var/mended)
 	var/obj/item/device/radio/R = holder
@@ -38,4 +43,4 @@ var/const/WIRE_TRANSMIT = 4
 
 		if(WIRE_TRANSMIT)
 			R.broadcasting = mended && !IsIndexCut(WIRE_SIGNAL)
-	SSnanoui.update_uis(holder)
+	SSnano.update_uis(holder)

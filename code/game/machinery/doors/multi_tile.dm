@@ -1,16 +1,14 @@
 //Terribly sorry for the code doubling, but things go derpy otherwise.
 /obj/machinery/door/airlock/multi_tile
 	width = 2
-	appearance_flags = 0
 
 /obj/machinery/door/airlock/multi_tile/New()
 	..()
 	SetBounds()
 
-/obj/machinery/door/airlock/multi_tile/Move()
+/obj/machinery/door/airlock/multi_tile/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
 	. = ..()
 	SetBounds()
-
 
 /obj/machinery/door/airlock/multi_tile/proc/SetBounds()
 	if(dir in list(EAST, WEST))
@@ -23,20 +21,16 @@
 /obj/machinery/door/airlock/multi_tile/glass
 	name = "Glass Airlock"
 	icon = 'icons/obj/doors/Door2x1glass.dmi'
-	opacity = 0
-	glass = 1
+	opacity = FALSE
+	glass = TRUE
 	assembly_type = /obj/structure/door_assembly/multi_tile
 
-
-//Shit that isn't glass.
-/obj/machinery/door/airlock/multi_tile/metal/maintenance
+/obj/machinery/door/airlock/multi_tile/metal
 	name = "Airlock"
-	icon = 'icons/obj/doors/Door2x1maint.dmi'
-	opacity = 1
-	glass = 0
-	assembly_type = /obj/structure/door_assembly/multi_tile/maintenance
+	icon = 'icons/obj/doors/Door2x1metal.dmi'
+	assembly_type = /obj/structure/door_assembly/multi_tile
 
-/obj/machinery/door/airlock/multi_tile/metal/New()
+/obj/machinery/door/airlock/multi_tile/New()
 	..()
 	if(src.dir > 3)
 		f5 = new/obj/machinery/filler_object(src.loc)
@@ -60,3 +54,6 @@
 	icon_state = ""
 	density = FALSE
 	anchored = TRUE
+
+/obj/machinery/door/airlock/multi_tile/metal/mait
+	icon = 'icons/obj/doors/Door2x1_Maint.dmi'

@@ -8,20 +8,24 @@
 	size = 12
 	requires_ntnet = 1
 	available_on_ntnet = 1
-	nanomodule_path = /datum/nano_module/email_administration
+	nanomodule_path = /datum/nano_module/program/email_administration
 	required_access = access_network
 
-
-
-
-/datum/nano_module/email_administration/
-	name = "Email Client"
+/datum/nano_module/program/email_administration
+	name = "Email Administration"
+	available_to_ai = TRUE
 	var/datum/computer_file/data/email_account/current_account = null
 	var/datum/computer_file/data/email_message/current_message = null
 	var/error = ""
 
-/datum/nano_module/email_administration/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/topic_state/state = GLOB.default_state)
+/datum/nano_module/program/email_administration/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state = GLOB.default_state)
 	var/list/data = host.initial_data()
+
+	data += "skill_fail"
+	if(!user.stat_check(STAT_COG, STAT_LEVEL_BASIC))
+		var/datum/extension/fake_data/fake_data = get_or_create_extension(src, /datum/extension/fake_data, /datum/extension/fake_data, 15)
+		data["skill_fail"] = fake_data.update_and_return_data()
+	data["terminal"] = !!program
 
 	if(error)
 		data["error"] = error
@@ -55,7 +59,7 @@
 		data["accounts"] = all_accounts
 		data["accountcount"] = all_accounts.len
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
 		ui = new(user, src, ui_key, "email_administration.tmpl", "Email Administration Utility", 600, 450, state = state)
 		if(host.update_layout())
@@ -65,12 +69,15 @@
 		ui.open()
 
 
-/datum/nano_module/email_administration/Topic(href, href_list)
+/datum/nano_module/program/email_administration/Topic(href, href_list)
 	if(..())
 		return 1
 
 	var/mob/user = usr
 	if(!istype(user))
+		return 1
+
+	if(!user.stat_check(STAT_COG, STAT_LEVEL_BASIC))
 		return 1
 
 	// High security - can only be operated when the user has an ID with access on them.
@@ -125,7 +132,7 @@
 		return 1
 
 	if(href_list["newaccount"])
-		var/newdomain = sanitize(input(user,"Pick domain:", "Domain name") as null|anything in GLOB.using_map.usable_email_tlds)
+		var/newdomain = sanitize(input(user,"Pick domain:", "Domain name") as null|anything in GLOB.maps_data.usable_email_tlds)
 		if(!newdomain)
 			return 1
 		var/newlogin = sanitize(input(user,"Pick account name (@[newdomain]):", "Account name"), 100)
@@ -133,7 +140,7 @@
 			return 1
 
 		var/complete_login = "[newlogin]@[newdomain]"
-		if(ntnet_global.does_email_exist(complete_login))
+		if(ntnet_global.find_email_by_login(complete_login))
 			error = "Error creating account: An account with same address already exists."
 			return 1
 

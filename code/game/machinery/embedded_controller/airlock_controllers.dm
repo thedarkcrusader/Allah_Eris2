@@ -11,31 +11,16 @@
 	var/tag_airlock_mech_sensor
 	var/tag_shuttle_mech_sensor
 	var/tag_secure = 0
-	var/list/dummy_terminals = list()
-	var/cycle_to_external_air = 0
 
 /obj/machinery/embedded_controller/radio/airlock/New()
-	..()
+	. = ..()
 	program = new/datum/computer/file/embedded_program/airlock(src)
-
-/obj/machinery/embedded_controller/radio/airlock/Destroy()
-	for(var/thing in dummy_terminals)
-		var/obj/machinery/dummy_airlock_controller/dummy = thing
-		dummy.master_controller = null
-	dummy_terminals.Cut()
-	return ..()
-
-/obj/machinery/embedded_controller/radio/airlock/CanUseTopic(var/mob/user)
-	if(!allowed(user))
-		return min(STATUS_UPDATE, ..())
-	else
-		return ..()
 
 //Advanced airlock controller for when you want a more versatile airlock controller - useful for turning simple access control rooms into airlocks
 /obj/machinery/embedded_controller/radio/airlock/advanced_airlock_controller
 	name = "Advanced Airlock Controller"
 
-/obj/machinery/embedded_controller/radio/airlock/advanced_airlock_controller/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/nano_ui/master_ui = null, var/datum/topic_state/state = GLOB.default_state)
+/obj/machinery/embedded_controller/radio/airlock/advanced_airlock_controller/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	var/data[0]
 
 	data = list(
@@ -47,15 +32,12 @@
 		"secure" = program.memory["secure"]
 	)
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 
 	if (!ui)
-		ui = new(user, src, ui_key, "advanced_airlock_console.tmpl", name, 470, 290, state = state)
-
+		ui = new(user, src, ui_key, "advanced_airlock_console.tmpl", name, 470, 290)
 		ui.set_initial_data(data)
-
 		ui.open()
-
 		ui.set_auto_update(1)
 
 /obj/machinery/embedded_controller/radio/airlock/advanced_airlock_controller/Topic(href, href_list)
@@ -63,23 +45,12 @@
 		return
 
 	usr.set_machine(src)
+	src.add_fingerprint(usr)
 
-	var/clean = 0
-	switch(href_list["command"])	//anti-HTML-hacking checks
-		if("cycle_ext")
-			clean = 1
-		if("cycle_int")
-			clean = 1
-		if("force_ext")
-			clean = 1
-		if("force_int")
-			clean = 1
-		if("abort")
-			clean = 1
-		if("purge")
-			clean = 1
-		if("secure")
-			clean = 1
+	var/clean = FALSE
+	switch(href_list["command"])
+		if("cycle_ext", "cycle_int", "force_ext", "force_int", "abort", "purge", "secure")
+			clean = TRUE
 
 	if(clean)
 		program.receive_user_command(href_list["command"])
@@ -92,7 +63,7 @@
 	name = "Airlock Controller"
 	tag_secure = 1
 
-/obj/machinery/embedded_controller/radio/airlock/airlock_controller/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/nano_ui/master_ui = null, var/datum/topic_state/state = GLOB.default_state)
+/obj/machinery/embedded_controller/radio/airlock/airlock_controller/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	var/data[0]
 
 	data = list(
@@ -102,15 +73,12 @@
 		"processing" = program.memory["processing"],
 	)
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 
 	if (!ui)
-		ui = new(user, src, ui_key, "simple_airlock_console.tmpl", name, 470, 290, state = state)
-
+		ui = new(user, src, ui_key, "simple_airlock_console.tmpl", name, 470, 290)
 		ui.set_initial_data(data)
-
 		ui.open()
-
 		ui.set_auto_update(1)
 
 /obj/machinery/embedded_controller/radio/airlock/airlock_controller/Topic(href, href_list)
@@ -118,23 +86,16 @@
 		return
 
 	usr.set_machine(src)
+	src.add_fingerprint(usr)
 
 	var/clean = 0
-	switch(href_list["command"])	//anti-HTML-hacking checks
-		if("cycle_ext")
-			clean = 1
-		if("cycle_int")
-			clean = 1
-		if("force_ext")
-			clean = 1
-		if("force_int")
-			clean = 1
-		if("abort")
-			clean = 1
+	switch(href_list["command"])
+		if("cycle_ext", "cycle_int", "force_ext", "force_int", "abort")
+			clean = TRUE
 
 	if(clean)
 		program.receive_user_command(href_list["command"])
-
+	playsound(loc, 'sound/machines/machine_switch.ogg', 100, 1)
 	return 1
 
 
@@ -156,7 +117,7 @@
 	else
 		icon_state = "access_control_off"
 
-/obj/machinery/embedded_controller/radio/airlock/access_controller/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/nano_ui/master_ui = null, var/datum/topic_state/state = GLOB.default_state)
+/obj/machinery/embedded_controller/radio/airlock/access_controller/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	var/data[0]
 
 	data = list(
@@ -165,15 +126,12 @@
 		"processing" = program.memory["processing"]
 	)
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 
 	if (!ui)
-		ui = new(user, src, ui_key, "door_access_console.tmpl", name, 330, 220, state = state)
-
+		ui = new(user, src, ui_key, "door_access_console.tmpl", name, 330, 220)
 		ui.set_initial_data(data)
-
 		ui.open()
-
 		ui.set_auto_update(1)
 
 /obj/machinery/embedded_controller/radio/airlock/access_controller/Topic(href, href_list)
@@ -181,21 +139,20 @@
 		return
 
 	usr.set_machine(src)
+	src.add_fingerprint(usr)
 
-	var/clean = 0
-	switch(href_list["command"])	//anti-HTML-hacking checks
-		if("cycle_ext_door")
-			clean = 1
-		if("cycle_int_door")
-			clean = 1
+	var/clean = FALSE
+	switch(href_list["command"])
+		if("cycle_ext_door", "cycle_int_door")
+			clean = TRUE
 		if("force_ext")
 			if(program.memory["interior_status"]["state"] == "closed")
-				clean = 1
+				clean = TRUE
 		if("force_int")
 			if(program.memory["exterior_status"]["state"] == "closed")
-				clean = 1
+				clean = TRUE
 
 	if(clean)
 		program.receive_user_command(href_list["command"])
-
+	playsound(loc, 'sound/machines/machine_switch.ogg', 100, 1)
 	return 1

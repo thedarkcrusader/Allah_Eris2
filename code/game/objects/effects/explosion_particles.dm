@@ -3,17 +3,13 @@
 	icon = 'icons/effects/effects.dmi'
 	icon_state = "explosion_particle"
 	opacity = 1
-	anchored = 1
+	anchored = TRUE
 	mouse_opacity = 0
 
 /obj/effect/expl_particles/New()
 	..()
 	spawn (15)
 		qdel(src)
-	return
-
-/obj/effect/expl_particles/Move()
-	..()
 	return
 
 /datum/effect/system/expl_particles
@@ -31,8 +27,8 @@
 	for(i=0, i<src.number, i++)
 		spawn(0)
 			var/obj/effect/expl_particles/expl = new /obj/effect/expl_particles(src.location)
-			var/direct = pick(GLOB.alldirs)
-			for(i=0, i<pick(1;25,2;50,3,4;200), i++)
+			var/direct = pick(alldirs)
+			for(var/j=0, j<pick(1;25,2;50,3,4;200), j++)
 				sleep(1)
 				step(expl,direct)
 
@@ -41,15 +37,16 @@
 	icon = 'icons/effects/96x96.dmi'
 	icon_state = "explosion"
 	opacity = 1
-	anchored = 1
+	anchored = TRUE
 	mouse_opacity = 0
 	pixel_x = -32
 	pixel_y = -32
 
 /obj/effect/explosion/New()
 	..()
-	spawn (10)
-		qdel(src)
+	addtimer(CALLBACK(GLOBAL_PROC, GLOBAL_PROC_REF(qdel), src), 1 SECOND)
+	//spawn (10)
+	//	qdel(src)
 	return
 
 /datum/effect/system/explosion
@@ -68,3 +65,16 @@
 		var/datum/effect/effect/system/smoke_spread/S = new/datum/effect/effect/system/smoke_spread()
 		S.set_up(5,0,location,null)
 		S.start()
+
+/obj/effect/explosion_fire
+	name = "Shockwave"
+	icon = 'icons/effects/effects.dmi'
+	icon_state = "fire_trails"
+
+
+/obj/effect/explosion_fire/New()
+	..()
+	addtimer(CALLBACK(GLOBAL_PROC, GLOBAL_PROC_REF(qdel), src), 0.5 SECOND)
+
+
+

@@ -8,7 +8,7 @@
 	w_class = ITEM_SIZE_TINY
 	throw_speed = 7
 	throw_range = 15
-	matter = list(DEFAULT_WALL_MATERIAL = 60)
+	matter = list(MATERIAL_PLASTIC = 1)
 	attack_verb = list("stamped")
 
 /obj/item/stamp/captain
@@ -16,27 +16,23 @@
 	icon_state = "stamp-cap"
 
 /obj/item/stamp/hop
-	name = "head of personnel's rubber stamp"
+	name = "first officer's rubber stamp"
 	icon_state = "stamp-hop"
 
 /obj/item/stamp/hos
-	name = "head of security's rubber stamp"
+	name = "ironhammer commander's rubber stamp"
 	icon_state = "stamp-hos"
 
-/obj/item/stamp/ward
-	name = "warden's rubber stamp"
-	icon_state = "stamp-ward"
-
 /obj/item/stamp/ce
-	name = "chief engineer's rubber stamp"
+	name = "exultant's rubber stamp"
 	icon_state = "stamp-ce"
 
 /obj/item/stamp/rd
-	name = "research director's rubber stamp"
+	name = "moebius expedition overseer's rubber stamp"
 	icon_state = "stamp-rd"
 
 /obj/item/stamp/cmo
-	name = "chief medical officer's rubber stamp"
+	name = "moebius biolab officer's rubber stamp"
 	icon_state = "stamp-cmo"
 
 /obj/item/stamp/denied
@@ -47,21 +43,17 @@
 	name = "clown's rubber stamp"
 	icon_state = "stamp-clown"
 
-/obj/item/stamp/internalaffairs
-	name = "internal affairs rubber stamp"
-	icon_state = "stamp-intaff"
-
-/obj/item/stamp/centcomm
-	name = "centcomm rubber stamp"
-	icon_state = "stamp-cent"
-
 /obj/item/stamp/qm
-	name = "quartermaster's rubber stamp"
+	name = "guild merchant's stamp"
 	icon_state = "stamp-qm"
 
-/obj/item/stamp/cargo
-	name = "cargo rubber stamp"
-	icon_state = "stamp-cargo"
+/obj/item/stamp/nt
+	name = "neotheology preacher's stamp"
+	icon_state = "stamp-nt"
+
+/obj/item/stamp/lus
+	name = "luscent official's stamp"
+	icon_state = "stamp-lus"
 
 // Syndicate stamp to forge documents.
 /obj/item/stamp/chameleon/attack_self(mob/user as mob)
@@ -78,10 +70,10 @@
 
 	var/input_stamp = input(user, "Choose a stamp to disguise as.", "Choose a stamp.") in show_stamps
 
-	if(user && src in user.contents)
+	if(user && (src in user.contents))
 
 		var/obj/item/stamp/chosen_stamp = stamps[capitalize(input_stamp)]
 
 		if(chosen_stamp)
-			SetName(chosen_stamp.name)
+			name = chosen_stamp.name
 			icon_state = chosen_stamp.icon_state

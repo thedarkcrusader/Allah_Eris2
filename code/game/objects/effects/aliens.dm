@@ -1,56 +1,53 @@
 /*
  * Acid
  */
- #define ACID_STRONG     2
- #define ACID_MODERATE   1.5
- #define ACID_WEAK       1
-
 /obj/effect/acid
 	name = "acid"
 	desc = "Burbling corrosive stuff. Probably a bad idea to roll around in it."
 	icon_state = "acid"
 	icon = 'icons/mob/alien.dmi'
+	layer = ABOVE_NORMAL_TURF_LAYER
 
-	density = 0
+	density = FALSE
 	opacity = 0
-	anchored = 1
+	anchored = TRUE
 
 	var/atom/target
-	var/acid_strength = ACID_WEAK
-	var/melt_time = 10 SECONDS
-	var/last_melt = 0
+	var/ticks = 0
+	var/target_strength = 0
 
 /obj/effect/acid/New(loc, supplied_target)
 	..(loc)
 	target = supplied_target
-	melt_time = melt_time / acid_strength
-	START_PROCESSING(SSprocessing, src)
 
-/obj/effect/acid/Destroy()
-	STOP_PROCESSING(SSprocessing, src)
-	target = null
-	. = ..()
+	if(isturf(target)) // Turf take twice as long to take down.
+		target_strength = 8
+	else
+		target_strength = 4
+	tick()
 
-/obj/effect/acid/Process()
-	if(QDELETED(target))
+/obj/effect/acid/proc/tick()
+	if(!target)
 		qdel(src)
-	else if(world.time > last_melt + melt_time)
-		var/done_melt = target.acid_melt()
-		last_melt = world.time
-		if(done_melt)
-			qdel(src)
 
-/atom/var/acid_melted = 0
+	ticks++
+	if(ticks >= target_strength)
+		target.visible_message("<span class='alium'>\The [target] collapses under its own weight into a puddle of goop and undigested debris!</span>")
+		if(istype(target, /turf/wall)) // I hate turf code.
+			var/turf/wall/W = target
+			W.dismantle_wall()
+		else
+			qdel(target)
+		qdel(src)
+		return
 
-/atom/proc/acid_melt()
-	. = FALSE
-	switch(acid_melted)
-		if(0)
-			visible_message("<span class='alium'>Acid hits \the [src] with a sizzle!</span>")
-		if(1 to 3)
-			visible_message("<span class='alium'>The acid melts \the [src]!</span>")
+	switch(target_strength - ticks)
+		if(6)
+			visible_message("<span class='alium'>\The [src.target] is holding up against the acid!</span>")
 		if(4)
-			visible_message("<span class='alium'>The acid melts \the [src] away into nothing!</span>")
-			. = TRUE
-			qdel(src)
-	acid_melted++
+			visible_message("<span class='alium'>\The [src.target]\s structure is being melted by the acid!</span>")
+		if(2)
+			visible_message("<span class='alium'>\The [src.target] is struggling to withstand the acid!</span>")
+		if(0 to 1)
+			visible_message("<span class='alium'>\The [src.target] begins to crumble under the acid!</span>")
+	spawn(rand(150, 200)) tick()

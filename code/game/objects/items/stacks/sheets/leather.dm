@@ -1,3 +1,6 @@
+/obj/item/stack/material/animalhide
+	bad_type = /obj/item/stack/material/animalhide
+
 /obj/item/stack/material/animalhide/human
 	name = "human skin"
 	desc = "The by-product of human farming."
@@ -69,16 +72,11 @@
 	var/drying_threshold_temperature = 500 //Kelvin to start drying
 
 //Step one - dehairing.
-/obj/item/stack/material/animalhide/attackby(obj/item/W as obj, mob/user as mob)
-	if(	istype(W, /obj/item/material/knife) || \
-		istype(W, /obj/item/material/kitchen/utensil/knife) || \
-		istype(W, /obj/item/material/twohanded/fireaxe) || \
-		istype(W, /obj/item/material/hatchet) )
-
-		//visible message on mobs is defined as visible_message(var/message, var/self_message, var/blind_message)
-		usr.visible_message("<span class='notice'>\The [usr] starts cutting hair off \the [src]</span>", "<span class='notice'>You start cutting the hair off \the [src]</span>", "You hear the sound of a knife rubbing against flesh")
-		if(do_after(user,50))
-			to_chat(usr, "<span class='notice'>You cut the hair from this [src.singular_name]</span>")
+/obj/item/stack/material/animalhide/attackby(obj/item/I, mob/user)
+	if(QUALITY_CUTTING in I.tool_qualities)
+		usr.visible_message(SPAN_NOTICE("\The [usr] starts cutting hair off \the [src]"), SPAN_NOTICE("You start cutting the hair off \the [src]"), "You hear the sound of a knife rubbing against flesh")
+		if(I.use_tool(user, src, WORKTIME_FAST, QUALITY_CUTTING, FAILCHANCE_EASY, required_stat = STAT_COG))
+			to_chat(usr, SPAN_NOTICE("You cut the hair from this [src.singular_name]"))
 			//Try locating an exisitng stack on the tile and add to there if possible
 			for(var/obj/item/stack/material/hairlesshide/HS in usr.loc)
 				if(HS.amount < 50)

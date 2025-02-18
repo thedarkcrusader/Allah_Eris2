@@ -31,21 +31,22 @@
 	name = "orion trail"
 	desc = "Imported straight from Outpost-T71!"
 	icon_state = "arcade"
-	circuit = /obj/item/circuitboard/arcade/orion_trail
+	circuit = /obj/item/electronics/circuitboard/arcade/orion_trail
 	var/list/supplies = list("1" = 0, "2" = 0, "3" = 0, "4" = 0, "5" = 0, "6" = 0) //engine,hull,electronics,food,fuel
 	var/list/supply_cost = list("1" = 1000, "2" = 950, "3" = 1100, "4" = 75, "5" = 100)
 	var/list/supply_name = list("1" = "engine parts", "2" = "hull parts", "3" = "electronic parts", "4" = "food", "5" = "fuel", "6" = "credits")
 	var/list/settlers = list()
-	var/num_traitors = 0
-	var/list/events = list(ORION_TRAIL_RAIDERS		= 3,
-						   ORION_TRAIL_FLUX			= 1,
-						   ORION_TRAIL_ILLNESS		= 3,
-						   ORION_TRAIL_BREAKDOWN	= 2,
-						   ORION_TRAIL_MUTINY		= 3,
-						   ORION_TRAIL_MALFUNCTION	= 2,
-						   ORION_TRAIL_COLLISION	= 1,
-						   ORION_TRAIL_CARP			= 3
-						   )
+	var/num_contractors = 0
+	var/list/events = list(
+		ORION_TRAIL_RAIDERS		= 3,
+		ORION_TRAIL_FLUX			= 1,
+		ORION_TRAIL_ILLNESS		= 3,
+		ORION_TRAIL_BREAKDOWN	= 2,
+		ORION_TRAIL_MUTINY		= 3,
+		ORION_TRAIL_MALFUNCTION	= 2,
+		ORION_TRAIL_COLLISION	= 1,
+		ORION_TRAIL_CARP			= 3
+	)
 	var/list/stops = list("Pluto","Asteroid Belt","Proxima Centauri","Dead Space","Rigel Prime","Tau Ceti Beta","Black Hole","Space Outpost Beta-9","Orion Prime")
 	var/list/stopblurbs = list(
 		"Pluto, long since occupied with long-range sensors and scanners, stands ready to, and indeed continues to probe the far reaches of the galaxy.",
@@ -59,7 +60,7 @@
 		"You have made it to Orion! Congratulations! Your crew is one of the few to start a new foothold for mankind!"
 		)
 	var/list/stop_distance = list(10000,7000,25000,9000,5000,30000,25000,10000,0)
-	var/event = null
+	var/event
 	var/event_title = ""
 	var/event_desc = ""
 	var/event_actions = ""
@@ -69,7 +70,7 @@
 	var/view = 0
 
 /obj/machinery/computer/arcade/orion_trail/proc/newgame(var/emag = 0)
-	SetName("orion trail[emag ? ": Realism Edition" : ""]")
+	name = "orion trail[emag ? ": Realism Edition" : ""]"
 	supplies = list("1" = 1, "2" = 1, "3" = 1, "4" = 60, "5" = 20, "6" = 5000)
 	emagged = emag
 	distance = 0
@@ -79,7 +80,7 @@
 			settlers += pick(GLOB.first_names_male)
 		else
 			settlers += pick(GLOB.first_names_female)
-	num_traitors = 0
+	num_contractors = 0
 	event = ORION_TRAIL_START
 	port = 0
 	view = ORION_VIEW_MAIN
@@ -175,7 +176,9 @@
 	dat += "[view==ORION_VIEW_CREW ? "" : "<a href='?src=\ref[src];crew=1'>"]Crew[view==ORION_VIEW_CREW ? "" : "</a>"]</P>"
 	user << browse(dat, "window=arcade")
 
-/obj/machinery/computer/arcade/orion_trail/OnTopic(user, href_list)
+/obj/machinery/computer/arcade/orion_trail/Topic(href,href_list)
+	if(..())
+		return 1
 	if(href_list["continue"])
 		if(view == ORION_VIEW_MAIN)
 			var/next_event = null
@@ -183,14 +186,14 @@
 				event = ORION_TRAIL_SPACEPORT
 			if(event == ORION_TRAIL_GAMEOVER)
 				event = null
-				attack_hand(user)
-				return TOPIC_REFRESH
+				src.updateUsrDialog()
+				return
 			if(!settlers.len)
 				event_desc = "You and your crew were killed on the way to Orion, your ship left abandoned for scavengers to find."
 				next_event = ORION_TRAIL_GAMEOVER
 			if(port == 9)
 				win()
-				return TOPIC_REFRESH
+				return
 			var/travel = min(rand(1000,10000),distance)
 			if(href_list["fix"])
 				var/item = href_list["fix"]
@@ -231,36 +234,30 @@
 				generate_event(next_event)
 		else
 			view = ORION_VIEW_MAIN
-		return TOPIC_REFRESH
 
-	else if(href_list["supplies"])
+	if(href_list["supplies"])
 		view = ORION_VIEW_SUPPLIES
-		return TOPIC_REFRESH
 
-	else if(href_list["crew"])
+	if(href_list["crew"])
 		view = ORION_VIEW_CREW
-		return TOPIC_REFRESH
 
-	else if(href_list["buy"])
+	if(href_list["buy"])
 		var/item = href_list["buy"]
 		if(supply_cost["[item]"] <= supplies["6"])
 			supplies["[item]"] += (text2num(item) > 3 ? 10 : 1)
 			supplies["6"] -= supply_cost["[item]"]
-		return TOPIC_REFRESH
 
-	else if(href_list["sell"])
+	if(href_list["sell"])
 		var/item = href_list["sell"]
 		if(supplies["[item]"] >= (text2num(item) > 3 ? 10 : 1))
 			supplies["6"] += supply_cost["[item]"]
 			supplies["[item]"] -= (text2num(item) > 3 ? 10 : 1)
-		return TOPIC_REFRESH
 
-	else if(href_list["kill"])
+	if(href_list["kill"])
 		var/item = text2num(href_list["kill"])
 		remove_settler(item)
-		return TOPIC_REFRESH
 
-	else if(href_list["attack"])
+	if(href_list["attack"])
 		supply_cost = list()
 		if(prob(17*settlers.len))
 			event_desc = "An empty husk of a station now, all its resources stripped for use in your travels."
@@ -276,10 +273,7 @@
 				if(prob(10))
 					remove_settler(null, "died while you were escaping!")
 		event = ORION_TRAIL_SPACEPORT_RAIDED
-		return TOPIC_REFRESH
-
-	if(. == TOPIC_REFRESH)
-		attack_hand(user)
+	src.updateUsrDialog()
 
 /obj/machinery/computer/arcade/orion_trail/proc/change_resource(var/specific = null, var/add = 1)
 	if(!specific)
@@ -301,12 +295,12 @@
 
 	event_info += "The crewmember, [settlers[specific]] [desc == null ? "has died!":"[desc]"]<BR>"
 	settlers -= settlers[specific]
-	if(num_traitors > 0 && prob(100/max(1,settlers.len-1)))
-		num_traitors--
+	if(num_contractors > 0 && prob(100/max(1,settlers.len-1)))
+		num_contractors--
 
 /obj/machinery/computer/arcade/orion_trail/proc/generate_event(var/specific = null)
 	if(!specific)
-		if(prob(20*num_traitors))
+		if(prob(20*num_contractors))
 			specific = ORION_TRAIL_MUTINY_ATTACK
 		else
 			specific = pickweight(events)
@@ -360,34 +354,34 @@
 
 		if(ORION_TRAIL_MUTINY)
 			event_info = ""
-			if(num_traitors < settlers.len - 1 && prob(55)) //gotta have at LEAST one non-traitor.
-				num_traitors++
+			if(num_contractors < settlers.len - 1 && prob(55)) //gotta have at LEAST one non-contractor.
+				num_contractors++
 		if(ORION_TRAIL_MUTINY_ATTACK)
 			//check to see if they just jump ship
-			if(prob(30+(settlers.len-num_traitors)*20))
-				event_info = "The traitors decided to jump ship along with some of your supplies!<BR>"
-				change_resource(4,-1 - (0.2 * num_traitors))
-				change_resource(5,-1 - (0.1 * num_traitors))
-				for(var/i=0;i<num_traitors;i++)
+			if(prob(30+(settlers.len-num_contractors)*20))
+				event_info = "The contractors decided to jump ship along with some of your supplies!<BR>"
+				change_resource(4,-1 - (0.2 * num_contractors))
+				change_resource(5,-1 - (0.1 * num_contractors))
+				for(var/i=0;i<num_contractors;i++)
 					remove_settler(rand(2,settlers.len),"decided to up and leave!")
-				num_traitors = 0
+				num_contractors = 0
 			else //alright. They wanna fight for the ship.
-				event_info = "The traitors are charging you! Prepare your weapons!<BR>"
-				var/list/traitors = list()
-				for(var/i=0;i<num_traitors;i++)
-					traitors += pick((settlers-traitors)-settlers[1])
-				var/list/nontraitors = settlers-traitors
-				while(nontraitors.len && traitors.len)
+				event_info = "The contractors are charging you! Prepare your weapons!<BR>"
+				var/list/contractors = list()
+				for(var/i=0;i<num_contractors;i++)
+					contractors += pick((settlers-contractors)-settlers[1])
+				var/list/noncontractors = settlers-contractors
+				while(noncontractors.len && contractors.len)
 					if(prob(50))
-						var/t = rand(1,traitors.len)
-						remove_settler(t,"was slain like the traitorous scum they were!")
-						traitors -= traitors[t]
+						var/t = rand(1,contractors.len)
+						remove_settler(t,"was slain like the contractorous scum they were!")
+						contractors -= contractors[t]
 					else
-						var/n = rand(1,nontraitors.len)
+						var/n = rand(1,noncontractors.len)
 						remove_settler(n,"was slain in defense of the ship!")
-						nontraitors -= nontraitors[n]
-				settlers = nontraitors
-				num_traitors = 0
+						noncontractors -= noncontractors[n]
+				settlers = noncontractors
+				num_contractors = 0
 		if(ORION_TRAIL_DISASTER)
 			event_desc = "The [event] proved too difficult for you and your crew!"
 			change_resource(4,-1)
@@ -405,35 +399,35 @@
 /obj/machinery/computer/arcade/orion_trail/proc/emag_effect(var/event)
 	switch(event)
 		if(ORION_TRAIL_RAIDERS)
-			if(istype(usr,/mob/living/carbon))
+			if(iscarbon(usr))
 				var/mob/living/carbon/M = usr
 				if(prob(50))
-					to_chat(usr, "<span class='warning'>You hear battle shouts. The tramping of boots on cold metal. Screams of agony. The rush of venting air. Are you going insane?</span>")
+					to_chat(usr, SPAN_WARNING("You hear battle shouts. The tramping of boots on cold metal. Screams of agony. The rush of venting air. Are you going insane?"))
 					M.hallucination(50, 50)
 				else
-					to_chat(usr, "<span class='danger'>Something strikes you from behind! It hurts like hell and feel like a blunt weapon, but nothing is there...</span>")
+					to_chat(usr, SPAN_DANGER("Something strikes you from behind! It hurts like hell and feel like a blunt weapon, but nothing is there..."))
 					M.take_organ_damage(10)
 			else
-				to_chat(usr, "<span class='warning'>The sounds of battle fill your ears...</span>")
+				to_chat(usr, SPAN_WARNING("The sounds of battle fill your ears..."))
 		if(ORION_TRAIL_ILLNESS)
-			if(istype(usr,/mob/living/carbon/human))
+			if(ishuman(usr))
 				var/mob/living/carbon/human/M = usr
-				to_chat(M, "<span class='warning'>An overpowering wave of nausea consumes over you. You hunch over, your stomach's contents preparing for a spectacular exit.</span>")
+				to_chat(M, SPAN_WARNING("An overpowering wave of nausea consumes over you. You hunch over, your stomach's contents preparing for a spectacular exit."))
 				M.vomit()
 			else
-				to_chat(usr, "<span class='warning'>You feel ill.</span>")
+				to_chat(usr, SPAN_WARNING("You feel ill."))
 		if(ORION_TRAIL_CARP)
-			to_chat(usr, "<span class='danger'> Something bit you!</span>")
+			to_chat(usr, SPAN_DANGER(" Something bit you!"))
 			var/mob/living/M = usr
 			M.adjustBruteLoss(10)
 		if(ORION_TRAIL_FLUX)
-			if(istype(usr,/mob/living/carbon) && prob(75))
+			if(iscarbon(usr) && prob(75))
 				var/mob/living/carbon/M = usr
 				M.Weaken(3)
 				src.visible_message("A sudden gust of powerful wind slams \the [M] into the floor!", "You hear a large fwooshing sound, followed by a bang.")
 				M.take_organ_damage(10)
 			else
-				to_chat(usr, "<span class='warning'>A violent gale blows past you, and you barely manage to stay standing!</span>")
+				to_chat(usr, SPAN_WARNING("A violent gale blows past you, and you barely manage to stay standing!"))
 		if(ORION_TRAIL_MALFUNCTION)
 			if(supplies["3"])
 				return
@@ -442,13 +436,13 @@
 				supplies["[i]"] = max(0,supplies["[i]"] + rand(-10,10))
 		if(ORION_TRAIL_COLLISION)
 			if(prob(90) && !supplies["2"])
-				var/turf/simulated/floor/F = src.loc
+				var/turf/floor/F = src.loc
 				F.ChangeTurf(/turf/space)
-				src.visible_message("<span class='danger'>Something slams into the floor around \the [src], exposing it to space!</span>", "You hear something crack and break.")
+				src.visible_message(SPAN_DANGER("Something slams into the floor around \the [src], exposing it to space!"), "You hear something crack and break.")
 			else
 				src.visible_message("Something slams into the floor around \the [src] - luckily, it didn't get through!", "You hear something crack.")
 		if(ORION_TRAIL_GAMEOVER)
-			to_chat(usr, "<span class='danger'><font size=3>You're never going to make it to Orion...</font></span>")
+			to_chat(usr, SPAN_DANGER("<font size=3>You're never going to make it to Orion...</font>"))
 			var/mob/living/M = usr
 			M.visible_message("\The [M] starts rapidly deteriorating.")
 			M << browse (null,"window=arcade")
@@ -484,30 +478,31 @@
 	icon_state = "ship"
 	w_class = ITEM_SIZE_SMALL
 	var/active = 0 //if the ship is on
-/obj/item/orion_ship/examine(mob/user)
-	. = ..()
-	if(!(in_range(user, src)))
-		return
-	if(!active)
-		to_chat(user, "<span class='notice'>There's a little switch on the bottom. It's flipped down.</span>")
-	else
-		to_chat(user, "<span class='notice'>There's a little switch on the bottom. It's flipped up.</span>")
+
+/obj/item/orion_ship/examine(mob/user, extra_description = "")
+	if(get_dist(user, src) < 2)
+		if(active)
+			extra_description += SPAN_NOTICE("There's a little switch on the bottom. It's flipped up.")
+		else
+			extra_description += SPAN_NOTICE("There's a little switch on the bottom. It's flipped down.")
+	..(user, extra_description)
+
 /obj/item/orion_ship/attack_self(mob/user)
 	if(active)
 		return
 	message_admins("[key_name_admin(usr)] primed an explosive Orion ship for detonation.")
 	log_game("[key_name(usr)] primed an explosive Orion ship for detonation.")
-	to_chat(user, "<span class='warning'>You flip the switch on the underside of [src].</span>")
+	to_chat(user, SPAN_WARNING("You flip the switch on the underside of [src]."))
 	active = 1
-	src.visible_message("<span class='notice'>[src] softly beeps and whirs to life!</span>")
+	src.visible_message(SPAN_NOTICE("[src] softly beeps and whirs to life!"))
 	src.audible_message("<b>\The [src]</b> says, 'This is ship ID #[rand(1,1000)] to Orion Port Authority. We're coming in for landing, over.'")
 	sleep(20)
-	src.visible_message("<span class='warning'>[src] begins to vibrate...</span>")
+	src.visible_message(SPAN_WARNING("[src] begins to vibrate..."))
 	src.audible_message("<b>\The [src]</b> says, 'Uh, Port? Having some issues with our reactor, could you check it out? Over.'")
 	sleep(30)
 	src.audible_message("<b>\The [src]</b> says, 'Oh, God! Code Eight! CODE EIGHT! IT'S GONNA BL-'")
 	sleep(3.6)
-	src.visible_message("<span class='danger'>[src] explodes!</span>")
+	src.visible_message(SPAN_DANGER("[src] explodes!"))
 	explosion(src.loc, 1,2,4)
 	qdel(src)
 

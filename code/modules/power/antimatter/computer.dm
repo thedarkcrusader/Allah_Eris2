@@ -27,8 +27,9 @@
 	return
 
 /obj/machinery/computer/am_engine/Topic(href, href_list)
-	if((. = ..()))
+	if(..())
 		return
+	usr.machine = src
 
 	if(!href_list["operation"])
 		return

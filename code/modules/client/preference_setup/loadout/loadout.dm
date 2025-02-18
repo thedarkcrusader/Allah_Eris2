@@ -19,9 +19,11 @@ var/list/gear_datums = list()
 /hook/startup/proc/populate_gear_list()
 
 	//create a list of gear datums to sort
-	for(var/geartype in typesof(/datum/gear)-/datum/gear)
+	for(var/geartype in subtypesof(/datum/gear))
 		var/datum/gear/G = geartype
 		if(initial(G.category) == geartype)
+			continue
+		if(GLOB.maps_data.loadout_blacklist && (geartype in GLOB.maps_data.loadout_blacklist))
 			continue
 
 		var/use_name = initial(G.display_name)
@@ -61,10 +63,12 @@ var/list/gear_datums = list()
 		var/okay = 1
 		if(G.whitelisted && preference_mob)
 			okay = 0
-			for(var/species in G.whitelisted)
+			// TODO: enable after baymed
+			/*for(var/species in G.whitelisted)
 				if(is_species_whitelisted(preference_mob, species))
 					okay = 1
 					break
+					*/
 		if(!okay)
 			continue
 		if(max_cost && G.cost > max_cost)
@@ -101,7 +105,13 @@ var/list/gear_datums = list()
 		else
 			pref.gear_list[index] = list()
 
-/datum/category_item/player_setup_item/loadout/content()
+/datum/category_item/player_setup_item/loadout/content(var/mob/user)
+	if(!pref.preview_icon)
+		pref.update_preview_icon()
+	if(pref.preview_north && pref.preview_south && pref.preview_west)
+		user << browse_rsc(pref.preview_north, "new_previewicon[NORTH].png")
+		user << browse_rsc(pref.preview_south, "new_previewicon[SOUTH].png")
+		user << browse_rsc(pref.preview_west, "new_previewicon[WEST].png")
 	. = list()
 	var/total_cost = 0
 	var/list/gears = pref.gear_list[pref.gear_slot]
@@ -146,7 +156,7 @@ var/list/gear_datums = list()
 				. += " <a href='?src=\ref[src];select_category=[category]'><font color = '#e67300'>[category] - [category_cost]</font></a> "
 			else
 				. += " <a href='?src=\ref[src];select_category=[category]'>[category] - 0</a> "
-
+	. += "<div class='statusDisplay' style = 'max-width: 192px; clear:both;'><img src=new_previewicon[SOUTH].png width=64 height=64><img src=new_previewicon[WEST].png width=64 height=64><img src=new_previewicon[NORTH].png width=64 height=64></div>"
 	. += "</b></center></td></tr>"
 
 	var/datum/loadout_category/LC = loadout_categories[current_tab]
@@ -154,21 +164,22 @@ var/list/gear_datums = list()
 	. += "<tr><td colspan=3><b><center>[LC.category]</center></b></td></tr>"
 	. += "<tr><td colspan=3><hr></td></tr>"
 	var/jobs = list()
-	for(var/job_title in (pref.job_medium|pref.job_low|pref.job_high))
-		var/datum/job/J = SSjobs.occupations_by_title[job_title]
-		if(J)
-			dd_insertObjectList(jobs, J)
+	if(SSjob)
+		for(var/job_title in (pref.job_medium|pref.job_low|pref.job_high))
+			var/datum/job/J = SSjob.GetJob(job_title)
+			if(J)
+				dd_insertObjectList(jobs, J)
 	for(var/gear_name in LC.gear)
 		if(!(gear_name in valid_gear_choices()))
 			continue
 		var/list/entry = list()
 		var/datum/gear/G = LC.gear[gear_name]
 		var/ticked = (G.display_name in pref.gear_list[pref.gear_slot])
-		entry += "<tr style='vertical-align:top;'><td width=25%><a style='white-space:normal;' [ticked ? "class='linkOn' " : ""]href='?src=\ref[src];toggle_gear=[html_encode(G.display_name)]'>[G.display_name]</a></td>"
+		entry += "<tr style='vertical-align:top;'><td width=25%><a style='white-space:normal;' [ticked ? "class='linkOn' " : ""]href='?src=\ref[src];toggle_gear=[G.display_name]'>[G.display_name]</a></td>"
 		entry += "<td width = 10% style='vertical-align:top'>[G.cost]</td>"
 		entry += "<td><font size=2>[G.get_description(get_gear_metadata(G,1))]</font>"
 		var/allowed = 1
-		if(G.allowed_roles)
+		if(allowed && G.allowed_roles)
 			var/good_job = 0
 			var/bad_job = 0
 			entry += "<br><i>"
@@ -177,7 +188,7 @@ var/list/gear_datums = list()
 				++ind
 				if(ind > 1)
 					entry += ", "
-				if(J.type in G.allowed_roles)
+				if(J.title in G.allowed_roles)
 					entry += "<font color=55cc55>[J.title]</font>"
 					good_job = 1
 				else
@@ -218,6 +229,8 @@ var/list/gear_datums = list()
 /datum/category_item/player_setup_item/loadout/OnTopic(href, href_list, user)
 	if(href_list["toggle_gear"])
 		var/datum/gear/TG = gear_datums[href_list["toggle_gear"]]
+		if(!TG)
+			return TOPIC_REFRESH
 		if(TG.display_name in pref.gear_list[pref.gear_slot])
 			pref.gear_list[pref.gear_slot] -= TG.display_name
 		else
@@ -290,6 +303,7 @@ var/list/gear_datums = list()
 	var/cost = 1           //Number of points used. Items in general cost 1 point, storage/armor/gloves/special use costs 2 points.
 	var/slot               //Slot to equip to.
 	var/list/allowed_roles //Roles that can spawn with this item.
+	var/list/allowed_branches //Service branches that can spawn with it.
 	var/whitelisted        //Term to check the whitelist for..
 	var/sort_category = "General"
 	var/flags              //Special tweaks in new
@@ -325,23 +339,26 @@ var/list/gear_datums = list()
 /datum/gear/proc/spawn_item(var/location, var/metadata)
 	var/datum/gear_data/gd = new(path, location)
 	for(var/datum/gear_tweak/gt in gear_tweaks)
-		gt.tweak_gear_data(metadata["[gt]"], gd)
+		gt.tweak_gear_data(metadata && metadata["[gt]"], gd)
 	var/item = new gd.path(gd.location)
 	for(var/datum/gear_tweak/gt in gear_tweaks)
-		gt.tweak_item(item, metadata["[gt]"])
+		gt.tweak_item(item, metadata && metadata["[gt]"])
 	return item
 
 /datum/gear/proc/spawn_on_mob(var/mob/living/carbon/human/H, var/metadata)
 	var/obj/item/item = spawn_item(H, metadata)
-
-	if(H.equip_to_slot_if_possible(item, slot, del_on_fail = 1, force = 1))
+	if(SSinventory.initialized && H.replace_in_slot(item, slot, put_in_storage = TRUE, skip_covering_check = TRUE, del_if_failed_to_equip = TRUE))
+		if(istype(item, /obj/item/clothing/under))
+			// this means we replaced jumpsuit and all items inside now on the floor
+			// so we need to pick them up
+			for(var/obj/item/I in get_turf(H))
+				H.equip_to_appropriate_slot(I)
 		to_chat(H, "<span class='notice'>Equipping you with \the [item]!</span>")
-		return TRUE
-
-	return FALSE
+		. = item
 
 /datum/gear/proc/spawn_in_storage_or_drop(var/mob/living/carbon/human/H, var/metadata)
 	var/obj/item/item = spawn_item(H, metadata)
+	item.add_fingerprint(H)
 
 	var/atom/placed_in = H.equip_to_storage(item)
 	if(placed_in)
@@ -352,5 +369,3 @@ var/list/gear_datums = list()
 		to_chat(H, "<span class='notice'>Placing \the [item] in your hands!</span>")
 	else
 		to_chat(H, "<span class='danger'>Dropping \the [item] on the ground!</span>")
-		item.forceMove(get_turf(H))
-		item.add_fingerprint(H)

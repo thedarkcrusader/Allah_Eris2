@@ -12,9 +12,9 @@
 		pipe_image = null
 	. = ..()
 
-/obj/machinery/atmospherics/ex_act(severity)
+/obj/machinery/atmospherics/explosion_act(target_power, explosion_handler/handler)
 	for(var/atom/movable/A in src) //ventcrawling is serious business
-		A.ex_act(severity)
+		A.explosion_act(target_power, handler)
 	. = ..()
 
 /obj/machinery/atmospherics/relaymove(mob/living/user, direction)
@@ -42,9 +42,6 @@
 			user.remove_ventcrawl()
 			user.forceMove(src.loc)
 			user.visible_message("You hear something squeezing through the pipes.", "You climb out the ventilation system.")
-	user.canmove = 0
-	spawn(1)
-		user.canmove = 1
 
 /obj/machinery/atmospherics/proc/can_crawl_through()
 	return 1
@@ -83,7 +80,7 @@ obj/machinery/atmospherics/trinary/isConnectable(var/obj/machinery/atmospherics/
 	return (target == node || ..())
 
 /obj/machinery/atmospherics/unary/isConnectable(var/obj/machinery/atmospherics/target)
-	return (target == node || ..())
+	return (target == node1 || ..())
 
 /obj/machinery/atmospherics/valve/isConnectable()
 	return (open && ..())

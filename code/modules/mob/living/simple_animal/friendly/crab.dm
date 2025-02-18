@@ -3,11 +3,8 @@
 	name = "crab"
 	desc = "A hard-shelled crustacean. Seems quite content to lounge around all the time."
 	icon_state = "crab"
-	icon_living = "crab"
-	icon_dead = "crab_dead"
 	mob_size = MOB_SMALL
 	speak_emote = list("clicks")
-	emote_hear = list("clicks")
 	emote_see = list("clacks")
 	speak_chance = 1
 	turns_per_move = 5
@@ -29,7 +26,7 @@
 		if(isturf(src.loc) && !resting && !buckled)		//This is so it only moves if it's not inside a closet, gentics machine, etc.
 			turns_since_move++
 			if(turns_since_move >= turns_per_move)
-				Move(get_step(src,pick(4,8)))
+				step_glide(src,pick(4,8), DELAY2GLIDESIZE(0.5 SECONDS))
 				turns_since_move = 0
 	regenerate_icons()
 

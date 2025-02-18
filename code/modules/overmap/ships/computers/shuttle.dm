@@ -1,13 +1,12 @@
 //Shuttle controller computer for shuttles going between sectors
 /obj/machinery/computer/shuttle_control/explore
 	name = "general shuttle control console"
-	icon_state = "thick"
 
-/obj/machinery/computer/shuttle_control/explore/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1)
+/obj/machinery/computer/shuttle_control/explore/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	var/data[0]
-	var/datum/shuttle/autodock/overmap/shuttle = SSshuttles.shuttles[shuttle_tag]
+	var/datum/shuttle/autodock/overmap/shuttle = SSshuttle.shuttles[shuttle_tag]
 	if (!istype(shuttle))
-		to_chat(usr,"<span class='warning'>Unable to establish link with the shuttle.</span>")
+		to_chat(usr, "<span class='warning'>Unable to establish link with the shuttle.</span>")
 		return
 
 	var/shuttle_state
@@ -62,7 +61,7 @@
 		"fuel_pressure_status" = (fuel_pressure/fuel_max_pressure > 0.2)? "good" : "bad"
 	)
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 
 	if (!ui)
 		ui = new(user, src, ui_key, "shuttle_control_console_exploration.tmpl", "[shuttle_tag] Shuttle Control", 510, 340)
@@ -88,8 +87,8 @@
 		if(possible_d.len)
 			D = input("Choose shuttle destination", "Shuttle Destination") as null|anything in possible_d
 		else
-			to_chat(usr,"<span class='warning'>No valid landing sites in range.</span>")
+			to_chat(usr, "<span class='warning'>No valid landing sites in range.</span>")
 		possible_d = shuttle.get_possible_destinations()
-		if(CanInteract(usr, GLOB.default_state) && (D in possible_d))
+		if(CanInteract(usr,GLOB.default_state) && (D in possible_d))
 			shuttle.set_destination(possible_d[D])
 		return TOPIC_REFRESH

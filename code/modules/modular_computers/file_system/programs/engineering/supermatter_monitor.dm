@@ -44,8 +44,8 @@
 	var/turf/T = get_turf(nano_host())
 	if(!T)
 		return
-	var/valid_z_levels = (GetConnectedZlevels(T.z) & GLOB.using_map.station_levels)
-	for(var/obj/machinery/power/supermatter/S in SSmachines.machinery)
+	var/valid_z_levels = (GetConnectedZlevels(T.z) & GLOB.maps_data.station_levels)
+	for(var/obj/machinery/power/supermatter/S in GLOB.machines)
 		// Delaminating, not within coverage, not on a tile.
 		if(S.grav_pulling || S.exploded || !(S.z in valid_z_levels) || !istype(S.loc, /turf/))
 			continue
@@ -59,9 +59,8 @@
 	for(var/obj/machinery/power/supermatter/S in supermatters)
 		. = max(., S.get_status())
 
-/datum/nano_module/supermatter_monitor/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/topic_state/state = GLOB.default_state)
+/datum/nano_module/supermatter_monitor/nano_ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = NANOUI_FOCUS, datum/nano_topic_state/state = GLOB.default_state)
 	var/list/data = host.initial_data()
-
 	if(istype(active))
 		var/turf/T = get_turf(active)
 		if(!T)
@@ -82,16 +81,14 @@
 			data["SM_gas_O2"] = round(100*air.gas["oxygen"]/air.total_moles,0.01)
 			data["SM_gas_CO2"] = round(100*air.gas["carbon_dioxide"]/air.total_moles,0.01)
 			data["SM_gas_N2"] = round(100*air.gas["nitrogen"]/air.total_moles,0.01)
-			data["SM_gas_PH"] = round(100*air.gas["phoron"]/air.total_moles,0.01)
+			data["SM_gas_PZ"] = round(100*air.gas["plasma"]/air.total_moles,0.01)
 			data["SM_gas_N2O"] = round(100*air.gas["sleeping_agent"]/air.total_moles,0.01)
-			data["SM_gas_H2"] = round(100*air.gas["hydrogen"]/air.total_moles,0.01)
 		else
 			data["SM_gas_O2"] = 0
 			data["SM_gas_CO2"] = 0
 			data["SM_gas_N2"] = 0
-			data["SM_gas_PH"] = 0
+			data["SM_gas_PZ"] = 0
 			data["SM_gas_N2O"] = 0
-			data["SM_gas_H2"] = 0
 	else
 		var/list/SMS = list()
 		for(var/obj/machinery/power/supermatter/S in supermatters)
@@ -108,7 +105,7 @@
 		data["active"] = 0
 		data["supermatters"] = SMS
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
 		ui = new(user, src, ui_key, "supermatter_monitor.tmpl", "Supermatter Monitoring", 600, 400, state = state)
 		if(host.update_layout())

@@ -2,237 +2,233 @@
 /// HYPOSPRAY
 ////////////////////////////////////////////////////////////////////////////////
 
-/obj/item/reagent_containers/hypospray //obsolete, use hypospray/vial for the actual hypospray item
+/obj/item/reagent_containers/hypospray
 	name = "hypospray"
-	desc = "The DeForest Medical Corporation hypospray is a sterile, air-needle autoinjector for rapid administration of drugs to patients."
+	desc = "The Moebius Medical department hypospray is a sterile, air-needle autoinjector for rapid administration of drugs to patients."
 	icon = 'icons/obj/syringe.dmi'
 	item_state = "hypo"
 	icon_state = "hypo"
-	origin_tech = list(TECH_MATERIAL = 4, TECH_BIO = 5)
 	amount_per_transfer_from_this = 5
 	unacidable = 1
-	volume = 30
+	volume = 40
 	possible_transfer_amounts = null
-	atom_flags = ATOM_FLAG_OPEN_CONTAINER
-	slot_flags = SLOT_EARS
-	w_class = ITEM_SIZE_SMALL
-	var/inject_sound = 'sound/items/hypoinject.ogg'
-
-///obj/item/reagent_containers/hypospray/New() //comment this to make hypos start off empty
-//	..()
-//	reagents.add_reagent(/datum/reagent/tricordrazine, 30)
-//	return
-
-/obj/item/reagent_containers/hypospray/do_surgery(mob/living/carbon/M, mob/living/user)
-	if(user.a_intent != I_HELP) //in case it is ever used as a surgery tool
-		return ..()
-	attack(M, user)
-	return 1
+	reagent_flags = OPENCONTAINER
+	slot_flags = SLOT_BELT
+	preloaded_reagents = list("bicaridine" = 40)
+	//spawn_blacklisted = TRUE//antag_item_targets?
 
 /obj/item/reagent_containers/hypospray/attack(mob/living/M as mob, mob/user as mob)
 	if(!reagents.total_volume)
-		to_chat(user, "<span class='warning'>[src] is empty.</span>")
+		to_chat(user, SPAN_WARNING("[src] is empty."))
 		return
 	if (!istype(M))
 		return
-
+	var/injtime //Injecting through a hardsuit takes long time due to needing to find a port.
+	// Handling errors and injection duration
 	var/mob/living/carbon/human/H = M
 	if(istype(H))
-		var/obj/item/organ/external/affected = H.get_organ(user.zone_sel.selecting)
-		if(!affected)
-			to_chat(user, "<span class='danger'>\The [H] is missing that limb!</span>")
-			return
-		else if(affected.robotic >= ORGAN_ROBOT)
-			to_chat(user, "<span class='danger'>You cannot inject a robotic limb.</span>")
-			return
-
-	user.setClickCooldown(DEFAULT_QUICK_COOLDOWN)
-	//user.do_attack_animation(M)
-	to_chat(user, "<span class='notice'>You inject [M] with [src].</span>")
-	to_chat(M, "<span class='notice'>You feel a tiny prick!</span>")
-	user.visible_message("<span class='warning'>[user] injects [M] with [src].</span>")
-
-	if(M.reagents)
-		var/contained = reagentlist()
-		var/trans = reagents.trans_to_mob(M, amount_per_transfer_from_this, CHEM_BLOOD)
-		admin_inject_log(user, M, src, contained, trans)
-		to_chat(user, "<span class='notice'>[trans] units injected. [reagents.total_volume] units remaining in \the [src].</span>")
-
-	playsound(M, inject_sound, 100)
+		var/obj/item/clothing/suit/space/SS = H.get_equipped_item(slot_wear_suit)
+		var/obj/item/rig/RIG = H.get_equipped_item(slot_back)
+		if((istype(RIG) && RIG.suit_is_deployed()) || istype(SS))
+			injtime = 30
+			var/obj/item/organ/external/affected = H.get_organ(BP_CHEST)
+			if(BP_IS_ROBOTIC(affected))
+				to_chat(user, SPAN_WARNING("Injection port on [M]'s suit is refusing your [src]."))
+				// I think rig is advanced enough for this, and people will learn what causes this error
+				if(RIG)
+					playsound(src.loc, 'sound/machines/buzz-two.ogg', 50, 1, -3)
+					RIG.visible_message("\icon[RIG]\The [RIG] states \"Attention: User of this suit appears to be synthetic origin\".")
+				return
+		// check without message
+		else if(!H.can_inject(user, FALSE))
+			// lets check if user is easily fooled
+			var/obj/item/organ/external/affected = H.get_organ(user.targeted_organ)
+			if(BP_IS_LIFELIKE(affected) && user && user.stats.getStat(STAT_BIO) < STAT_LEVEL_BASIC)
+				if(M.reagents)
+					var/trans = reagents.remove_any(amount_per_transfer_from_this)
+					user.visible_message(SPAN_WARNING("[user] injects [M] with [src]!"), SPAN_WARNING("You inject [M] with [src]."))
+					to_chat(user, SPAN_NOTICE("[trans] units injected. [reagents.total_volume] units remaining in \the [src]."))
+				return
+			else
+				// if he is not lets show him what actually happened
+				H.can_inject(user, TRUE)
+				return
+	else if(!M.can_inject(user, TRUE))
+		return
+	// handling injection duration on others
+	if(M != user)
+		user.setClickCooldown(DEFAULT_QUICK_COOLDOWN)
+		user.do_attack_animation(M)
+		if(injtime)
+			user.visible_message(SPAN_WARNING("[user] begins hunting for an injection port on [M]'s suit!"), SPAN_WARNING("You begins hunting for an injection port on [M]'s suit!"))
+			if(do_mob(user, M, injtime))
+				user.visible_message(SPAN_WARNING("[user] injects [M] with [src]!"), SPAN_WARNING("You inject [M] with [src]."))
+			else
+				return
+	// handling actual injection
+	// on this stage we are sure that everything is alright
+	var/contained = reagents.log_list()
+	var/trans = reagents.trans_to_mob(M, amount_per_transfer_from_this, CHEM_BLOOD)
+	admin_inject_log(user, M, src, contained, trans)
+	to_chat(user, SPAN_NOTICE("[trans] units injected. [reagents.total_volume] units remaining in \the [src]."))
 	return
 
-/obj/item/reagent_containers/hypospray/vial
-	name = "hypospray"
-	item_state = "autoinjector"
-	desc = "The DeForest Medical Corporation hypospray is a sterile, air-needle autoinjector for rapid administration of drugs to patients. Uses a replacable 30u vial."
-	var/obj/item/reagent_containers/glass/beaker/vial/loaded_vial
-	volume = 0
+/obj/item/reagent_containers/hypospray/verb/empty()
+	set name = "Empty Hypospray"
+	set category = "Object"
+	set src in usr
 
-/obj/item/reagent_containers/hypospray/vial/New()
-	..()
-	loaded_vial = new /obj/item/reagent_containers/glass/beaker/vial(src)
-	volume = loaded_vial.volume
-	reagents.maximum_volume = loaded_vial.reagents.maximum_volume
-
-/obj/item/reagent_containers/hypospray/vial/attack_hand(mob/user as mob)
-	if(user.get_inactive_hand() == src)
-		if(loaded_vial)
-			reagents.trans_to_holder(loaded_vial.reagents,volume)
-			reagents.maximum_volume = 0
-			loaded_vial.update_icon()
-			user.put_in_hands(loaded_vial)
-			loaded_vial = null
-			to_chat(user, "You remove the vial from the [src].")
-			update_icon()
-			playsound(src.loc, 'sound/weapons/flipblade.ogg', 50, 1)
-			return
-		..()
-	else
-		return ..()
-
-/obj/item/reagent_containers/hypospray/vial/attackby(obj/item/W, mob/user as mob)
-	if(istype(W, /obj/item/reagent_containers/glass/beaker/vial))
-		if(!loaded_vial)
-			if(!do_after(user,10) || loaded_vial || !(W in user))
-				return 0
-			if(W.is_open_container())
-				W.atom_flags ^= ATOM_FLAG_OPEN_CONTAINER
-				W.update_icon()
-			user.drop_item()
-			W.forceMove(src)
-			loaded_vial = W
-			reagents.maximum_volume = loaded_vial.reagents.maximum_volume
-			loaded_vial.reagents.trans_to_holder(reagents,volume)
-			user.visible_message("<span class='notice'>[user] has loaded [W] into \the [src].</span>","<span class='notice'>You load \the [W] into \the [src].</span>")
-			update_icon()
-			playsound(src.loc, 'sound/weapons/empty.ogg', 50, 1)
-		else
-			to_chat(user,"<span class='notice'>\The [src] already has a vial.</span>")
-	else
-		..()
+	if (alert(usr, "Are you sure you want to empty that?", "Empty Bottle:", "Yes", "No") != "Yes")
+		return
+	if(isturf(usr.loc))
+		to_chat(usr, SPAN_NOTICE("You empty \the [src] onto the floor."))
+		reagents.splash(usr.loc, reagents.total_volume)
 
 /obj/item/reagent_containers/hypospray/autoinjector
-	name = "autoinjector"
+	name = "autoinjector (inaprovaline)"
 	desc = "A rapid and safe way to administer small amounts of drugs by untrained or trained personnel."
-	icon_state = "blue"
+	w_class = ITEM_SIZE_TINY
+	slot_flags = SLOT_EARS
+	icon_state = "autoinjector"
 	item_state = "autoinjector"
 	amount_per_transfer_from_this = 5
+	matter = list(MATERIAL_STEEL = 1, MATERIAL_PLASTIC = 1)
+	reagent_flags = REFILLABLE | DRAINABLE | AMOUNT_VISIBLE
 	volume = 5
-	origin_tech = list(TECH_MATERIAL = 2, TECH_BIO = 2)
-	var/list/starts_with = list(/datum/reagent/inaprovaline = 5)
+	preloaded_reagents = list("inaprovaline" = 5)
+	spawn_blacklisted = TRUE
+	var/image/filling_overlay
 
-/obj/item/reagent_containers/hypospray/autoinjector/New()
+/obj/item/reagent_containers/hypospray/autoinjector/on_reagent_change()
 	..()
-	for(var/T in starts_with)
-		reagents.add_reagent(T, starts_with[T])
-	update_icon()
-	return
-
-/obj/item/reagent_containers/hypospray/autoinjector/attack(mob/M as mob, mob/user as mob)
-	..()
-	if(reagents.total_volume <= 0) //Prevents autoinjectors to be refilled.
-		atom_flags &= ~ATOM_FLAG_OPEN_CONTAINER
-	update_icon()
-	return
+	if(reagents.total_volume <= 0) //Prevents autoinjectors from being refilled.
+		reagent_flags &= ~REFILLABLE
 
 /obj/item/reagent_containers/hypospray/autoinjector/update_icon()
-	if(reagents.total_volume > 0)
-		icon_state = "[initial(icon_state)]1"
+	cut_overlays()
+	if(reagents && reagents.total_volume > 0)
+		icon_state = initial(icon_state)
+		filling_overlay = mutable_appearance('icons/obj/reagentfillings.dmi', "autoinjector")
+		filling_overlay.color = reagents.get_color()
+		add_overlay(filling_overlay)
 	else
-		icon_state = "[initial(icon_state)]0"
+		if(reagents && reagents.total_volume <= 0)
+			filling_overlay = mutable_appearance('icons/obj/reagentfillings.dmi', "autoinjector0")
+			filling_overlay.color = reagents.get_color()
+			add_overlay(filling_overlay)
+			icon_state = "[initial(icon_state)]0"
 
-/obj/item/reagent_containers/hypospray/autoinjector/examine(mob/user)
-	. = ..(user)
-	if(reagents && reagents.reagent_list.len)
-		to_chat(user, "<span class='notice'>It is currently loaded.</span>")
-	else
-		to_chat(user, "<span class='notice'>It is spent.</span>")
+// TRADE
+/obj/item/reagent_containers/hypospray/autoinjector/antitoxin
+	name = "autoinjector (anti-toxin)"
+	preloaded_reagents = list("anti_toxin" = 5)
 
-/obj/item/reagent_containers/hypospray/autoinjector/detox
-	name = "autoinjector (antitox)"
-	icon_state = "green"
-	starts_with = list(/datum/reagent/dylovene = 5)
+/obj/item/reagent_containers/hypospray/autoinjector/tricordrazine
+	name = "autoinjector (tricordrazine)"
+	preloaded_reagents = list("tricordrazine" = 5)
 
-/obj/item/reagent_containers/hypospray/autoinjector/pain
-	name = "autoinjector (painkiller)"
-	icon_state = "purple"
-	starts_with = list(/datum/reagent/tramadol = 10)
+/obj/item/reagent_containers/hypospray/autoinjector/kelotane
+	name = "autoinjector (kelotane)"
+	preloaded_reagents = list("kelotane" = 5)
 
-/obj/item/reagent_containers/hypospray/autoinjector/combatpain
+/obj/item/reagent_containers/hypospray/autoinjector/bicaridine
+	name = "autoinjector (bicaridine)"
+	preloaded_reagents = list("bicaridine" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/antirad
+	name = "autoinjector (anti-rad)"
+	preloaded_reagents = list("hyronalin" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/dexalin
+	name = "autoinjector (dexalin)"
+	preloaded_reagents = list("dexalin" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/spaceacillin
+	name = "autoinjector (spaceacillin)"
+	preloaded_reagents = list("spaceacillin" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/tramadol
+	name = "autoinjector (tramadol)"
+	preloaded_reagents = list("tramadol" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/polystem
+	name = "autoinjector (polystem)"
+	preloaded_reagents = list("polystem" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/meralyne
+	name = "autoinjector (meralyne)"
+	preloaded_reagents = list("meralyne" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/dermaline
+	name = "autoinjector (dermaline)"
+	preloaded_reagents = list("dermaline" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/dexalinplus
+	name = "autoinjector (dexalin plus)"
+	preloaded_reagents = list("dexalinp" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/oxycodone
 	name = "autoinjector (oxycodone)"
-	icon_state = "black"
-	starts_with = list(/datum/reagent/tramadol/oxycodone = 5)
+	preloaded_reagents = list("oxycodone" = 5)
 
-/obj/item/reagent_containers/hypospray/autoinjector/revive
-	name = "autoinjector (atepoine)"
-	icon_state = "black"
-	starts_with = list(/datum/reagent/atepoine = 10)
+/obj/item/reagent_containers/hypospray/autoinjector/ryetalyn
+	name = "autoinjector (ryetalyn)"
+	preloaded_reagents = list("ryetalyn" = 5)
 
-/obj/item/reagent_containers/hypospray/autoinjector/mindbreaker
-	name = "autoinjector"
-	icon_state = "black"
-	starts_with = list(/datum/reagent/mindbreaker = 5)
+/obj/item/reagent_containers/hypospray/autoinjector/hyperzine
+	name = "autoinjector (hyperzine)"
+	preloaded_reagents = list("hyperzine" = 5)
 
-/obj/item/reagent_containers/hypospray/autoinjector/blood
-	name = "blood injector"
-	desc = "A blood injector, contained O- blood."
-	icon_state = "n"
+/obj/item/reagent_containers/hypospray/autoinjector/drugs
+	name = "autoinjector (drugs)"
+	preloaded_reagents = list("space_drugs" = 5)
 
-	amount_per_transfer_from_this = 50
-	volume = 500
-	var/blood_type = "O-"
+/obj/item/reagent_containers/hypospray/autoinjector/quickhealbrute
+	name = "autoinjector (brute-aid)"
+	preloaded_reagents = list("bicaridine" = 1, "meralyne" = 1, "seligitillin" = 1, "tricordrazine" = 1, "polystem" = 1)
+	price_tag = 100
 
-/obj/item/reagent_containers/hypospray/autoinjector/blood/New()
-	..()
-	if(blood_type)
-		reagents.add_reagent(/datum/reagent/blood, volume, list("donor" = null, "blood_DNA" = null, "blood_type" = blood_type, "trace_chem" = null, "virus2" = list(), "antibodies" = list()))
+/obj/item/reagent_containers/hypospray/autoinjector/quickhealburn
+	name = "autoinjector (burn-aid)"
+	preloaded_reagents = list("kelotane" = 1.25, "dermaline" = 1.25, "tricordrazine" = 1.25, "polystem" = 1.25)
+	price_tag = 100
 
-/obj/item/reagent_containers/hypospray/autoinjector/morphine
-	name = "morphine syrette"
-	icon_state = "syrette_closed"
-	starts_with = list(/datum/reagent/tramadol/morphine = 10)
-	inject_sound = 'sound/items/syrette_inject.ogg'
+/obj/item/reagent_containers/hypospray/autoinjector/bloodclot
+	name = "autoinjector (blood clotting, type 1)"
+	preloaded_reagents = list("thrombopoietin" = 5)
 
-/obj/item/reagent_containers/hypospray/autoinjector/morphine/update_icon()
-	if(reagents.total_volume > 0)
-		icon_state = "syrette_closed"
-	else
-		icon_state = "syrette_open"
+/obj/item/reagent_containers/hypospray/autoinjector/bloodclot_alt
+	name = "autoinjector (blood clotting, type 2)"
+	preloaded_reagents = list("thromboxane" = 5)
 
-/obj/item/reagent_containers/glass/ampule
-	name = "ampule"
-	desc = "An ampule. Holds reagents. Usually pain medication. Use a syrette on it to refill the syrette."
-	icon = 'icons/obj/syringe.dmi'
-	icon_state = "ampule"
-	item_state = null
-	amount_per_transfer_from_this = 10
-	w_class = ITEM_SIZE_SMALL
-	slot_flags = SLOT_EARS
-	volume = 100
-	var/closed = 1
+/obj/item/reagent_containers/hypospray/autoinjector/bloodrestore
+	name = "autoinjector (blood restoration, type 1)"
+	preloaded_reagents = list("aldosterone" = 5)
 
-/obj/item/reagent_containers/glass/ampule/attack_self()
-	..()
-	if(closed)
-		to_chat(usr, "<span class='notice'>You crack \the [src], opening it.</span>")
-		playsound(src, 'sound/items/plastic_rip.ogg', 100)
-		atom_flags |= ATOM_FLAG_OPEN_CONTAINER
-		icon_state = "[initial(icon_state)]_open"
-		closed = 0
-	else
-		return
-	update_icon()
+/obj/item/reagent_containers/hypospray/autoinjector/bloodrestore_alt
+	name = "autoinjector (blood restoration, type 2)"
+	preloaded_reagents = list("erythropoietin" = 5)
 
-/obj/item/reagent_containers/glass/ampule/morphine
-	name = "morphine ampule"
-	New()
-		..()
-		reagents.add_reagent(/datum/reagent/tramadol/morphine, 100)
+/obj/item/reagent_containers/hypospray/autoinjector/painkiller
+	name = "autoinjector (painkiller, type 1)"
+	preloaded_reagents = list("enkephalin" = 5)
 
-/obj/item/reagent_containers/glass/ampule/attackby(obj/item/W, mob/user as mob)
-	if(istype(W, /obj/item/reagent_containers/hypospray/autoinjector))
-		var/obj/item/reagent_containers/hypospray/autoinjector/A = W
-		if(src.reagents)
-			var/trans = reagents.trans_to_obj(A, amount_per_transfer_from_this)
-			to_chat(user, "<span class='notice'>[trans] units refilled into \the [A]. [reagents.total_volume] units remaining in \the [src].</span>")
-			A.update_icon()
+/obj/item/reagent_containers/hypospray/autoinjector/painkiller_alt
+	name = "autoinjector (painkiller, type 2)"
+	preloaded_reagents = list("endomorphin" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/speedboost
+	name = "autoinjector (agility, type 1)"
+	preloaded_reagents = list("osteocalcin" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/speedboost_alt
+	name = "autoinjector (agility, type 2)"
+	preloaded_reagents = list("noradrenaline" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/oxygenation
+	name = "autoinjector (oxygenation, type 1)"
+	preloaded_reagents = list("dexterone" = 5)
+
+/obj/item/reagent_containers/hypospray/autoinjector/oxygenation_alt
+	name = "autoinjector (oxygenation, type 2)"
+	preloaded_reagents = list("vasotriene" = 5)

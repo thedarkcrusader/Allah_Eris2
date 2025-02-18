@@ -2,6 +2,7 @@
 * AI-specific *
 **************/
 /obj/item/device/camera/siliconcam
+	spawn_frequency = 0
 	var/in_camera_mode = 0
 	var/photos_taken = 0
 	var/list/obj/item/photo/aipictures = list()
@@ -18,15 +19,15 @@
 /obj/item/device/camera/siliconcam/proc/injectaialbum(obj/item/photo/p, var/sufix = "") //stores image information to a list similar to that of the datacore
 	p.loc = src
 	photos_taken++
-	p.SetName("Image [photos_taken][sufix]")
+	p.name = "Image [photos_taken][sufix]"
 	aipictures += p
 
 /obj/item/device/camera/siliconcam/proc/injectmasteralbum(obj/item/photo/p) //stores image information to a list similar to that of the datacore
 	var/mob/living/silicon/robot/C = usr
 	if(C.connected_ai)
-		C.connected_ai.silicon_camera.injectaialbum(p.copy(1), " (synced from [C.name])")
+		C.connected_ai.aiCamera.injectaialbum(p.copy(1), " (synced from [C.name])")
 		to_chat(C.connected_ai, "<span class='unconscious'>Image uploaded by [C.name]</span>")
-		to_chat(usr, "<span class='unconscious'>Image synced to remote database</span>")//feedback to the Cyborg player that the picture was taken
+		to_chat(usr, "<span class='unconscious'>Image synced to remote database</span>"	) //feedback to the Cyborg player that the picture was taken
 	else
 		to_chat(usr, "<span class='unconscious'>Image recorded</span>")
 	// Always save locally
@@ -59,6 +60,7 @@
 
 	selection.show(usr)
 	to_chat(usr, selection.desc)
+
 /obj/item/device/camera/siliconcam/proc/deletepicture(obj/item/device/camera/siliconcam/cam)
 	var/selection = selectpicture(cam)
 
@@ -67,6 +69,7 @@
 
 	aipictures -= selection
 	to_chat(usr, "<span class='unconscious'>Local image deleted</span>")
+
 //Capture Proc for AI / Robot
 /mob/living/silicon/ai/can_capture_turf(turf/T)
 	var/mob/living/silicon/ai = src
@@ -81,12 +84,15 @@
 /obj/item/device/camera/siliconcam/proc/camera_mode_off()
 	src.in_camera_mode = 0
 	to_chat(usr, "<B>Camera Mode deactivated</B>")
+
 /obj/item/device/camera/siliconcam/proc/camera_mode_on()
 	src.in_camera_mode = 1
 	to_chat(usr, "<B>Camera Mode activated</B>")
+
 /obj/item/device/camera/siliconcam/ai_camera/printpicture(mob/user, obj/item/photo/p)
 	injectaialbum(p)
 	to_chat(usr, "<span class='unconscious'>Image recorded</span>")
+
 /obj/item/device/camera/siliconcam/robot_camera/printpicture(mob/user, obj/item/photo/p)
 	injectmasteralbum(p)
 
@@ -139,18 +145,18 @@
 	deletepicture(src)
 
 obj/item/device/camera/siliconcam/proc/getsource()
-	if(istype(src.loc, /mob/living/silicon/ai))
+	if(isAI(src.loc))
 		return src
 
 	var/mob/living/silicon/robot/C = usr
 	var/obj/item/device/camera/siliconcam/Cinfo
 	if(C.connected_ai)
-		Cinfo = C.connected_ai.silicon_camera
+		Cinfo = C.connected_ai.aiCamera
 	else
 		Cinfo = src
 	return Cinfo
 
 /mob/living/silicon/proc/GetPicture()
-	if(!silicon_camera)
+	if(!aiCamera)
 		return
-	return silicon_camera.selectpicture()
+	return aiCamera.selectpicture()

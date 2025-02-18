@@ -1,18 +1,10 @@
 /mob/living/silicon
-	var/datum/ai_laws/laws
+	var/datum/ai_laws/laws = null
 	var/list/additional_law_channels = list("State" = "")
-
-/mob/living/silicon/New()
-	..()
-	if(!laws)
-		laws = GLOB.using_map.default_law_type
-	if(ispath(laws))
-		laws = new laws()
-	laws_sanity_check()
 
 /mob/living/silicon/proc/laws_sanity_check()
 	if (!src.laws)
-		laws = new GLOB.using_map.default_law_type
+		laws = new base_law_type
 
 /mob/living/silicon/proc/has_zeroth_law()
 	return laws.zeroth_law != null
@@ -25,7 +17,7 @@
 /mob/living/silicon/robot/set_zeroth_law(var/law, var/law_borg)
 	..()
 	if(tracking_entities)
-		to_chat(src, "<span class='warning'>Internal camera is currently being accessed.</span>")
+		to_chat(src, SPAN_WARNING("Internal camera is currently being accessed."))
 
 /mob/living/silicon/proc/add_ion_law(var/law)
 	laws_sanity_check()
@@ -67,25 +59,27 @@
 
 /mob/living/silicon/proc/statelaws(var/datum/ai_laws/laws)
 	var/prefix = ""
-	if(MAIN_CHANNEL == lawchannel)
-		prefix = ";"
-	else if(lawchannel == "Binary")
-		prefix = "[get_language_prefix()]b"
-	else if((lawchannel in additional_law_channels))
-		prefix = additional_law_channels[lawchannel]
-	else
-		prefix = get_radio_key_from_channel(lawchannel)
+	switch(lawchannel)
+		if(MAIN_CHANNEL)
+			prefix = ";"
+		if("Binary")
+			prefix = "[get_language_prefix()]b"
+		else
+			if((lawchannel in additional_law_channels))
+				prefix = ":" + additional_law_channels[lawchannel]
+			else
+				prefix = ":" + get_radio_key_from_channel(lawchannel)
 
 	dostatelaws(lawchannel, prefix, laws)
 
 /mob/living/silicon/proc/dostatelaws(var/method, var/prefix, var/datum/ai_laws/laws)
 	if(stating_laws[prefix])
-		to_chat(src, "<span class='notice'>[method]: Already stating laws using this communication method.</span>")
+		to_chat(src, SPAN_NOTICE("[method]: Already stating laws using this communication method."))
 		return
 
 	stating_laws[prefix] = 1
 
-	var/can_state = statelaw("[prefix]Current Active Laws:")
+	var/can_state = statelaw("[prefix] Current Active Laws:")
 
 	for(var/datum/ai_law/law in laws.laws_to_state())
 		can_state = statelaw("[prefix][law.get_index()]. [law.law]")
@@ -93,11 +87,11 @@
 			break
 
 	if(!can_state)
-		to_chat(src, "<span class='danger'>[method]: Unable to state laws. Communication method unavailable.</span>")
+		to_chat(src, SPAN_DANGER("[method]: Unable to state laws. Communication method unavailable."))
 	stating_laws[prefix] = 0
 
-/mob/living/silicon/proc/statelaw(var/law, var/mob/living/L = src)
-	if(L.say(law))
+/mob/living/silicon/proc/statelaw(var/law)
+	if(src.say(law))
 		sleep(10)
 		return 1
 
@@ -106,7 +100,7 @@
 /mob/living/silicon/proc/law_channels()
 	var/list/channels = new()
 	channels += MAIN_CHANNEL
-	channels += silicon_radio.channels
+	channels += common_radio.channels
 	channels += additional_law_channels
 	channels += "Binary"
 	return channels
@@ -117,4 +111,4 @@
 
 /mob/living/silicon/proc/log_law(var/law_message)
 	log_and_message_admins(law_message)
-	GLOB.lawchanges += "[stationtime2text()] - [usr ? "[key_name(usr)]" : "EVENT"] [law_message]"
+	lawchanges += "[stationtime2text()] - [usr ? "[key_name(usr)]" : "EVENT"] [law_message]"

@@ -9,10 +9,9 @@
 	master = M
 	if (istype(M, /obj/machinery/embedded_controller/radio))
 		var/obj/machinery/embedded_controller/radio/R = M
-		var/datum/computer/file/embedded_program/P = locate(R.id_tag)
-		if(istype(P))
-			error("Duplicate program: '[R.id_tag]'")
 		id_tag = R.id_tag
+
+	id_tag = copytext(id_tag, 1)
 
 /datum/computer/file/embedded_program/proc/receive_user_command(command)
 	return
@@ -20,7 +19,7 @@
 /datum/computer/file/embedded_program/proc/receive_signal(datum/signal/signal, receive_method, receive_param)
 	return
 
-/datum/computer/file/embedded_program/proc/process()
+/datum/computer/file/embedded_program/Process()
 	return
 
 /datum/computer/file/embedded_program/proc/post_signal(datum/signal/signal, comm_line)

@@ -1,15 +1,12 @@
 /obj/structure/closet/malf/suits
-	desc = "It's a storage unit for operational gear."
+	desc = "A storage unit for operational gear."
 	icon_state = "syndicate"
-	icon_closed = "syndicate"
-	icon_opened = "syndicateopen"
+	rarity_value = 50
 
-/obj/structure/closet/malf/suits/WillContain()
-	return list(
-		/obj/item/tank/jetpack/void,
-		/obj/item/clothing/mask/breath,
-		/obj/item/clothing/head/helmet/space/void,
-		/obj/item/clothing/suit/space/void,
-		/obj/item/crowbar,
-		/obj/item/cell,
-		/obj/item/device/multitool)
+/obj/structure/closet/malf/suits/populate_contents()
+	new /obj/item/tank/jetpack/void(src)
+	new /obj/item/clothing/mask/breath(src)
+	new /obj/item/clothing/suit/space/void(src)
+	new /obj/item/tool/crowbar(src)
+	new /obj/item/cell/large(src)
+	new /obj/item/tool/multitool(src)

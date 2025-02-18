@@ -2,9 +2,11 @@
 	name = "rune"
 	desc = "A rune drawn in crayon."
 	icon = 'icons/obj/rune.dmi'
-	anchored = 1
+	layer = TURF_DECAL_LAYER
+	anchored = TRUE
+	random_rotation = 0
 
-	New(location,main = "#ffffff",shade = "#000000",var/type = "rune")
+	New(location,main = "#FFFFFF",shade = "#000000",var/type = "graffiti")
 		..()
 		loc = location
 

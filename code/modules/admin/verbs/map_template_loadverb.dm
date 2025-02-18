@@ -1,65 +1,75 @@
-/datum/admins/proc/map_template_load()
-	set category = "Fun"
-	set desc = "Pick a map template to load at your current location. You will be able to confirm bounds before committing."
-	set name = "Map Template - Place"
+/client/proc/map_template_load()
+	set category = "Debug"
+	set name = "Map template - Place At Loc"
 
-	if (!check_rights(R_FUN)) return
+	var/datum/map_template/template
+
 
 	var/map = input(usr, "Choose a Map Template to place at your CURRENT LOCATION","Place Map Template") as null|anything in SSmapping.map_templates
 	if(!map)
 		return
+	template = SSmapping.map_templates[map]
 
-	var/datum/map_template/template = SSmapping.map_templates[map]
+	var/orientation = text2dir(input(usr, "Choose an orientation for this Map Template.", "Orientation") as null|anything in list("North", "South", "East", "West"))
+	if(!orientation)
+		return
 
-	var/turf/T = get_turf(usr)
+	// Convert dir to degrees rotation
+	orientation = dir2angle(orientation)
+
+	var/turf/T = get_turf(mob)
 	if(!T)
 		return
 
-	var/clear_contents = (alert(usr, "Do you want to delete everything in the way of the template? \
-		May take a few seconds, particularly on  larger templates!", "Clear Contents", "No", "Yes") == "Yes")
-
 	var/list/preview = list()
-	for(var/S in template.get_affected_turfs(T,centered = TRUE))
-		preview += image('icons/turf/overlays.dmi',S,"greenOverlay")
+	template.preload_size(template.mappath, orientation)
+	for(var/S in template.get_affected_turfs(T,centered = TRUE, orientation=orientation))
+		preview += image('icons/misc/debug_group.dmi',S ,"red")
 	usr.client.images += preview
-	if(alert(usr,"Confirm location.","Template Confirm","Yes","No") == "Yes")
-		if(template.load(T, centered = TRUE, clear_contents=clear_contents))
-			log_and_message_admins("has placed a map template ([template.name]).")
+	if(alert(usr,"Confirm location.", "Template Confirm","No","Yes") == "Yes")
+		if(template.annihilate && alert(usr,"This template is set to annihilate everything in the red square.  \
+		\nEVERYTHING IN THE RED SQUARE WILL BE DELETED, ARE YOU ABSOLUTELY SURE?", "Template Confirm","No","Yes") == "No")
+			usr.client.images -= preview
+			return
+
+		if(template.load(T, centered = TRUE, orientation=orientation))
+			message_admins("<span class='adminnotice'>[key_name_admin(usr)] has placed a map template ([template.name]).</span>")
 		else
 			to_chat(usr, "Failed to place map")
 	usr.client.images -= preview
 
-/datum/admins/proc/map_template_load_new_z()
-	set category = "Fun"
-	set desc = "Pick a map template to load as a new zlevel, or a set of new zlevels if multi-z."
-	set name = "Map Template - Place In New Z"
+/client/proc/map_template_load_on_new_z()
+	set category = "Debug"
+	set name = "Map template - New Z"
 
-	if (!check_rights(R_FUN)) return
+	var/datum/map_template/template
 
-	var/map = input(usr, "Choose a Map Template to place on a new zlevel","Place Map Template") as null|anything in SSmapping.map_templates
+	var/map = input(usr, "Choose a Map Template to place on a new Z-level.","Place Map Template") as null|anything in SSmapping.map_templates
 	if(!map)
 		return
+	template = SSmapping.map_templates[map]
 
-	var/datum/map_template/template = SSmapping.map_templates[map]
+	var/orientation = text2dir(input(usr, "Choose an orientation for this Map Template.", "Orientation") as null|anything in list("North", "South", "East", "West"))
+	if(!orientation)
+		return
 
-	if (template.loaded && !template.allow_duplicates)
-		var/jesus_take_the_wheel = alert(usr, "That template has already been loaded and doesn't want to be loaded again. \
-			Proceeding may unpredictably break things and cause runtimes.", "Confirm load", "Cancel load", "Do you see any cops around?") == "Do you see any cops around?"
-		if (!jesus_take_the_wheel)
+	// Convert dir to degrees rotation
+	orientation = dir2angle(orientation)
+
+	if((!(orientation%180) && template.width > world.maxx || template.height > world.maxy) || (orientation%180 && template.width > world.maxy || template.height > world.maxx))
+		if(alert(usr,"This template is larger than the existing z-levels. It will EXPAND ALL Z-LEVELS to match the size of the template. This may cause chaos. Are you sure you want to do this?","DANGER!!!","Cancel","Yes") == "Cancel")
+			to_chat(usr,"Template placement aborted.")
 			return
 
-	var/new_z_centre = template.load_new_z()
-	if (new_z_centre)
-		log_and_message_admins("has placed a map template ([template.name]) on a new zlevel.", location=new_z_centre)
-	else
-		to_chat(usr, "Failed to place map")
+	if(alert(usr,"Confirm map load.", "Template Confirm","No","Yes") == "Yes")
+		if(template.load_new_z(orientation=orientation))
+			message_admins("<span class='adminnotice'>[key_name_admin(usr)] has placed a map template ([template.name]) on Z level [world.maxz].</span>")
+		else
+			to_chat(usr, "Failed to place map")
 
-/datum/admins/proc/map_template_upload()
-	set category = "Fun"
-	set desc = "Upload a .dmm file to use as a map template. Any unknown types will be skipped!"
+/client/proc/map_template_upload()
+	set category = "Debug"
 	set name = "Map Template - Upload"
-
-	if (!check_rights(R_FUN)) return
 
 	var/map = input(usr, "Choose a Map Template to upload to template storage","Upload Map Template") as null|file
 	if(!map)
@@ -68,8 +78,8 @@
 		to_chat(usr, "Bad map file: [map]")
 		return
 
-	var/datum/map_template/M = new(list(map), "[map]")
-	if(M.preload_size())
+	var/datum/map_template/M = new(map, "[map]")
+	if(M.preload_size(map))
 		to_chat(usr, "Map template '[map]' ready to place ([M.width]x[M.height])")
 		SSmapping.map_templates[M.name] = M
 		message_admins("<span class='adminnotice'>[key_name_admin(usr)] has uploaded a map template ([map])</span>")

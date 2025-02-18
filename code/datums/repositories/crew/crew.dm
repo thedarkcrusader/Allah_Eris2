@@ -2,11 +2,14 @@ var/global/datum/repository/crew/crew_repository = new()
 
 /datum/repository/crew
 	var/list/cache_data
+	var/list/cache_data_alert
 	var/list/modifier_queues
 	var/list/modifier_queues_by_type
 
 /datum/repository/crew/New()
 	cache_data = list()
+	cache_data_alert = list()
+
 	var/PriorityQueue/general_modifiers = new/PriorityQueue(/proc/cmp_crew_sensor_modifier)
 	var/PriorityQueue/binary_modifiers = new/PriorityQueue(/proc/cmp_crew_sensor_modifier)
 	var/PriorityQueue/vital_modifiers = new/PriorityQueue(/proc/cmp_crew_sensor_modifier)
@@ -31,7 +34,7 @@ var/global/datum/repository/crew/crew_repository = new()
 
 	..()
 
-/datum/repository/crew/proc/health_data(var/z_level)
+/datum/repository/crew/proc/health_data(z_level, forced = FALSE)
 	var/list/crewmembers = list()
 	if(!z_level)
 		return crewmembers
@@ -41,58 +44,49 @@ var/global/datum/repository/crew/crew_repository = new()
 		cache_entry = new/datum/cache_entry
 		cache_data[num2text(z_level)] = cache_entry
 
-	if(world.time < cache_entry.timestamp)
+	if(!forced && (world.time < cache_entry.timestamp))
 		return cache_entry.data
 
+	cache_data_alert[num2text(z_level)] = FALSE
 	var/tracked = scan()
 	for(var/obj/item/clothing/under/C in tracked)
 		var/turf/pos = get_turf(C)
 		if(C.has_sensor && pos && pos.z == z_level && C.sensor_mode != SUIT_SENSOR_OFF)
-			if(istype(C.loc, /mob/living/carbon/human))
+			if(ishuman(C.loc))
 				var/mob/living/carbon/human/H = C.loc
+
 				if(H.w_uniform != C)
 					continue
-				var/pressure = H.get_blood_pressure()
-				var/blood_result = H.get_blood_oxygenation()
-				if(blood_result > 110)
-					blood_result = "increased"
-				else if(blood_result < 90)
-					blood_result = "low"
-				else if(blood_result < 60)
-					blood_result = "extremely low"
-				else
-					blood_result = "normal"
-				pressure += " ([blood_result] oxygenation)"
 
-				var/true_pulse = H.pulse()
-				var/pulse_span = "good"
-				switch(true_pulse)
-					if(PULSE_NONE)
-						pulse_span = "bad"
-					if(PULSE_SLOW)
-						pulse_span = "highlight"
-					if(PULSE_NORM)
-						pulse_span = "good"
-					if(PULSE_FAST)
-						pulse_span = "average"
-					if(PULSE_2FAST)
-						pulse_span = "bad"
-					if(PULSE_THREADY)
-						pulse_span = "bad"
-
-				var/list/crewmemberData = list("sensor_type" = C.sensor_mode, "stat"= H.stat, "span" = pulse_span, "pulse"= H.get_pulse(1), "pressure"= pressure, "bodytemp" = H.bodytemperature - T0C, "area"="", "x"=-1, "y"=-1, "z"=-1, "ref" = "\ref[H]")
+				var/list/crewmemberData = list("sensor_type"=C.sensor_mode, "stat"=H.stat, "area"="", "x"=-1, "y"=-1, "z"=-1, "ref"="\ref[H]")
 				if(!(run_queues(H, C, pos, crewmemberData) & MOD_SUIT_SENSORS_REJECTED))
+					var/datum/computer_file/report/crew_record/CR = get_crewmember_record(crewmemberData["name"])
+					if(CR)
+						// We wont include sensors of deceased people
+						if(CR.get_status() == "Deceased")
+							continue
 					crewmembers[++crewmembers.len] = crewmemberData
+					if (crewmemberData["alert"])
+						cache_data_alert[num2text(z_level)] = TRUE
 
-	crewmembers = sortByKey(crewmembers, "name")
+	crewmembers = sortNames(crewmembers)
 	cache_entry.timestamp = world.time + 5 SECONDS
 	cache_entry.data = crewmembers
 
+	cache_data[num2text(z_level)] = cache_entry
+
 	return crewmembers
+
+/datum/repository/crew/proc/has_health_alert(var/z_level)
+	. = FALSE
+	if(!z_level)
+		return
+	health_data(z_level) // Make sure cache doesn't get stale
+	. = cache_data_alert[num2text(z_level)]
 
 /datum/repository/crew/proc/scan()
 	var/list/tracked = list()
-	for(var/mob/living/carbon/human/H in SSmobs.mob_list)
+	for(var/mob/living/carbon/human/H in SShumans.mob_list)
 		if(istype(H.w_uniform, /obj/item/clothing/under))
 			var/obj/item/clothing/under/C = H.w_uniform
 			if (C.has_sensor)

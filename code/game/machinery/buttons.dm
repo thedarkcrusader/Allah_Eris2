@@ -1,13 +1,13 @@
 /obj/machinery/button
 	name = "button"
-	icon = 'icons/obj/objects.dmi'
-	icon_state = "launcherbtt"
+	icon = 'icons/obj/machines/buttons.dmi'
+	icon_state = "launcher0"
 	desc = "A remote control switch for something."
 	var/id = null
 	var/active = 0
 	var/operating = 0
-	anchored = 1.0
-	use_power = 1
+	anchored = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 2
 	active_power_usage = 4
 	var/_wifi_id
@@ -22,18 +22,14 @@
 /obj/machinery/button/Destroy()
 	qdel(wifi_sender)
 	wifi_sender = null
-	return..()
-
-/obj/machinery/button/attack_ai(mob/user as mob)
-	return attack_hand(user)
+	return ..()
 
 /obj/machinery/button/attackby(obj/item/W, mob/user as mob)
 	return attack_hand(user)
 
 /obj/machinery/button/attack_hand(mob/living/user)
 	if(..()) return 1
-	if(istype(user, /mob/living/carbon))
-		playsound(src, "button", 60)
+	playsound(loc, 'sound/machines/button.ogg', 100, 1)
 	activate(user)
 
 /obj/machinery/button/proc/activate(mob/living/user)
@@ -52,13 +48,14 @@
 
 /obj/machinery/button/update_icon()
 	if(active)
-		icon_state = "launcheract"
+		icon_state = "launcher1"
+	else if(stat & (NOPOWER))
+		icon_state = "launcher-p"
 	else
-		icon_state = "launcherbtt"
+		icon_state = "launcher0"
 
 //alternate button with the same functionality, except has a lightswitch sprite instead
 /obj/machinery/button/switch
-	icon = 'icons/obj/power.dmi'
 	icon_state = "light0"
 
 /obj/machinery/button/switch/update_icon()
@@ -66,7 +63,6 @@
 
 //alternate button with the same functionality, except has a door control sprite instead
 /obj/machinery/button/alternate
-	icon = 'icons/obj/stationobjs.dmi'
 	icon_state = "doorctrl0"
 
 /obj/machinery/button/alternate/update_icon()
@@ -92,17 +88,13 @@
 
 //alternate button with the same toggle functionality, except has a lightswitch sprite instead
 /obj/machinery/button/toggle/switch
-	icon = 'icons/obj/power.dmi'
 	icon_state = "light0"
 
 /obj/machinery/button/toggle/switch/update_icon()
 	icon_state = "light[active]"
 
-
-
 //alternate button with the same toggle functionality, except has a door control sprite instead
 /obj/machinery/button/toggle/alternate
-	icon = 'icons/obj/stationobjs.dmi'
 	icon_state = "doorctrl0"
 
 /obj/machinery/button/toggle/alternate/update_icon()
@@ -147,8 +139,7 @@
 #define SAFE   0x10
 
 /obj/machinery/button/toggle/door
-	icon = 'icons/obj/stationobjs.dmi'
-	icon_state = "doorctrl"
+	icon_state = "doorctrl0"
 
 	var/_door_functions = 1
 /*	Bitflag, 	1 = open
@@ -159,9 +150,9 @@
 
 /obj/machinery/button/toggle/door/update_icon()
 	if(active)
-		icon_state = "[initial(icon_state)]"
+		icon_state = "doorctrl0"
 	else
-		icon_state = "[initial(icon_state)]2"
+		icon_state = "doorctrl2"
 
 /obj/machinery/button/toggle/door/Initialize()
 	if(_wifi_id)
@@ -205,30 +196,3 @@
 #undef BOLTS
 #undef SHOCK
 #undef SAFE
-
-/obj/machinery/button/toggle/valve
-	name = "remote valve control"
-	var/frequency = 0
-	var/datum/radio_frequency/radio_connection
-
-/obj/machinery/button/toggle/valve/Initialize()
-	. = ..()
-	radio_connection = SSradio.add_object(src, frequency, RADIO_ATMOSIA)
-
-/obj/machinery/button/toggle/valve/update_icon()
-	if(!active)
-		icon_state = "launcherbtt"
-	else
-		icon_state = "launcheract"
-
-
-/obj/machinery/button/toggle/valve/activate(mob/living/user)
-	var/datum/signal/signal = new
-	signal.transmission_method = 1 // radio transmission
-	signal.source = src
-	signal.frequency = frequency
-	signal.data["tag"] = id
-	signal.data["command"] = "valve_toggle"
-	radio_connection.post_signal(src, signal, filter = RADIO_ATMOSIA)
-	active = !active
-	update_icon()

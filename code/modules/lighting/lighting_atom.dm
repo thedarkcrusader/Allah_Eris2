@@ -1,167 +1,87 @@
-/atom
-	var/light_power = 1 // intensity of the light
-	var/light_range = 0 // range in tiles of the light
-	var/light_color		// Hexadecimal RGB string representing the colour of the light
-	var/light_shape = null
+#define MINIMUM_USEFUL_LIGHT_RANGE 1.4
 
-	var/datum/light_source/light
-	var/list/light_sources
-	var/tmp/obj/effect/light/light_new
-
-// Nonsensical value for l_color default, so we can detect if it gets set to null.
+// The proc you should always use to set the light of this atom.
+// Nonesensical value for l_color default, so we can detect if it gets set to null.
 #define NONSENSICAL_VALUE -99999
-/atom/proc/set_light(l_range, l_power, l_color = NONSENSICAL_VALUE, var/small = FALSE, var/directional = FALSE, var/animated = FALSE)
-	. = 0 //make it less costly if nothing's changed
+/atom/proc/set_light(l_range, l_power, l_color=NONSENSICAL_VALUE)
+	if(l_range > 0 && l_range < MINIMUM_USEFUL_LIGHT_RANGE)
+		l_range = MINIMUM_USEFUL_LIGHT_RANGE	//Brings the range up to 1.4, which is just barely brighter than the soft lighting that surrounds players.
 
-	if(l_power != null && l_power != light_power)
-		light_power = l_power
-		. = 1
+	if(l_range != null) light_range = l_range
+	if(l_power != null) light_power = l_power
+	if(l_color != NONSENSICAL_VALUE) light_color = l_color
 
-	if(l_range != null && l_range != light_range)
-		light_range = l_range
-		. = 1
-
-	if(l_color != NONSENSICAL_VALUE && l_color != light_color)
-		light_color = l_color
-		. = 1
-
-	if(.)
-		update_light(small, directional)
-
+	update_light()
 
 #undef NONSENSICAL_VALUE
 
-/atom/proc/update_light(var/small = FALSE, var/directional = FALSE)
+// Will update the light (duh).
+// Creates or destroys it if needed, makes it update values, makes sure it's got the correct source turf...
+/atom/proc/update_light()
 	set waitfor = FALSE
+	if (QDELETED(src))
+		return
 
-	if(light_range)
-		if(!(light_new in src:vis_contents))
-			light_new = new()
-
-			if(directional)
-				var/matrix/M = matrix()
-				M.Scale(20)
-				light_new.transform = M
-				light_new.dir = src.dir
-
-			else if(light_shape)
-				light_new.icon_state = light_shape
-
-			else if(light_range > 2)
-				var/matrix/M = matrix()
-				M.Scale(10)
-				light_new.transform = M
-
-			else if(light_range < 0)
-				var/matrix/M = matrix()
-				M.Scale(0.5)
-				light_new.transform = M
-
-			else
-				var/matrix/M = matrix()
-				M.Scale(4)
-				light_new.transform = M
-
-			src:vis_contents += light_new
-
-	if(light_range == 0)//No range, no light. However you can have negative range, which will make your light really small, so it's best just check for 0 instead.
-		src:vis_contents -= light_new
-
-	if(light_color)
-		light_new.color = light_color
-
-	/*
-	if(light_power)
-		//light_new.transform = matrix(1,0,SCALE_NUMBER,0,1,SCALE_NUMBER)
-		if(light_power != 1)
-			light_new.transform = matrix(SCALE_NUMBER, MATRIX_SCALE) * light_new.transform
-	*/
-
-
-
-	/*
-	if(!light_power || !light_range)
+	if(!light_power || !light_range) // We won't emit light anyways, destroy the light source.
 		if(light)
 			light.destroy()
 			light = null
 	else
-		if(!istype(loc, /atom/movable))
+		if(!istype(loc, /atom/movable)) // We choose what atom should be the top atom of the light here.
 			. = src
 		else
 			. = loc
 
-		if(light)
+		if(light) // Update the light or create it if it does not exist.
 			light.update(.)
 		else
-			light = new /datum/light_source(src, .)
-	*/
+			light = new/datum/light_source(src, .)
 
-/atom/Destroy()
-	if(light)
-		light.destroy()
-		light = null
+// Incase any lighting vars are on in the typepath we turn the light on in New().
+/atom/proc/init_light()
+	if(light_power && light_range)
+		update_light()
+
+	if(opacity && isturf(loc))
+		var/turf/T = loc
+		T.has_opaque_atom = TRUE // No need to recalculate it in this case, it's guaranteed to be on afterwards anyways.
+
+/atom/movable/init_light()
+	. = ..()
+
+	if(opacity && isturf(loc))
+		var/turf/T = loc
+		T.reconsider_lights()
+
+	if(istype(loc, /turf/open))
+		var/turf/open/open = loc
+		if(open.isOpen())
+			open.fallThrough(src)
+
+// If we have opacity, make sure to tell (potentially) affected light sources.
+/atom/movable/Destroy()
+	var/turf/T = loc
+	if(opacity && istype(T))
+		set_opacity(FALSE)
 	return ..()
 
-/atom/set_opacity()
+// Should always be used to change the opacity of an atom.
+// It notifies (potentially) affected light sources so they can update (if needed).
+/atom/movable/set_opacity(new_opacity)
 	. = ..()
-	if(.)
-		var/turf/T = loc
-		if(istype(T))
-			T.handle_opacity_change(src)
+	if (!.)
+		return
 
-#define LIGHT_MOVE_UPDATE \
-var/turf/old_loc = loc;\
-. = ..();\
-if(loc != old_loc) {\
-	for(var/datum/light_source/L in light_sources) {\
-		L.source_atom.update_light();\
-	}\
-}
+	opacity = new_opacity
+	var/turf/T = loc
+	if (!isturf(T))
+		return
 
-/atom/movable/Move()
-	LIGHT_MOVE_UPDATE
-
-/atom/movable/forceMove()
-	LIGHT_MOVE_UPDATE
-
-#undef LIGHT_MOVE_UPDATE
-
-/obj/item/update_light()
-	. = ..()
-	if(istype(loc, /atom/movable))
-		var/atom/movable/M = loc
-		if(light_range)
-			M.vis_contents |= light_new
-			vis_contents.Cut()
-		else
-			M.vis_contents.Cut()
-			M.update_light()
-
-
-/mob/update_light()
-	. = ..()
-	for(var/obj/item/A in src)
-		if(A.light_range)
-			vis_contents |= A.light_new
-
-/obj/item/equipped(mob/user)
-	. = ..()
-	if((light_new in vis_contents))//We have no light already, so get rid of it.
-		vis_contents -= light_new
-		user.vis_contents.Cut()
-		user.update_light()
-	//update_light()
-
-
-/obj/item/pickup(mob/user)
-	. = ..()
-	if((light_new in vis_contents))//We have no light already, so get rid of it.
-		user.vis_contents |= light_new
-		user.update_light()
-	// update_light()
-
-/obj/item/dropped(mob/user)
-	. = ..()
-	user.vis_contents.Cut()
-	user.update_light()
-	update_light()
+	if (new_opacity == TRUE)
+		T.has_opaque_atom = TRUE
+		T.reconsider_lights()
+	else
+		var/old_has_opaque_atom = T.has_opaque_atom
+		T.recalc_atom_opacity()
+		if (old_has_opaque_atom != T.has_opaque_atom)
+			T.reconsider_lights()

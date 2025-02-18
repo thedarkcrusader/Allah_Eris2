@@ -1,10 +1,10 @@
 /client
-	control_freak = CONTROL_FREAK_ALL //| CONTROL_FREAK_MACROS | CONTROL_FREAK_SKIN
+	control_freak = CONTROL_FREAK_ALL | CONTROL_FREAK_MACROS | CONTROL_FREAK_SKIN
 
 var/list/registered_macros_by_ckey_
 
 // Disables click and double-click macros, as per http://www.byond.com/forum/?post=2219001
-/mob/verb/DisableClick(argu = null as anything, sec = "" as text,number1 = 0 as num, number2 = 0 as num)
+/mob/verb/DisableClick(argu = null as anything, sec = "" as text, number1 = 0 as num, number2 = 0 as num)
 	set name = ".click"
 	set category = null
 	log_macro(ckey, ".click")

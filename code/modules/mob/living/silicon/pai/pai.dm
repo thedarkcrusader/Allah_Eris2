@@ -2,6 +2,7 @@
 	name = "pAI"
 	icon = 'icons/mob/pai.dmi'
 	icon_state = "repairbot"
+	layer = BELOW_MOB_LAYER
 
 	emote_type = 2		// pAIs emotes are heard, not seen, so they can be seen through a container (eg. person)
 	pass_flags = 1
@@ -10,8 +11,7 @@
 	can_pull_size = ITEM_SIZE_SMALL
 	can_pull_mobs = MOB_PULL_SMALLER
 
-	idcard = /obj/item/card/id
-	silicon_radio = null // pAIs get their radio from the card they belong to.
+	idcard_type = /obj/item/card/id
 
 	var/network = "SS13"
 	var/obj/machinery/camera/current = null
@@ -20,16 +20,14 @@
 	var/list/software = list()
 	var/userDNA		// The DNA string of our assigned user
 	var/obj/item/device/paicard/card	// The card we inhabit
+	var/obj/item/device/radio/radio		// Our primary radio
 
 	var/chassis = "repairbot"   // A record of your chosen chassis.
 	var/global/list/possible_chassis = list(
 		"Drone" = "repairbot",
 		"Cat" = "cat",
 		"Mouse" = "mouse",
-		"Monkey" = "monkey",
-		"Rabbit" = "rabbit",
-		"Mushroom" = "mushroom",
-		"Corgi" = "corgi"
+		"Monkey" = "monkey"
 		)
 
 	var/global/list/possible_say_verbs = list(
@@ -37,8 +35,7 @@
 		"Natural" = list("says","yells","asks"),
 		"Beep" = list("beeps","beeps loudly","boops"),
 		"Chirp" = list("chirps","chirrups","cheeps"),
-		"Feline" = list("purrs","yowls","meows"),
-		"Canine" = list("yaps", "barks", "woofs")
+		"Feline" = list("purrs","yowls","meows")
 		)
 
 	var/obj/item/pai_cable/cable		// The cable we produce and use when door or camera jacking
@@ -49,7 +46,7 @@
 	var/pai_law0 = "Serve your master."
 	var/pai_laws				// String for additional operating instructions our master might give us
 
-	var/silence_time			// Timestamp when we were silenced (normally via EMP burst), set to null after silence has faded
+	var/silence_time			// Timestamp when we were item_flags & SILENT (normally via EMP burst), set to null after silence has faded
 
 // Various software-specific vars
 
@@ -57,10 +54,8 @@
 	var/screen				// Which screen our main window displays
 	var/subscreen			// Which specific function of the main screen is being displayed
 
-	var/obj/item/device/pda/ai/pai/pda = null
-
-	var/secHUD = 0			// Toggles whether the Security HUD is active or not
-	var/medHUD = 0			// Toggles whether the Medical  HUD is active or not
+	var/secHUD = FALSE			// Toggles whether the Security HUD is active or not
+	var/medHUD = FALSE			// Toggles whether the Medical  HUD is active or not
 
 	var/medical_cannotfind = 0
 	var/datum/data/record/medicalActive1		// Datacore record declarations for record software
@@ -78,48 +73,30 @@
 
 	var/translator_on = 0 // keeps track of the translator module
 
-	var/current_pda_messaging = null
-
 /mob/living/silicon/pai/New(var/obj/item/device/paicard)
-	status_flags |= NO_ANTAG
 	src.loc = paicard
 	card = paicard
-	sradio = new(src)
-
-	//As a human made device, we'll understand sol common without the need of the translator
-	add_language(LANGUAGE_SOL_COMMON, 1)
-
-	verbs += /mob/living/silicon/pai/proc/choose_chassis
-	verbs += /mob/living/silicon/pai/proc/choose_verbs
-	verbs -= /mob/living/verb/ghost
-
-	..()
-
 	if(card)
 		if(!card.radio)
-			card.radio = new /obj/item/device/radio(card)
-		silicon_radio = card.radio
+			card.radio = new /obj/item/device/radio(src.card)
+		radio = card.radio
 
-/mob/living/silicon/pai/Destroy()
-	QDEL_NULL(sradio)
-	card = null
-	silicon_radio = null // Because this radio actually belongs to another instance we simply null
+	//Default languages without universal translator software
+	add_language("Sol Common", 1)
+	add_verb(src, /mob/living/silicon/pai/proc/choose_chassis)
+	add_verb(src, /mob/living/silicon/pai/proc/choose_verbs)
+	..()
+
+/mob/living/silicon/pai/Login()
+	..()
+
+/mob/living/silicon/pai/get_status_tab_items()
 	. = ..()
-
-// this function shows the information about being silenced as a pAI in the Status panel
-/mob/living/silicon/pai/proc/show_silenced()
-	if(src.silence_time)
+	if(silence_time)
 		var/timeleft = round((silence_time - world.timeofday)/10 ,1)
-		stat(null, "Communications system reboot in -[(timeleft / 60) % 60]:[add_zero(num2text(timeleft % 60), 2)]")
+		. += list(list("Communications system reboot in -[(timeleft / 60) % 60]:[add_zero(num2text(timeleft % 60), 2)]"))
 
-
-/mob/living/silicon/pai/Stat()
-	. = ..()
-	statpanel("Status")
-	if (src.client.statpanel == "Status")
-		show_silenced()
-
-/mob/living/silicon/pai/check_eye(var/mob/user as mob)
+/mob/living/silicon/pai/check_eye(mob/user)
 	if (!src.current)
 		return -1
 	return 0
@@ -144,7 +121,7 @@
 	if(prob(20))
 		var/turf/T = get_turf_or_move(src.loc)
 		for (var/mob/M in viewers(T))
-			M.show_message("<span class='warning'>A shower of sparks spray from [src]'s inner workings.</span>", 3, "<span class='warning'>You hear and smell the ozone hiss of electrical sparks being expelled violently.</span>", 2)
+			M.show_message("\red A shower of sparks spray from [src]'s inner workings.", 3, "\red You hear and smell the ozone hiss of electrical sparks being expelled violently.", 2)
 		return src.death(0)
 
 	switch(pick(1,2,3))
@@ -177,53 +154,25 @@
 	src.reset_view(C)
 	return 1
 
+/mob/living/silicon/pai/verb/reset_record_view()
+	set category = "pAI Commands"
+	set name = "Reset Records Software"
+
+	securityActive1 = null
+	securityActive2 = null
+	security_cannotfind = 0
+	medicalActive1 = null
+	medicalActive2 = null
+	medical_cannotfind = 0
+	SSnano.update_uis(src)
+	to_chat(usr, SPAN_NOTICE("You reset your record-viewing software."))
+
 /mob/living/silicon/pai/cancel_camera()
 	set category = "pAI Commands"
 	set name = "Cancel Camera View"
 	src.reset_view(null)
 	src.unset_machine()
 	src.cameraFollow = null
-
-//Addition by Mord_Sith to define AI's network change ability
-/*
-/mob/living/silicon/pai/proc/pai_network_change()
-	set category = "pAI Commands"
-	set name = "Change Camera Network"
-	src.reset_view(null)
-	src.unset_machine()
-	src.cameraFollow = null
-	var/cameralist[0]
-
-	if(usr.stat == 2)
-		to_chat(usr, "You can't change your camera network because you are dead!")
-		return
-
-	for (var/obj/machinery/camera/C in Cameras)
-		if(!C.status)
-			continue
-		else
-			if(C.network != "CREED" && C.network != "thunder" && C.network != "RD" && C.network != "phoron" && C.network != "Prison") COMPILE ERROR! This will have to be updated as camera.network is no longer a string, but a list instead
-				cameralist[C.network] = C.network
-
-	src.network = input(usr, "Which network would you like to view?") as null|anything in cameralist
-	to_chat(src, "<span class='notice'>Switched to [src.network] camera network.</span>")
-//End of code by Mord_Sith
-*/
-
-
-/*
-// Debug command - Maybe should be added to admin verbs later
-/mob/verb/makePAI(var/turf/t in view())
-	var/obj/item/device/paicard/card = new(t)
-	var/mob/living/silicon/pai/pai = new(card)
-	pai.key = src.key
-	card.setPersonality(pai)
-
-*/
-
-// Procs/code after this point is used to convert the stationary pai item into a
-// mobile pai mob. This also includes handling some of the general shit that can occur
-// to it. Really this deserves its own file, but for the moment it can sit here. ~ Z
 
 /mob/living/silicon/pai/verb/fold_out()
 	set category = "pAI Commands"
@@ -241,10 +190,10 @@
 	last_special = world.time + 100
 
 	//I'm not sure how much of this is necessary, but I would rather avoid issues.
-	if(istype(card.loc,/obj/item/integrated_circuit/manipulation/ai/))
-		to_chat(src, "There is no room to unfold inside \the [card.loc]. You're good and stuck.")
+	if(istype(card.loc,/obj/item/rig_module))
+		to_chat(src, "There is no room to unfold inside this rig module. You're good and stuck.")
 		return 0
-	else if(istype(card.loc,/mob))
+	else if(ismob(card.loc))
 		var/mob/holder = card.loc
 		if(ishuman(holder))
 			var/mob/living/carbon/human/H = holder
@@ -252,12 +201,9 @@
 				if(card in affecting.implants)
 					affecting.take_damage(rand(30,50))
 					affecting.implants -= card
-					H.visible_message("<span class='danger'>\The [src] explodes out of \the [H]'s [affecting.name] in a shower of gore!</span>")
+					H.visible_message(SPAN_DANGER("\The [src] explodes out of \the [H]'s [affecting.name] in shower of gore!"))
 					break
 		holder.drop_from_inventory(card)
-	else if(istype(card.loc,/obj/item/device/pda))
-		var/obj/item/device/pda/holder = card.loc
-		holder.pai = null
 
 	src.client.perspective = EYE_PERSPECTIVE
 	src.client.eye = src
@@ -299,8 +245,8 @@
 		finalized = alert("Look at your sprite. Is this what you wish to use?",,"No","Yes")
 
 	chassis = possible_chassis[choice]
-	verbs -= /mob/living/silicon/pai/proc/choose_chassis
-	verbs += /mob/living/proc/hide
+	remove_verb(src, /mob/living/silicon/pai/proc/choose_chassis)
+	add_verb(src, /mob/living/proc/hide)
 
 /mob/living/silicon/pai/proc/choose_verbs()
 	set category = "pAI Commands"
@@ -314,22 +260,42 @@
 	speak_exclamation = sayverbs[(sayverbs.len>1 ? 2 : sayverbs.len)]
 	speak_query = sayverbs[(sayverbs.len>2 ? 3 : sayverbs.len)]
 
-	verbs -= /mob/living/silicon/pai/proc/choose_verbs
+	remove_verb(src, /mob/living/silicon/pai/proc/choose_verbs)
+
+/mob/living/silicon/pai/lay_down()
+	set name = "Rest"
+	set category = "IC"
+
+	// Pass lying down or getting up to our pet human, if we're in a rig.
+	if(istype(src.loc,/obj/item/device/paicard))
+		resting = 0
+		var/obj/item/rig/rig = src.get_rig()
+		if(istype(rig))
+			rig.force_rest(src)
+	else
+		if(resting)
+			resting = FALSE
+		else if (!resting)
+			resting = TRUE
+		icon_state = resting ? "[chassis]_rest" : "[chassis]"
+		to_chat(src, "<span class='notice'>You are now [resting ? "resting" : "getting up"]</span>")
+
+	canmove = !resting
 
 //Overriding this will stop a number of headaches down the track.
 /mob/living/silicon/pai/attackby(obj/item/W as obj, mob/user as mob)
 	if(W.force)
-		visible_message("<span class='danger'>[user.name] attacks [src] with [W]!</span>")
+		visible_message(SPAN_DANGER("[user.name] attacks [src] with [W]!"))
 		src.adjustBruteLoss(W.force)
 		src.updatehealth()
 	else
-		visible_message("<span class='warning'>[user.name] bonks [src] harmlessly with [W].</span>")
+		visible_message(SPAN_WARNING("[user.name] bonks [src] harmlessly with [W]."))
 	spawn(1)
 		if(stat != 2) close_up()
 	return
 
 /mob/living/silicon/pai/attack_hand(mob/user as mob)
-	visible_message("<span class='danger'>[user.name] boops [src] on the head.</span>")
+	visible_message(SPAN_DANGER("[user.name] boops [src] on the head."))
 	close_up()
 
 //I'm not sure how much of this is necessary, but I would rather avoid issues.
@@ -378,22 +344,14 @@
 	if(!istype(H))
 		return
 	H.icon_state = "pai-[icon_state]"
-	grabber.update_inv_l_hand()
-	grabber.update_inv_r_hand()
+	H.update_wear_icon()
 	return H
 
-/mob/living/silicon/pai/verb/wipe_software()
-	set name = "Wipe Software"
-	set category = "OOC"
-	set desc = "Wipe your software. This is functionally equivalent to cryo or robotic storage, freeing up your job slot."
-
-	// Make sure people don't kill themselves accidentally
-	if(alert("WARNING: This will immediately wipe your software and ghost you, removing your character from the round permanently (similar to cryo and robotic storage). Are you entirely sure you want to do this?",
-					"Wipe Software", "No", "No", "Yes") != "Yes")
+/mob/living/silicon/pai/MouseDrop(atom/over_object)
+	var/mob/living/carbon/H = over_object
+	if(!istype(H) || !Adjacent(H)) return ..()
+	if(H.a_intent == I_HELP)
+		get_scooped(H)
 		return
-
-	close_up()
-	visible_message("<b>[src]</b> fades away from the screen, the pAI device goes silent.")
-	card.removePersonality()
-	clear_client()
-
+	else
+		return ..()

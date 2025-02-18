@@ -1,5 +1,5 @@
 
-/obj/item/device/encryptionkey/
+/obj/item/device/encryptionkey
 	name = "standard encryption key"
 	desc = "An encryption key for a radio headset. Contains cypherkeys."
 	icon = 'icons/obj/radio.dmi'
@@ -7,221 +7,132 @@
 	item_state = ""
 	w_class = ITEM_SIZE_TINY
 	slot_flags = SLOT_EARS
-	var/translate_binary = 0
-	var/translate_hive = 0
-	var/syndie = 0
+	spawn_blacklisted = TRUE
+	description_antag = "This is a special key with acces to restricted channels"
+	matter = list(MATERIAL_STEEL = 0.5, MATERIAL_SILVER = 0.5)
+	var/translate_binary = FALSE
+	var/translate_hive = FALSE
+	var/syndie = FALSE
+	var/merc = FALSE
+	var/pirate = FALSE
 	var/list/channels = list()
 
-/obj/item/device/encryptionkey/attackby(obj/item/W as obj, mob/user as mob)
+/obj/item/device/encryptionkey/attackby(obj/item/W, mob/user)
 
-
-//Base red one.
-/obj/item/device/encryptionkey/red
+/obj/item/device/encryptionkey/syndicate
 	icon_state = "cypherkey"
-	channels = list("Red" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1//Signifies that it de-crypts Syndicate transmissions
+	channels = list("Mercenary" = 1)
+	origin_tech = list(TECH_COVERT = 3)
+	syndie = TRUE//Signifies that it de-crypts Syndicate transmissions
 
-/obj/item/device/encryptionkey/redsl_alpha
+/obj/item/device/encryptionkey/mercenaries
 	icon_state = "cypherkey"
-	channels = list("Red" = 1, "Red Alpha" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
+	channels = list("Mercenary" = 1)
+	merc = TRUE
 
-/obj/item/device/encryptionkey/redsl_bravo
+/obj/item/device/encryptionkey/pirates
 	icon_state = "cypherkey"
-	channels = list("Red" = 1, "Red Bravo" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/redsl_charlie
-	icon_state = "cypherkey"
-	channels = list("Red" = 1, "Red Charlie" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/redsl_delta
-	icon_state = "cypherkey"
-	channels = list("Red" = 1, "Red Delta" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/red_all
-	icon_state = "cypherkey"
-	channels = list("Red" = 1, "Red Alpha" = 1, "Red Bravo" = 1, "Red Charlie" = 1, "Red Delta" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/red_alpha
-	icon_state = "cypherkey"
-	channels = list("Red Alpha" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/red_bravo
-	icon_state = "cypherkey"
-	channels = list("Red Bravo" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1//Signifies that it de-crypts Syndicate transmissions
-
-/obj/item/device/encryptionkey/red_charlie
-	icon_state = "cypherkey"
-	channels = list("Red Charlie" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1//Signifies that it de-crypts Syndicate transmissions
-
-/obj/item/device/encryptionkey/red_delta
-	icon_state = "cypherkey"
-	channels = list("Red Delta" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1//Signifies that it de-crypts Syndicate transmissions
-
-
-//Base blue one.
-/obj/item/device/encryptionkey/blue
-	icon_state = "cypherkey"
-	channels = list("Blue" = 1)
-	origin_tech = list(TECH_ILLEGAL = 2)
-	syndie = 1
-
-/obj/item/device/encryptionkey/bluesl_alpha
-	icon_state = "cypherkey"
-	channels = list("Blue" = 1, "Blue Alpha" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/bluesl_bravo
-	icon_state = "cypherkey"
-	channels = list("Blue" = 1, "Blue Bravo" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/bluesl_charlie
-	icon_state = "cypherkey"
-	channels = list("Blue" = 1, "Blue Charlie" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/bluesl_delta
-	icon_state = "cypherkey"
-	channels = list("Blue" = 1, "Blue Delta" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/blue_all
-	icon_state = "cypherkey"
-	channels = list("Blue" = 1, "Blue Alpha" = 1, "Blue Bravo" = 1, "Blue Charlie" = 1, "Blue Delta" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/blue_alpha
-	icon_state = "cypherkey"
-	channels = list("Blue Alpha" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/blue_bravo
-	icon_state = "cypherkey"
-	channels = list("Blue Bravo" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/blue_charlie
-	icon_state = "cypherkey"
-	channels = list("Blue Charlie" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
-
-/obj/item/device/encryptionkey/blue_delta
-	icon_state = "cypherkey"
-	channels = list("Blue Delta" = 1)
-	origin_tech = list(TECH_ILLEGAL = 3)
-	syndie = 1
+	channels = list("Pirate" = 1)
+	pirate = TRUE
 
 /obj/item/device/encryptionkey/binary
 	icon_state = "cypherkey"
-	translate_binary = 1
-	origin_tech = list(TECH_ILLEGAL = 3)
+	translate_binary = TRUE
+	origin_tech = list(TECH_COVERT = 3)
 
 /obj/item/device/encryptionkey/headset_sec
-	name = "security radio encryption key"
-	icon_state = "sec_cypherkey"
-	channels = list("Security" = 1)
-
-
-/obj/item/device/encryptionkey/headset_red
-	name = "red radio encryption key"
+	name = "ironhammer radio encryption key"
 	icon_state = "sec_cypherkey"
 	channels = list("Security" = 1)
 
 /obj/item/device/encryptionkey/headset_eng
-	name = "engineering radio encryption key"
+	name = "technomancer radio encryption key"
 	icon_state = "eng_cypherkey"
 	channels = list("Engineering" = 1)
 
 /obj/item/device/encryptionkey/headset_rob
-	name = "robotics radio encryption key"
+	name = "moebius robotics radio encryption key"
 	icon_state = "rob_cypherkey"
 	channels = list("Engineering" = 1, "Science" = 1)
 
 /obj/item/device/encryptionkey/headset_med
-	name = "medical radio encryption key"
+	name = "moebius medical radio encryption key"
 	icon_state = "med_cypherkey"
 	channels = list("Medical" = 1)
 
+/obj/item/device/encryptionkey/headset_church
+	name = "neotheology radio encryption key"
+	icon_state = "nt_cypherkey"
+	channels = list("NT Voice" = 1)
+
 /obj/item/device/encryptionkey/headset_sci
-	name = "science radio encryption key"
+	name = "moebius science radio encryption key"
 	icon_state = "sci_cypherkey"
 	channels = list("Science" = 1)
 
-/obj/item/device/encryptionkey/headset_medsci
-	name = "medical research radio encryption key"
-	icon_state = "medsci_cypherkey"
-	channels = list("Medical" = 1, "Science" = 1)
+/obj/item/device/encryptionkey/headset_moebius
+	name = "Moebius laboratories encryption key"
+	icon_state = "sci_cypherkey"
+	channels = list("Science" = 1, "Medical" = 1)
 
 /obj/item/device/encryptionkey/headset_com
-	name = "command radio encryption key"
+	name = "Eris command radio encryption key"
 	icon_state = "com_cypherkey"
 	channels = list("Command" = 1)
 
 /obj/item/device/encryptionkey/heads/captain
-	name = "captain's encryption key"
+	name = "Eris captain's encryption key"
 	icon_state = "cap_cypherkey"
-	channels = list("Command" = 1, "Security" = 1, "Engineering" = 0, "Science" = 0, "Medical" = 0, "Supply" = 0, "Service" = 0)
+	channels = list("Command" = 1, "Security" = 1, "Engineering" = 1, "NT Voice" = 1, "Science" = 1, "Medical" = 1, "Supply" = 1, "Service" = 1)
 
 /obj/item/device/encryptionkey/heads/ai_integrated
 	name = "ai integrated encryption key"
-	desc = "Integrated encryption key."
+	desc = "Integrated encryption key"
 	icon_state = "cap_cypherkey"
-	channels = list("Command" = 1, "Security" = 1, "Engineering" = 1, "Science" = 1, "Medical" = 1, "Supply" = 1, "Service" = 1, "AI Private" = 1)
+	channels = list("Command" = 1, "Security" = 1, "Engineering" = 1, "NT Voice" = 1, "Science" = 1, "Medical" = 1, "Supply" = 1, "Service" = 1, "AI Private" = 1)
 
 /obj/item/device/encryptionkey/heads/rd
-	name = "research director's encryption key"
+	name = "expedition overseer's encryption key"
 	icon_state = "rd_cypherkey"
 	channels = list("Science" = 1, "Command" = 1)
 
+/obj/item/device/encryptionkey/heads/moebius
+	name = "Moebius command encryption key"
+	icon_state = "rd_cypherkey"
+	channels = list("Science" = 1, "Medical" = 1, "Command" = 1)
+
 /obj/item/device/encryptionkey/heads/hos
-	name = "head of security's encryption key"
+	name = "Ironhammer commander's encryption key"
 	icon_state = "hos_cypherkey"
 	channels = list("Security" = 1, "Command" = 1)
 
 /obj/item/device/encryptionkey/heads/ce
-	name = "chief engineer's encryption key"
+	name = "exultant's encryption key"
 	icon_state = "ce_cypherkey"
 	channels = list("Engineering" = 1, "Command" = 1)
 
 /obj/item/device/encryptionkey/heads/cmo
-	name = "chief medical officer's encryption key"
+	name = "Biolab officer's encryption key"
 	icon_state = "cmo_cypherkey"
 	channels = list("Medical" = 1, "Command" = 1)
 
 /obj/item/device/encryptionkey/heads/hop
-	name = "head of personnel's encryption key"
+	name = "First Officer's encryption key"
 	icon_state = "hop_cypherkey"
-	channels = list("Supply" = 1, "Service" = 1, "Command" = 1, "Security" = 0)
+	channels = list("Command" = 1, "Security" = 1, "Engineering" = 1, "NT Voice" = 1, "Science" = 1, "Medical" = 1, "Supply" = 1, "Service" = 1)
+
+/obj/item/device/encryptionkey/heads/merchant
+	name = "Asters Merchant radio encryption key"
+	icon_state = "qm_cypherkey"
+	channels = list("Supply" = 1, "Command" = 1)
+
+/obj/item/device/encryptionkey/heads/preacher
+	name = "NeoTheology Preacher radio encryption key"
+	icon_state = "preach_cypherkey"
+	channels = list("NT Voice" = 1, "Command" = 1)
 
 /obj/item/device/encryptionkey/headset_cargo
-	name = "supply radio encryption key"
+	name = "Asters Guild radio encryption key"
 	icon_state = "cargo_cypherkey"
 	channels = list("Supply" = 1)
 
@@ -230,21 +141,13 @@
 	icon_state = "srv_cypherkey"
 	channels = list("Service" = 1)
 
-/obj/item/device/encryptionkey/headset_inquisition
-	name = "inquisition radio key"
-	icon_state = "hos_cypherkey"
-	channels = list("Inquisition" = 1)
-
-/obj/item/device/encryptionkey/ert
-	name = "\improper ERT radio encryption key"
-	channels = list("Response Team" = 1, "Science" = 1, "Command" = 1, "Medical" = 1, "Engineering" = 1, "Security" = 1, "Supply" = 1, "Service" = 1)
-
-/obj/item/device/encryptionkey/specops //for events
-	name = "special operations radio encryption key"
-	icon_state = "bin_cypherkey"
-	channels = list("Special Ops" = 1)
-	origin_tech = list(TECH_ILLEGAL = 2)
-
 /obj/item/device/encryptionkey/entertainment
 	name = "entertainment radio key"
 	channels = list("Entertainment" = 1)
+
+//addition to /obj/item/card/id/all_access
+/obj/item/device/encryptionkey/heads/admin
+	name = "Admin encryption key"
+	desc = "Full powers encryption key"
+	icon_state = "cap_cypherkey"
+	channels = list("Command" = 1, "Security" = 1, "Engineering" = 1, "NT Voice" = 1, "Science" = 1, "Medical" = 1, "Supply" = 1, "Service" = 1, "AI Private" = 1, "Mercenary" = 1)

@@ -26,12 +26,12 @@
 
 // Actually decay the turf.
 /datum/universal_state/proc/DecayTurf(var/turf/T)
-	if(istype(T,/turf/simulated/wall))
-		var/turf/simulated/wall/W=T
+	if(istype(T,/turf/wall))
+		var/turf/wall/W=T
 		W.melt()
 		return
-	if(istype(T,/turf/simulated/floor))
-		var/turf/simulated/floor/F=T
+	if(istype(T,/turf/floor))
+		var/turf/floor/F=T
 		// Burnt?
 		if(!F.burnt)
 			F.burn_tile()
@@ -63,18 +63,9 @@
 /datum/universal_state/proc/OverlayAndAmbientSet()
 	return
 
-/datum/universal_state/proc/OnPlayerLatejoin(var/mob/living/M)
-	return
-
-/datum/universal_state/proc/OnTouchMapEdge(var/atom/A)
-	return TRUE //return FALSE to cancel map edge handling
-
-/proc/SetUniversalState(var/newstate,var/on_exit=1, var/on_enter=1, list/arguments=null)
+/proc/SetUniversalState(var/newstate,var/on_exit=1, var/on_enter=1)
 	if(on_exit)
-		GLOB.universe.OnExit()
-	if(arguments)
-		GLOB.universe = new newstate(arglist(arguments))
-	else
-		GLOB.universe = new newstate
+		universe.OnExit()
+	universe = new newstate
 	if(on_enter)
-		GLOB.universe.OnEnter()
+		universe.OnEnter()

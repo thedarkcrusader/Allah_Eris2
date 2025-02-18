@@ -5,7 +5,7 @@
 #define O2STANDARD 0.21 // Percentage.
 #define N2STANDARD 0.79
 
-#define MOLES_PHORON_VISIBLE 0.7 // Moles in a standard cell after which phoron is visible.
+#define MOLES_PLASMA_VISIBLE 0.7 // Moles in a standard cell after which plasma is visible.
 #define MOLES_O2STANDARD     (MOLES_CELLSTANDARD * O2STANDARD) // O2 standard value (21%)
 #define MOLES_N2STANDARD     (MOLES_CELLSTANDARD * N2STANDARD) // N2 standard value (79%)
 #define MOLES_O2ATMOS (MOLES_O2STANDARD*50)
@@ -15,8 +15,10 @@
 #define MIN_TOXIN_DAMAGE 1
 #define MAX_TOXIN_DAMAGE 10
 
-#define STD_BREATH_VOLUME       12 // Liters in a normal breath.
-
+#define BREATH_VOLUME       0.5 // Liters in a normal breath.
+#define BREATH_MOLES        (ONE_ATMOSPHERE * BREATH_VOLUME / (T20C * R_IDEAL_GAS_EQUATION)) // Amount of air to take a from a tile
+#define BREATH_PERCENTAGE   (BREATH_VOLUME / CELL_VOLUME)                                    // Amount of air needed before pass out/suffocation commences.
+#define HUMAN_NEEDED_OXYGEN (MOLES_CELLSTANDARD * BREATH_PERCENTAGE * 0.16)
 #define HUMAN_HEAT_CAPACITY 280000 //J/K For 80kg person
 
 #define SOUND_MINIMUM_PRESSURE 10
@@ -39,8 +41,8 @@
 
 // Must be between 0 and 1. Values closer to 1 equalize temperature faster. Should not exceed 0.4, else strange heat flow occurs.
 #define  FLOOR_HEAT_TRANSFER_COEFFICIENT 0.4
-#define   WALL_HEAT_TRANSFER_COEFFICIENT 0.0
-#define   DOOR_HEAT_TRANSFER_COEFFICIENT 0.0
+#define   WALL_HEAT_TRANSFER_COEFFICIENT 0
+#define   DOOR_HEAT_TRANSFER_COEFFICIENT 0
 #define  SPACE_HEAT_TRANSFER_COEFFICIENT 0.2 // A hack to partly simulate radiative heat.
 #define   OPEN_HEAT_TRANSFER_COEFFICIENT 0.4
 #define WINDOW_HEAT_TRANSFER_COEFFICIENT 0.1 // A hack for now.
@@ -49,9 +51,9 @@
 #define CARBON_LIFEFORM_FIRE_RESISTANCE (T0C + 200)
 #define CARBON_LIFEFORM_FIRE_DAMAGE     4
 
-// Phoron fire properties.
-#define PHORON_MINIMUM_BURN_TEMPERATURE    (T0C +  126) //400 K - autoignite temperature in tanks and canisters - enclosed environments I guess
-#define PHORON_FLASHPOINT                  (T0C +  246) //519 K - autoignite temperature in air if that ever gets implemented.
+// Plasma fire properties.
+#define PLASMA_MINIMUM_BURN_TEMPERATURE    (T0C +  126) //400 K - autoignite temperature in tanks and canisters - enclosed environments I guess
+#define PLASMA_FLASHPOINT                  (T0C +  246) //519 K - autoignite temperature in air if that ever gets implemented.
 
 //These control the mole ratio of oxidizer and fuel used in the combustion reaction
 #define FIRE_REACTION_OXIDIZER_AMOUNT	3 //should be greater than the fuel amount if fires are going to spread much
@@ -73,7 +75,6 @@
 #define XGM_GAS_FUEL        1
 #define XGM_GAS_OXIDIZER    2
 #define XGM_GAS_CONTAMINANT 4
-#define XGM_GAS_FUSION_FUEL 8
 
 #define TANK_LEAK_PRESSURE     (30.*ONE_ATMOSPHERE) // Tank starts leaking.
 #define TANK_RUPTURE_PRESSURE  (40.*ONE_ATMOSPHERE) // Tank spills all contents into atmosphere.
@@ -91,19 +92,39 @@
 // Defines how much of certain gas do the Atmospherics tanks start with. Values are in kpa per tile (assuming 20C)
 #define ATMOSTANK_NITROGEN      90000 // A lot of N2 is needed to produce air mix, that's why we keep 90MPa of it
 #define ATMOSTANK_OXYGEN        40000 // O2 is also important for airmix, but not as much as N2 as it's only 21% of it.
-#define ATMOSTANK_CO2           25000 // CO2, PH, and H2 are not critically important for station, only for toxins and alternative coolants, no need to store a lot of those.
-#define ATMOSTANK_PHORON        25000
-#define ATMOSTANK_PHORON_FUEL	15000
-#define ATMOSTANK_HYDROGEN      25000
-#define ATMOSTANK_HYDROGEN_FUEL 25000
+#define ATMOSTANK_CO2           25000 // CO2 and PH are not critically important for station, only for toxins and alternative coolants, no need to store a lot of those.
+#define ATMOSTANK_PLASMA        25000
 #define ATMOSTANK_NITROUSOXIDE  10000 // N2O doesn't have a real useful use, i guess it's on station just to allow refilling of sec's riot control canisters?
 
-#define MAX_PUMP_PRESSURE		15000	// Maximal pressure setting for pumps and vents
-#define MAX_OMNI_PRESSURE		7500	// Maximal output(s) pressure for omni devices (filters/mixers)
+#define R_IDEAL_GAS_EQUATION       8.31    // kPa*L/(K*mol).
+#define ONE_ATMOSPHERE             101.325 // kPa.
+#define IDEAL_GAS_ENTROPY_CONSTANT 1164    // (mol^3 * s^3) / (kg^3 * L).
 
-//Used by turbine and TEG energy generation.
-#define ADIABATIC_EXPONENT 0.667 //Actually adiabatic exponent - 1.
+// Radiation constants.
+#define STEFAN_BOLTZMANN_CONSTANT    5.6704e-8 // W/(m^2*K^4).
+#define COSMIC_RADIATION_TEMPERATURE 3.15      // K.
+#define AVERAGE_SOLAR_RADIATION      200       // W/m^2. Kind of arbitrary. Really this should depend on the sun position much like solars.
+#define RADIATOR_OPTIMUM_PRESSURE    3771      // kPa at 20 C. This should be higher as gases aren't great conductors until they are dense. Used the critical pressure for air.
+#define GAS_CRITICAL_TEMPERATURE     132.65    // K. The critical point temperature for air.
 
-//Used by air tanks.
-#define TANK_MAX_RELEASE_PRESSURE (3*ONE_ATMOSPHERE)
-#define TANK_DEFAULT_RELEASE_PRESSURE ONE_ATMOSPHERE
+#define RADIATOR_EXPOSED_SURFACE_AREA_RATIO 0.04 // (3 cm + 100 cm * sin(3deg))/(2*(3+100 cm)). Unitless ratio.
+#define HUMAN_EXPOSED_SURFACE_AREA          5.2 //m^2, surface area of 1.7m (H) x 0.46m (D) cylinder
+
+#define T0C  273.15 //    0 degrees celcius
+#define T20C 293.15 //   20 degrees celcius
+#define TCMB 2.7    // -270.3 degrees celcius
+
+GLOBAL_LIST_INIT(pipe_paint_colors, sortList(list(
+		"amethyst" = rgb(130,43,255), //supplymain
+		"blue" = rgb(0,0,255),
+		"brown" = rgb(178,100,56),
+		"cyan" = rgb(0,255,249),
+		"dark" = rgb(69,69,69),
+		"green" = rgb(30,255,0),
+		"grey" = rgb(255,255,255),
+		"orange" = rgb(255,129,25),
+		"purple" = rgb(128,0,182),
+		"red" = rgb(255,0,0),
+		"violet" = rgb(64,0,128),
+		"yellow" = rgb(255,198,0)
+)))

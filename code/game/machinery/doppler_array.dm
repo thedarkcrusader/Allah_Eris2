@@ -3,7 +3,10 @@ var/list/doppler_arrays = list()
 /obj/machinery/doppler_array
 	name = "tachyon-doppler array"
 	desc = "A highly precise directional sensor array which measures the release of quants from decaying tachyons. The doppler shifting of the mirror-image formed by these quants can reveal the size, location and temporal affects of energetic disturbances within a large radius ahead of the array."
-
+	icon = 'icons/obj/machines/research.dmi'
+	icon_state = "tdoppler"
+	density = TRUE
+	anchored = TRUE
 
 /obj/machinery/doppler_array/New()
 	..()
@@ -11,9 +14,9 @@ var/list/doppler_arrays = list()
 
 /obj/machinery/doppler_array/Destroy()
 	doppler_arrays -= src
-	..()
+	. = ..()
 
-/obj/machinery/doppler_array/proc/sense_explosion(var/x0,var/y0,var/z0,var/devastation_range,var/heavy_impact_range,var/light_impact_range,var/took)
+/obj/machinery/doppler_array/proc/sense_explosion(var/x0,var/y0,var/z0,var/devastation_range,var/heavy_impact_range,var/light_impact_range,var/singe_impact_range,var/took)
 	if(stat & NOPOWER)	return
 	if(z != z0)			return
 
@@ -34,15 +37,18 @@ var/list/doppler_arrays = list()
 	if(distance > 100)		return
 	if(!(direct & dir))	return
 
-	var/message = "Explosive disturbance detected - Epicenter at: grid ([x0],[y0]). Epicenter radius: [devastation_range]. Outer radius: [heavy_impact_range]. Shockwave radius: [light_impact_range]. Temporal displacement of tachyons: [took]seconds."
+	var/message = "Explosive disturbance detected - Epicenter at: grid ([x0],[y0]). Epicenter radius: [devastation_range]. Outer radius: [heavy_impact_range] to [light_impact_range]. Shockwave radius: [singe_impact_range]. Temporal displacement of tachyons: [took] seconds."
 
 	for(var/mob/O in hearers(src, null))
 		O.show_message("<span class='game say'><span class='name'>[src]</span> states coldly, \"[message]\"</span>",2)
 
-/obj/machinery/doppler_array/update_icon()
+
+/obj/machinery/doppler_array/power_change()
+	..()
 	if(stat & BROKEN)
 		icon_state = "[initial(icon_state)]-broken"
-	else if( !(stat & NOPOWER) )
-		icon_state = initial(icon_state)
 	else
-		icon_state = "[initial(icon_state)]-off"
+		if( !(stat & NOPOWER) )
+			icon_state = initial(icon_state)
+		else
+			icon_state = "[initial(icon_state)]-off"

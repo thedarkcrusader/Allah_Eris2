@@ -1,20 +1,6 @@
-/proc/Christmas_Game_Start()
-	for(var/obj/structure/flora/tree/pine/xmas in world)
-		if(isNotStationLevel(xmas.z))	continue
-		for(var/turf/simulated/floor/T in orange(1,xmas))
-			for(var/i=1,i<=rand(1,5),i++)
-				new /obj/item/a_gift(T)
-	//for(var/mob/living/simple_animal/corgi/Ian/Ian in mob_list)
-	//	Ian.place_on_head(new /obj/item/clothing/head/helmet/space/santahat(Ian))
-
-/proc/ChristmasEvent()
-	for(var/obj/structure/flora/tree/pine/xmas in world)
-		var/mob/living/simple_animal/hostile/tree/evil_tree = new /mob/living/simple_animal/hostile/tree(xmas.loc)
-		evil_tree.icon_state = xmas.icon_state
-		evil_tree.icon_living = evil_tree.icon_state
-		evil_tree.icon_dead = evil_tree.icon_state
-		evil_tree.icon_gib = evil_tree.icon_state
-		qdel(xmas)
+/obj/item/toy
+	price_tag = 5
+	bad_type = /obj/item/toy
 
 /obj/item/toy/xmas_cracker
 	name = "xmas cracker"
@@ -27,10 +13,10 @@
 	..()
 
 /obj/item/toy/xmas_cracker/attack(mob/target, mob/user)
-	if( !cracked && istype(target,/mob/living/carbon/human) && (target.stat == CONSCIOUS) && !target.get_active_hand() )
-		target.visible_message("<span class='notice'>[user] and [target] pop \an [src]! *pop*</span>", "<span class='notice'>You pull \an [src] with [target]! *pop*</span>", "<span class='notice'>You hear a *pop*.</span>")
+	if( !cracked && ishuman(target) && (target.stat == CONSCIOUS) && !target.get_active_hand() )
+		target.visible_message(SPAN_NOTICE("[user] and [target] pop \an [src]! *pop*"), SPAN_NOTICE("You pull \an [src] with [target]! *pop*"), SPAN_NOTICE("You hear a *pop*."))
 		var/obj/item/paper/Joke = new /obj/item/paper(user.loc)
-		Joke.SetName("[pick("awful","terrible","unfunny")] joke")
+		Joke.name = "[pick("awful","terrible","unfunny")] joke"
 		Joke.info = pick("What did one snowman say to the other?\n\n<i>'Is it me or can you smell carrots?'</i>",
 			"Why couldn't the snowman get laid?\n\n<i>He was frigid!</i>",
 			"Where are santa's helpers educated?\n\n<i>Nowhere, they're ELF-taught.</i>",
@@ -40,7 +26,7 @@
 			"What do you get from eating tree decorations?\n\n<i>Tinsilitis!</i>",
 			"What do snowmen wear on their heads?\n\n<i>Ice caps!</i>",
 			"Why is Christmas just like life on ss13?\n\n<i>You do all the work and the fat guy gets all the credit.</i>",
-			"Why doesn�t Santa have any children?\n\n<i>Because he only comes down the chimney.</i>")
+			"Why doesn't Santa have any children?\n\n<i>Because he only comes down the chimney.</i>")
 		new /obj/item/clothing/head/festive(target.loc)
 		user.update_icons()
 		cracked = 1
@@ -59,5 +45,4 @@
 	desc = "A crappy paper hat that you are REQUIRED to wear."
 	flags_inv = 0
 	body_parts_covered = 0
-	armor = list(melee = 0, bullet = 0, laser = 0,energy = 0, bomb = 0, bio = 0, rad = 0)
 

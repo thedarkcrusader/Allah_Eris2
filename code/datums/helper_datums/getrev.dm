@@ -24,23 +24,21 @@ var/global/datum/getrev/revdata = new()
 					date = unix2date(unix_time)
 			break
 
-	world.log << "Running revision:"
-	world.log << branch
-	world.log << date
-	world.log << revision
+	log_world("Running revision:")
+	log_world(branch)
+	log_world(date)
+	log_world(revision)
 
-/client/verb/showrevinfo()
+client/verb/showrevinfo()
 	set category = "OOC"
 	set name = "Show Server Revision"
 	set desc = "Check the current server code revision"
 
-	to_chat(src, "<b>Client Version:</b> [byond_version]")
 	if(revdata.revision)
-		var/server_revision = revdata.revision
+		to_chat(src, "<b>Server revision:</b> [revdata.branch] - [revdata.date]")
 		if(config.githuburl)
-			server_revision = "<a href='[config.githuburl]/commit/[server_revision]'>[server_revision]</a>"
-		to_chat(src, "<b>Server Revision:</b> [server_revision] - [revdata.branch] - [revdata.date]")
+			to_chat(src, "<a href='[config.githuburl]/commit/[revdata.revision]'>[revdata.revision]</a>")
+		else
+			to_chat(src, revdata.revision)
 	else
-		to_chat(src, "<b>Server Revision:</b> Revision Unknown")
-	to_chat(src, "Game ID: <b>[game_id]</b>")
-	to_chat(src, "Current map: [GLOB.using_map.full_name]")
+		to_chat(src, "Revision unknown")

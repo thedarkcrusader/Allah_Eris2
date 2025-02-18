@@ -21,6 +21,10 @@
 /datum/computer_file/program/aidiag/Topic(href, href_list)
 	if(..())
 		return 1
+
+	if(!usr.stat_check(STAT_COG, STAT_LEVEL_ADEPT))
+		return 1
+
 	var/mob/living/silicon/ai/A = get_ai()
 	if(!A)
 		return 0
@@ -45,7 +49,7 @@
 		to_chat(A, "<span class='danger'>Non-core laws reset.</span>")
 		return 1
 	if(href_list["PRG_uploadDefault"])
-		A.laws = new GLOB.using_map.default_law_type
+		A.laws = new maps_data.default_law_type
 		to_chat(A, "<span class='danger'>All laws purged. Default lawset uploaded.</span>")
 		return 1
 	if(href_list["PRG_addCustomSuppliedLaw"])
@@ -83,8 +87,15 @@
 /datum/nano_module/program/computer_aidiag
 	name = "AI Maintenance Utility"
 
-/datum/nano_module/program/computer_aidiag/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/topic_state/state = GLOB.default_state)
+/datum/nano_module/program/computer_aidiag/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state = GLOB.default_state)
 	var/list/data = host.initial_data()
+
+	data += "skill_fail"
+	if(!user.stat_check(STAT_COG, STAT_LEVEL_ADEPT))
+		var/datum/extension/fake_data/fake_data = get_or_create_extension(src, /datum/extension/fake_data, /datum/extension/fake_data, 25)
+		data["skill_fail"] = fake_data.update_and_return_data()
+	data["terminal"] = !!program
+
 	var/mob/living/silicon/ai/A
 	// A shortcut for getting the AI stored inside the computer. The program already does necessary checks.
 	if(program && istype(program, /datum/computer_file/program/aidiag))
@@ -109,7 +120,7 @@
 
 		data["ai_laws"] = all_laws
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
 		ui = new(user, src, ui_key, "aidiag.tmpl", "AI Maintenance Utility", 600, 400, state = state)
 		if(host.update_layout())

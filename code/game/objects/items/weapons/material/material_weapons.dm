@@ -8,17 +8,19 @@
 	throw_speed = 3
 	throw_range = 7
 	w_class = ITEM_SIZE_NORMAL
-	sharp = 0
-	edge = 0
-
+	sharp = FALSE
+	edge = FALSE
+	bad_type = /obj/item/material
+	spawn_tags = SPAWN_TAG_WEAPON
+	icon = 'icons/obj/weapons.dmi'
 	var/applies_material_colour = 1
 	var/unbreakable
-	var/force_divisor = 0.5
+	var/force_divisor = 1
 	var/thrown_force_divisor = 0.5
-	var/default_material = DEFAULT_WALL_MATERIAL
+	var/default_material = MATERIAL_STEEL
 	var/material/material
 	var/drops_debris = 1
-	var/broken_icon = null
+	var/furniture_icon  //icon states for non-material colorable overlay, i.e. handles
 
 /obj/item/material/New(var/newloc, var/material_key)
 	..(newloc)
@@ -33,37 +35,32 @@
 	if(matter.len)
 		for(var/material_type in matter)
 			if(!isnull(matter[material_type]))
-				matter[material_type] *= force_divisor // May require a new var instead.
+				matter[material_type] = round(max(1, matter[material_type] * force_divisor)) // current system uses rounded values, so no less than 1.
 
 /obj/item/material/get_material()
 	return material
 
 /obj/item/material/proc/update_force()
 	if(edge || sharp)
-		force = material.get_edge_damage()
+		force = material.hardness
 	else
 		force = material.get_blunt_damage()
-	force = round(force*force_divisor)
-	throwforce = round(material.get_blunt_damage()*thrown_force_divisor)
+	force = min(25, round(force*force_divisor))
+	throwforce = min(15, round(material.get_blunt_damage()*thrown_force_divisor))
 	//spawn(1)
-//		log_debug("[src] has force [force] and throwforce [throwforce] when made from default material [material.name]")
-
+	//	world << "[src] has force [force] and throwforce [throwforce] when made from default material [material.name]"
 
 /obj/item/material/proc/set_material(var/new_material)
 	material = get_material_by_name(new_material)
 	if(!material)
 		qdel(src)
 	else
-		SetName("[material.display_name] [initial(name)]")
+		name = "[material.display_name] [initial(name)]"
 		health = round(material.integrity/10)
 		if(applies_material_colour)
 			color = material.icon_colour
 		if(material.products_need_process())
 			START_PROCESSING(SSobj, src)
-		if(material.conductive)
-			obj_flags |= OBJ_FLAG_CONDUCTIBLE
-		else
-			obj_flags &= (~OBJ_FLAG_CONDUCTIBLE)
 		update_force()
 
 /obj/item/material/Destroy()
@@ -71,13 +68,12 @@
 	. = ..()
 
 /obj/item/material/apply_hit_effect()
-	. = ..()
+	..()
 	if(!unbreakable)
-		if(!prob(material.hardness))
-			if(material.is_brittle())
-				health = 0
-			else
-				health--
+		if(material.is_brittle())
+			health = 0
+		else if(!prob(material.hardness))
+			health--
 		check_health()
 
 /obj/item/material/proc/check_health(var/consumed)
@@ -86,29 +82,20 @@
 
 /obj/item/material/proc/shatter(var/consumed)
 	var/turf/T = get_turf(src)
-	if(broken_icon)
-		playsound(src, "shatter", 70, 1)
-		T.visible_message("<span class='danger'>\The [src] breaks!</span>")
-		icon = 'icons/obj/items/broken_weapons.dmi'
-		icon_state = broken_icon
-		force = 0
-
-
-	else
-		T.visible_message("<span class='danger'>\The [src] [material.destruction_desc]!</span>")
-		if(istype(loc, /mob/living))
-			var/mob/living/M = loc
-			M.drop_from_inventory(src)
-		playsound(src, "shatter", 70, 1)
-		if(!consumed && drops_debris) material.place_shard(T)
-		qdel(src)
+	T.visible_message(SPAN_DANGER("\The [src] [material.destruction_desc]!"))
+	if(isliving(loc))
+		var/mob/living/M = loc
+		M.drop_from_inventory(src)
+	playsound(src, "shatter", 70, 1)
+	if(!consumed && drops_debris) material.place_shard(T)
+	qdel(src)
 /*
 Commenting this out pending rebalancing of radiation based on small objects.
-/obj/item/material/process()
+/obj/item/material/Process()
 	if(!material.radioactivity)
 		return
 	for(var/mob/living/L in range(1,src))
-		L.apply_effect(round(material.radioactivity/30),IRRADIATE, blocked = L.getarmor(null, "rad"))
+		L.apply_effect(round(material.radioactivity/30),IRRADIATE,0)
 */
 
 /*
@@ -122,8 +109,8 @@ Commenting this out pending rebalancing of radiation based on small objects.
 	check_health(1)
 
 /obj/item/material/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W,/obj/item/weldingtool))
-		var/obj/item/weldingtool/WT = W
+	if(istype(W,/obj/item/tool/weldingtool))
+		var/obj/item/tool/weldingtool/WT = W
 		if(material.ignition_point && WT.remove_fuel(0, user))
 			TemperatureAct(150)
 	else

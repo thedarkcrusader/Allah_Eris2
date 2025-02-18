@@ -2,23 +2,24 @@
 /proc/get_camera_access(var/network)
 	if(!network)
 		return 0
-	. = GLOB.using_map.get_network_access(network)
-	if(.)
-		return
-
 	switch(network)
 		if(NETWORK_ENGINEERING, NETWORK_ALARM_ATMOS, NETWORK_ALARM_CAMERA, NETWORK_ALARM_FIRE, NETWORK_ALARM_POWER)
 			return access_engine
-		if(NETWORK_CRESCENT, NETWORK_ERT)
-			return access_cent_specops
-		if(NETWORK_MEDICAL)
-			return access_medical
+		if(NETWORK_MEDICAL,NETWORK_RESEARCH)
+			return access_moebius
 		if(NETWORK_MINE)
 			return access_mailsorting // Cargo office - all cargo staff should have access here.
-		if(NETWORK_RESEARCH)
-			return access_research
+		if(NETWORK_ROBOTS)
+			return access_rd
+		if(NETWORK_PRISON)
+			return access_security
+		if(NETWORK_ENGINEERING,NETWORK_ENGINE)
+			return access_engine
+		if(NETWORK_COMMAND)
+			return access_heads
 		if(NETWORK_THUNDER)
 			return 0
+
 
 	return access_security // Default for all other networks
 
@@ -33,20 +34,21 @@
 	size = 12
 	available_on_ntnet = 1
 	requires_ntnet = 1
+	usage_flags = PROGRAM_ALL & ~PROGRAM_PDA
 
 /datum/nano_module/camera_monitor
 	name = "Camera Monitoring program"
 	var/obj/machinery/camera/current_camera = null
 	var/current_network = null
 
-/datum/nano_module/camera_monitor/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1, state = GLOB.default_state)
+/datum/nano_module/camera_monitor/nano_ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = NANOUI_FOCUS, state = GLOB.default_state)
 	var/list/data = host.initial_data()
 
 	data["current_camera"] = current_camera ? current_camera.nano_structure() : null
 	data["current_network"] = current_network
 
 	var/list/all_networks[0]
-	for(var/network in GLOB.using_map.station_networks)
+	for(var/network in station_networks)
 		all_networks.Add(list(list(
 							"tag" = network,
 							"has_access" = can_access_network(user, get_camera_access(network))
@@ -55,11 +57,11 @@
 	all_networks = modify_networks_list(all_networks)
 
 	data["networks"] = all_networks
-
+	data["map_scalar"] = MAP_SCALAR
 	if(current_network)
 		data["cameras"] = camera_repository.cameras_in_network(current_network)
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
 		ui = new(user, src, ui_key, "sec_camera.tmpl", "Camera Monitoring", 900, 800, state = state)
 		// ui.auto_update_layout = 1 // Disabled as with suit sensors monitor - breaks the UI map. Re-enable once it's fixed somehow.
@@ -169,7 +171,7 @@
 // The ERT variant has access to ERT and crescent cams, but still checks for accesses. ERT members should be able to use it.
 /datum/nano_module/camera_monitor/ert/modify_networks_list(var/list/networks)
 	..()
-	networks.Add(list(list("tag" = NETWORK_ERT, "has_access" = 1)))
+	//networks.Add(list(list("tag" = NETWORK_ERT, "has_access" = 1)))	//TODO: replace this
 	networks.Add(list(list("tag" = NETWORK_CRESCENT, "has_access" = 1)))
 	return networks
 

@@ -3,8 +3,8 @@
 	desc = "A computer used to control the stationary scrubbers and pumps in the area."
 	icon_keyboard = "atmos_key"
 	icon_screen = "area_atmos"
-	light_color = "#e6ffff"
-	circuit = /obj/item/circuitboard/area_atmos
+	light_color = COLOR_LIGHTING_CYAN_MACHINERY
+	circuit = /obj/item/electronics/circuitboard/area_atmos
 
 	var/list/connectedscrubbers = new()
 	var/status = ""
@@ -26,41 +26,42 @@
 	attack_hand(var/mob/user as mob)
 		if(..(user))
 			return
+		src.add_fingerprint(usr)
 		var/dat = {"
 		<html>
 			<head>
 				<style type="text/css">
 					a.green:link
 					{
-						color:#00cc00;
+						color:#00CC00;
 					}
 					a.green:visited
 					{
-						color:#00cc00;
+						color:#00CC00;
 					}
 					a.green:hover
 					{
-						color:#00cc00;
+						color:#00CC00;
 					}
 					a.green:active
 					{
-						color:#00cc00;
+						color:#00CC00;
 					}
 					a.red:link
 					{
-						color:#ff0000;
+						color:#FF0000;
 					}
 					a.red:visited
 					{
-						color:#ff0000;
+						color:#FF0000;
 					}
 					a.red:hover
 					{
-						color:#ff0000;
+						color:#FF0000;
 					}
 					a.red:active
 					{
-						color:#ff0000;
+						color:#FF0000;
 					}
 				</style>
 			</head>
@@ -96,6 +97,7 @@
 		if(..())
 			return
 		usr.set_machine(src)
+		src.add_fingerprint(usr)
 
 
 		if(href_list["scan"])

@@ -1,18 +1,17 @@
 //CORTICAL BORER ORGANS.
+
 /obj/item/organ/internal/borer
 	name = "cortical borer"
 	icon = 'icons/obj/objects.dmi'
 	icon_state = "borer"
 	organ_tag = BP_BRAIN
 	desc = "A disgusting space slug."
-	parent_organ = BP_HEAD
+	parent_organ_base = BP_HEAD
 	vital = 1
 
 /obj/item/organ/internal/borer/Process()
-
 	// Borer husks regenerate health, feel no pain, and are resistant to stuns and brainloss.
-	for(var/chem_name in GLOB.borer_reagent_types_by_name)
-		var/chem = GLOB.borer_reagent_types_by_name[chem_name]
+	for(var/chem in list("tricordrazine","tramadol","hyperzine","alkysine"))
 		if(owner.reagents.get_reagent_amount(chem) < 3)
 			owner.reagents.add_reagent(chem, 5)
 
@@ -22,23 +21,22 @@
 		if(!istype(H))
 			return
 
-		var/datum/reagent/blood/B = locate(/datum/reagent/blood) in H.vessel.reagent_list
+		var/datum/reagent/organic/blood/B = locate(/datum/reagent/organic/blood) in H.vessel.reagent_list
 		blood_splatter(H,B,1)
 		var/obj/effect/decal/cleanable/blood/splatter/goo = locate() in get_turf(owner)
 		if(goo)
-			goo.SetName("husk ichor")
+			goo.name = "husk ichor"
 			goo.desc = "It's thick and stinks of decay."
 			goo.basecolor = "#412464"
 			goo.update_icon()
 
-/obj/item/organ/internal/borer/removed(var/mob/living/user)
-
-	..()
-
-	var/mob/living/simple_animal/borer/B = owner.has_brain_worms()
+/obj/item/organ/internal/borer/removed_mob(mob/living/user)
+	var/mob/living/simple_animal/borer/B = owner.get_brain_worms()
 	if(B)
 		B.leave_host()
 		B.ckey = owner.ckey
+
+	..()
 
 	spawn(0)
 		qdel(src)

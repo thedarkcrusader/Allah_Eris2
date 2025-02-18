@@ -11,21 +11,23 @@
 	var/last_flash = 0 //Don't want it getting spammed like regular flashes
 	var/strength = 10 //How weakened targets are when flashed.
 	var/base_state = "mflash"
-	anchored = 1
-	use_power = 1
+	anchored = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 2
-	movable_flags = MOVABLE_FLAG_PROXMOVE
+	flags = PROXMOVE
 	var/_wifi_id
 	var/datum/wifi/receiver/button/flasher/wifi_receiver
 
 /obj/machinery/flasher/portable //Portable version of the flasher. Only flashes when anchored
 	name = "portable flasher"
 	desc = "A portable flashing device. Wrench to activate and deactivate. Cannot detect slow movements."
+	description_info = "Will flash people that run"
 	icon_state = "pflash1"
 	strength = 8
-	anchored = 0
+	anchored = FALSE
 	base_state = "pflash"
-	density = 1
+	density = TRUE
+	range = 3 //the eris' hallways are wider than other maps
 
 /obj/machinery/flasher/Initialize()
 	. = ..()
@@ -37,8 +39,9 @@
 	wifi_receiver = null
 	return ..()
 
-/obj/machinery/flasher/update_icon()
-	if ( !(stat & (BROKEN|NOPOWER)) )
+/obj/machinery/flasher/power_change()
+	..()
+	if ( !(stat & NOPOWER) )
 		icon_state = "[base_state]1"
 //		src.sd_SetLuminosity(2)
 	else
@@ -47,15 +50,13 @@
 
 //Don't want to render prison breaks impossible
 /obj/machinery/flasher/attackby(obj/item/W as obj, mob/user as mob)
-	if(isWirecutter(W))
-		add_fingerprint(user, 0, W)
+	if (istype(W, /obj/item/tool/wirecutters))
+		add_fingerprint(user)
 		src.disable = !src.disable
 		if (src.disable)
-			user.visible_message("<span class='warning'>[user] has disconnected the [src]'s flashbulb!</span>", "<span class='warning'>You disconnect the [src]'s flashbulb!</span>")
+			user.visible_message(SPAN_WARNING("[user] has disconnected the [src]'s flashbulb!"), SPAN_WARNING("You disconnect the [src]'s flashbulb!"))
 		if (!src.disable)
-			user.visible_message("<span class='warning'>[user] has connected the [src]'s flashbulb!</span>", "<span class='warning'>You connect the [src]'s flashbulb!</span>")
-	else
-		..()
+			user.visible_message(SPAN_WARNING("[user] has connected the [src]'s flashbulb!"), SPAN_WARNING("You connect the [src]'s flashbulb!"))
 
 //Let the AI trigger them directly.
 /obj/machinery/flasher/attack_ai()
@@ -81,23 +82,22 @@
 			continue
 
 		var/flash_time = strength
-		if (istype(O, /mob/living/carbon/human))
+		if (ishuman(O))
 			var/mob/living/carbon/human/H = O
 			if(!H.eyecheck() <= 0)
 				continue
-			flash_time = round(H.species.flash_mod * flash_time)
-			var/obj/item/organ/internal/eyes/E = H.internal_organs_by_name[BP_EYES]
-			if(!E)
-				return
-			if(E.is_bruised() && prob(E.damage + 50))
-				H.flash_eyes()
-				E.damage += rand(1, 5)
-		if(!O.blinded)
-			O.flash_eyes()
-			O.eye_blurry += flash_time
-			O.confused += (flash_time + 2)
-			O.Stun(flash_time / 2)
-			O.Weaken(3)
+			O.flash(strength, FALSE , TRUE , TRUE , 10)
+		else
+			if(isrobot(O))
+				var/mob/living/silicon/robot/robo = O
+				robo.flash(strength, FALSE, FALSE , FALSE)
+				continue
+			else
+				if (istype(O,/mob/living/silicon/ai))
+					return
+				O.flash(strength , FALSE, FALSE ,FALSE)
+			O.Weaken(flash_time)
+
 
 /obj/machinery/flasher/emp_act(severity)
 	if(stat & (BROKEN|NOPOWER))
@@ -111,22 +111,24 @@
 	if ((src.disable) || (src.last_flash && world.time < src.last_flash + 150))
 		return
 
-	if(istype(AM, /mob/living/carbon))
+	if(iscarbon(AM))
 		var/mob/living/carbon/M = AM
-		if ((M.m_intent != "walk") && (src.anchored))
+		if ((MOVING_DELIBERATELY(M)) && (src.anchored))
+			return
+		else if (src.anchored)
 			src.flash()
 
 /obj/machinery/flasher/portable/attackby(obj/item/W as obj, mob/user as mob)
-	if(isWrench(W))
+	if (istype(W, /obj/item/tool/wrench))
 		add_fingerprint(user)
 		src.anchored = !src.anchored
 
 		if (!src.anchored)
-			user.show_message(text("<span class='warning'>[src] can now be moved.</span>"))
+			user.show_message(text(SPAN_WARNING("[src] can now be moved.")))
 			src.overlays.Cut()
 
 		else if (src.anchored)
-			user.show_message(text("<span class='warning'>[src] is now secured.</span>"))
+			user.show_message(text(SPAN_WARNING("[src] is now secured.")))
 			src.overlays += "[base_state]-s"
 
 /obj/machinery/button/flasher
@@ -141,16 +143,15 @@
 	use_power(5)
 
 	active = 1
-	icon_state = "launcheract"
+	icon_state = "launcher1"
 
-	for(var/obj/machinery/flasher/M in SSmachines.machinery)
+	for(var/obj/machinery/flasher/M in GLOB.machines)
 		if(M.id == src.id)
-			spawn()
-				M.flash()
+			M.flash()
 
 	sleep(50)
 
-	icon_state = "launcherbtt"
+	icon_state = "launcher0"
 	active = 0
 
 	return

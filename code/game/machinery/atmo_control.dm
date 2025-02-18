@@ -3,24 +3,24 @@
 	icon_state = "gsensor1"
 	name = "Gas Sensor"
 
-	anchored = 1
+	anchored = TRUE
 	var/state = 0
 
 	var/id_tag
 	var/frequency = 1439
 
-	var/on = 1
+	var/on = TRUE
 	var/output = 3
-	//Flags:
+	//Flags: (For multiple readings, add outputs. Example: Air with Pressure and Temp would be output = 7)
 	// 1 for pressure
 	// 2 for temperature
 	// Output >= 4 includes gas composition
 	// 4 for oxygen concentration
-	// 8 for phoron concentration
+	// 8 for plasma concentration
 	// 16 for nitrogen concentration
 	// 32 for carbon dioxide concentration
-	// 64 for hydrogen concentration
-
+	// 63 for All The Above
+	// N2O currently doesn't have a flag, or I don't know it, so mixing it with others ends up with Gas Comp different from analyzer -Mycah
 	var/datum/radio_frequency/radio_connection
 
 /obj/machinery/air_sensor/update_icon()
@@ -46,19 +46,16 @@
 				if(output&4)
 					signal.data["oxygen"] = round(100*air_sample.gas["oxygen"]/total_moles,0.1)
 				if(output&8)
-					signal.data["phoron"] = round(100*air_sample.gas["phoron"]/total_moles,0.1)
+					signal.data["plasma"] = round(100*air_sample.gas["plasma"]/total_moles,0.1)
 				if(output&16)
 					signal.data["nitrogen"] = round(100*air_sample.gas["nitrogen"]/total_moles,0.1)
 				if(output&32)
 					signal.data["carbon_dioxide"] = round(100*air_sample.gas["carbon_dioxide"]/total_moles,0.1)
-				if(output&64)
-					signal.data["hydrogen"] = round(100*air_sample.gas["hydrogen"]/total_moles,0.1)
 			else
 				signal.data["oxygen"] = 0
-				signal.data["phoron"] = 0
+				signal.data["plasma"] = 0
 				signal.data["nitrogen"] = 0
 				signal.data["carbon_dioxide"] = 0
-				signal.data["hydrogen"] = 0
 		signal.data["sigtype"]="status"
 		radio_connection.post_signal(src, signal, filter = RADIO_ATMOSIA)
 
@@ -74,7 +71,7 @@
 
 obj/machinery/air_sensor/Destroy()
 	SSradio.remove_object(src,frequency)
-	..()
+	. = ..()
 
 /obj/machinery/computer/general_air_control
 	icon = 'icons/obj/computer.dmi'
@@ -88,11 +85,11 @@ obj/machinery/air_sensor/Destroy()
 
 	var/list/sensor_information = list()
 	var/datum/radio_frequency/radio_connection
-	circuit = /obj/item/circuitboard/air_management
+	circuit = /obj/item/electronics/circuitboard/air_management
 
 obj/machinery/computer/general_air_control/Destroy()
 	SSradio.remove_object(src, frequency)
-	..()
+	. = ..()
 
 /obj/machinery/computer/general_air_control/attack_hand(mob/user)
 	if(..(user))
@@ -126,7 +123,7 @@ obj/machinery/computer/general_air_control/Destroy()
 					sensor_part += "   <B>Pressure:</B> [data["pressure"]] kPa<BR>"
 				if(data["temperature"])
 					sensor_part += "   <B>Temperature:</B> [data["temperature"]] K<BR>"
-				if(data["oxygen"]||data["phoron"]||data["nitrogen"]||data["carbon_dioxide"]||data["hydrogen"])
+				if(data["oxygen"] || data["plasma"] || data["nitrogen"] || data["carbon_dioxide"])
 					sensor_part += "   <B>Gas Composition :</B>"
 					if(data["oxygen"])
 						sensor_part += "[data["oxygen"]]% O2; "
@@ -134,10 +131,8 @@ obj/machinery/computer/general_air_control/Destroy()
 						sensor_part += "[data["nitrogen"]]% N; "
 					if(data["carbon_dioxide"])
 						sensor_part += "[data["carbon_dioxide"]]% CO2; "
-					if(data["hydrogen"])
-						sensor_part += "[data["hydrogen"]]% H2; "
-					if(data["phoron"])
-						sensor_part += "[data["phoron"]]% PH; "
+					if(data["plasma"])
+						sensor_part += "[data["plasma"]]% TX; "
 				sensor_part += "<HR>"
 
 			else
@@ -159,8 +154,9 @@ obj/machinery/computer/general_air_control/Destroy()
 	radio_connection = SSradio.add_object(src, frequency, RADIO_ATMOSIA)
 
 /obj/machinery/computer/general_air_control/Initialize()
-	set_frequency(frequency)
 	. = ..()
+	set_frequency(frequency)
+
 
 /obj/machinery/computer/general_air_control/large_tank_control
 	icon = 'icons/obj/computer.dmi'
@@ -174,7 +170,7 @@ obj/machinery/computer/general_air_control/Destroy()
 
 	var/input_flow_setting = 200
 	var/pressure_setting = ONE_ATMOSPHERE * 45
-	circuit = /obj/item/circuitboard/air_management/tank_control
+	circuit = /obj/item/electronics/circuitboard/air_management/tank_control
 
 
 /obj/machinery/computer/general_air_control/large_tank_control/return_text()
@@ -228,7 +224,7 @@ Max Output Pressure: [output_pressure] kPa<BR>"}
 
 	if(href_list["adj_pressure"])
 		var/change = text2num(href_list["adj_pressure"])
-		pressure_setting = between(0, pressure_setting + change, MAX_PUMP_PRESSURE)
+		pressure_setting = between(0, pressure_setting + change, 50*ONE_ATMOSPHERE)
 		spawn(1)
 			src.updateUsrDialog()
 		return 1
@@ -293,7 +289,7 @@ Max Output Pressure: [output_pressure] kPa<BR>"}
 
 	var/input_flow_setting = 700
 	var/pressure_setting = 100
-	circuit = /obj/item/circuitboard/air_management/supermatter_core
+	circuit = /obj/item/electronics/circuitboard/air_management/supermatter_core
 
 
 /obj/machinery/computer/general_air_control/supermatter_core/return_text()
@@ -347,7 +343,7 @@ Min Core Pressure: [pressure_limit] kPa<BR>"}
 
 	if(href_list["adj_pressure"])
 		var/change = text2num(href_list["adj_pressure"])
-		pressure_setting = between(0, pressure_setting + change, MAX_PUMP_PRESSURE)
+		pressure_setting = between(0, pressure_setting + change, 10*ONE_ATMOSPHERE)
 		spawn(1)
 			src.updateUsrDialog()
 		return 1
@@ -411,7 +407,7 @@ Min Core Pressure: [pressure_limit] kPa<BR>"}
 
 	var/cutoff_temperature = 2000
 	var/on_temperature = 1200
-	circuit = /obj/item/circuitboard/air_management/injector_control
+	circuit = /obj/item/electronics/circuitboard/air_management/injector_control
 
 /obj/machinery/computer/general_air_control/fuel_injection/Process()
 	if(automation)
@@ -475,7 +471,7 @@ Rate: [volume_rate] L/sec<BR>"}
 		..(signal)
 
 /obj/machinery/computer/general_air_control/fuel_injection/Topic(href, href_list)
-	if((. = ..()))
+	if(..())
 		return
 
 	if(href_list["refresh_status"])
@@ -526,3 +522,7 @@ Rate: [volume_rate] L/sec<BR>"}
 		)
 
 		radio_connection.post_signal(src, signal, filter = RADIO_ATMOSIA)
+
+
+
+

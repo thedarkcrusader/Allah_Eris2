@@ -13,8 +13,10 @@
 	var/decl/security_level/highest_standard_security_level
 
 	var/decl/security_level/current_security_level  // The current security level. Defaults to the first entry in all_security_levels if unset.
+	var/decl/security_level/stored_security_level   // The security level that we are escalating to high security from - we will return to this level once we choose to revert.
 	var/list/all_security_levels                    // List of all available security levels
 	var/list/standard_security_levels               // List of all normally selectable security levels
+	var/list/comm_console_security_levels           // List of all selectable security levels for the command and communication console - basically standard_security_levels - 1
 
 /decl/security_state/New()
 	// Setup the severe security level
@@ -30,7 +32,7 @@
 	// Setup the highest standard security level
 	if(highest_standard_security_level || isnull(highest_standard_security_level))
 		if(!(highest_standard_security_level in all_security_levels))
-			highest_standard_security_level = all_security_levels[all_security_levels.len - 1]
+			highest_standard_security_level = all_security_levels[all_security_levels.len]
 		highest_standard_security_level = decls_repository.get_decl(highest_standard_security_level)
 	else
 		highest_standard_security_level = null
@@ -53,6 +55,13 @@
 		standard_security_levels += security_level
 		if(security_level == highest_standard_security_level)
 			break
+
+	comm_console_security_levels = list()
+	// Setup the list of selectable security levels available in the comm. console
+	for(var/security_level in all_security_levels)
+		if(security_level == highest_standard_security_level)
+			break
+		comm_console_security_levels += security_level
 
 	// Now we ensure the high security level is not above the severe one (but we allow them to be equal)
 	var/severe_index = all_security_levels.Find(severe_security_level)
@@ -127,13 +136,18 @@
 	var/name
 
 	// These values are primarily for station alarms and status displays, and which light colors and overlays to use
-	var/light_range
-	var/light_power
+	var/light_max_bright = 0.5
+	var/light_inner_range = 0.1
+	var/light_outer_range = 1
 	var/light_color_alarm
 	var/light_color_status_display
 
 	var/overlay_alarm
+	var/overlay_firealarm
 	var/overlay_status_display
+
+	var/up_description
+	var/down_description
 
 // Called when we're switching from a lower security level to this one.
 /decl/security_level/proc/switching_up_to()
@@ -155,12 +169,10 @@
 * The default security state and levels setup
 */
 /decl/security_state/default
-	all_security_levels = list(/decl/security_level/default/code_green, /decl/security_level/default/code_blue, /decl/security_level/default/code_red, /decl/security_level/default/code_delta)
+	all_security_levels = list(/decl/security_level/default/code_green, /decl/security_level/default/code_blue, /decl/security_level/default/code_red, /decl/security_level/default/code_delta, /decl/security_level/default/code_jumping)
 
 /decl/security_level/default
 	icon = 'icons/misc/security_state.dmi'
-	var/up_description
-	var/down_description
 
 	var/static/datum/announcement/priority/security/security_announcement_up = new(do_log = 0, do_newscast = 1, new_sound = sound('sound/misc/notice1.ogg'))
 	var/static/datum/announcement/priority/security/security_announcement_down = new(do_log = 0, do_newscast = 1, new_sound = sound('sound/misc/notice1.ogg'))
@@ -176,62 +188,74 @@
 	notify_station()
 
 /decl/security_level/default/proc/notify_station()
-	for(var/obj/machinery/firealarm/FA in SSmachines.machinery)
-		if(FA.z in GLOB.using_map.contact_levels)
+	for(var/obj/machinery/firealarm/FA in GLOB.firealarm_list)
+		if(FA.z in GLOB.maps_data.contact_levels)
 			FA.update_icon()
 	post_status("alert")
 
 /decl/security_level/default/code_green
 	name = "code green"
 
-	light_range = 2
-	light_power = 1
+	light_max_bright = 0.25
+	light_inner_range = 0.1
+	light_outer_range = 1
 
-	light_color_alarm = COLOR_GREEN
-	light_color_status_display = COLOR_GREEN
+	light_color_alarm = COLOR_LIGHTING_GREEN_MACHINERY
+	light_color_status_display = COLOR_LIGHTING_GREEN_MACHINERY
 
 	overlay_alarm = "alarm_green"
+	overlay_firealarm = "overlay_green"
+
 	overlay_status_display = "status_display_green"
 
-	down_description = "All threats to the station have passed. Security may not have weapons visible, privacy laws are once again fully enforced."
+	down_description = "All threats to the ship have passed. Security may not have weapons visible, privacy laws are once again fully enforced."
 
 /decl/security_level/default/code_blue
 	name = "code blue"
 
-	light_range = 2
-	light_power = 1
-	light_color_alarm = COLOR_BLUE
-	light_color_status_display = COLOR_BLUE
+	light_max_bright = 0.5
+	light_inner_range = 0.1
+	light_outer_range = 2
+	light_color_alarm = COLOR_LIGHTING_BLUE_MACHINERY
+	light_color_status_display = COLOR_LIGHTING_BLUE_MACHINERY
 
 	overlay_alarm = "alarm_blue"
+	overlay_firealarm = "overlay_blue"
+
 	overlay_status_display = "status_display_blue"
 
-	up_description = "The station has received reliable information about possible hostile activity on the station. Security staff may have weapons visible, random searches are permitted."
+	up_description = "The ship has received reliable information about possible hostile activity on the ship. Security staff may have weapons visible, random searches are permitted."
 	down_description = "The immediate threat has passed. Security may no longer have weapons drawn at all times, but may continue to have them visible. Random searches are still allowed."
 
 /decl/security_level/default/code_red
 	name = "code red"
 
-	light_range = 4
-	light_power = 2
-	light_color_alarm = COLOR_RED
-	light_color_status_display = COLOR_RED
+	light_max_bright = 0.5
+	light_inner_range = 0.1
+	light_outer_range = 2
+	light_color_alarm = COLOR_LIGHTING_RED_MACHINERY
+	light_color_status_display = COLOR_LIGHTING_RED_MACHINERY
 
 	overlay_alarm = "alarm_red"
+	overlay_firealarm = "overlay_red"
+
 	overlay_status_display = "status_display_red"
 
-	up_description = "There is an immediate serious threat to the station. Security may have weapons unholstered at all times. Random searches are allowed and advised."
-	down_description = "The self-destruct mechanism has been deactivated, there is still however an immediate serious threat to the station. Security may have weapons unholstered at all times, random searches are allowed and advised."
+	up_description = "There is an immediate serious threat to the ship. Security may have weapons unholstered at all times. Random searches are allowed and advised."
+	down_description = "The self-destruct mechanism has been deactivated, there is still however an immediate serious threat to the ship. Security may have weapons unholstered at all times, random searches are allowed and advised."
 
 /decl/security_level/default/code_delta
 	name = "code delta"
 
-	light_range = 4
-	light_power = 2
-	light_color_alarm = COLOR_RED
-	light_color_status_display = COLOR_NAVY_BLUE
+	light_max_bright = 0.75
+	light_inner_range = 0.1
+	light_outer_range = 3
+	light_color_alarm = COLOR_LIGHTING_RED_MACHINERY
+	light_color_status_display = COLOR_LIGHTING_BLUE_MACHINERY
 
 	overlay_alarm = "alarm_delta"
+	overlay_firealarm = "overlay_delta"
+
 	overlay_status_display = "status_display_delta"
 
 	var/static/datum/announcement/priority/security/security_announcement_delta = new(do_log = 0, do_newscast = 1, new_sound = sound('sound/effects/siren.ogg'))
@@ -239,3 +263,26 @@
 /decl/security_level/default/code_delta/switching_up_to()
 	security_announcement_delta.Announce("The self-destruct mechanism has been engaged. All crew are instructed to obey all instructions given by heads of staff. Any violations of these orders can be punished by death. This is not a drill.", "Attention! Delta security level reached!")
 	notify_station()
+
+/decl/security_level/default/code_jumping
+	name = "code bluespace jump"
+	light_max_bright = 0.75
+	light_inner_range = 0.1
+	light_outer_range = 3
+	light_color_alarm = COLOR_LIGHTING_RED_MACHINERY
+	light_color_status_display = COLOR_LIGHTING_BLUE_MACHINERY
+
+	overlay_alarm = "alarm_delta"
+	overlay_firealarm = "overlay_delta"
+
+	overlay_status_display = "status_display_delta"
+
+	var/static/datum/announcement/priority/security/security_announcement_jumping = new(do_log = FALSE, do_newscast = TRUE, new_sound = sound('sound/effects/siren.ogg'))
+
+/decl/security_level/default/code_jumping/switching_up_to()
+	security_announcement_jumping.Announce("Bluespace jump initiation detected from the Bridge, authorized by /%#~1@^&*~!#$%&!!@@NULL/. Adjusting ship bluespace-core heading for jump towards EXCELSIOR-CONTROLLED space. All crew are advised to buckle down and secure any mobile parts.", "Attention! Bluespace jump in 15 minutes!", use_text_to_speech = TRUE)
+	notify_station()
+
+/decl/security_level/default/code_jumping/switching_down_to()
+	. = ..()
+	security_announcement_jumping.Announce("Bluespace jump towards EXCELSIOR-CONTROLLED space has been cancelled. All crew may resume their work activities.", "Attention! Bluespace jump cancelled.", use_text_to_speech = TRUE)

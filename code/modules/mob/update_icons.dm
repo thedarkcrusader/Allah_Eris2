@@ -13,10 +13,10 @@
 /mob/proc/update_inv_handcuffed()
 	return
 
-/mob/proc/update_inv_back()
+/mob/proc/update_inv_legcuffed()
 	return
 
-/mob/proc/update_inv_chest_holster()
+/mob/proc/update_inv_back()
 	return
 
 /mob/proc/update_inv_l_hand()
@@ -65,6 +65,4 @@
 	return
 
 /mob/proc/update_targeted()
-	return
-/mob/proc/update_inv_neck()
 	return

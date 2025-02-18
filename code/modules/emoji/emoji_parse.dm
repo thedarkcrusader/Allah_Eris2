@@ -1,5 +1,7 @@
 /proc/emoji_parse(text)
 	. = text
+	if(!config.emojis)
+		return
 	var/static/list/emojis = icon_states(icon('icons/emoji.dmi'))
 	var/parsed = ""
 	var/pos = 1
@@ -25,3 +27,4 @@
 				parsed += copytext(text, pos, search)
 		break
 	return parsed
+

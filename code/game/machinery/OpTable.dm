@@ -2,79 +2,68 @@
 	name = "Operating Table"
 	desc = "Used for advanced medical procedures."
 	icon = 'icons/obj/surgery.dmi'
-	icon_state = "table2-idle"
-	density = 1
-	anchored = 1.0
-	use_power = 1
+	icon_state = "optable-idle"
+
+	layer = TABLE_LAYER
+	density = TRUE
+	anchored = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 1
 	active_power_usage = 5
-	var/mob/living/carbon/human/victim = null
-	var/strapped = 0.0
 
-	var/obj/machinery/computer/operating/computer = null
+	var/mob/living/carbon/victim
 
+	var/obj/machinery/computer/operating/computer
+	can_buckle = TRUE
+	buckle_dir = SOUTH
+	buckle_lying = TRUE //bed-like behavior, forces mob.lying = buckle_lying if != -1
+
+	var/y_offset = 0
 /obj/machinery/optable/New()
 	..()
-	for(dir in list(NORTH,EAST,SOUTH,WEST))
+	for(var/dir in list(NORTH,EAST,SOUTH,WEST))
 		computer = locate(/obj/machinery/computer/operating, get_step(src, dir))
 		if (computer)
 			computer.table = src
 			break
 //	spawn(100) //Wont the MC just call this process() before and at the 10 second mark anyway?
-//		process()
+//		Process()
 
-/obj/machinery/optable/ex_act(severity)
-
-	switch(severity)
-		if(1.0)
-			//SN src = null
-			qdel(src)
-			return
-		if(2.0)
-			if (prob(50))
-				//SN src = null
-				qdel(src)
-				return
-		if(3.0)
-			if (prob(25))
-				src.set_density(0)
-		else
-	return
 
 /obj/machinery/optable/attack_hand(mob/user as mob)
-	if (HULK in usr.mutations)
-		visible_message("<span class='danger'>\The [usr] destroys \the [src]!</span>")
-		src.set_density(0)
-		qdel(src)
-	return
+	if (user.incapacitated(INCAPACITATION_DEFAULT))
+		return
+	if (victim)
+		user_unbuckle_mob(user)
+		return
+//	if (HULK in usr.mutations)
+//		visible_message(SPAN_DANGER("\The [usr] destroys \the [src]!"))
+//		density = FALSE
+//		qdel(src)
+
+/obj/machinery/optable/unbuckle_mob()
+	. = ..()
+	check_victim()
+	set_power_use(IDLE_POWER_USE)
 
 /obj/machinery/optable/CanPass(atom/movable/mover, turf/target, height=0, air_group=0)
 	if(air_group || (height==0)) return 1
 
-	if(istype(mover) && mover.checkpass(PASS_FLAG_TABLE))
+	if(istype(mover) && mover.checkpass(PASSTABLE))
 		return 1
 	else
 		return 0
 
-
-/obj/machinery/optable/MouseDrop_T(obj/O as obj, mob/user as mob)
-
-	if ((!( istype(O, /obj/item) ) || user.get_active_hand() != O))
-		return
-	user.drop_item()
-	if (O.loc != src.loc)
-		step(O, get_dir(O, src))
-	return
-
 /obj/machinery/optable/proc/check_victim()
-	if(locate(/mob/living/carbon/human, src.loc))
-		var/mob/living/carbon/human/M = locate(/mob/living/carbon/human, src.loc)
-		if(M.lying)
-			src.victim = M
-			icon_state = M.pulse() ? "table2-active" : "table2-idle"
-			return 1
-	src.victim = null
-	icon_state = "table2-idle"
+	if (istype(buckled_mob,/mob/living/carbon))
+		victim = buckled_mob
+		if(ishuman(buckled_mob))
+			var/mob/living/carbon/human/M = buckled_mob
+			icon_state = M.pulse() ? "optable-active" : "optable-idle"
+		return 1
+
+	victim = null
+	icon_state = "optable-idle"
 	return 0
 
 /obj/machinery/optable/Process()
@@ -84,21 +73,19 @@
 	if (C == user)
 		user.visible_message("[user] climbs on \the [src].","You climb on \the [src].")
 	else
-		visible_message("<span class='notice'>\The [C] has been laid on \the [src] by [user].</span>", 3)
+		visible_message(SPAN_NOTICE("\The [C] has been laid on \the [src] by [user]."), 3)
+		if (user.pulling == C)
+			user.stop_pulling() //Lets not drag your patient off the table after you just put them there
 	if (C.client)
 		C.client.perspective = EYE_PERSPECTIVE
 		C.client.eye = src
-	C.resting = 1
-	C.dropInto(loc)
+	C.loc = loc
 	for(var/obj/O in src)
-		O.dropInto(loc)
-	src.add_fingerprint(user)
-	if(ishuman(C))
-		var/mob/living/carbon/human/H = C
-		src.victim = H
-		icon_state = H.pulse() ? "table2-active" : "table2-idle"
-	else
-		icon_state = "table2-idle"
+		O.loc = loc
+	add_fingerprint(user)
+	buckle_mob(C)
+	set_power_use(ACTIVE_POWER_USE)
+
 
 /obj/machinery/optable/MouseDrop_T(mob/target, mob/user)
 
@@ -110,26 +97,34 @@
 	else
 		return ..()
 
-/obj/machinery/optable/climb_on()
+/obj/machinery/optable/verb/climb_on()
+	set name = "Climb On Table"
+	set category = "Object"
+	set src in oview(1)
+
 	if(usr.stat || !ishuman(usr) || usr.restrained() || !check_table(usr))
 		return
 
 	take_victim(usr,usr)
 
-/obj/machinery/optable/attackby(obj/item/W as obj, mob/living/carbon/user as mob)
-	if (istype(W, /obj/item/grab))
-		var/obj/item/grab/G = W
-		if(iscarbon(G.affecting) && check_table(G.affecting))
-			take_victim(G.affecting,usr)
-			qdel(W)
-			return
+/obj/machinery/optable/affect_grab(var/mob/user, var/mob/target)
+	take_victim(target,user)
+	return TRUE
 
 /obj/machinery/optable/proc/check_table(mob/living/carbon/patient as mob)
 	check_victim()
-	if(src.victim && get_turf(victim) == get_turf(src) && victim.lying)
-		to_chat(usr, "<span class='warning'>\The [src] is already occupied!</span>")
+	if(victim)
+		to_chat(usr, SPAN_WARNING("\The [src] is already occupied!"))
 		return 0
 	if(patient.buckled)
-		to_chat(usr, "<span class='notice'>Unbuckle \the [patient] first!</span>")
+		to_chat(usr, SPAN_NOTICE("Unbuckle \the [patient] first!"))
 		return 0
 	return 1
+
+/obj/machinery/optable/post_buckle_mob(mob/living/M as mob)
+	if(M == buckled_mob)
+		M.pixel_y = y_offset
+	else
+		M.pixel_y = 0
+
+	check_victim()

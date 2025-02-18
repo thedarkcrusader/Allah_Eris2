@@ -1,23 +1,29 @@
-/obj/structure/closet/secure_closet/hydroponics
+/obj/structure/closet/secure_closet/personal/hydroponics
 	name = "botanist's locker"
 	req_access = list(access_hydroponics)
-	icon_state = "hydrosecure1"
-	icon_closed = "hydrosecure"
-	icon_locked = "hydrosecure1"
-	icon_opened = "hydrosecureopen"
-	icon_off = "hydrosecureoff"
+	access_occupy = list(access_hydroponics)
+	icon_state = "hydro"
 
-/obj/structure/closet/secure_closet/hydroponics/WillContain()
-	return list(
-		new /datum/atom_creator/weighted(list(/obj/item/clothing/suit/apron, /obj/item/clothing/suit/apron/overalls)),
-		/obj/item/storage/plants,
-		/obj/item/clothing/under/rank/hydroponics,
-		/obj/item/device/analyzer/plant_analyzer,
-		/obj/item/device/radio/headset/headset_service,
-		/obj/item/clothing/mask/bandana/botany,
-		/obj/item/clothing/head/bandana/green,
-		/obj/item/material/minihoe,
-		/obj/item/material/hatchet,
-		/obj/item/wirecutters/clippers,
-		/obj/item/reagent_containers/spray/plantbgone,
-	)
+/obj/structure/closet/secure_closet/personal/hydroponics/populate_contents()
+	if(prob(25))
+		new /obj/item/storage/backpack/botanist(src)
+	else if(prob(25))
+		new /obj/item/storage/backpack/sport/botanist(src)
+	else
+		new /obj/item/storage/backpack/satchel/botanist(src)
+	new /obj/item/clothing/suit/apron(src)
+	new /obj/item/storage/bag/produce(src)
+	new /obj/item/clothing/under/rank/hydroponics(src)
+	new /obj/item/device/scanner/plant(src)
+	new /obj/item/device/radio/headset/headset_service(src)
+	new /obj/item/clothing/mask/bandana/botany(src)
+	new /obj/item/tool/minihoe(src)
+	new /obj/item/tool/hatchet(src)
+	new /obj/item/tool/wirecutters(src)
+	new /obj/item/reagent_containers/spray/plantbgone(src)
+	new /obj/item/clothing/gloves/botanic_leather(src)
+
+/obj/structure/closet/secure_closet/personal/hydroponics/public
+	name = "gardener's locker"
+	req_access = list(access_hydroponics)
+	access_occupy = list()

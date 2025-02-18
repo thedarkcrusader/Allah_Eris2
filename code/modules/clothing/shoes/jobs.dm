@@ -1,89 +1,131 @@
 /obj/item/clothing/shoes/galoshes
-	desc = "Rubber boots."
+	desc = "Rubber boots with high traction. Prevents the wearer from slipping."
 	name = "galoshes"
 	icon_state = "galoshes"
 	permeability_coefficient = 0.05
-	item_flags = ITEM_FLAG_NOSLIP
-	can_hold_knife = 1
+	siemens_coefficient = 0 // DAMN BOI
+	item_flags = NOSLIP
+	slowdown = SHOES_SLOWDOWN + 1
 	species_restricted = null
-
-/obj/item/clothing/shoes/galoshes/Initialize()
-	. = ..()
-	slowdown_per_slot[slot_shoes] = 1
+	style = STYLE_NEG_HIGH
 
 /obj/item/clothing/shoes/jackboots
 	name = "jackboots"
-	desc = "Tall synthleather boots with an artificial shine."
+	desc = "Standard-issue Security combat boots for combat scenarios or combat situations. All combat, all the time."
 	icon_state = "jackboots"
 	item_state = "jackboots"
-	force = 3
-	armor = list(melee = 30, bullet = 10, laser = 10, energy = 15, bomb = 20, bio = 0, rad = 0)
-	siemens_coefficient = 0.7
-	can_hold_knife = 1
-	cold_protection = FEET
-	min_cold_protection_temperature = HELMET_MIN_COLD_PROTECTION_TEMPERATURE
-	var/obj/item/material/sword/combat_knife/knife = null
+	force = WEAPON_FORCE_HARMLESS
+	armor = list(
+		melee = 3,
+		bullet = 0,
+		energy = 2,
+		bomb = 0,
+		bio = 25,
+		rad = 0
+	)
+	siemens_coefficient = 0.6
+	can_hold_knife = TRUE
 
-/obj/item/clothing/shoes/jackboots/New()
-	..()
-	knife = new
-	update_icon()
+/obj/item/clothing/shoes/jackboots/ironhammer
+	icon_state = "jackboots_ironhammer"
+	desc = "Standard-issue Ironhammer combat boots for combat scenarios or combat situations. All combat, all the time."
 
-/obj/item/clothing/shoes/jackboots/attackby(obj/item/I, mob/user)
-	. = ..()
-	if(istype(I, /obj/item/material/sword/combat_knife))
-		if(knife)//We've already got a knife in there, no need for another.
-			return
-		user.drop_from_inventory(I)
-		I.forceMove(src)
-		knife = I
-		update_icon()
-		playsound(src, 'sound/items/holster_knife.ogg', 50, 0, -1)
+/obj/item/clothing/shoes/jackboots/german
+	name = "Oberth Republic boots"
+	desc = "A pair of brown boots."
+	icon_state = "jackboots_german"
 
-/obj/item/clothing/shoes/jackboots/attack_hand(mob/living/user)
-	if(knife)
-		user.put_in_active_hand(knife)
-		knife = null
-		update_icon()
-		return
-	..()
+/obj/item/clothing/shoes/jackboots/neotheology
+	name = "custodian's jackboots"
+	desc = "Specially altered jackboots for NeoTheology custodians to prevent them from slipping."
+	icon_state = "jackboots"
+	item_state = "jackboots"
+	force = WEAPON_FORCE_HARMLESS
+	siemens_coefficient = 0.3
+	item_flags = NOSLIP
+	can_hold_knife = TRUE
+	spawn_blacklisted = TRUE
 
-/obj/item/clothing/shoes/jackboots/update_icon()
-	..()
-	if(knife)
-		icon_state = "[initial(icon_state)]_knife"
-	else
-		icon_state = initial(icon_state)
+/obj/item/clothing/shoes/reinforced
+	name = "reinforced shoes"
+	desc = "Slightly reinforced shoes. Optimal for your journey into a wonderful world of maintenance."
+	icon_state = "reinforced"
+	item_state = "reinforced"
+	armor = list(
+		melee = 3,
+		bullet = 0,
+		energy = 2,
+		bomb = 0,
+		bio = 0,
+		rad = 0
+	)
+	siemens_coefficient = 0.5
 
-/*
-/obj/item/clothing/shoes/jackboots/update_icon()
-	..()//I am aware this breaks the blood overlay, however I'm not particularly worried about that. We can fix that later. - Matt
-	var/image/I = image('icons/obj/clothing/accessory_overlays.dmi', "bootknife_0")
-	if(knife)
-		I = image('icons/obj/clothing/accessory_overlays.dmi', "bootknife_1")
+/obj/item/clothing/shoes/reinforced/ironhammer
+	icon_state = "reinforced_ironhammer"
 
-	overlays += I
-*/
-
-
-/obj/item/clothing/shoes/jackboots/unathi
-	name = "toe-less jackboots"
-	desc = "Modified pair of jackboots, particularly comfortable for those species whose toes hold claws."
-	item_state = "digiboots"
-	icon_state = "digiboots"
-	species_restricted = null
+/obj/item/clothing/shoes/reinforced/medical
+	name = "moebius reinforced shoes"
+	desc = "Slightly reinforced shoes for moebius medical personnel."
+	icon_state = "reinforced_moebius"
+	item_state = "reinforced_moebius"
+	spawn_blacklisted = TRUE
 
 /obj/item/clothing/shoes/workboots
-	name = "workboots"
+	name = "work boots"
 	desc = "A pair of steel-toed work boots designed for use in industrial settings. Safety first."
 	icon_state = "workboots"
 	item_state = "workboots"
-	armor = list(melee = 40, bullet = 0, laser = 0, energy = 15, bomb = 20, bio = 0, rad = 20)
-	siemens_coefficient = 0.7
-	can_hold_knife = 1
+	siemens_coefficient = 0
+	armor = list(
+		melee = 2,
+		bullet = 0,
+		energy = 2,
+		bomb = 0,
+		bio = 0,
+		rad = 0
+	)
+	can_hold_knife = TRUE
+	style = STYLE_NEG_HIGH
 
-/obj/item/clothing/shoes/workboots/toeless
-	name = "toe-less workboots"
-	desc = "A pair of toeless work boots designed for use in industrial settings. Modified for species whose toes have claws."
-	icon_state = "workbootstoeless"
-	species_restricted = null
+/obj/item/clothing/shoes/workboots/proletariat
+	name = "Excelsior boots"
+	desc = "Robust, yet surprisingly posh boots; one and only design worn by comrades everywhere from Haven to null sector."
+	icon_state = "prolo_boots"
+	item_state = "prolo_boots"
+	siemens_coefficient = 0
+	armor = list(
+		melee = 3,
+		bullet = 2,
+		energy = 2,
+		bomb = 0,
+		bio = 0,
+		rad = 0
+	)
+	can_hold_knife = TRUE
+	style = STYLE_HIGH
+
+/obj/item/clothing/shoes/korund
+	name = "Excelsior assault boots"
+	desc = "Heavily reinforced ankle boots for combat scenarios."
+	icon_state = "korund_boots"
+	item_state = "korund_boots"
+	siemens_coefficient = 0
+	armor = list(
+		melee = 5,
+		bullet = 7,
+		energy = 5,
+		bomb = 35,
+		bio = 0,
+		rad = 0
+	)
+	can_hold_knife = TRUE
+	style = STYLE_NEG_HIGH
+	spawn_blacklisted = TRUE
+
+/obj/item/clothing/shoes/artist_shoes
+	name = "Pointy Shoes"
+	desc = "They're actually quite comfortable."
+	icon_state = "artist"
+	item_state = "artist_shoes"
+	spawn_frequency = 0

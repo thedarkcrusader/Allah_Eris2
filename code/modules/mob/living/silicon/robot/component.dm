@@ -1,15 +1,19 @@
 // TODO: remove the robot.mmi and robot.cell variables and completely rely on the robot component system
+/datum/robot_component
+	var/name
+	var/installed = 0
+	var/powered = 0
+	var/toggled = 1
+	var/brute_damage = 0
+	var/electronics_damage = 0
+	var/idle_usage = 0   // Amount of power used every MC tick. In joules.
+	var/active_usage = 0 // Amount of power used for every action. Actions are module-specific. Actuator for each tile moved, etc.
+	var/max_damage = 30  // HP of this component.
+	var/mob/living/silicon/robot/owner
+	var/installed_by_default = TRUE
+	var/robot_trait = null // a cyborg trait to add when this is installed
+	var/powered_trait = FALSE // does this module need to be powered for its trait to be active ?
 
-/datum/robot_component/var/name
-/datum/robot_component/var/installed = 0
-/datum/robot_component/var/powered = 0
-/datum/robot_component/var/toggled = 1
-/datum/robot_component/var/brute_damage = 0
-/datum/robot_component/var/electronics_damage = 0
-/datum/robot_component/var/idle_usage = 0   // Amount of power used every MC tick. In joules.
-/datum/robot_component/var/active_usage = 0 // Amount of power used for every action. Actions are module-specific. Actuator for each tile moved, etc.
-/datum/robot_component/var/max_damage = 30  // HP of this component.
-/datum/robot_component/var/mob/living/silicon/robot/owner
 
 // The actual device object that has to be installed for this.
 /datum/robot_component/var/external_type = null
@@ -21,26 +25,37 @@
 	src.owner = R
 
 /datum/robot_component/proc/install()
+	if(!powered_trait)
+		owner.AddTrait(robot_trait)
+	else
+		update_power_state()
+
 /datum/robot_component/proc/uninstall()
+	owner.RemoveTrait(robot_trait)
 
 /datum/robot_component/proc/destroy()
-	if (istype(wrapped, /obj/item/robot_parts/robot_component))
-		var/obj/item/robot_parts/robot_component/comp = wrapped
-		wrapped.icon_state = comp.icon_state_broken
+	// The thing itself isn't there anymore, but some fried remains are.
+	if(wrapped)
+		var/obj/item/trash_item = new /obj/item/trash/broken_robot_part
+
+		trash_item.icon = wrapped.icon
+		trash_item.matter = wrapped.matter.Copy()
+		trash_item.name = "broken [wrapped.name]"
+		trash_item.w_class = wrapped.w_class
+		if(istype(wrapped, /obj/item/robot_parts/robot_component))
+			var/obj/item/robot_parts/robot_component/comp = wrapped
+			trash_item.icon_state = comp.icon_state_broken // Module-specific broken icons! Yay!
+		else
+			trash_item.icon_state = wrapped.icon_state
+
+		qdel(wrapped)
+		wrapped = trash_item
 
 	installed = -1
 	uninstall()
 
-/datum/robot_component/proc/repair()
-	if (istype(wrapped, /obj/item/robot_parts/robot_component))
-		var/obj/item/robot_parts/robot_component/comp = wrapped
-		wrapped.icon_state = comp.icon_state
-
-	installed = 1
-	install()
-
 /datum/robot_component/proc/take_damage(brute, electronics, sharp, edge)
-	if(installed != 1) return
+	if(installed != TRUE) return
 
 	brute_damage += brute
 	electronics_damage += electronics
@@ -48,7 +63,7 @@
 	if(brute_damage + electronics_damage >= max_damage) destroy()
 
 /datum/robot_component/proc/heal_damage(brute, electronics)
-	if(installed != 1)
+	if(installed != TRUE)
 		// If it's not installed, can't repair it.
 		return 0
 
@@ -56,16 +71,23 @@
 	electronics_damage = max(0, electronics_damage - electronics)
 
 /datum/robot_component/proc/is_powered()
-	return (installed == 1) && (brute_damage + electronics_damage < max_damage) && (!idle_usage || powered)
+	return (installed == TRUE) && (brute_damage + electronics_damage < max_damage) && (!idle_usage || powered)
 
 /datum/robot_component/proc/update_power_state()
-	if(toggled == 0)
-		powered = 0
+	if(toggled == FALSE)
+		powered = FALSE
+		if(powered_trait && robot_trait)
+			owner.RemoveTrait(robot_trait)
 		return
-	if(owner.cell_use_power(idle_usage))
-		powered = 1
+	if(owner.cell && owner.cell.charge >= idle_usage)
+		owner.cell_use_power(idle_usage)
+		powered = TRUE
+		if(powered_trait && robot_trait)
+			owner.AddTrait(robot_trait)
 	else
-		powered = 0
+		powered = FALSE
+		if(powered_trait && robot_trait)
+			owner.RemoveTrait(robot_trait)
 
 
 // ARMOUR
@@ -77,13 +99,52 @@
 	max_damage = 60
 
 
+
+// JETPACK
+// Allows the cyborg to move in space
+// Uses no power when idle. Uses 50J for each tile the cyborg moves.
+/datum/robot_component/jetpack
+	name = "jetpack"
+	external_type = /obj/item/robot_parts/robot_component/jetpack
+	max_damage = 60
+	installed_by_default = FALSE
+	active_usage = 150
+
+	var/obj/item/tank/jetpack/synthetic/tank = null
+
+
+/datum/robot_component/jetpack/install()
+	..()
+	tank = new/obj/item/tank/jetpack/synthetic
+	//owner.internals = tank
+	tank.forceMove(owner)
+	owner.jetpack = tank
+	tank.component = src
+
+/datum/robot_component/jetpack/uninstall()
+	..()
+	qdel(tank)
+	tank = null
+	owner.jetpack = null
+
+//Uses power when the tank is compressing air to refill itself
+/datum/robot_component/jetpack/update_power_state()
+	if(tank && tank.compressing)
+		idle_usage = active_usage
+	else
+		idle_usage = 0
+	.=..()
+
+
+
+
+
 // ACTUATOR
 // Enables movement.
-// Uses no power when idle. Uses 200J for each tile the cyborg moves.
 /datum/robot_component/actuator
 	name = "actuator"
 	idle_usage = 0
-	active_usage = 200
+	active_usage = 100
 	external_type = /obj/item/robot_parts/robot_component/actuator
 	max_damage = 50
 
@@ -99,16 +160,11 @@
 /datum/robot_component/cell
 	name = "power cell"
 	max_damage = 50
-	var/obj/item/cell/stored_cell = null
 
 /datum/robot_component/cell/destroy()
 	..()
-	stored_cell = owner.cell
 	owner.cell = null
 
-/datum/robot_component/cell/repair()
-	owner.cell = stored_cell
-	stored_cell = null
 
 // RADIO
 // Enables radio communications
@@ -188,6 +244,7 @@
 	components["camera"] = new/datum/robot_component/camera(src)
 	components["comms"] = new/datum/robot_component/binary_communication(src)
 	components["armour"] = new/datum/robot_component/armour(src)
+	components["jetpack"] = new/datum/robot_component/jetpack(src)
 
 // Checks if component is functioning
 /mob/living/silicon/robot/proc/is_component_functioning(module_name)
@@ -207,12 +264,42 @@
 
 // Component Objects
 // These objects are visual representation of modules
+
+// Spawned when a robot component breaks
+// Has default name/icon/materials, replaced by the component itself when it breaks
+/obj/item/trash/broken_robot_part
+	name = "broken actuator"
+	desc = "A robot part, broken beyond repair. Can be recycled in an autolathe."
+	icon = 'icons/obj/robot_component.dmi'
+	icon_state = "motor_broken"
+	matter = list(MATERIAL_STEEL = 5)
+
 /obj/item/robot_parts/robot_component
 	icon = 'icons/obj/robot_component.dmi'
 	icon_state = "working"
+	var/icon_state_broken = "broken"
+	matter = list(MATERIAL_STEEL = 5)
+
 	var/brute = 0
 	var/burn = 0
-	var/icon_state_broken = "broken"
+	var/total_dam = 0
+	var/max_dam = 30
+
+/obj/item/robot_parts/robot_component/take_damage(var/brute_amt, var/burn_amt)
+	brute += brute_amt
+	burn += burn_amt
+	total_dam = brute+burn
+	if(total_dam >= max_dam)
+		var/obj/item/electronics/circuitboard/broken/broken_device = new (get_turf(src))
+		if(icon_state_broken != "broken")
+			broken_device.icon = icon
+			broken_device.icon_state = icon_state_broken
+		broken_device.name = "broken [name]"
+		return broken_device
+	return 0
+
+/obj/item/robot_parts/robot_component/proc/is_functional()
+	return ((brute + burn) < max_dam)
 
 /obj/item/robot_parts/robot_component/binary_communication_device
 	name = "binary communication device"
@@ -243,3 +330,13 @@
 	name = "radio"
 	icon_state = "radio"
 	icon_state_broken = "radio_broken"
+
+/obj/item/robot_parts/robot_component/jetpack
+	name = "jetpack"
+	desc = "Self refilling jetpack that makes the unit suitable for EVA work."
+	icon = 'icons/obj/tank.dmi'
+	icon_state = "jetpack-black"
+	icon_state_broken = "jetpack-black"
+	matter = list(MATERIAL_STEEL = 10, MATERIAL_PLASMA = 10, MATERIAL_SILVER = 20)
+	spawn_tags = SPAWN_TAG_JETPACK
+	rarity_value = 66.66

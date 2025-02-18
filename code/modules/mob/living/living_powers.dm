@@ -11,48 +11,34 @@
 
 	hiding = !hiding
 	if(hiding)
-		to_chat(src, "<span class='notice'>You are now hiding.</span>")
+		to_chat(src, SPAN_NOTICE("You are now hiding."))
 	else
-		to_chat(src, "<span class='notice'>You have stopped hiding.</span>")
+		to_chat(src, SPAN_NOTICE("You have stopped hiding."))
 	reset_layer()
 
-/mob/living/proc/breath_death()
-	set name = "Breath Death"
-	set desc = "Infect others with your very breathe."
-	set category = "Abilities"
 
-	if(last_special > world.time)
-		return
+/mob/living/proc/activate_ai()
+	AI_inactive = FALSE
+	life_cycles_before_sleep = initial(life_cycles_before_sleep)
 
-	last_special = world.time + 1 SECOND
+/mob/living/proc/try_activate_ai()
+	if(AI_inactive)
+		activate_ai()
 
-	var/turf/T = get_turf(src)
-	var/obj/effect/effect/water/chempuff/chem = new(T)
-	chem.create_reagents(10)
-	chem.reagents.add_reagent(/datum/reagent/toxin/corrupting,30)
-	chem.set_up(get_step(T, dir), 2, 10)
-	playsound(T, 'sound/hallucinations/wail.ogg',20,1)
 
-/mob/living/proc/consume()
-	set name = "Consume"
-	set desc = "Regain life by consuming it from others."
-	set category = "Abilities"
+/mob/living/proc/check_surrounding_area(var/dist = 7)
 
-	if(last_special > world.time)
-		return
-	var/mob/living/target
-	for(var/mob/living/L in get_turf(src))
-		if(L.lying || L.stat == DEAD)
-			target = L
-			break
-	if(!target)
-		return
+	if(faction == "neutral")
+		return TRUE
+	for (var/mob/living/exosuit/M in GLOB.mechas_list)
+		if (M.z == src.z && get_dist(src, M) <= dist)
+			return TRUE
 
-	last_special = world.time + 50
+	for(var/mob/living/M in SSmobs.mob_living_by_zlevel[(get_turf(src)).z])
+		if(!(M.stat < DEAD))
+			continue
+		if(M.faction != faction)
+			if(get_dist(src, M) <= dist)
+				return TRUE
 
-	src.visible_message("<span class='danger'>\The [src] hunkers down over \the [target], tearing into their flesh.</span>")
-	if(do_after(src,target,100))
-		target.adjustBruteLoss(25)
-		if(target.health < -target.maxHealth)
-			target.gib()
-		src.adjustBruteLoss(-25)
+	return FALSE

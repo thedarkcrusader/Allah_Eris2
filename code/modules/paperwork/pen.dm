@@ -10,7 +10,7 @@
  * Pens
  */
 /obj/item/pen
-	desc = "It's a normal black ink pen."
+	desc = "A normal black ink pen."
 	name = "pen"
 	icon = 'icons/obj/bureaucracy.dmi'
 	icon_state = "pen"
@@ -20,22 +20,24 @@
 	w_class = ITEM_SIZE_TINY
 	throw_speed = 7
 	throw_range = 15
-	matter = list(DEFAULT_WALL_MATERIAL = 10)
+	matter = list(MATERIAL_STEEL = 1)
+	spawn_tags = SPAWN_TAG_JUNK
+	rarity_value = 6
 	var/colour = "black"	//what colour the ink is!
 
 
 /obj/item/pen/blue
-	desc = "It's a normal blue ink pen."
+	desc = "A normal blue ink pen."
 	icon_state = "pen_blue"
 	colour = "blue"
 
 /obj/item/pen/red
-	desc = "It's a normal red ink pen."
+	desc = "A normal red ink pen."
 	icon_state = "pen_red"
 	colour = "red"
 
 /obj/item/pen/multi
-	desc = "It's a pen with multiple colors of ink!"
+	desc = "A pen with multiple colors of ink!"
 	var/selectedColor = 1
 	var/colors = list("black","blue","red")
 
@@ -50,20 +52,22 @@
 	else
 		icon_state = "pen_[colour]"
 
-	to_chat(user, "<span class='notice'>Changed color to '[colour].'</span>")
+	to_chat(user, SPAN_NOTICE("Changed color to '[colour].'"))
 
 /obj/item/pen/invisible
-	desc = "It's an invisble pen marker."
+	desc = "An invisble pen marker."
 	icon_state = "pen"
 	colour = "white"
 
 
-/obj/item/pen/attack(mob/M as mob, mob/user as mob)
+/obj/item/pen/attack(mob/M, mob/user)
 	if(!ismob(M))
 		return
-	to_chat(user, "<span class='warning'>You stab [M] with the pen.</span>")
-	admin_attack_log(user, M, "Stabbed using \a [src]", "Was stabbed with \a [src]", "used \a [src] to stab")
-
+	to_chat(user, SPAN_WARNING("You stab [M] with the pen."))
+//	M << "\red You feel a tiny prick!" //That's a whole lot of meta!
+	M.attack_log += text("\[[time_stamp()]\] <font color='orange'>Has been stabbed with [name]  by [user.name] ([user.ckey])</font>")
+	user.attack_log += text("\[[time_stamp()]\] <font color='red'>Used the [name] to stab [M.name] ([M.ckey])</font>")
+	msg_admin_attack("[user.name] ([user.ckey]) Used the [name] to stab [M.name] ([M.ckey]) (<A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[user.x];Y=[user.y];Z=[user.z]'>JMP</a>)")
 	return
 
 /*
@@ -71,24 +75,26 @@
  */
 
 /obj/item/pen/reagent
-	atom_flags = ATOM_FLAG_OPEN_CONTAINER
-	origin_tech = list(TECH_MATERIAL = 2, TECH_ILLEGAL = 5)
+	reagent_flags = REFILLABLE | DRAINABLE
+	slot_flags = SLOT_BELT
+	origin_tech = list(TECH_MATERIAL = 2, TECH_COVERT = 5)
+	spawn_blacklisted = TRUE
 
 /obj/item/pen/reagent/New()
 	..()
 	create_reagents(30)
 
-/obj/item/pen/reagent/attack(mob/living/M, mob/user, var/target_zone)
+/obj/item/pen/reagent/attack(mob/living/M, mob/user)
 
 	if(!istype(M))
 		return
 
 	. = ..()
 
-	if(M.can_inject(user, target_zone))
+	if(M.can_inject(user,1))
 		if(reagents.total_volume)
 			if(M.reagents)
-				var/contained_reagents = reagents.get_reagents()
+				var/contained_reagents = reagents.log_list()
 				var/trans = reagents.trans_to_mob(M, 30, CHEM_BLOOD)
 				admin_inject_log(user, M, src, contained_reagents, trans)
 
@@ -96,21 +102,33 @@
  * Sleepy Pens
  */
 /obj/item/pen/reagent/sleepy
-	desc = "It's a black ink pen with a sharp point and a carefully engraved \"Waffle Co.\"."
-	origin_tech = list(TECH_MATERIAL = 2, TECH_ILLEGAL = 5)
+	desc = "A black ink pen with a sharp point and \"Waffle Co.\" engraved on the side."
+	origin_tech = list(TECH_MATERIAL = 2, TECH_COVERT = 5)
 
 /obj/item/pen/reagent/sleepy/New()
 	..()
-	reagents.add_reagent(/datum/reagent/chloralhydrate, 15)	//Used to be 100 sleep toxin//30 Chloral seems to be fatal, reducing it to 22, reducing it further to 15 because fuck you OD code./N
+	reagents.add_reagent("chloralhydrate", 22)	//Used to be 100 sleep toxin//30 Chloral seems to be fatal, reducing it to 22./N
 
+
+/*
+ * Parapens
+ */
+/obj/item/pen/reagent/paralysis
+	origin_tech = "materials=2;syndicate=5"
+
+/obj/item/pen/reagent/paralysis/New()
+	..()
+	reagents.add_reagent("zombiepowder", 10)
+	reagents.add_reagent("cryptobiolin", 15)
 
 /*
  * Chameleon pen
  */
 /obj/item/pen/chameleon
 	var/signature = ""
+	spawn_blacklisted = TRUE
 
-/obj/item/pen/chameleon/attack_self(mob/user as mob)
+/obj/item/pen/chameleon/attack_self(mob/user)
 	/*
 	// Limit signatures to official crew members
 	var/personnel_list[] = list()
@@ -171,12 +189,16 @@
 	icon_state = "crayonred"
 	w_class = ITEM_SIZE_TINY
 	attack_verb = list("attacked", "coloured")
-	colour = "#ff0000" //RGB
+	colour = "#FF0000" //RGB
 	var/shadeColour = "#220000" //RGB
 	var/uses = 30 //0 for unlimited uses
 	var/instant = 0
 	var/colourName = "red" //for updateIcon purposes
+	var/grindable = TRUE //normal crayons are grindable, rainbow and mime aren't
 
 	New()
 		name = "[colourName] crayon"
+		if(grindable)
+			create_reagents(20)
+			reagents.add_reagent("crayon_dust_[colourName]", 20)
 		..()

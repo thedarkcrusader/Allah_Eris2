@@ -1,11 +1,12 @@
 #define MEMOFILE "data/memo.sav"	//where the memos are saved
-#define ENABLE_MEMOS 1				//using a define because screw making a config variable for it. This is more efficient and purty.
 
+//admin memo system. show/delete/write.
+// +SERVER needed to delete admin memos of others
 //switch verb so we don't spam up the verb lists with like, 3 verbs for this feature.
 /client/proc/admin_memo(task in list("write","show","delete"))
 	set name = "Memo"
 	set category = "Server"
-	if(!ENABLE_MEMOS)		return
+	if(!config.admin_memo_system)	return
 	if(!check_rights(0))	return
 	switch(task)
 		if("write")		admin_memo_write()
@@ -31,7 +32,7 @@
 
 //show all memos
 /client/proc/admin_memo_show()
-	if(ENABLE_MEMOS)
+	if(config.admin_memo_system)
 		var/savefile/F = new(MEMOFILE)
 		if(F)
 			for(var/ckey in F.dir)
@@ -51,4 +52,3 @@
 			to_chat(src, "<b>Removed Memo created by [ckey].</b>")
 
 #undef MEMOFILE
-#undef ENABLE_MEMOS

@@ -9,12 +9,11 @@
 	icon = 'icons/obj/objects.dmi'
 	icon_state = "floor_magnet-f"
 	name = "Electromagnetic Generator"
-	desc = "A device that uses powernet to create points of magnetic energy."
-	level = 1		// underfloor
-	plane = ABOVE_PLATING_PLANE
-	layer = ABOVE_WIRE_LAYER
-	anchored = 1
-	use_power = 1
+	desc = "A device that uses station power to create points of magnetic energy."
+	level = BELOW_PLATING_LEVEL		// underfloor
+	layer = LOW_OBJ_LAYER
+	anchored = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 50
 
 	var/freq = 1449		// radio frequency
@@ -22,7 +21,7 @@
 	var/magnetic_field = 1 // the range of magnetic attraction
 	var/code = 0 // frequency code, they should be different unless you have a group of magnets working together or something
 	var/turf/center // the center of magnetic attraction
-	var/on = 0
+	var/on = FALSE
 	var/pulling = 0
 
 	// x, y modifiers to the center turf; (0, 0) is centered on the magnet, whereas (1, -1) is one tile right, one tile down
@@ -44,11 +43,11 @@
 
 	// update the invisibility and icon
 	hide(var/intact)
-		set_invisibility(intact ? 101 : 0)
-		update_icon()
+		invisibility = intact ? 101 : 0
+		updateicon()
 
 	// update the icon_state
-	update_icon()
+	proc/updateicon()
 		var/state="floor_magnet"
 		var/onstate=""
 		if(!on)
@@ -130,7 +129,7 @@
 
 	Process()
 		if(stat & NOPOWER)
-			on = 0
+			on = FALSE
 
 		// Sanity checks:
 		if(electricity_level <= 0)
@@ -151,10 +150,10 @@
 
 		// Update power usage:
 		if(on)
-			use_power = 2
 			active_power_usage = electricity_level*15
+			set_power_use(ACTIVE_POWER_USE)
 		else
-			use_power = 0
+			set_power_use(NO_POWER_USE)
 
 
 		// Overload conditions:
@@ -167,7 +166,7 @@
 						qdel(src)
 		*/
 
-		update_icon()
+		updateicon()
 
 
 	proc/magnetic_process() // proc that actually does the pulling
@@ -178,11 +177,12 @@
 			center = locate(x+center_x, y+center_y, z)
 			if(center)
 				for(var/obj/M in orange(magnetic_field, center))
-					if(!M.anchored && (M.obj_flags & OBJ_FLAG_CONDUCTIBLE))
+					if(!M.anchored && (M.flags & CONDUCT))
 						step_towards(M, center)
 
 				for(var/mob/living/silicon/S in orange(magnetic_field, center))
-					if(istype(S, /mob/living/silicon/ai)) continue
+					if(isAI(S))
+						continue
 					step_towards(S, center)
 
 			use_power(electricity_level * 5)
@@ -192,15 +192,15 @@
 
 /obj/machinery/magnetic_module/Destroy()
 	SSradio.remove_object(src, freq)
-	..()
+	. = ..()
 
 /obj/machinery/magnetic_controller
 	name = "Magnetic Control Console"
 	icon = 'icons/obj/airlock_machines.dmi' // uses an airlock machine icon, THINK GREEN HELP THE ENVIRONMENT - RECYCLING!
 	icon_state = "airlock_control_standby"
-	density = 1
-	anchored = 1.0
-	use_power = 1
+	density = TRUE
+	anchored = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 45
 	var/frequency = 1449
 	var/code = 0
@@ -277,8 +277,6 @@
 	Topic(href, href_list)
 		if(..())
 			return 1
-		if(stat & (BROKEN|NOPOWER))
-			return
 		usr.set_machine(src)
 
 		if(href_list["radio-op"])
@@ -402,4 +400,4 @@
 
 /obj/machinery/magnetic_controller/Destroy()
 	SSradio.remove_object(src, frequency)
-	..()
+	. = ..()

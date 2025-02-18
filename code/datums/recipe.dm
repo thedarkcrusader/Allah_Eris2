@@ -9,7 +9,7 @@
  * * items are objects. Fruits, tools, circuit boards.
  * * result is type to create as new object
  * * time is optional parameter, you shall use in in your machine,
- * * default /datum/recipe/ procs does not rely on this parameter.
+     default /datum/recipe/ procs does not rely on this parameter.
  *
  *  Functions you need:
  *  /datum/recipe/proc/make(var/obj/container as obj)
@@ -31,8 +31,8 @@
  * */
 
 /datum/recipe
-	var/list/reagents // example: = list(/datum/reagent/drink/juice/berry = 5) // do not list same reagent twice
-	var/list/items    // example: = list(/obj/item/crowbar, /obj/item/welder) // place /foo/bar before /foo
+	var/list/reagents // example: = list("berryjuice" = 5) // do not list same reagent twice
+	var/list/items    // example: = list(/obj/item/tool/crowbar, /obj/item/welder) // place /foo/bar before /foo
 	var/list/fruit    // example: = list("fruit" = 3)
 	var/result        // example: = /obj/item/reagent_containers/food/snacks/donut/normal
 	var/time = 100    // 1/10 part of second
@@ -74,13 +74,13 @@
 	if (items && items.len)
 		var/list/checklist = list()
 		checklist = items.Copy() // You should really trust Copy
-		for(var/obj/O in container.InsertedContents())
+		for(var/obj/O in container)
 			if(istype(O,/obj/item/reagent_containers/food/snacks/grown))
 				continue // Fruit is handled in check_fruit().
 			var/found = 0
 			for(var/i = 1; i < checklist.len+1; i++)
 				var/item_type = checklist[i]
-				if (istype(O,item_type))
+				if (istype(O, item_type))
 					checklist.Cut(i, i+1)
 					found = 1
 					break
@@ -93,7 +93,7 @@
 //general version
 /datum/recipe/proc/make(var/obj/container as obj)
 	var/obj/result_obj = new result(container)
-	for (var/obj/O in (container.InsertedContents()-result_obj))
+	for (var/obj/O in (container.contents-result_obj))
 		O.reagents.trans_to_obj(result_obj, O.reagents.total_volume)
 		qdel(O)
 	container.reagents.clear_reagents()
@@ -102,18 +102,14 @@
 // food-related
 /datum/recipe/proc/make_food(var/obj/container as obj)
 	if(!result)
-		log_error("<span class='danger'>Recipe [type] is defined without a result, please bug this.</span>")
-
+		to_chat(world, SPAN_DANGER("Recipe [type] is defined without a result, please bug this."))
 		return
 	var/obj/result_obj = new result(container)
-	for (var/obj/O in (container.InsertedContents()-result_obj))
+	for (var/obj/O in (container.contents-result_obj))
 		if (O.reagents)
-			O.reagents.del_reagent(/datum/reagent/nutriment)
+			O.reagents.del_reagent("nutriment")
 			O.reagents.update_total()
 			O.reagents.trans_to_obj(result_obj, O.reagents.total_volume)
-		if(istype(O,/obj/item/holder/))
-			var/obj/item/holder/H = O
-			H.destroy_all()
 		qdel(O)
 	container.reagents.clear_reagents()
 	return result_obj

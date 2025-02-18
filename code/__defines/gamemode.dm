@@ -1,3 +1,5 @@
+
+#define GAME_STATE_STARTUP		0
 #define GAME_STATE_PREGAME		1
 #define GAME_STATE_SETTING_UP	2
 #define GAME_STATE_PLAYING		3
@@ -19,32 +21,63 @@
 #define ANTAG_RANDSPAWN         0x100 // Potentially randomly spawns due to events.
 #define ANTAG_VOTABLE           0x200 // Can be voted as an additional antagonist before roundstart.
 #define ANTAG_SET_APPEARANCE    0x400 // Causes antagonists to use an appearance modifier on spawn.
-#define ANTAG_RANDOM_EXCEPTED   0x800 // If a game mode randomly selects antag types, antag types with this flag should be excluded.
+#define ANTAG_RANDOM_EXCEPTED	0x800 // If a game mode randomly selects antag types, antag types with this flag should be excluded.
 
-// Mode/antag template macros.
-#define MODE_BORER "borer"
-#define MODE_XENOMORPH "xeno"
-#define MODE_LOYALIST "loyalist"
-#define MODE_MUTINEER "mutineer"
-#define MODE_COMMANDO "commando"
-#define MODE_DEATHSQUAD "deathsquad"
-#define MODE_ERT "ert"
-#define MODE_ACTOR "actor"
-#define MODE_MERCENARY "mercenary"
-#define MODE_RAIDER "raider"
-#define MODE_WIZARD "wizard"
-#define MODE_CHANGELING "changeling"
-#define MODE_CULTIST "cultist"
-#define MODE_MONKEY "monkey"
-#define MODE_RENEGADE "renegade"
-#define MODE_REVOLUTIONARY "revolutionary"
-#define MODE_MALFUNCTION "malf"
-#define MODE_TRAITOR "traitor"
-#define MODE_DEITY "deity"
-#define MODE_USURP "usurp"
+//A flag to skip target selection
+#define ANTAG_SKIP_TARGET	-1
 
-#define DEFAULT_TELECRYSTAL_AMOUNT 50 //130 ARE YOU HIGH?
+// Storyteller names macro
+#define STORYTELLER_BASE "guide"
+
+// antag bantypes macros.
+#define ROLE_BANTYPE_BORER ROLE_BORER
+#define ROLE_BANTYPE_MALFUNCTION ROLE_MALFUNCTION
+#define ROLE_BANTYPE_TRAITOR ROLE_TRAITOR
+#define ROLE_BANTYPE_INQUISITOR ROLE_INQUISITOR
+#define ROLE_BANTYPE_EXCELSIOR ROLE_EXCELSIOR_REV
+#define ROLE_BANTYPE_CARRION ROLE_CARRION
+#define ROLE_BANTYPE_CREW_SIDED ROLE_MARSHAL
+#define ROLE_BANTYPE_BLITZ ROLE_BLITZ
+
+// antag template macros.
+#define ROLE_BORER "borer"
+#define ROLE_BORER_REPRODUCED "borer_r"
+#define ROLE_LOYALIST "loyalist"
+#define ROLE_MUTINEER "mutineer"
+#define ROLE_COMMANDO "commando"
+#define ROLE_DEATHSQUAD "deathsquad"
+#define ROLE_ARTIST "artist"
+#define ROLE_MERCENARY "mercenary"
+#define ROLE_PIRATE "pirate"
+#define ROLE_CARRION "carrion"
+#define ROLE_MONKEY "monkey"
+#define ROLE_MALFUNCTION "malf"
+#define ROLE_CONTRACTOR "contractor"
+#define ROLE_CONTRACTOR_SYNTH "robo_contractor"
+#define ROLE_MARSHAL "marshal"
+
+#define ROLE_EXCELSIOR_REV "excelsior_rev"
+
+#define ROLE_INQUISITOR "inquisitor"
+#define ROLE_SECDOC_DEFENDER "secdoc_defender"
+
+#define ROLE_BLITZ "blitzshell"
+
+#define FACTION_EXCELSIOR "excelsior"
+#define FACTION_BORERS "borers"
+#define FACTION_SERBS	"serbians"
+#define FACTION_PIRATES	"pirates"
+#define FACTION_NEOTHEOLOGY	"neotheologists"
+
+#define ROLES_CONTRACT_COMPLETE list(ROLE_CONTRACTOR,ROLE_CARRION) // Blitz not included
+#define ROLES_CONTRACT_VIEW list(ROLE_CONTRACTOR,ROLE_CARRION,ROLE_BLITZ,ROLE_MARSHAL)
+#define ROLES_UPLINK_BASE list(ROLE_CONTRACTOR,ROLE_MARSHAL,ROLE_INQUISITOR,ROLE_MERCENARY)
+
+#define ROLESET_CONTRACTOR "contractor"
+
+#define DEFAULT_TELECRYSTAL_AMOUNT 25
 #define IMPLANT_TELECRYSTAL_AMOUNT(x) (round(x * 0.49)) // If this cost is ever greater than half of DEFAULT_TELECRYSTAL_AMOUNT then it is possible to buy more TC than you spend
+
 
 /////////////////
 ////WIZARD //////
@@ -54,7 +87,7 @@
 #define GHOSTCAST		0x1		//can a ghost cast it?
 #define NEEDSCLOTHES	0x2		//does it need the wizard garb to cast? Nonwizard spells should not have this
 #define NEEDSHUMAN		0x4		//does it require the caster to be human?
-#define Z2NOCAST		0x8		//if this is added, the spell can't be cast at centcomm
+#define Z2NOCAST		0x8		//if this is added, the spell can't be cast at centcom
 #define STATALLOWED		0x10	//if set, the user doesn't have to be conscious to cast. Required for ghost spells
 #define IGNOREPREV		0x20	//if set, each new target does not overlap with the previous one
 //The following flags only affect different types of spell, and therefore overlap
@@ -83,8 +116,3 @@
 #define Sp_RECHARGE	"recharge"
 #define Sp_CHARGES	"charges"
 #define Sp_HOLDVAR	"holdervar"
-
-#define INITIALIZATION_NOW 1
-#define INITIALIZATION_HAS_BEGUN 2
-#define INITIALIZATION_COMPLETE 4
-#define INITIALIZATION_NOW_AND_COMPLETE (INITIALIZATION_NOW|INITIALIZATION_COMPLETE)

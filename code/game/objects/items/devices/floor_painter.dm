@@ -1,23 +1,20 @@
 /obj/item/device/floor_painter
 	name = "floor painter"
-	icon = 'icons/obj/device.dmi'
-	icon_state = "flpainter"
-	item_state = "fl_painter"
-	desc = "A slender and none-too-sophisticated device capable of painting, erasing, and applying decals to most types of floors."
-	description_info = "Use this item in your hand to access a menu in which you may change the type of decal, applied direction, and color. Click any accessible tile on the floor to apply your choice."
-	description_fluff = "This ubiquitous maintenance-grade floor painter isn't as fancy or convenient as modern consumer models, but with an internal synthesizer it never runs out of pigment!"
-	description_antag = "This thing would be perfect for vandalism. Could you write your name in the halls?"
+	icon = 'icons/obj/bureaucracy.dmi'
+	icon_state = "floorpainter"
+	item_state = "flight"
+
+	matter = list(MATERIAL_STEEL = 1, MATERIAL_PLASTIC = 2, MATERIAL_GLASS = 1)
 
 	var/decal =        "remove all decals"
 	var/paint_dir =    "precise"
 	var/paint_colour = COLOR_WHITE
 
 	var/list/decals = list(
-		"quarter-turf" =      list("path" = /obj/effect/floor_decal/corner, "precise" = 1, "coloured" = 1),
 		"hazard stripes" =    list("path" = /obj/effect/floor_decal/industrial/warning),
 		"corner, hazard" =    list("path" = /obj/effect/floor_decal/industrial/warning/corner),
 		"hatched marking" =   list("path" = /obj/effect/floor_decal/industrial/hatch, "coloured" = 1),
-		"dashed outline" =    list("path" = /obj/effect/floor_decal/industrial/outline, "coloured" = 1),
+		"dotted outline" =    list("path" = /obj/effect/floor_decal/industrial/outline, "coloured" = 1),
 		"loading sign" =      list("path" = /obj/effect/floor_decal/industrial/loading),
 		"mosaic, large" =     list("path" = /obj/effect/floor_decal/chapel),
 		"1" =                 list("path" = /obj/effect/floor_decal/sign),
@@ -49,13 +46,13 @@
 	if(!proximity)
 		return
 
-	var/turf/simulated/floor/F = A
+	var/turf/floor/F = A
 	if(!istype(F))
-		to_chat(user, "<span class='warning'>\The [src] can only be used on actual flooring.</span>")
+		to_chat(user, SPAN_WARNING("\The [src] can only be used on ship flooring."))
 		return
 
-	if(!F.flooring.can_paint || F.broken || F.burnt)
-		to_chat(user, "<span class='warning'>\The [src] cannot paint broken tiles.</span>")
+	if(!F.flooring || !F.flooring.can_paint || F.broken || F.burnt)
+		to_chat(user, SPAN_WARNING("\The [src] cannot paint broken or missing tiles."))
 		return
 
 	var/list/decal_data = decals[decal]
@@ -69,11 +66,11 @@
 			config_error = 1
 
 	if(config_error)
-		to_chat(user, "<span class='warning'>\The [src] flashes an error light. You might need to reconfigure it.</span>")
+		to_chat(user, SPAN_WARNING("\The [src] flashes an error light. You might need to reconfigure it."))
 		return
 
 	if(F.decals && F.decals.len > 5 && painting_decal != /obj/effect/floor_decal/reset)
-		to_chat(user, "<span class='warning'>\The [F] has been painted too much; you need to clear it off.</span>")
+		to_chat(user, SPAN_WARNING("\The [F] has been painted too much; you need to clear it off."))
 		return
 
 	var/painting_dir = 0
@@ -115,9 +112,9 @@
 	else if(choice == "Colour")
 		choose_colour()
 
-/obj/item/device/floor_painter/examine(mob/user)
-	. = ..(user)
-	to_chat(user, "It is configured to produce the '[decal]' decal with a direction of '[paint_dir]' using [paint_colour] paint.")
+/obj/item/device/floor_painter/examine(mob/user, extra_description = "")
+	extra_description += "It is configured to produce the '[decal]' decal with a direction of '[paint_dir]' using [paint_colour] paint."
+	..(user, extra_description)
 
 /obj/item/device/floor_painter/verb/choose_colour()
 	set name = "Choose Colour"
@@ -130,7 +127,7 @@
 	var/new_colour = input(usr, "Choose a colour.", "Floor painter", paint_colour) as color|null
 	if(new_colour && new_colour != paint_colour)
 		paint_colour = new_colour
-		to_chat(usr, "<span class='notice'>You set \the [src] to paint with <font color='[paint_colour]'>a new colour</font>.</span>")
+		to_chat(usr, SPAN_NOTICE("You set \the [src] to paint with <font color='[paint_colour]'>a new colour</font>."))
 
 /obj/item/device/floor_painter/verb/choose_decal()
 	set name = "Choose Decal"
@@ -144,7 +141,7 @@
 	var/new_decal = input("Select a decal.") as null|anything in decals
 	if(new_decal && !isnull(decals[new_decal]))
 		decal = new_decal
-		to_chat(usr, "<span class='notice'>You set \the [src] decal to '[decal]'.</span>")
+		to_chat(usr, SPAN_NOTICE("You set \the [src] decal to '[decal]'."))
 
 /obj/item/device/floor_painter/verb/choose_direction()
 	set name = "Choose Direction"
@@ -158,4 +155,31 @@
 	var/new_dir = input("Select a direction.") as null|anything in paint_dirs
 	if(new_dir && !isnull(paint_dirs[new_dir]))
 		paint_dir = new_dir
-		to_chat(usr, "<span class='notice'>You set \the [src] direction to '[paint_dir]'.</span>")
+		to_chat(usr, SPAN_NOTICE("You set \the [src] direction to '[paint_dir]'."))
+
+/obj/item/device/floor_painter/mech_painter
+	name = "mech painter"
+	icon_state = "mechpainter"
+	matter = list(MATERIAL_STEEL = 1,MATERIAL_GLASS = 1)
+
+/obj/item/device/floor_painter/mech_painter/afterattack(var/atom/A, var/mob/user, proximity, params)
+	if(!proximity)
+		return
+
+	var/mob/living/exosuit/ES = A
+	if(istype(ES))
+		to_chat(user, SPAN_WARNING("You can't paint an active exosuit. Dismantle it first."))
+		return
+
+	var/obj/structure/heavy_vehicle_frame/EF = A
+	if(istype(EF))
+		EF.set_colour(paint_colour)
+		return
+
+	var/obj/item/mech_component/MC = A
+	if(istype(MC))
+		MC.set_colour(paint_colour)
+		return
+
+/obj/item/device/floor_painter/mech_painter/attack_self(var/mob/user)
+	choose_colour()

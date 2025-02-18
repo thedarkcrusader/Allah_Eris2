@@ -2,15 +2,16 @@
 
 /obj/machinery/containment_field
 	name = "Containment Field"
-	desc = "An energy field."
+	desc = "A crackling, humming field of electromagnetic energy. Its kinetic force is more than enough to halt the course of a gravitational singularity, so it's probably not safe for you to touch."
 	icon = 'icons/obj/singularity.dmi'
 	icon_state = "Contain_F"
-	anchored = 1
-	density = 0
+	anchored = TRUE
+	density = FALSE
 	unacidable = 1
-	use_power = 0
+	use_power = NO_POWER_USE
 	light_range = 4
-	movable_flags = MOVABLE_FLAG_PROXMOVE
+	layer = ABOVE_OBJ_LAYER
+	flags = PROXMOVE
 	var/obj/machinery/field_generator/FG1 = null
 	var/obj/machinery/field_generator/FG2 = null
 	var/hasShocked = 0 //Used to add a delay between shocks. In some cases this used to crash servers by spawning hundreds of sparks every second.
@@ -30,14 +31,14 @@
 		return 1
 
 
-/obj/machinery/containment_field/ex_act(severity)
-	return 0
+/obj/machinery/containment_field/explosion_act(target_power, explosion_handler/handler)
+	return target_power
 
 /obj/machinery/containment_field/HasProximity(atom/movable/AM as mob|obj)
-	if(istype(AM,/mob/living/silicon) && prob(40))
+	if(issilicon(AM) && prob(40))
 		shock(AM)
 		return 1
-	if(istype(AM,/mob/living/carbon) && prob(50))
+	if(iscarbon(AM) && prob(50))
 		shock(AM)
 		return 1
 	return 0

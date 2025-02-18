@@ -9,101 +9,98 @@ var/global/universe_has_ended = 0
 
 /datum/universal_state/supermatter_cascade/OnShuttleCall(var/mob/user)
 	if(user)
-		to_chat(user, "<span class='sinister'>All you hear on the frequency is static and panicked screaming. There will be no shuttle call today.</span>")
+		to_chat(user, "<span class='sinister'>The only thing you hear from the console is static. You are alone.</span>")
 	return 0
 
 /datum/universal_state/supermatter_cascade/OnTurfChange(var/turf/T)
 	var/turf/space/S = T
 	if(istype(S))
-		S.color = "#0066ff"
+		S.color = "#0066FF"
 	else
 		S.color = initial(S.color)
 
 /datum/universal_state/supermatter_cascade/DecayTurf(var/turf/T)
-	if(istype(T,/turf/simulated/wall))
-		var/turf/simulated/wall/W=T
+	if(istype(T,/turf/wall))
+		var/turf/wall/W=T
 		W.melt()
 		return
-	if(istype(T,/turf/simulated/floor))
-		var/turf/simulated/floor/F=T
+	if(istype(T,/turf/floor))
+		var/turf/floor/F=T
 		// Burnt?
 		if(!F.burnt)
 			F.burn_tile()
 		else
-			if(!istype(F,/turf/simulated/floor/plating))
+			if(!istype(F,/turf/floor/plating))
 				F.break_tile_to_plating()
 		return
 
 // Apply changes when entering state
 /datum/universal_state/supermatter_cascade/OnEnter()
 	set background = 1
-	to_world("<span class='sinister' style='font-size:22pt'>You are blinded by a brilliant flash of energy.</span>")
-	sound_to(world, sound('sound/effects/cascade.ogg'))
+	SSgarbage.state = SS_SLEEPING
+	to_chat(world, "<span class='sinister' style='font-size:22pt'>You are blinded by a brilliant flash of energy.</span>")
 
-	for(var/mob/M in GLOB.player_list)
-		M.flash_eyes()
+	world << sound('sound/effects/cascade.ogg')
+
+	for(var/mob/living/M in GLOB.player_list)
+		M.flash()
 
 	if(evacuation_controller.cancel_evacuation())
-		priority_announcement.Announce("The evacuation has been aborted due to bluespace distortion.")
+		priority_announcement.Announce("The escape pod launch sequence has been aborted due to bluespace distortion.")
 
 	AreaSet()
 	MiscSet()
 	APCSet()
 	OverlayAndAmbientSet()
 
-	// Disable Nar-Sie.
-	cult.allow_narsie = 0
-
 	PlayerSet()
-	SSskybox.reinstate_skyboxes("cascade", FALSE)
 
-	new /obj/singularity/narsie/large/exit(pick(endgame_exits))
 	spawn(rand(30,60) SECONDS)
 		var/txt = {"
-A galaxy-wide electromagnetic pulse has been detected. All systems across space are heavily damaged and many personnel have died or are dying. We are currently detecting increasing indications that the universe itself is beginning to unravel.
+AUTOMATED ALERT: Attention [station_name], this is a high alert broadcast to all ships from the central communication hub of the [boss_name], a catastrophe has happened on the ship [station_name], information regarding the incident is classified.
 
-[station_name()], the largest source of disturbances has been pinpointed directly to you. We estimate you have five minutes until a bluespace rift opens within your facilities.
-
-There is no known way to stop the formation of the rift, nor any way to escape it. You are entirely alone.
-
-God help your s\[\[###!!!-
+We highly suggest, that all corporate owned, and free ships within listening range depart into Bluespace. Until the incident ends, all employees aboard HTU operated ships will have their pay-rolls will be frozen, and their have benefits cut, independent ships not included.
 
 AUTOMATED ALERT: Link to [command_name()] lost.
-
 "}
 		priority_announcement.Announce(txt,"SUPERMATTER CASCADE DETECTED")
 
+		for(var/obj/machinery/computer/shuttle_control/C in GLOB.computer_list)
+			if(istype(C, /obj/machinery/computer/shuttle_control/research) || istype(C, /obj/machinery/computer/shuttle_control/mining))
+				C.req_access = list()
+				C.req_one_access = list()
+
 		spawn(5 MINUTES)
-			ticker.station_explosion_cinematic(0,null) // TODO: Custom cinematic
+			SSticker.station_explosion_cinematic(0,null) // TODO: Custom cinematic
 			universe_has_ended = 1
 		return
 
 /datum/universal_state/supermatter_cascade/proc/AreaSet()
-	for(var/area/A)
-		if(!istype(A,/area) || istype(A, /area/space) || istype(A,/area/beach))
+	for(var/area/A in all_areas)
+		if(!istype(A,/area) || istype(A, /area/space))
 			continue
 
-		A.update_icon()
+		A.updateicon()
 
 /datum/universal_state/supermatter_cascade/OverlayAndAmbientSet()
 	spawn(0)
-		for(var/datum/lighting_corner/L in world)
-			if(L.z in GLOB.using_map.admin_levels)
-				L.update_lumcount(1,1,1)
+		for(var/atom/movable/lighting_overlay/L in world)
+			if(isAdminLevel(L.z))
+				L.update_overlay(1,1,1)
 			else
-				L.update_lumcount(0.0, 0.4, 1)
+				L.update_overlay(0, 0.4, 1)
 
-		for(var/turf/space/T)
+		for(var/turf/space/T in turfs)
 			OnTurfChange(T)
 
 /datum/universal_state/supermatter_cascade/proc/MiscSet()
-	for (var/obj/machinery/firealarm/alm in SSmachines.machinery)
+	for (var/obj/machinery/firealarm/alm in GLOB.firealarm_list)
 		if (!(alm.stat & BROKEN))
-			alm.ex_act(2)
+			alm.explosion_act(500, null)
 
 /datum/universal_state/supermatter_cascade/proc/APCSet()
-	for (var/obj/machinery/power/apc/APC in SSmachines.machinery)
-		if (!(APC.stat & BROKEN) && !APC.is_critical)
+	for (var/obj/machinery/power/apc/APC in GLOB.apc_list)
+		if (!(APC.stat & BROKEN) && is_valid_apc(APC))
 			APC.chargemode = 0
 			if(APC.cell)
 				APC.cell.charge = 0
@@ -111,11 +108,8 @@ AUTOMATED ALERT: Link to [command_name()] lost.
 			APC.queue_icon_update()
 
 /datum/universal_state/supermatter_cascade/proc/PlayerSet()
-	for(var/datum/mind/M in GLOB.player_list)
-		if(!istype(M.current,/mob/living))
+	for(var/datum/antagonist/A in GLOB.current_antags)
+		if(!isliving(A.owner.current))
 			continue
-		if(M.current.stat!=2)
-			M.current.Weaken(10)
-			M.current.flash_eyes()
 
-		clear_antag_roles(M)
+		A.remove_antagonist()

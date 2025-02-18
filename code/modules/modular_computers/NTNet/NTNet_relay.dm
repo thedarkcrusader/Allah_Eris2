@@ -2,12 +2,13 @@
 /obj/machinery/ntnet_relay
 	name = "NTNet Quantum Relay"
 	desc = "A very complex router and transmitter capable of connecting electronic devices together. Looks fragile."
-	use_power = 2
+	icon = 'icons/obj/machines/telecomms.dmi'
+	use_power = ACTIVE_POWER_USE
 	active_power_usage = 20000 //20kW, apropriate for machine that keeps massive cross-Zlevel wireless network operational.
 	idle_power_usage = 100
 	icon_state = "bus"
-	anchored = 1
-	density = 1
+	anchored = TRUE
+	density = TRUE
 	var/datum/ntnet/NTNet = null // This is mostly for backwards reference and to allow varedit modifications from ingame.
 	var/enabled = 1				// Set to 0 if the relay was turned off
 	var/dos_failure = 0			// Set to 1 if the relay failed due to (D)DoS attack
@@ -37,9 +38,9 @@
 
 /obj/machinery/ntnet_relay/Process()
 	if(operable())
-		use_power = 2
+		set_power_use(ACTIVE_POWER_USE)
 	else
-		use_power = 1
+		set_power_use(IDLE_POWER_USE)
 
 	if(dos_overload)
 		dos_overload = max(0, dos_overload - dos_dissipate)
@@ -56,14 +57,14 @@
 		ntnet_global.add_log("Quantum relay switched from overload recovery mode to normal operation mode.")
 	..()
 
-/obj/machinery/ntnet_relay/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/topic_state/state = GLOB.default_state)
+/obj/machinery/ntnet_relay/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state = GLOB.default_state)
 	var/list/data = list()
 	data["enabled"] = enabled
 	data["dos_capacity"] = dos_capacity
 	data["dos_overload"] = dos_overload
 	data["dos_crashed"] = dos_failure
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
 		ui = new(user, src, ui_key, "ntnet_relay.tmpl", "NTNet Quantum Relay", 500, 300, state = state)
 		ui.set_initial_data(data)
@@ -71,7 +72,7 @@
 		ui.set_auto_update(1)
 
 /obj/machinery/ntnet_relay/attack_hand(var/mob/living/user)
-	ui_interact(user)
+	nano_ui_interact(user)
 
 /obj/machinery/ntnet_relay/Topic(href, href_list)
 	if(..())
@@ -97,7 +98,7 @@
 	gl_uid++
 	component_parts = list()
 	component_parts += new /obj/item/stack/cable_coil(src,15)
-	component_parts += new /obj/item/circuitboard/ntnet_relay(src)
+	component_parts += new /obj/item/electronics/circuitboard/ntnet_relay(src)
 
 	if(ntnet_global)
 		ntnet_global.relays.Add(src)
@@ -116,21 +117,8 @@
 	..()
 
 /obj/machinery/ntnet_relay/attackby(var/obj/item/W as obj, var/mob/user as mob)
-	if(isScrewdriver(W))
-		playsound(src.loc, 'sound/items/Screwdriver.ogg', 50, 1)
-		panel_open = !panel_open
-		to_chat(user, "You [panel_open ? "open" : "close"] the maintenance hatch")
+	if(default_deconstruction(W, user))
 		return
-	if(isCrowbar(W))
-		if(!panel_open)
-			to_chat(user, "Open the maintenance panel first.")
-			return
-		playsound(src.loc, 'sound/items/Crowbar.ogg', 50, 1)
-		to_chat(user, "You disassemble \the [src]!")
-
-		for(var/atom/movable/A in component_parts)
-			A.forceMove(src.loc)
-		new/obj/machinery/constructable_frame/machine_frame(src.loc)
-		qdel(src)
+	if(default_part_replacement(W, user))
 		return
 	..()

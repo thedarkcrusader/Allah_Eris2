@@ -3,19 +3,15 @@
 	desc = "A fancy bed with built-in injectors, a dialysis machine, and a limited health scanner."
 	icon = 'icons/obj/Cryogenic2.dmi'
 	icon_state = "sleeper_0"
-	density = 1
-	anchored = 1
-	clicksound = 'sound/machines/buttonbeep.ogg'
-	clickvol = 30
+	density = TRUE
+	anchored = TRUE
+	circuit = /obj/item/electronics/circuitboard/sleeper
 	var/mob/living/carbon/human/occupant = null
-	var/list/available_chemicals = list("Inaprovaline" = /datum/reagent/inaprovaline, "Soporific" = /datum/reagent/soporific, "Paracetamol" = /datum/reagent/paracetamol, "Dylovene" = /datum/reagent/dylovene, "Dexalin" = /datum/reagent/dexalin)
+	var/list/available_chemicals = list("inaprovaline2" = "Synth-Inaprovaline", "stoxin" = "Soporific", "paracetamol" = "Paracetamol", "anti_toxin" = "Dylovene", "dexalin" = "Dexalin", "tricordrazine" = "Tricordrazine")
 	var/obj/item/reagent_containers/glass/beaker = null
 	var/filtering = 0
-	var/pump
-	var/list/stasis_settings = list(1, 2, 5)
-	var/stasis = 1
 
-	use_power = 1
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 15
 	active_power_usage = 200 //builtin health analyzer, dialysis machine, injectors.
 
@@ -39,16 +35,6 @@
 					occupant.vessel.trans_to_obj(beaker, pumped + 1)
 		else
 			toggle_filter()
-	if(pump > 0)
-		if(beaker && istype(occupant))
-			if(beaker.reagents.total_volume < beaker.reagents.maximum_volume)
-				for(var/datum/reagent/x in occupant.ingested.reagent_list)
-					occupant.ingested.trans_to_obj(beaker, 3)
-		else
-			toggle_pump()
-
-	if(iscarbon(occupant) && stasis > 1)
-		occupant.SetStasis(stasis)
 
 /obj/machinery/sleeper/update_icon()
 	icon_state = "sleeper_[occupant ? "1" : "0"]"
@@ -57,9 +43,9 @@
 	if(..())
 		return 1
 
-	ui_interact(user)
+	nano_ui_interact(user)
 
-/obj/machinery/sleeper/ui_interact(var/mob/user, var/ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/topic_state/state = GLOB.outside_state)
+/obj/machinery/sleeper/nano_ui_interact(var/mob/user, var/ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state =GLOB.outside_state)
 	var/data[0]
 
 	data["power"] = stat & (NOPOWER|BROKEN) ? 0 : 1
@@ -67,18 +53,38 @@
 	var/list/reagents = list()
 	for(var/T in available_chemicals)
 		var/list/reagent = list()
-		reagent["name"] = T
-		if(occupant && occupant.reagents)
+		reagent["id"] = T
+		reagent["name"] = available_chemicals[T]
+		if(occupant)
 			reagent["amount"] = occupant.reagents.get_reagent_amount(T)
 		reagents += list(reagent)
 	data["reagents"] = reagents.Copy()
 
 	if(occupant)
-		var/scan = medical_scan_results(occupant)
-		scan = replacetext(scan,"'notice'","'white'")
-		scan = replacetext(scan,"'warning'","'average'")
-		scan = replacetext(scan,"'danger'","'bad'")
-		data["occupant"] =scan
+		data["occupant"] = 1
+		switch(occupant.stat)
+			if(CONSCIOUS)
+				data["stat"] = "Conscious"
+			if(UNCONSCIOUS)
+				data["stat"] = "Unconscious"
+			if(DEAD)
+				data["stat"] = "<font color='red'>Dead</font>"
+		data["crit_health"] = round((occupant.health / occupant.maxHealth) * 100)
+		if(ishuman(occupant))
+			var/mob/living/carbon/human/H = occupant
+			data["pulse"] = H.get_pulse(GETPULSE_TOOL)
+			var/organ_health
+			var/organ_damage
+			for(var/obj/item/organ/external/E in H.organs)
+				organ_health += E.total_internal_health
+				organ_damage += E.severity_internal_wounds
+			data["internal_health"] = round((1 - (organ_health ? organ_damage / organ_health : 0)) * 100)
+		data["brute"] = occupant.getBruteLoss()
+		data["burn"] = occupant.getFireLoss()
+		data["oxy"] = occupant.getOxyLoss()
+
+		var/tox_content = occupant.chem_effects[CE_TOXIN] + occupant.chem_effects[CE_ALCOHOL_TOXIC]
+		data["tox"] = tox_content ? tox_content : "0"
 	else
 		data["occupant"] = 0
 	if(beaker)
@@ -86,77 +92,60 @@
 	else
 		data["beaker"] = -1
 	data["filtering"] = filtering
-	data["pump"] = pump
-	data["stasis"] = stasis
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if(!ui)
 		ui = new(user, src, ui_key, "sleeper.tmpl", "Sleeper UI", 600, 600, state = state)
 		ui.set_initial_data(data)
 		ui.open()
 		ui.set_auto_update(1)
 
-/obj/machinery/sleeper/CanUseTopic(user)
-	if(user == occupant)
-		to_chat(usr, "<span class='warning'>You can't reach the controls from the inside.</span>")
-		return STATUS_CLOSE
-	return ..()
+/obj/machinery/sleeper/Topic(href, href_list)
+	if(..())
+		return 1
 
-/obj/machinery/sleeper/OnTopic(user, href_list)
+	if(usr == occupant)
+		to_chat(usr, SPAN_WARNING("You can't reach the controls from the inside."))
+		return
+
+	add_fingerprint(usr)
+
 	if(href_list["eject"])
 		go_out()
-		return TOPIC_REFRESH
 	if(href_list["beaker"])
 		remove_beaker()
-		return TOPIC_REFRESH
 	if(href_list["filter"])
 		if(filtering != text2num(href_list["filter"]))
 			toggle_filter()
-			return TOPIC_REFRESH
-	if(href_list["pump"])
-		if(filtering != text2num(href_list["pump"]))
-			toggle_pump()
-			return TOPIC_REFRESH
 	if(href_list["chemical"] && href_list["amount"])
 		if(occupant && occupant.stat != DEAD)
 			if(href_list["chemical"] in available_chemicals) // Your hacks are bad and you should feel bad
-				inject_chemical(user, href_list["chemical"], text2num(href_list["amount"]))
-				return TOPIC_REFRESH
-	if(href_list["stasis"])
-		var/nstasis = text2num(href_list["stasis"])
-		if(stasis != nstasis && nstasis in stasis_settings)
-			stasis = text2num(href_list["stasis"])
-			return TOPIC_REFRESH
+				inject_chemical(usr, href_list["chemical"], text2num(href_list["amount"]))
 
-/obj/machinery/sleeper/attack_ai(var/mob/user)
-	return attack_hand(user)
+	playsound(loc, 'sound/machines/button.ogg', 100, 1)
+	return 1
 
 /obj/machinery/sleeper/attackby(var/obj/item/I, var/mob/user)
+	add_fingerprint(user)
 	if(istype(I, /obj/item/reagent_containers/glass))
-		add_fingerprint(user)
 		if(!beaker)
 			beaker = I
 			user.drop_item()
-			I.forceMove(src)
-			user.visible_message("<span class='notice'>\The [user] adds \a [I] to \the [src].</span>", "<span class='notice'>You add \a [I] to \the [src].</span>")
+			I.loc = src
+			user.visible_message(SPAN_NOTICE("\The [user] adds \a [I] to \the [src]."), SPAN_NOTICE("You add \a [I] to \the [src]."))
 		else
-			to_chat(user, "<span class='warning'>\The [src] has a beaker already.</span>")
+			to_chat(user, SPAN_WARNING("\The [src] has a beaker already."))
 		return
-	else
-		..()
+
+/obj/machinery/sleeper/affect_grab(var/mob/user, var/mob/target)
+	go_in(target, user)
 
 /obj/machinery/sleeper/MouseDrop_T(var/mob/target, var/mob/user)
-	if(!CanMouseDrop(target, user))
-		return
-	if(!istype(target))
-		return
-	if(target.buckled)
-		to_chat(user, "<span class='warning'>Unbuckle the subject before attempting to move them.</span>")
+	if(user.stat || user.lying || !Adjacent(user) || !target.Adjacent(user)|| !ishuman(target))
 		return
 	go_in(target, user)
 
 /obj/machinery/sleeper/relaymove(var/mob/user)
-	..()
 	go_out()
 
 /obj/machinery/sleeper/emp_act(var/severity)
@@ -175,15 +164,7 @@
 	if(!occupant || !beaker)
 		filtering = 0
 		return
-	to_chat(occupant, "<span class='warning'>You feel like your blood is being sucked away.</span>")
 	filtering = !filtering
-
-/obj/machinery/sleeper/proc/toggle_pump()
-	if(!occupant || !beaker)
-		pump = 0
-		return
-	to_chat(occupant, "<span class='warning'>You feel a tube jammed down your throat.</span>")
-	pump = !pump
 
 /obj/machinery/sleeper/proc/go_in(var/mob/M, var/mob/user)
 	if(!M)
@@ -191,7 +172,7 @@
 	if(stat & (BROKEN|NOPOWER))
 		return
 	if(occupant)
-		to_chat(user, "<span class='warning'>\The [src] is already occupied.</span>")
+		to_chat(user, SPAN_WARNING("\The [src] is already occupied."))
 		return
 
 	if(M == user)
@@ -201,14 +182,14 @@
 
 	if(do_after(user, 20, src))
 		if(occupant)
-			to_chat(user, "<span class='warning'>\The [src] is already occupied.</span>")
+			to_chat(user, SPAN_WARNING("\The [src] is already occupied."))
 			return
 		M.stop_pulling()
 		if(M.client)
 			M.client.perspective = EYE_PERSPECTIVE
 			M.client.eye = src
 		M.forceMove(src)
-		update_use_power(2)
+		set_power_use(ACTIVE_POWER_USE)
 		occupant = M
 		update_icon()
 
@@ -218,34 +199,43 @@
 	if(occupant.client)
 		occupant.client.eye = occupant.client.mob
 		occupant.client.perspective = MOB_PERSPECTIVE
-	occupant.dropInto(loc)
+	occupant.forceMove(get_turf(src))
 	occupant = null
 	for(var/atom/movable/A in src) // In case an object was dropped inside or something
 		if(A == beaker)
 			continue
-		A.dropInto(loc)
-	update_use_power(1)
+		A.forceMove(loc)
+	set_power_use(IDLE_POWER_USE)
 	update_icon()
 	toggle_filter()
 
 /obj/machinery/sleeper/proc/remove_beaker()
 	if(beaker)
-		beaker.dropInto(loc)
+		beaker.loc = loc
 		beaker = null
 		toggle_filter()
-		toggle_pump()
 
-/obj/machinery/sleeper/proc/inject_chemical(var/mob/living/user, var/chemical_name, var/amount)
+/obj/machinery/sleeper/proc/inject_chemical(var/mob/living/user, var/chemical, var/amount)
 	if(stat & (BROKEN|NOPOWER))
 		return
 
-	var/chemical_type = available_chemicals[chemical_name]
 	if(occupant && occupant.reagents)
-		if(occupant.reagents.get_reagent_amount(chemical_type) + amount <= 20)
+		if(occupant.reagents.get_reagent_amount(chemical) + amount <= 20)
 			use_power(amount * CHEM_SYNTH_ENERGY)
-			occupant.reagents.add_reagent(chemical_type, amount)
-			to_chat(user, "Occupant now has [occupant.reagents.get_reagent_amount(chemical_type)] unit\s of [chemical_name] in their bloodstream.")
+			occupant.reagents.add_reagent(chemical, amount)
+			to_chat(user, "Occupant now has [occupant.reagents.get_reagent_amount(chemical)] units of [available_chemicals[chemical]] in their bloodstream.")
 		else
 			to_chat(user, "The subject has too many chemicals.")
 	else
 		to_chat(user, "There's no suitable occupant in \the [src].")
+
+/obj/machinery/sleeper/verb/eject_occupant_verb()
+	set name = "Eject Occupant"
+	set desc = "Force eject occupant."
+	set category = "Object"
+	set src in view(1)
+
+	if (usr.incapacitated() || occupant == usr)
+		return
+
+	go_out()

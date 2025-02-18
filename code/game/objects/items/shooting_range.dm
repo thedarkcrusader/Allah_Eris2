@@ -4,77 +4,77 @@
 	desc = "A shooting target."
 	icon = 'icons/obj/objects.dmi'
 	icon_state = "target_h"
-	density = 0
+	density = FALSE
 	var/hp = 1800
 	var/icon/virtualIcon
 	var/list/bulletholes = list()
 
-	Destroy()
-		// if a target is deleted and associated with a stake, force stake to forget
-		for(var/obj/structure/target_stake/T in view(3,src))
-			if(T.pinned_target == src)
-				T.pinned_target = null
-				T.set_density(1)
-				break
-		..() // delete target
+/obj/item/target/Destroy()
+	// if a target is deleted and associated with a stake, force stake to forget
+	for(var/obj/structure/target_stake/T in view(3,src))
+		if(T.pinned_target == src)
+			T.pinned_target = null
+			T.density = TRUE
+			break
+	. = ..() // delete target
 
-	Move()
-		..()
-		// After target moves, check for nearby stakes. If associated, move to target
-		for(var/obj/structure/target_stake/M in view(3,src))
-			if(M.density == 0 && M.pinned_target == src)
-				M.loc = loc
+/obj/item/target/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
+	. = ..()
+	// After target moves, check for nearby stakes. If associated, move to target
+	for(var/obj/structure/target_stake/M in view(3,src))
+		if(!M.density && M.pinned_target == src)
+			M.loc = loc
 
-		// This may seem a little counter-intuitive but I assure you that's for a purpose.
-		// Stakes are the ones that carry targets, yes, but in the stake code we set
-		// a stake's density to 0 meaning it can't be pushed anymore. Instead of pushing
-		// the stake now, we have to push the target.
-
-
-
-	attackby(obj/item/W as obj, mob/user as mob)
-		if(isWelder(W))
-			var/obj/item/weldingtool/WT = W
-			if(WT.remove_fuel(0, user))
-				overlays.Cut()
-				to_chat(usr, "You slice off [src]'s uneven chunks of aluminum and scorch marks.")
-				return
+	// This may seem a little counter-intuitive but I assure you that's for a purpose.
+	// Stakes are the ones that carry targets, yes, but in the stake code we set
+	// a stake's density to 0 meaning it can't be pushed anymore. Instead of pushing
+	// the stake now, we have to push the target.
 
 
-	attack_hand(mob/user as mob)
-		// taking pinned targets off!
-		var/obj/structure/target_stake/stake
-		for(var/obj/structure/target_stake/T in view(3,src))
-			if(T.pinned_target == src)
-				stake = T
-				break
 
-		if(stake)
-			if(stake.pinned_target)
-				stake.set_density(1)
-				set_density(0)
-				layer = OBJ_LAYER
+/obj/item/target/attackby(obj/item/I, mob/user)
+	if(QUALITY_WELDING in I.tool_qualities)
+		if(I.use_tool(user, src, WORKTIME_FAST, QUALITY_WELDING, FAILCHANCE_EASY, required_stat = STAT_MEC))
+			overlays.Cut()
+			to_chat(user, SPAN_NOTICE("You slice off [src]'s uneven chunks of aluminum and scorch marks."))
+			return
 
-				forceMove(user.loc)
-				if(ishuman(user))
-					if(!user.get_active_hand())
-						user.put_in_hands(src)
-						to_chat(user, "You take the target out of the stake.")
-				else
-					src.loc = get_turf(user)
+
+/obj/item/target/attack_hand(mob/user as mob)
+	// taking pinned targets off!
+	var/obj/structure/target_stake/stake
+	for(var/obj/structure/target_stake/T in view(3,src))
+		if(T.pinned_target == src)
+			stake = T
+			break
+
+	if(stake)
+		if(stake.pinned_target)
+			stake.density = TRUE
+			density = FALSE
+			layer = OBJ_LAYER
+
+			loc = user.loc
+			if(ishuman(user))
+				if(!user.get_active_hand())
+					user.put_in_hands(src)
 					to_chat(user, "You take the target out of the stake.")
+			else
+				src.loc = get_turf(user)
+				to_chat(user, "You take the target out of the stake.")
 
-				stake.pinned_target = null
-				return
+			stake.pinned_target = null
+			return
 
-		else
-			..()
+	else
+		..()
 
-	syndicate
+/obj/item/target/syndicate
 		icon_state = "target_s"
 		desc = "A shooting target that looks like a hostile agent."
 		hp = 2600 // i guess syndie targets are sturdier?
-	alien
+
+/obj/item/target/alien
 		icon_state = "target_q"
 		desc = "A shooting target with a threatening silhouette."
 		hp = 2350 // alium onest too kinda
@@ -89,14 +89,14 @@
 
 
 	virtualIcon = new(icon, icon_state)
-
+	var/damage = Proj.get_total_damage()
 	if( virtualIcon.GetPixel(p_x, p_y) ) // if the located pixel isn't blank (null)
 
-		hp -= Proj.damage
+		hp -= damage
 		if(hp <= 0)
 			for(var/mob/O in oviewers())
 				if ((O.client && !( O.blinded )))
-					to_chat(O, "<span class='warning'>\The [src] breaks into tiny pieces and collapses!</span>")
+					to_chat(O, SPAN_WARNING("\The [src] breaks into tiny pieces and collapses!"))
 			qdel(src)
 
 		// Create a temporary object to represent the damage
@@ -104,8 +104,7 @@
 		bmark.pixel_x = p_x
 		bmark.pixel_y = p_y
 		bmark.icon = 'icons/effects/effects.dmi'
-		bmark.plane = OBJ_PLANE
-		bmark.layer = ABOVE_OBJ_LAYER
+		bmark.layer = 3.5
 		bmark.icon_state = "scorch"
 
 		if(decaltype == 1)
@@ -115,7 +114,7 @@
 			bmark.pixel_x--
 			bmark.pixel_y--
 
-			if(Proj.damage >= 20 || istype(Proj, /obj/item/projectile/beam/practice))
+			if(damage >= 20 || istype(Proj, /obj/item/projectile/beam/practice))
 				bmark.icon_state = "scorch"
 				bmark.set_dir(pick(NORTH,SOUTH,EAST,WEST)) // random scorch design
 
@@ -127,12 +126,12 @@
 			// Bullets are hard. They make dents!
 			bmark.icon_state = "dent"
 
-		if(Proj.damage >= 10 && bulletholes.len <= 35) // maximum of 35 bullet holes
+		if(damage >= 10 && bulletholes.len <= 35) // maximum of 35 bullet holes
 			if(decaltype == 2) // bullet
-				if(prob(Proj.damage+30)) // bullets make holes more commonly!
+				if(prob(damage+30)) // bullets make holes more commonly!
 					new/datum/bullethole(src, bmark.pixel_x, bmark.pixel_y) // create new bullet hole
 			else // Lasers!
-				if(prob(Proj.damage-10)) // lasers make holes less commonly
+				if(prob(damage-10)) // lasers make holes less commonly
 					new/datum/bullethole(src, bmark.pixel_x, bmark.pixel_y) // create new bullet hole
 
 		// draw bullet holes

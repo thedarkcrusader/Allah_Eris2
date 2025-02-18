@@ -1,9 +1,9 @@
 /mob/living/simple_animal/tomato
 	name = "tomato"
-	desc = "It's a horrifyingly enormous beef tomato, and it's packing extra beef!"
+	desc = "A horrifyingly enormous beef tomato, and it's packing extra beef!"
 	icon_state = "tomato"
 	icon_living = "tomato"
-	icon_dead = "tomato_dead"
+
 	speak_chance = 0
 	turns_per_move = 5
 	maxHealth = 15

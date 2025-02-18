@@ -2,14 +2,16 @@
 
 /obj/effect/accelerated_particle
 	name = "Accelerated Particles"
-	desc = "Small things moving very fast."
-	icon = 'icons/obj/projectiles.dmi'
-	icon_state = "ice_2"//Need a new icon for this
-	anchored = 1
-	density = 1
+	desc = "Dozens of tiny glowing lights zooming at incredible speeds."
+	icon = 'icons/obj/machines/particle_accelerator2.dmi'
+	icon_state = "particle"//Need a new icon for this
+	anchored = TRUE
+	density = TRUE
 	var/movement_range = 10
 	var/energy = 10		//energy in eV
 	var/mega_energy = 0	//energy in MeV
+	var/frequency = 1
+	var/ionizing = 0
 	var/particle_type
 	var/additional_particles = 0
 	var/turf/target
@@ -39,28 +41,10 @@
 	if (A)
 		if(ismob(A))
 			toxmob(A)
-			var/mob/M = A
-			M.gib()
-
-		if((istype(A,/obj/machinery/the_singularitygen))||(istype(A,/obj/machinery/sunreactor/center))||(istype(A,/obj/machinery/sunreactor/rleft))||(istype(A,/obj/machinery/sunreactor/rright))||(istype(A,/obj/machinery/sunreactor/rup))||(istype(A,/obj/machinery/sunreactor/rdown)))
-			var/turf/Under
-			Under = get_turf(A)
-			A:energy += energy*(Under.temperature/280)
-		else if(istype(A,/obj/machinery/power/fusion_core))
-			var/obj/machinery/power/fusion_core/collided_core = A
-			if(particle_type && particle_type != "neutron")
-				if(collided_core.AddParticles(particle_type, 1 + additional_particles))
-					collided_core.owned_field.plasma_temperature += mega_energy
-					collided_core.owned_field.energy += energy
-					loc = null
-		else if(istype(A, /obj/effect/fusion_particle_catcher))
-			var/obj/effect/fusion_particle_catcher/PC = A
-			if(particle_type && particle_type != "neutron")
-				if(PC.parent.owned_core.AddParticles(particle_type, 1 + additional_particles))
-					PC.parent.plasma_temperature += mega_energy
-					PC.parent.energy += energy
-					loc = null
+		if((istype(A,/obj/machinery/the_singularitygen))||(istype(A,/obj/singularity/)))
+			A:energy += energy
 	return
+
 
 /obj/effect/accelerated_particle/Bumped(atom/A)
 	if(ismob(A))
@@ -68,15 +52,17 @@
 	return
 
 
-/obj/effect/accelerated_particle/ex_act(severity)
+/obj/effect/accelerated_particle/explosion_act(target_power, explosion_handler/handler)
 	qdel(src)
-	return
+	return 0
+
+
 
 /obj/effect/accelerated_particle/proc/toxmob(var/mob/living/M)
 	var/radiation = (energy*2)
-	M.apply_effect((radiation*3),IRRADIATE,blocked = M.getarmor(null, "rad"))
+	M.apply_effect((radiation*3),IRRADIATE,0)
 	M.updatehealth()
-//	to_chat(M, "<span class='warning'>You feel odd.</span>")
+	//M << "\red You feel odd."
 	return
 
 

@@ -9,15 +9,14 @@
 	desc = "Used to debug electronic equipment."
 	icon = 'icons/obj/hacktool.dmi'
 	icon_state = "hacktool-g"
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
-	force = 5.0
+	flags = CONDUCT
+	force = WEAPON_FORCE_HARMLESS
 	w_class = ITEM_SIZE_SMALL
-	throwforce = 5.0
+	throwforce = WEAPON_FORCE_HARMLESS
 	throw_range = 15
 	throw_speed = 3
-	desc = "You can use this on airlocks or APCs to try to hack them without cutting wires."
 
-	matter = list(DEFAULT_WALL_MATERIAL = 50,"glass" = 20)
+	matter = list(MATERIAL_PLASTIC = 2, MATERIAL_GLASS = 1)
 
 	origin_tech = list(TECH_MAGNET = 1, TECH_ENGINEERING = 1)
 	var/obj/machinery/telecomms/buffer // simple machine buffer for device linkage
@@ -26,21 +25,21 @@
 	if(istype(O, /obj/machinery/power/apc))
 		var/obj/machinery/power/apc/A = O
 		if(A.emagged || A.hacker)
-			to_chat(user, "<span class='warning'>There is a software error with the device.</span>")
+			to_chat(user, SPAN_WARNING("There is a software error with the device."))
 		else
-			to_chat(user, "<span class='notice'>The device's software appears to be fine.</span>")
+			to_chat(user, SPAN_NOTICE("The device's software appears to be fine."))
 		return 1
 	if(istype(O, /obj/machinery/door))
 		var/obj/machinery/door/D = O
 		if(D.operating == -1)
-			to_chat(user, "<span class='warning'>There is a software error with the device.</span>")
+			to_chat(user, SPAN_WARNING("There is a software error with the device."))
 		else
-			to_chat(user, "<span class='notice'>The device's software appears to be fine.</span>")
+			to_chat(user, SPAN_NOTICE("The device's software appears to be fine."))
 		return 1
 	else if(istype(O, /obj/machinery))
 		var/obj/machinery/A = O
 		if(A.emagged)
-			to_chat(user, "<span class='warning'>There is a software error with the device.</span>")
+			to_chat(user, SPAN_WARNING("There is a software error with the device."))
 		else
-			to_chat(user, "<span class='notice'>The device's software appears to be fine.</span>")
+			to_chat(user, SPAN_NOTICE("The device's software appears to be fine."))
 		return 1

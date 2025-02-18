@@ -2,6 +2,7 @@
 #define AB_SPELL 2
 #define AB_INNATE 3
 #define AB_GENERIC 4
+#define AB_ITEM_PROC 5
 
 #define AB_CHECK_RESTRAINED 1
 #define AB_CHECK_STUNNED 2
@@ -13,12 +14,13 @@
 /datum/action
 	var/name = "Generic Action"
 	var/action_type = AB_ITEM
-	var/procname = null
-	var/atom/movable/target = null
+	var/procname
+	var/list/arguments
+	var/atom/movable/target
 	var/check_flags = 0
 	var/processing = 0
 	var/active = 0
-	var/obj/screen/movable/action_button/button = null
+	var/obj/screen/movable/action_button/button
 	var/button_icon = 'icons/mob/actions.dmi'
 	var/button_icon_state = "default"
 	var/background_icon_state = "bg_default"
@@ -30,6 +32,7 @@
 /datum/action/Destroy()
 	if(owner)
 		Remove(owner)
+	. = ..()
 
 /datum/action/proc/Grant(mob/living/T)
 	if(owner)
@@ -59,7 +62,7 @@
 		if(AB_ITEM)
 			if(target)
 				var/obj/item/item = target
-				item.ui_action_click()
+				item.ui_action_click(usr, name)
 		//if(AB_SPELL)
 		//	if(target)
 		//		var/obj/effect/proc_holder/spell = target
@@ -71,7 +74,12 @@
 				Deactivate()
 		if(AB_GENERIC)
 			if(target && procname)
-				call(target,procname)(usr)
+				call(target, procname)(usr)
+		if(AB_ITEM_PROC)
+			if(target && procname)
+				if(!arguments)
+					arguments = usr
+				call(target, procname)(arguments)		
 	return
 
 /datum/action/proc/Activate()
@@ -80,7 +88,7 @@
 /datum/action/proc/Deactivate()
 	return
 
-/datum/action/proc/ProcessAction()
+/datum/action/Process()
 	return
 
 /datum/action/proc/CheckRemoval(mob/living/user) // 1 if action is no longer valid for this mob and should be removed
@@ -116,7 +124,7 @@
 	var/datum/action/owner
 	screen_loc = "WEST,NORTH"
 
-/obj/screen/movable/action_button/Click(location,control,params)
+/obj/screen/movable/action_button/Click(location, control, params)
 	var/list/modifiers = params2list(params)
 	if(modifiers["shift"])
 		moved = 0
@@ -134,19 +142,19 @@
 
 	overlays.Cut()
 	var/image/img
-	if(owner.action_type == AB_ITEM && owner.target)
+	if((owner.action_type == AB_ITEM || owner.action_type == AB_ITEM_PROC) && owner.target)
 		var/obj/item/I = owner.target
 		img = image(I.icon, src , I.icon_state)
 	else if(owner.button_icon && owner.button_icon_state)
-		img = image(owner.button_icon,src,owner.button_icon_state)
+		img = image(owner.button_icon, src, owner.button_icon_state)
 	img.pixel_x = 0
 	img.pixel_y = 0
 	overlays += img
 
 	if(!owner.IsAvailable())
-		color = rgb(128,0,0,128)
+		color = rgb(128, 0, 0, 128)
 	else
-		color = rgb(255,255,255,255)
+		color = rgb(255, 255, 255, 255)
 
 //Hide/Show Action Buttons ... Button
 /obj/screen/movable/action_button/hide_toggle
@@ -156,9 +164,9 @@
 	var/hidden = 0
 
 /obj/screen/movable/action_button/hide_toggle/Click()
-	usr.hud_used.action_buttons_hidden = !usr.hud_used.action_buttons_hidden
+	//usr.hud_used.action_buttons_hidden = !usr.hud_used.action_buttons_hidden
 
-	hidden = usr.hud_used.action_buttons_hidden
+	//hidden = usr.hud_used.action_buttons_hidden
 	if(hidden)
 		name = "Show Buttons"
 	else
@@ -168,16 +176,13 @@
 
 
 /obj/screen/movable/action_button/hide_toggle/proc/InitialiseIcon(var/mob/living/user)
-	if(isalien(user))
-		icon_state = "bg_alien"
-	else
-		icon_state = "bg_default"
+	icon_state = "bg_default"
 	UpdateIcon()
 	return
 
 /obj/screen/movable/action_button/hide_toggle/UpdateIcon()
 	overlays.Cut()
-	var/image/img = image(icon,src,hidden?"show":"hide")
+	var/image/img = image(icon, src, hidden?"show":"hide")
 	overlays += img
 	return
 
@@ -198,14 +203,14 @@
 	var/coord_row_offset = AB_NORTH_OFFSET
 	return "WEST[coord_col]:[coord_col_offset],NORTH[coord_row]:[coord_row_offset]"
 
-/datum/hud/proc/SetButtonCoords(var/obj/screen/button,var/number)
+/datum/hud/proc/SetButtonCoords(var/obj/screen/button, var/number)
 	var/row = round((number-1)/AB_MAX_COLUMNS)
 	var/col = ((number - 1)%(AB_MAX_COLUMNS)) + 1
 	var/x_offset = 32*(col-1) + AB_WEST_OFFSET + 2*col
 	var/y_offset = -32*(row+1) + AB_NORTH_OFFSET
 
 	var/matrix/M = matrix()
-	M.Translate(x_offset,y_offset)
+	M.Translate(x_offset, y_offset)
 	button.transform = M
 
 //Presets for item actions

@@ -16,6 +16,14 @@
 	var/obj/item/card/id/id = GetIdCard()
 	return id ? id.GetAccess() : list()
 
+/proc/get_access_by_id(id)
+	var/list/AS = priv_all_access_datums_id || get_all_access_datums_by_id()
+	return AS[num2text(id)]
+
+/proc/get_access_region_by_id(id)
+	var/datum/access/AD = get_access_by_id(id)
+	return AD.region
+
 /atom/movable/proc/GetIdCard()
 	return null
 
@@ -25,6 +33,7 @@
 /obj/proc/check_access_list(var/list/L)
 	if(!req_access)		req_access = list()
 	if(!req_one_access)	req_one_access = list()
+	if(!L)	return 0
 	if(!istype(L, /list))	return 0
 	return has_access(req_access, req_one_access, L)
 
@@ -66,7 +75,7 @@
 		priv_all_access_datums = init_subtypes(/datum/access)
 		priv_all_access_datums = dd_sortedObjectList(priv_all_access_datums)
 
-	return priv_all_access_datums.Copy()
+	return priv_all_access_datums
 
 /var/list/datum/access/priv_all_access_datums_id
 /proc/get_all_access_datums_by_id()
@@ -75,7 +84,7 @@
 		for(var/datum/access/A in get_all_access_datums())
 			priv_all_access_datums_id["[A.id]"] = A
 
-	return priv_all_access_datums_id.Copy()
+	return priv_all_access_datums_id
 
 /var/list/datum/access/priv_all_access_datums_region
 /proc/get_all_access_datums_by_region()
@@ -86,7 +95,7 @@
 				priv_all_access_datums_region[A.region] = list()
 			priv_all_access_datums_region[A.region] += A
 
-	return priv_all_access_datums_region.Copy()
+	return priv_all_access_datums_region
 
 /proc/get_access_ids(var/access_types = ACCESS_TYPE_ALL)
 	var/list/L = new()
@@ -123,7 +132,7 @@
 
 	return priv_syndicate_access.Copy()
 
-/var/list/priv_region_access
+/var/list/list/priv_region_access
 /proc/get_region_accesses(var/code)
 	if(code == ACCESS_REGION_ALL)
 		return get_all_station_access()
@@ -135,8 +144,7 @@
 				priv_region_access["[A.region]"] = list()
 			priv_region_access["[A.region]"] += A.id
 
-	var/list/region = priv_region_access["[code]"]
-	return region.Copy()
+	return priv_region_access["[code]"].Copy()
 
 /proc/get_region_accesses_name(var/code)
 	switch(code)
@@ -153,22 +161,22 @@
 		if(ACCESS_REGION_COMMAND) //command
 			return "Command"
 		if(ACCESS_REGION_GENERAL) //station general
-			return "General"
+			return "Station General"
 		if(ACCESS_REGION_SUPPLY) //supply
 			return "Supply"
+		if(ACCESS_REGION_CHURCH) //Neotheo
+			return "NeoTheology"
+		if(ACCESS_REGION_CLUB) //service
+			return "Club"
 
 /proc/get_access_desc(id)
-	var/list/AS = priv_all_access_datums_id || get_all_access_datums_by_id()
+	var/list/AS = get_all_access_datums_by_id()
 	var/datum/access/A = AS["[id]"]
 
 	return A ? A.desc : ""
 
 /proc/get_centcom_access_desc(A)
 	return get_access_desc(A)
-
-/proc/get_access_by_id(id)
-	var/list/AS = priv_all_access_datums_id || get_all_access_datums_by_id()
-	return AS[num2text(id)]
 
 /proc/get_all_jobs()
 	var/list/all_jobs = list()
@@ -189,13 +197,12 @@
 		"Death Commando",
 		"Research Officer",
 		"BlackOps Commander",
-		"Supreme Commander",
-		"Emergency Response Team",
-		"Emergency Response Team Leader")
+		"Supreme Commander")
 
-/mob/observer/ghost
-	var/static/obj/item/card/id/all_access/ghost_all_access
+/mob/GetIdCard()
+	return null
 
+var/obj/item/card/id/all_access/ghost_all_access
 /mob/observer/ghost/GetIdCard()
 	if(!is_admin(src))
 		return
@@ -209,18 +216,20 @@
 
 #define HUMAN_ID_CARDS list(get_active_hand(), wear_id, get_inactive_hand())
 /mob/living/carbon/human/GetIdCard()
-	for(var/item_slot in HUMAN_ID_CARDS)
-		var/obj/item/I = item_slot
-		var/obj/item/card/id = I ? I.GetIdCard() : null
+	for(var/obj/item/I in HUMAN_ID_CARDS)
+		var/obj/item/card/id = I.GetIdCard()
 		if(id)
 			return id
 
 /mob/living/carbon/human/GetAccess()
 	. = list()
-	for(var/item_slot in HUMAN_ID_CARDS)
-		var/obj/item/I = item_slot
-		if(I)
-			. |= I.GetAccess()
+	for(var/obj/item/I in HUMAN_ID_CARDS)
+		. |= I.GetAccess()
+
+	var/obj/item/implant/core_implant/C = get_core_implant()
+	if(C)
+		. |= C.GetAccess()
+
 #undef HUMAN_ID_CARDS
 
 /mob/living/silicon/GetIdCard()
@@ -228,14 +237,15 @@
 		return // Unconscious, dead or once possessed but now client-less silicons are not considered to have id access.
 	return idcard
 
-/proc/FindNameFromID(var/mob/M, var/missing_id_name = "Unknown")
+
+proc/FindNameFromID(var/mob/M, var/missing_id_name = "Unknown")
 	var/obj/item/card/id/C = M.GetIdCard()
 	if(C)
 		return C.registered_name
 	return missing_id_name
 
-/proc/get_all_job_icons() //For all existing HUD icons
-	return joblist + list("Prisoner")
+proc/get_all_job_icons() //For all existing HUD icons
+	return GLOB.joblist + list("Prisoner")
 
 /obj/proc/GetJobName() //Used in secHUD icon generation
 	var/obj/item/card/id/I = GetIdCard()
@@ -256,3 +266,11 @@
 		return
 
 	return "Unknown" //Return unknown if none of the above apply
+
+//Checks if the access (constant or list) is contained in one of the entries of access_patterns, a list of lists.
+/proc/has_access_pattern(list/access_patterns, access)
+	if(!islist(access))
+		access = list(access)
+	for(var/access_pattern in access_patterns)
+		if(has_access(access_pattern, list(), access))
+			return 1

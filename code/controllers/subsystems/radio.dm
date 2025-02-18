@@ -1,10 +1,10 @@
 SUBSYSTEM_DEF(radio)
 	name = "Radio"
-	flags = SS_NO_FIRE | SS_NO_INIT
+	flags = SS_NO_FIRE|SS_NO_INIT
 
 	var/list/datum/radio_frequency/frequencies = list()
 
-/datum/controller/subsystem/radio/proc/add_object(obj/device as obj, var/new_frequency as num, var/filter = null as text|null)
+/datum/controller/subsystem/radio/proc/add_object(obj/device, new_frequency as num, filter = null as text|null)
 	var/f_text = num2text(new_frequency)
 	var/datum/radio_frequency/frequency = frequencies[f_text]
 
@@ -27,9 +27,9 @@ SUBSYSTEM_DEF(radio)
 			qdel(frequency)
 			frequencies -= f_text
 
-	return 1
+	return TRUE
 
-/datum/controller/subsystem/radio/proc/return_frequency(var/new_frequency as num)
+/datum/controller/subsystem/radio/proc/return_frequency(new_frequency as num)
 	var/f_text = num2text(new_frequency)
 	var/datum/radio_frequency/frequency = frequencies[f_text]
 

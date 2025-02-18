@@ -1,186 +1,173 @@
-/*
-Overview:
-   Used to create objects that need a per step proc call.  Default definition of 'New()'
-   stores a reference to src machine in global 'machines list'.  Default definition
-   of 'Destroy' removes reference to src machine in global 'machines list'.
-
-Class Variables:
-   use_power (num)
-	  current state of auto power use.
-	  Possible Values:
-		 0 -- no auto power use
-		 1 -- machine is using power at its idle power level
-		 2 -- machine is using power at its active power level
-
-   active_power_usage (num)
-	  Value for the amount of power to use when in active power mode
-
-   idle_power_usage (num)
-	  Value for the amount of power to use when in idle power mode
-
-   power_channel (num)
-	  What channel to draw from when drawing power for power mode
-	  Possible Values:
-		 EQUIP:0 -- Equipment Channel
-		 LIGHT:2 -- Lighting Channel
-		 ENVIRON:3 -- Environment Channel
-
-   component_parts (list)
-	  A list of component parts of machine used by frame based machines.
-
-   panel_open (num)
-	  Whether the panel is open
-
-   uid (num)
-	  Unique id of machine across all machines.
-
-   gl_uid (global num)
-	  Next uid value in sequence
-
-   stat (bitflag)
-	  Machine status bit flags.
-	  Possible bit flags:
-		 BROKEN:1 -- Machine is broken
-		 NOPOWER:2 -- No power is being supplied to machine.
-		 POWEROFF:4 -- tbd
-		 MAINT:8 -- machine is currently under going maintenance.
-		 EMPED:16 -- temporary broken by EMP pulse
-
-Class Procs:
-   New()					 'game/machinery/machine.dm'
-
-   Destroy()					 'game/machinery/machine.dm'
-
-   auto_use_power()			'game/machinery/machine.dm'
-	  This proc determines how power mode power is deducted by the machine.
-	  'auto_use_power()' is called by the 'master_controller' game_controller every
-	  tick.
-
-	  Return Value:
-		 return:1 -- if object is powered
-		 return:0 -- if object is not powered.
-
-	  Default definition uses 'use_power', 'power_channel', 'active_power_usage',
-	  'idle_power_usage', 'powered()', and 'use_power()' implement behavior.
-
-   powered(chan = EQUIP)		 'modules/power/power.dm'
-	  Checks to see if area that contains the object has power available for power
-	  channel given in 'chan'.
-
-   use_power(amount, chan=EQUIP, autocalled)   'modules/power/power.dm'
-	  Deducts 'amount' from the power channel 'chan' of the area that contains the object.
-	  If it's autocalled then everything is normal, if something else calls use_power we are going to
-	  need to recalculate the power two ticks in a row.
-
-   power_change()			   'modules/power/power.dm'
-	  Called by the area that contains the object when ever that area under goes a
-	  power state change (area runs out of power, or area channel is turned off).
-
-   RefreshParts()			   'game/machinery/machine.dm'
-	  Called to refresh the variables in the machine that are contributed to by parts
-	  contained in the component_parts list. (example: glass and material amounts for
-	  the autolathe)
-
-	  Default definition does nothing.
-
-   assign_uid()			   'game/machinery/machine.dm'
-	  Called by machine to assign a value to the uid variable.
-
-   process()				  'game/machinery/machine.dm'
-	  Called by the 'master_controller' once per game tick for each machine that is listed in the 'machines' list.
-
-
-	Compiled by Aygar
-*/
-
+/**
+ * Machines in the world, such as computers, pipes, and airlocks.
+ *
+ *Overview:
+ *  Used to create objects that need a per step proc call.  Default definition of 'Initialize()'
+ *  stores a reference to src machine in global 'machines list'.  Default definition
+ *  of 'Destroy' removes reference to src machine in global 'machines list'.
+ *
+ *Class Variables:
+ *  use_power (num)
+ *     current state of auto power use.
+ *     Possible Values:
+ *        NO_POWER_USE -- no auto power use
+ *        IDLE_POWER_USE -- machine is using power at its idle power level
+ *        ACTIVE_POWER_USE -- machine is using power at its active power level
+ *
+ *  active_power_usage (num)
+ *     Value for the amount of power to use when in active power mode
+ *
+ *  idle_power_usage (num)
+ *     Value for the amount of power to use when in idle power mode
+ *
+ *  power_channel (num)
+ *     What channel to draw from when drawing power for power mode
+ *     Possible Values:
+ *        AREA_USAGE_EQUIP:1 -- Equipment Channel
+ *        AREA_USAGE_LIGHT:2 -- Lighting Channel
+ *        AREA_USAGE_ENVIRON:3 -- Environment Channel
+ *
+ *  component_parts (list)
+ *     A list of component parts of machine used by frame based machines.
+ *
+ *  stat (bitflag)
+ *     Machine status bit flags.
+ *     Possible bit flags:
+ *        BROKEN -- Machine is broken
+ *        NOPOWER -- No power is being supplied to machine.
+ *        MAINT -- machine is currently under going maintenance.
+ *        EMPED -- temporary broken by EMP pulse
+ *
+ *Class Procs:
+ *  Initialize()
+ *
+ *  Destroy()
+ *
+ *	update_mode_power_usage()
+ *		updates the static_power_usage var of this machine and makes its static power usage from its area accurate.
+ *		called after the idle or active power usage has been changed.
+ *
+ *	update_power_channel()
+ *		updates the static_power_usage var of this machine and makes its static power usage from its area accurate.
+ *		called after the power_channel var has been changed or called to change the var itself.
+ *
+ *	unset_static_power()
+ *		completely removes the current static power usage of this machine from its area.
+ *		used in the other power updating procs to then readd the correct power usage.
+ *
+ *
+ *     Default definition uses 'use_power', 'power_channel', 'active_power_usage',
+ *     'idle_power_usage', 'powered()', and 'use_power()' implement behavior.
+ *
+ *  powered(chan = -1)         'modules/power/power.dm'
+ *     Checks to see if area that contains the object has power available for power
+ *     channel given in 'chan'. -1 defaults to power_channel
+ *
+ *  use_power(amount, chan=-1)   'modules/power/power.dm'
+ *     Deducts 'amount' from the power channel 'chan' of the area that contains the object.
+ *
+ *  power_change()               'modules/power/power.dm'
+ *     Called by the area that contains the object when ever that area under goes a
+ *     power state change (area runs out of power, or area channel is turned off).
+ *
+ *  RefreshParts()               'game/machinery/machine.dm'
+ *     Called to refresh the variables in the machine that are contributed to by parts
+ *     contained in the component_parts list. (example: glass and material amounts for
+ *     the autolathe)
+ *
+ *     Default definition does nothing.
+ *
+ *  process()                  'game/machinery/machine.dm'
+ *     Called by the 'machinery subsystem' once per machinery tick for each machine that is listed in its 'machines' list.
+ *
+ *  process_atmos()
+ *     Called by the 'air subsystem' once per atmos tick for each machine that is listed in its 'atmos_machines' list.
+ * Compiled by Aygar
+ */
 /obj/machinery
 	name = "machinery"
 	icon = 'icons/obj/stationobjs.dmi'
-	w_class = ITEM_SIZE_NO_CONTAINER
+	w_class = ITEM_SIZE_GARGANTUAN
+
+	price_tag = 100
 
 	var/stat = 0
 	var/emagged = 0
-	var/malf_upgraded = 0
-	var/use_power = 1
+	var/use_power = IDLE_POWER_USE
 		//0 = dont run the auto
 		//1 = run auto, use idle
 		//2 = run auto, use active
 	var/idle_power_usage = 0
 	var/active_power_usage = 0
-	var/power_channel = EQUIP //EQUIP, ENVIRON or LIGHT
-	var/list/component_parts = null //list of all the parts used to build it, if made from certain kinds of frames.
+	var/power_channel = STATIC_EQUIP //STATIC_EQUIP, STATIC_ENVIRON or STATIC_LIGHT
+	var/list/component_parts //list of all the parts used to build it, if made from certain kinds of frames.
 	var/uid
 	var/panel_open = 0
+		//0 - panel closed
+		//1 - panel opened
+		//-1 - panel never should be opened (used for NT buildings)
 	var/global/gl_uid = 1
 	var/interact_offline = 0 // Can the machine be interacted with while de-powered.
-	var/clicksound			// sound played on succesful interface use by a carbon lifeform
-	var/clickvol = 40		// sound played on succesful interface use
+	var/obj/item/electronics/circuitboard/circuit
+	var/frame_type = FRAME_DEFAULT
+	var/health = 100
+	var/maxHealth = 100
+
+	var/current_power_usage = 0 // How much power are we currently using, dont change by hand, change power_usage vars and then use set_power_use
+	var/area/current_power_area // What area are we powering currently
+
+	var/hacked = FALSE // If this machine has had its access requirements hacked or not
+	var/shipside_only = FALSE // Does this mechanism need to be on the ship? Used for excel
+
 
 /obj/machinery/Initialize(mapload, d=0)
 	. = ..()
 	if(d)
 		set_dir(d)
+	GLOB.machines += src
+	InitCircuit()
+	power_change()
+	update_power_use()
 	START_PROCESSING(SSmachines, src)
 
-/obj/machinery/Destroy()
-	STOP_PROCESSING(SSmachines, src)
-	if(component_parts)
-		for(var/atom/A in component_parts)
-			if(A.loc == src) // If the components are inside the machine, delete them.
-				qdel(A)
-			else // Otherwise we assume they were dropped to the ground during deconstruction, and were not removed from the component_parts list by deconstruction code.
-				component_parts -= A
+	return INITIALIZE_HINT_LATELOAD
+
+/obj/machinery/LateInitialize()
 	. = ..()
+	power_change()
+
+/obj/machinery/Destroy()
+	GLOB.machines.Remove(src)
+	STOP_PROCESSING(SSmachines, src)
+	QDEL_LIST(component_parts)
+	if(contents) // The same for contents.
+		for(var/atom/A in contents)
+			qdel(A)
+	set_power_use(NO_POWER_USE)
+	return ..()
 
 /obj/machinery/Process()//If you dont use process or power why are you here
 	if(!(use_power || idle_power_usage || active_power_usage))
 		return PROCESS_KILL
 
 /obj/machinery/emp_act(severity)
-	if(use_power && stat == 0)
+	if(use_power && !stat)
 		use_power(7500/severity)
 
-		var/obj/effect/overlay/pulse2 = new /obj/effect/overlay(loc)
-		pulse2.icon = 'icons/effects/effects.dmi'
-		pulse2.icon_state = "empdisable"
-		pulse2.SetName("emp sparks")
-		pulse2.anchored = 1
-		pulse2.set_dir(pick(GLOB.cardinal))
-
-		spawn(10)
-			qdel(pulse2)
+		new /obj/effect/overlay/pulse(loc)
 	..()
 
-/obj/machinery/ex_act(severity)
-	switch(severity)
-		if(1.0)
-			qdel(src)
-			return
-		if(2.0)
-			if (prob(50))
-				qdel(src)
-				return
-		if(3.0)
-			if (prob(25))
-				qdel(src)
-				return
-		else
-	return
+/obj/machinery/proc/take_damage(amount)
+	. = health - amount < 0 ? amount - (amount - health) : amount
+	health -= amount
+	if(health <= 0)
+		qdel(src)
 
-//sets the use_power var and then forces an area power update
-/obj/machinery/proc/update_use_power(var/new_use_power)
-	use_power = new_use_power
+/obj/machinery/explosion_act(target_power, explosion_handler/handler)
+	take_damage(target_power)
+	return 0
 
-/obj/machinery/proc/auto_use_power()
-	if(!powered(power_channel))
-		return 0
-	if(src.use_power == 1)
-		use_power(idle_power_usage,power_channel, 1)
-	else if(src.use_power >= 2)
-		use_power(active_power_usage,power_channel, 1)
-	return 1
-
-/proc/is_operable(var/obj/machinery/M, var/mob/user)
+/proc/is_operable(obj/machinery/M, mob/user)
 	return istype(M) && M.operable()
 
 /obj/machinery/proc/operable(var/additional_flags = 0)
@@ -189,7 +176,10 @@ Class Procs:
 /obj/machinery/proc/inoperable(var/additional_flags = 0)
 	return (stat & (NOPOWER|BROKEN|additional_flags))
 
-/obj/machinery/CanUseTopic(var/mob/user)
+/obj/machinery/ui_state(mob/user)
+	return GLOB.machinery_state
+
+/obj/machinery/CanUseTopic(mob/user)
 	if(stat & BROKEN)
 		return STATUS_CLOSE
 
@@ -198,11 +188,11 @@ Class Procs:
 
 	return ..()
 
-/obj/machinery/CouldUseTopic(var/mob/user)
+/obj/machinery/CouldUseTopic(mob/user)
 	..()
 	user.set_machine(src)
 
-/obj/machinery/CouldNotUseTopic(var/mob/user)
+/obj/machinery/CouldNotUseTopic(mob/user)
 	user.unset_machine()
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -221,28 +211,66 @@ Class Procs:
 		return 1
 	if(user.lying || user.stat)
 		return 1
-	if ( ! (istype(usr, /mob/living/carbon/human) || \
-			istype(usr, /mob/living/silicon)))
-		to_chat(usr, "<span class='warning'>You don't have the dexterity to do this!</span>")
+	if(!user.IsAdvancedToolUser())
+		to_chat(usr, SPAN_WARNING("You don't have the dexterity to do this!"))
 		return 1
-/*
-	//distance checks are made by atom/proc/DblClick
-	if ((get_dist(src, user) > 1 || !istype(src.loc, /turf)) && !istype(user, /mob/living/silicon))
-		return 1
-*/
-	if (ishuman(user))
+
+	if(ishuman(user))
 		var/mob/living/carbon/human/H = user
 		if(H.getBrainLoss() >= 55)
-			visible_message("<span class='warning'>[H] stares cluelessly at \the [src].</span>")
+			visible_message(SPAN_WARNING("[H] stares cluelessly at [src]."))
 			return 1
 		else if(prob(H.getBrainLoss()))
-			to_chat(user, "<span class='warning'>You momentarily forget how to use \the [src].</span>")
+			to_chat(user, SPAN_WARNING("You momentarily forget how to use \the [src]."))
 			return 1
+
+	src.add_fingerprint(user)
 
 	return ..()
 
+/obj/machinery/proc/InitCircuit()
+	if(!circuit)
+		return
+
+	if(ispath(circuit))
+		circuit = new circuit
+
+	if(!component_parts)
+		component_parts = list()
+	if(circuit)
+		component_parts += circuit
+
+	for(var/item in circuit.req_components)
+		if(item == /obj/item/stack/cable_coil)
+			component_parts += new item(null, circuit.req_components[item])
+		else
+			for(var/j = 1 to circuit.req_components[item])
+				component_parts += new item
+
+	RefreshParts()
+
 /obj/machinery/proc/RefreshParts() //Placeholder proc for machines that are built using frames.
 	return
+
+/obj/machinery/proc/max_part_rating(var/type) //returns max rating of installed part type or null on error(keep in mind that all parts have to match that raiting).
+	if(!type)
+		error("max_part_rating() wrong usage")
+		return
+	var/list/obj/item/stock_parts/parts = list()
+	for(var/list/obj/item/stock_parts/P in component_parts)
+		if(istype(P, type))
+			parts.Add(P)
+	if(!parts.len)
+		error("max_part_rating() havent found any parts")
+		return
+	var/rating = 1
+	for(var/obj/item/stock_parts/P in parts)
+		if(P.rating < rating)
+			return rating
+		else
+			rating = P.rating
+
+	return rating
 
 /obj/machinery/proc/assign_uid()
 	uid = gl_uid
@@ -252,10 +280,7 @@ Class Procs:
 	for(var/mob/O in hearers(src, null))
 		O.show_message("\icon[src] <span class = 'notice'>[msg]</span>", 2)
 
-/obj/machinery/proc/ping(text=null)
-	if (!text)
-		text = "\The [src] pings."
-
+/obj/machinery/proc/ping(text="\The [src] pings.")
 	state(text, "blue")
 	playsound(src.loc, 'sound/machines/ping.ogg', 50, 0)
 
@@ -278,34 +303,52 @@ Class Procs:
 			return 1
 	return 0
 
-/obj/machinery/proc/default_deconstruction_crowbar(var/mob/user, var/obj/item/crowbar/C)
-	if(!istype(C))
-		return 0
-	if(!panel_open)
-		return 0
-	. = dismantle()
 
-/obj/machinery/proc/default_deconstruction_screwdriver(var/mob/user, var/obj/item/screwdriver/S)
-	if(!istype(S))
-		return 0
-	playsound(src.loc, 'sound/items/Screwdriver.ogg', 50, 1)
-	panel_open = !panel_open
-	to_chat(user, "<span class='notice'>You [panel_open ? "open" : "close"] the maintenance hatch of \the [src].</span>")
-	update_icon()
-	return 1
+//Tool qualities are stored in \code\__defines\tools_and_qualities.dm
+/obj/machinery/proc/default_deconstruction(obj/item/I, mob/user)
 
-/obj/machinery/proc/default_part_replacement(var/mob/user, var/obj/item/storage/part_replacer/R)
+	if(panel_open == -1)
+		to_chat(user, SPAN_NOTICE("There are no panels to open on \the [src]."))
+		return FALSE
+
+	var/qualities = list(QUALITY_SCREW_DRIVING)
+
+	if(panel_open && circuit)
+		qualities += QUALITY_PRYING
+
+	var/tool_type = I.get_tool_type(user, qualities, src)
+	switch(tool_type)
+		if(QUALITY_PRYING)
+			if(I.use_tool(user, src, WORKTIME_NORMAL, tool_type, FAILCHANCE_HARD, required_stat = STAT_MEC))
+				to_chat(user, SPAN_NOTICE("You remove the components of \the [src] with [I]."))
+				dismantle()
+			return TRUE
+
+		if(QUALITY_SCREW_DRIVING)
+			var/used_sound = panel_open ? 'sound/machines/Custom_screwdriveropen.ogg' :  'sound/machines/Custom_screwdriverclose.ogg'
+			if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, tool_type, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC, instant_finish_tier = 30, forced_sound = used_sound))
+				updateUsrDialog()
+				panel_open = !panel_open
+				to_chat(user, SPAN_NOTICE("You [panel_open ? "open" : "close"] the maintenance hatch of \the [src] with [I]."))
+				update_icon()
+			return TRUE
+
+		if(ABORT_CHECK)
+			return TRUE
+
+	return FALSE //If got no qualities - continue base attackby proc
+
+/obj/machinery/proc/default_part_replacement(obj/item/storage/part_replacer/R, mob/user)
 	if(!istype(R))
 		return 0
 	if(!component_parts)
 		return 0
 	if(panel_open)
-		var/obj/item/circuitboard/CB = locate(/obj/item/circuitboard) in component_parts
 		var/P
 		for(var/obj/item/stock_parts/A in component_parts)
-			for(var/T in CB.req_components)
-				if(ispath(A.type, T))
-					P = T
+			for(var/D in circuit.req_components)
+				if(istype(A, D))
+					P = D
 					break
 			for(var/obj/item/stock_parts/B in R.contents)
 				if(istype(B, P) && istype(A, P))
@@ -315,41 +358,91 @@ Class Procs:
 						component_parts -= A
 						component_parts += B
 						B.loc = null
-						to_chat(user, "<span class='notice'>[A.name] replaced with [B.name].</span>")
+						to_chat(user, SPAN_NOTICE("[A.name] replaced with [B.name]."))
 						break
 			update_icon()
 			RefreshParts()
 	else
-		to_chat(user, "<span class='notice'>Following parts detected in the machine:</span>")
-		for(var/var/obj/item/C in component_parts)
-			to_chat(user, "<span class='notice'>	[C.name]</span>")
+		to_chat(user, SPAN_NOTICE("Following parts detected in the machine:"))
+		for(var/obj/item/C in component_parts)
+			to_chat(user, SPAN_NOTICE("    [C.name]"))
 	return 1
 
-/obj/machinery/proc/dismantle()
-	playsound(loc, 'sound/items/Crowbar.ogg', 50, 1)
-	var/obj/machinery/constructable_frame/machine_frame/M = new /obj/machinery/constructable_frame/machine_frame(get_turf(src))
-	M.set_dir(src.dir)
-	M.state = 2
-	M.icon_state = "box_1"
-	for(var/obj/I in component_parts)
-		I.forceMove(get_turf(src))
+/obj/machinery/proc/create_frame(type)
+	if(type == FRAME_DEFAULT)
+		return new /obj/machinery/constructable_frame/machine_frame(loc)
+	if(type == FRAME_VERTICAL)
+		return new /obj/machinery/constructable_frame/machine_frame/vertical(loc)
 
+
+/obj/machinery/proc/dismantle()
+	on_deconstruction()
+	spawn_frame()
+
+	for(var/obj/I in component_parts)
+		I.forceMove(loc)
+		component_parts -= I
+	if(circuit)
+		circuit.forceMove(loc)
+		circuit.deconstruct(src)
 	qdel(src)
 	return 1
 
-/obj/machinery/InsertedContents()
-	return (contents - component_parts)
-
-/datum/proc/apply_visual(mob/M)
+//called on deconstruction before the final deletion
+/obj/machinery/proc/on_deconstruction()
 	return
+
+/obj/machinery/proc/spawn_frame(disassembled=TRUE)
+	var/obj/machinery/constructable_frame/machine_frame/M = create_frame(frame_type)
+
+	transfer_fingerprints_to(M)
+	M.anchored = anchored
+	M.set_dir(src.dir)
+
+	M.state = 2
+	M.icon_state = "[M.base_state]_1"
+	M.update_icon()
+
+	return M
+
 
 /datum/proc/remove_visual(mob/M)
 	return
 
-/obj/machinery/proc/malf_upgrade(var/mob/living/silicon/ai/user)
-	return 0
+/datum/proc/apply_visual(mob/M)
+	return
 
-/obj/machinery/CouldUseTopic(var/mob/user)
-	..()
-	if(clicksound && istype(user, /mob/living/carbon))
-		playsound(src, clicksound, clickvol)
+/obj/machinery/proc/update_power_use()
+	set_power_use(use_power)
+
+// The main proc that controls power usage of a machine, change use_power only with this proc
+/obj/machinery/proc/set_power_use(new_use_power)
+	if(current_power_usage && current_power_area) // We are tracking the area that is powering us so we can remove power from the right one if we got moved or something
+		current_power_area.removeStaticPower(current_power_usage, power_channel)
+		current_power_area = null
+
+	current_power_usage = 0
+	use_power = new_use_power
+
+	var/area/A = get_area(src)
+	if(!A || !anchored || stat & NOPOWER) // Unwrenched machines aren't plugged in, unpowered machines don't use power
+		return
+
+	if(use_power == IDLE_POWER_USE && idle_power_usage)
+		current_power_area = A
+		current_power_usage = idle_power_usage
+		current_power_area.addStaticPower(current_power_usage, power_channel)
+	else if(use_power == ACTIVE_POWER_USE && active_power_usage)
+		current_power_area = A
+		current_power_usage = active_power_usage
+		current_power_area.addStaticPower(current_power_usage, power_channel)
+
+
+// Unwrenching = unpluging from a power source
+/obj/machinery/wrenched_change()
+	update_power_use()
+
+/obj/machinery/get_item_cost(export)
+	. = ..()
+	for(var/atom/movable/i in component_parts)
+		. += SStrade.get_new_cost(i)

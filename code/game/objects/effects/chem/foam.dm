@@ -6,9 +6,9 @@
 	name = "foam"
 	icon_state = "foam"
 	opacity = 0
-	anchored = 1
-	density = 0
-	layer = ABOVE_OBJ_LAYER
+	anchored = TRUE
+	density = FALSE
+	layer = EDGED_TURF_LAYER
 	mouse_opacity = 0
 	animate_movement = 0
 	var/amount = 3
@@ -29,7 +29,7 @@
 		if(metal)
 			var/obj/structure/foamedmetal/M = new(src.loc)
 			M.metal = metal
-			M.update_icon()
+			M.updateicon()
 		flick("[icon_state]-disolve", src)
 		sleep(5)
 		qdel(src)
@@ -46,7 +46,7 @@
 	if(--amount < 0)
 		return
 
-	for(var/direction in GLOB.cardinal)
+	for(var/direction in cardinal)
 		var/turf/T = get_step(src, direction)
 		if(!T)
 			continue
@@ -64,9 +64,11 @@
 			F.create_reagents(10)
 			if(reagents)
 				for(var/datum/reagent/R in reagents.reagent_list)
-					F.reagents.add_reagent(R.type, 1, safety = 1) //added safety check since reagents in the foam have already had a chance to react
+					//added safety check since reagents in the foam have already had a chance to react
+					F.reagents.add_reagent(R.id, 1, safety = 1)
 
-/obj/effect/effect/foam/fire_act(datum/gas_mixture/air, exposed_temperature, exposed_volume) // foam disolves when heated, except metal foams
+// foam disolves when heated, except metal foams
+/obj/effect/effect/foam/fire_act(datum/gas_mixture/air, exposed_temperature, exposed_volume)
 	if(!metal && prob(max(0, exposed_temperature - 475)))
 		flick("[icon_state]-disolve", src)
 
@@ -76,9 +78,9 @@
 /obj/effect/effect/foam/Crossed(var/atom/movable/AM)
 	if(metal)
 		return
-	if(istype(AM, /mob/living))
+	if(isliving(AM))
 		var/mob/living/M = AM
-		M.slip("the foam", 6)
+		M.slip("the foam", 3)
 
 /datum/effect/effect/system/foam_spread
 	var/amount = 5				// the size of the foam spread.
@@ -95,11 +97,15 @@
 	carried_reagents = list()
 	metal = metalfoam
 
-	// bit of a hack here. Foam carries along any reagent also present in the glass it is mixed with (defaults to water if none is present). Rather than actually transfer the reagents, this makes a list of the reagent ids and spawns 1 unit of that reagent when the foam disolves.
+	// bit of a hack here.
+	// Foam carries along any reagent also present in the glass it is mixed with
+	// (defaults to water if none is present).
+	// Rather than actually transfer the reagents, this makes a list of the reagent ids
+	// and spawns 1 unit of that reagent when the foam disolves.
 
 	if(carry && !metal)
 		for(var/datum/reagent/R in carry.reagent_list)
-			carried_reagents += R.type
+			carried_reagents += R.id
 
 /datum/effect/effect/system/foam_spread/start()
 	spawn(0)
@@ -108,7 +114,7 @@
 			F.amount += amount
 			return
 
-		F = new /obj/effect/effect/foam(location, metal)
+		F = new(location, metal)
 		F.amount = amount
 
 		if(!metal) // don't carry other chemicals if a metal foam
@@ -116,18 +122,20 @@
 
 			if(carried_reagents)
 				for(var/id in carried_reagents)
-					F.reagents.add_reagent(id, 1, safety = 1) //makes a safety call because all reagents should have already reacted anyway
+					//makes a safety call because all reagents should have already reacted anyway
+					F.reagents.add_reagent(id, 1, safety = 1)
 			else
-				F.reagents.add_reagent(/datum/reagent/water, 1, safety = 1)
+				F.reagents.add_reagent("water", 1, safety = 1)
 
 // wall formed by metal foams, dense and opaque, but easy to break
 
 /obj/structure/foamedmetal
 	icon = 'icons/effects/effects.dmi'
 	icon_state = "metalfoam"
-	density = 1
+	density = TRUE
 	opacity = 1 // changed in New()
-	anchored = 1
+	anchored = TRUE
+	layer = EDGED_TURF_LAYER
 	name = "foamed metal"
 	desc = "A lightweight foamed metal wall."
 	var/metal = 1 // 1 = aluminum, 2 = iron
@@ -137,45 +145,49 @@
 	update_nearby_tiles(1)
 
 /obj/structure/foamedmetal/Destroy()
-	set_density(0)
+	density = FALSE
 	update_nearby_tiles(1)
-	..()
+	. = ..()
 
-/obj/structure/foamedmetal/update_icon()
+/obj/structure/foamedmetal/proc/updateicon()
 	if(metal == 1)
 		icon_state = "metalfoam"
 	else
 		icon_state = "ironfoam"
-
-/obj/structure/foamedmetal/ex_act(severity)
-	qdel(src)
 
 /obj/structure/foamedmetal/bullet_act()
 	if(metal == 1 || prob(50))
 		qdel(src)
 
 /obj/structure/foamedmetal/attack_hand(var/mob/user)
-	if ((HULK in user.mutations) || (prob(75 - metal * 25)))
-		user.visible_message("<span class='warning'>[user] smashes through the foamed metal.</span>", "<span class='notice'>You smash through the metal foam wall.</span>")
+/*	if ((HULK in user.mutations) || (prob(75 - metal * 25)))
+		user.visible_message(
+			SPAN_WARNING("[user] smashes through the foamed metal."),
+			SPAN_NOTICE("You smash through the metal foam wall.")
+		)
 		qdel(src)
-	else
-		to_chat(user, "<span class='notice'>You hit the metal foam but bounce off it.</span>")
+	else	*/
+	to_chat(user, SPAN_NOTICE("You hit the metal foam but bounce off it."))
 	return
 
-/obj/structure/foamedmetal/attackby(var/obj/item/I, var/mob/user)
-	if(istype(I, /obj/item/grab))
-		var/obj/item/grab/G = I
-		G.affecting.loc = src.loc
-		visible_message("<span class='warning'>[G.assailant] smashes [G.affecting] through the foamed metal wall.</span>")
-		qdel(I)
-		qdel(src)
-		return
+/obj/structure/foamedmetal/affect_grab(var/mob/living/user, var/mob/living/target)
+	target.forceMove(src.loc)
+	visible_message(SPAN_WARNING("[user] smashes [target] through the foamed metal wall."))
+	target.Weaken(5)
+	qdel(src)
+	return TRUE
 
+/obj/structure/foamedmetal/attackby(var/obj/item/I, var/mob/user)
+	if(!istype(I))
+		return
 	if(prob(I.force * 20 - metal * 25))
-		user.visible_message("<span class='warning'>[user] smashes through the foamed metal.</span>", "<span class='notice'>You smash through the foamed metal with \the [I].</span>")
+		user.visible_message(
+			SPAN_WARNING("[user] smashes through the foamed metal."),
+			SPAN_NOTICE("You smash through the foamed metal with \the [I].")
+		)
 		qdel(src)
 	else
-		to_chat(user, "<span class='notice'>You hit the metal foam to no effect.</span>")
+		to_chat(user, SPAN_NOTICE("You hit the metal foam to no effect."))
 
 /obj/structure/foamedmetal/CanPass(atom/movable/mover, turf/target, height=1.5, air_group = 0)
 	if(air_group)

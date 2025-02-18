@@ -6,7 +6,6 @@
 	desc = "a cloud of tiny, tiny robots."
 	icon = 'icons/mob/critter.dmi'
 	icon_state = "blobsquiggle_grey"
-	attacktext = "swarmed"
 	health = 10
 	maxHealth = 10
 	var/regen_time = 0
@@ -34,13 +33,14 @@
 			if(COMMANDED_HEALING)
 				heal()
 
-/mob/living/simple_animal/hostile/commanded/nanomachine/death(gibbed, deathmessage, show_dead_message)
-	..(null, "dissipates into thin air", "You have been destroyed.")
+/mob/living/simple_animal/hostile/commanded/nanomachine/death()
+	..(null,"Dissipates into thin air")
 	qdel(src)
 
 /mob/living/simple_animal/hostile/commanded/nanomachine/proc/move_to_heal()
 	if(!target_mob)
 		return 0
+	set_glide_size(DELAY2GLIDESIZE(move_to_delay))
 	walk_to(src,target_mob,1,move_to_delay)
 	if(Adjacent(target_mob))
 		stance = COMMANDED_HEALING

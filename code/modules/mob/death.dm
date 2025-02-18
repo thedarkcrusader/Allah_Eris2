@@ -2,53 +2,58 @@
 //added different sort of gibs and animations. N
 /mob/proc/gib(anim="gibbed-m",do_gibs)
 	death(1)
-	transforming = 1
+	transforming = TRUE
+	ADD_TRANSFORMATION_MOVEMENT_HANDLER(src)
 	canmove = 0
 	icon = null
-	set_invisibility(101)
-	update_canmove()
-	remove_from_dead_mob_list()
+	invisibility = 101
+	update_lying_buckled_and_verb_status()
+	GLOB.dead_mob_list -= src
+
+	if(do_gibs) gibs(loc, src)
 
 	var/atom/movable/overlay/animation = null
-	animation = new(loc)
-	animation.icon_state = "blank"
-	animation.icon = 'icons/mob/mob.dmi'
-	animation.master = src
+	if (anim)
+		animation = new(loc)
+		animation.icon_state = "blank"
+		animation.icon = 'icons/mob/mob.dmi'
+		animation.master = src
+		flick(anim, animation)
+	addtimer(CALLBACK(src, PROC_REF(check_delete), animation), 15)
 
-	flick(anim, animation)
-	if(do_gibs) gibs(loc, dna)
-
-	spawn(15)
-		if(animation)	qdel(animation)
-		if(src)			qdel(src)
+/mob/proc/check_delete(var/atom/movable/overlay/animation)
+	if(animation)	qdel(animation)
+	if(src)			qdel(src)
 
 //This is the proc for turning a mob into ash. Mostly a copy of gib code (above).
 //Originally created for wizard disintegrate. I've removed the virus code since it's irrelevant here.
 //Dusting robots does not eject the MMI, so it's a bit more powerful than gib() /N
-/mob/proc/dust(anim="dust-m",remains=/obj/effect/decal/cleanable/ash)
+/mob/proc/dust(anim = "dust-m", remains = /obj/effect/decal/cleanable/ash, iconfile = 'icons/mob/mob.dmi')
 	death(1)
-	var/atom/movable/overlay/animation = null
-	transforming = 1
+	if (istype(loc, /obj/item/holder))
+		var/obj/item/holder/H = loc
+		H.release_mob()
+
+	transforming = TRUE
+	ADD_TRANSFORMATION_MOVEMENT_HANDLER(src)
 	canmove = 0
 	icon = null
-	set_invisibility(101)
+	invisibility = 101
 
-	animation = new(loc)
-	animation.icon_state = "blank"
-	animation.icon = 'icons/mob/mob.dmi'
-	animation.master = src
-
-	flick(anim, animation)
 	new remains(loc)
 
 	remove_from_dead_mob_list()
-	spawn(15)
-		if(animation)	qdel(animation)
-		if(src)			qdel(src)
+	var/atom/movable/overlay/animation = null
+	if(anim)
+		animation = new(loc)
+		animation.icon_state = "blank"
+		animation.icon = iconfile
+		animation.master = src
+		flick(anim, animation)
+	addtimer(CALLBACK(src, PROC_REF(check_delete), animation), 15)
 
 
-/mob/proc/death(gibbed,deathmessage="seizes up and falls limp...", show_dead_message = "You have died.")
-
+/mob/proc/death(gibbed,deathmessage="seizes up and falls limp...",show_dead_message = "You have died.")
 	if(stat == DEAD)
 		return 0
 
@@ -57,12 +62,27 @@
 	if(!gibbed && deathmessage != "no message") // This is gross, but reliable. Only brains use it.
 		src.visible_message("<b>\The [src.name]</b> [deathmessage]")
 
-	set_stat(DEAD)
-	reset_plane_and_layer()
-	update_canmove()
+	// Drop all embedded items if gibbed/dusted
+	if(gibbed)
+		for(var/obj/O in embedded)
+			O.forceMove(loc)
+		embedded = list()
 
-	dizziness = 0
-	jitteriness = 0
+	for(var/mob/living/carbon/human/H in oviewers(src))
+		H.sanity.onSeeDeath(src)
+		SEND_SIGNAL_OLD(H, COMSIG_MOB_DEATH, src)
+
+	stat = DEAD
+	for(var/obj/item/implant/carrion_spider/control/C in src)
+		C.return_mind()
+
+	// Notifies borer of host death.
+	var/mob/living/simple_animal/borer/B = get_brain_worms()
+	if(B?.controlling)
+		B.host_death()
+
+	update_lying_buckled_and_verb_status()
+	reset_plane_and_layer()
 
 	set_sight(sight|SEE_TURFS|SEE_MOBS|SEE_OBJS)
 	set_see_in_dark(8)
@@ -71,43 +91,80 @@
 	drop_r_hand()
 	drop_l_hand()
 
-	//TODO:  Change death state to health_dead for all these icon files.  This is a stop gap.
+	//Bay statistics system would be hooked in here, but we're not porting it
 
-	if(healths)
-		healths.overlays = null // This is specific to humans but the relevant code is here; shouldn't mess with other mobs.
-		if("health7" in icon_states(healths.icon))
-			healths.icon_state = "health7"
-		else
-			healths.icon_state = "health6"
-			log_debug("[src] ([src.type]) died but does not have a valid health7 icon_state (using health6 instead). report this error to Ccomp5950 or your nearest Developer")
+
+	if(isliving(src))
+		var/mob/living/L = src
+		if(L.HUDneed.Find("health"))
+			var/obj/screen/health/H = L.HUDneed["health"]
+			//H.icon_state = "health7" hm... need recode this moment...
+			H.DEADelize()
+	if(client)
+		kill_CH() //We dead... clear any prepared abilities...
 
 	timeofdeath = world.time
-	if(mind) mind.store_memory("Time of death: [stationtime2text()]", 0)
+	if (isanimal(src))
+		set_death_time(ANIMAL, world.time)
+	else if (ispAI(src) || isdrone(src))
+		set_death_time(MINISYNTH, world.time)
+	else if (isliving(src))
+		set_death_time(CREW, world.time)//Crew is the fallback
+	if(mind)
+		mind.store_memory("Time of death: [stationtime2text()]", 0)
 	switch_from_living_to_dead_mob_list()
-
-	update_icon()
-
-	if(ticker && ticker.mode)
-		ticker.mode.check_win()
+	updateicon()
 	to_chat(src,"<span class='deadsay'>[show_dead_message]</span>")
-	if(iswarfare())//Only for warfare bullshit.
-		to_chat(src, "<font size='5'><span class='notice'>Once you ghost you will be able to respawn in [config.warfare_respawn_time] minutes.</span></fon>")
+	return 1
 
-	/*
-	if(client)  // the following is ported from r4407
-		var/cancel = 0 //It is commented out for now. Only to be used for very specific gamemodes that need to end when everyone is dead.
-		for(var/mob/living/carbon/human/H in GLOB.player_list)
-			if(!H.stat)
-				cancel = 1
-				break
-		if(!cancel)
-			to_world("<b>Everyone has died, restarting world in 30 seconds.</b>")
-			log_world("Everyone has died, restarting world in 30 seconds.")
-			spawn(270)
-				to_world("<b>Restarting...</b>")
-				log_world("Restarting...")
-				spawn(30)
-					log_admin("Restarting world, all players have died.")
-					world.Reboot("All players have died.")
-	*/
+
+
+
+//This proc retrieves the relevant time of death from
+/mob/proc/get_death_time(var/which)
+	var/datum/preferences/P = get_preferences(src)
+	if (!P)
+		return FALSE
+
+	return P.time_of_death[which]
+
+/mob/proc/set_death_time(var/which, var/value)
+	var/datum/preferences/P = get_preferences(src)
+	if (!P)
+		return FALSE
+	P.time_of_death[which] = value
+	return 1
+
+
+
+//These functions get and set the bonuses to respawn time
+//Bonuses can be applied by things like going to cryosleep
+/mob/proc/get_respawn_bonus(var/which)
+	var/datum/preferences/P = get_preferences(src)
+	if (!P)
+		return FALSE
+
+	if (which)
+		return P.crew_respawn_bonuses[which]
+	else
+		//Passing in no specific request will instead return the total of all the respawn bonuses
+		//This behaviour is utilised in mayrespawn
+		var/total = 0
+		for (var/v in P.crew_respawn_bonuses)
+			total += P.crew_respawn_bonuses[v]
+		return total
+
+/mob/proc/set_respawn_bonus(var/which, var/value)
+	var/datum/preferences/P = get_preferences(src)
+	if (!P)
+		return FALSE
+	P.crew_respawn_bonuses[which] = value
+	return 1
+
+//Wipes all respawn bonuses. Called when a player actually respawns
+/mob/proc/clear_respawn_bonus()
+	var/datum/preferences/P = get_preferences(src)
+	if (!P)
+		return FALSE
+	P.crew_respawn_bonuses.Cut()
 	return 1

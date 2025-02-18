@@ -6,10 +6,9 @@
 /obj/structure/transit_tube
 	icon = 'icons/obj/pipes/transit_tube.dmi'
 	icon_state = "E-W"
-	density = 1
-	plane = ABOVE_HUMAN_PLANE
-	layer = ABOVE_HUMAN_LAYER
-	anchored = 1.0
+	density = TRUE
+	layer = LOW_ITEM_LAYER
+	anchored = TRUE
 	var/list/tube_dirs = null
 	var/exit_delay = 2
 	var/enter_delay = 1
@@ -41,8 +40,9 @@
 	icon = 'icons/obj/pipes/transit_tube_pod.dmi'
 	icon_state = "pod"
 	animate_movement = FORWARD_STEPS
-	anchored = 1.0
-	density = 1
+	anchored = TRUE
+	density = TRUE
+	layer = BELOW_OBJ_LAYER
 	var/moving = 0
 	var/datum/gas_mixture/air_contents = new()
 
@@ -52,32 +52,7 @@
 	for(var/atom/movable/AM in contents)
 		AM.loc = loc
 
-	..()
-
-
-
-// When destroyed by explosions, properly handle contents.
-obj/structure/ex_act(severity)
-	switch(severity)
-		if(1.0)
-			for(var/atom/movable/AM in contents)
-				AM.loc = loc
-				AM.ex_act(severity++)
-
-			qdel(src)
-			return
-		if(2.0)
-			if(prob(50))
-				for(var/atom/movable/AM in contents)
-					AM.loc = loc
-					AM.ex_act(severity++)
-
-				qdel(src)
-				return
-		if(3.0)
-			return
-
-
+	. = ..()
 
 /obj/structure/transit_tube_pod/New(loc)
 	..(loc)
@@ -102,7 +77,7 @@ obj/structure/ex_act(severity)
 /obj/structure/transit_tube/Bumped(mob/AM as mob|obj)
 	var/obj/structure/transit_tube/T = locate() in AM.loc
 	if(T)
-		to_chat(AM, "<span class='warning'>The tube's support pylons block your way.</span>")
+		to_chat(AM, SPAN_WARNING("The tube's support pylons block your way."))
 		return ..()
 	else
 		AM.loc = src.loc
@@ -115,12 +90,12 @@ obj/structure/ex_act(severity)
 
 
 /obj/structure/transit_tube/station/Bumped(mob/AM as mob|obj)
-	if(!pod_moving && icon_state == "open" && istype(AM, /mob))
+	if(!pod_moving && icon_state == "open" && ismob(AM))
 		for(var/obj/structure/transit_tube_pod/pod in loc)
 			if(pod.contents.len)
-				to_chat(AM, "<span class='notice'>The pod is already occupied.</span>")
+				to_chat(AM, SPAN_NOTICE("The pod is already occupied."))
 				return
-			else if(!pod.moving && pod.dir in directions())
+			else if(!pod.moving && (pod.dir in directions()))
 				AM.loc = pod
 				return
 
@@ -128,7 +103,7 @@ obj/structure/ex_act(severity)
 /obj/structure/transit_tube/station/attack_hand(mob/user as mob)
 	if(!pod_moving)
 		for(var/obj/structure/transit_tube_pod/pod in loc)
-			if(!pod.moving && pod.dir in directions())
+			if(!pod.moving && (pod.dir in directions()))
 				if(icon_state == "closed")
 					open_animation()
 
@@ -157,7 +132,7 @@ obj/structure/ex_act(severity)
 
 /obj/structure/transit_tube/station/proc/launch_pod()
 	for(var/obj/structure/transit_tube_pod/pod in loc)
-		if(!pod.moving && pod.dir in directions())
+		if(!pod.moving && (pod.dir in directions()))
 			spawn(5)
 				pod_moving = 1
 				close_animation()
@@ -329,13 +304,13 @@ obj/structure/ex_act(severity)
 			sleep(last_delay)
 			set_dir(next_dir)
 			loc = next_loc // When moving from one tube to another, skip collision and such.
-			set_density(current_tube.density)
+			density = current_tube.density
 
 			if(current_tube && current_tube.should_stop_pod(src, next_dir))
 				current_tube.pod_stopped(src, dir)
 				break
 
-		set_density(1)
+		density = TRUE
 
 		// If the pod is no longer in a tube, move in a line until stopped or slowed to a halt.
 		//  /turf/inertial_drift appears to only work on mobs, and re-implementing some of the
@@ -378,7 +353,7 @@ obj/structure/ex_act(severity)
 //  the station, try to exit. If the direction matches one of the station's
 //  tube directions, launch the pod in that direction.
 /obj/structure/transit_tube_pod/relaymove(mob/mob, direction)
-	if(istype(mob, /mob) && mob.client)
+	if(ismob(mob) && mob.client)
 		// If the pod is not in a tube at all, you can get out at any time.
 		if(!(locate(/obj/structure/transit_tube) in loc))
 			mob.loc = loc
@@ -428,7 +403,7 @@ obj/structure/ex_act(severity)
 		tube_dirs = parse_dirs(icon_state)
 
 		if(copytext(icon_state, 1, 3) == "D-" || findtextEx(icon_state, "Pass"))
-			set_density(0)
+			density = FALSE
 
 
 

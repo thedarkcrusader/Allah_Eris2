@@ -12,12 +12,4 @@ GLOBAL_DATUM_INIT(logged_out_event, /decl/observ/logged_out, new)
 /decl/observ/logged_out
 	name = "Logged Out"
 	expected_type = /mob
-
-/******************
-* Logout Handling *
-******************/
-
-/mob/Logout()
-	message_admins("<span class='notice'>Logout: [key] id:[computer_id]</span>")
-	GLOB.logged_out_event.raise_event(src, my_client)
-	..()
+// moved to the apropriate mob/logout.dm

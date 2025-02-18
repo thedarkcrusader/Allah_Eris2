@@ -1,33 +1,79 @@
+// COLOR GLOVES
 /obj/item/clothing/gloves/color
+	name = "gloves"
+	initial_name = "gloves"
 	desc = "A pair of gloves, they don't look special in any way."
+	icon_state = "latex"
 	item_state = "lgloves"
-	icon_state = "white"
-
-/obj/item/clothing/gloves/color/modified
-	item_flags = ITEM_FLAG_PREMODIFIED
+	bad_type = /obj/item/clothing/gloves/color
 
 /obj/item/clothing/gloves/color/white
-	color = COLOR_WHITE
+	name = "white gloves"
+	desc = "These look pretty fancy."
+	icon_state = "latex"
+	item_state = "lgloves"
 
-/obj/item/clothing/gloves/color/white/modified
-	item_flags = ITEM_FLAG_PREMODIFIED
+/obj/item/clothing/gloves/color/white/insulated // Stealthy insulated gloves for uplink
+	desc = "A pair of thick fancy gloves."
+	siemens_coefficient = 0
 
-/obj/item/clothing/gloves/color/evening
-	desc = "A pair of gloves that reach past the elbow. Fancy!"
-	name = "evening gloves"
-	icon_state = "evening_gloves"
-	item_state = "evening_gloves"
-	color = COLOR_WHITE //original colour was "#7f7f7f", but white is fancier of course
-	body_parts_covered = ARMS|HANDS //evening gloves don't quite cover the entire arm, but might as well differentiate the item a bit
+/obj/item/clothing/gloves/color/yellow
+	name = "yellow gloves"
+	initial_name = "yellow gloves"
+	desc = "A pair of gloves, they don't look special in any way, but seems familiar."
+	icon_state = "yellow"
+	item_state = "ygloves"
 
-/obj/item/clothing/gloves/color/evening/modified
-	item_flags = ITEM_FLAG_PREMODIFIED
+/obj/item/clothing/gloves/color/orange
+	name = "orange gloves"
+	initial_name = "orange gloves"
+	icon_state = "orange"
+	item_state = "orangegloves"
 
-/obj/item/clothing/gloves/rainbow
+/obj/item/clothing/gloves/color/red
+	name = "red gloves"
+	initial_name = "red gloves"
+	icon_state = "red"
+	item_state = "redgloves"
+
+/obj/item/clothing/gloves/color/rainbow
 	name = "rainbow gloves"
-	desc = "A pair of gloves, they don't look special in any way."
+	initial_name = "rainbow gloves"
 	icon_state = "rainbow"
 	item_state = "rainbowgloves"
 
-/obj/item/clothing/gloves/rainbow/modified
-	item_flags = ITEM_FLAG_PREMODIFIED
+/obj/item/clothing/gloves/color/blue
+	name = "blue gloves"
+	initial_name = "blue gloves"
+	icon_state = "blue"
+	item_state = "bluegloves"
+
+/obj/item/clothing/gloves/color/purple
+	name = "purple gloves"
+	initial_name = "purple gloves"
+	icon_state = "purple"
+	item_state = "purplegloves"
+
+/obj/item/clothing/gloves/color/green
+	name = "green gloves"
+	initial_name = "green gloves"
+	icon_state = "green"
+	item_state = "greengloves"
+
+/obj/item/clothing/gloves/color/grey
+	name = "grey gloves"
+	initial_name = "grey gloves"
+	icon_state = "gray"
+	item_state = "graygloves"
+
+/obj/item/clothing/gloves/color/light_brown
+	name = "light brown gloves"
+	initial_name = "light brown gloves"
+	icon_state = "lightbrown"
+	item_state = "lightbrowngloves"
+
+/obj/item/clothing/gloves/color/brown
+	name = "brown gloves"
+	initial_name = "brown gloves"
+	icon_state = "brown"
+	item_state = "browngloves"

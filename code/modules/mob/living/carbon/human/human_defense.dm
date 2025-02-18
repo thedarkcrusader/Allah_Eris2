@@ -2,77 +2,83 @@
 Contains most of the procs that are called when a mob is attacked by something
 
 bullet_act
-ex_act
+explosion_act
 meteor_act
 
 */
-
-/obj/item/proc/get_attack_name()
-	if(sharp && edge)
-		return "slices"
-	else if(sharp && !edge)
-		return "stabs"
-	else
-		return "hits"
 
 /mob/living/carbon/human/bullet_act(var/obj/item/projectile/P, var/def_zone)
 	def_zone = check_zone(def_zone)
 	if(!has_organ(def_zone))
 		return PROJECTILE_FORCE_MISS //if they don't have the organ in question then the projectile just passes by.
+
+
+	var/obj/item/organ/external/organ = get_organ(def_zone)
+
 	//Shields
-	var/shield_check = check_shields(P.damage, P, null, def_zone, "the [P.name]")
+	var/shield_check = check_shields(P.get_structure_damage(), P, null, def_zone, "the [P.name]")
 	if(shield_check)
 		if(shield_check < 0)
 			return shield_check
 		else
-			P.on_hit(src, 100, def_zone)
-			return 100
+			P.on_hit(src, def_zone)
+			return 2
 
-	var/obj/item/organ/external/organ = get_organ(def_zone)
-	var/armor = getarmor_organ(organ, P.check_armour)
-	var/penetrating_damage = ((P.damage + P.armor_penetration) * P.penetration_modifier) - armor
+	//Checking absorb for spawning shrapnel
+	.=..(P , def_zone)
 
-	//Organ damage
-	if(organ.internal_organs.len && prob(35 + max(penetrating_damage, -12.5)))
-		var/damage_amt = min((P.damage * P.penetration_modifier), penetrating_damage) //So we don't factor in armor_penetration as additional damage
-		if(damage_amt > 0)
-		// Damage an internal organ
-			var/list/victims = list()
-			var/list/possible_victims = shuffle(organ.internal_organs.Copy())
-			for(var/obj/item/organ/internal/I in possible_victims)
-				if(I.damage < I.max_damage && (prob((I.relative_size) * (1 / max(1, victims.len)))))
-					victims += I
-			if(victims.len)
-				for(var/obj/item/organ/victim in victims)
-					damage_amt /= 2
-					victim.take_damage(damage_amt)
+	var/check_absorb = .
+	//Shrapnel
+	if(P.can_embed() && (check_absorb == PROJECTILE_STOP))
+		var/armor = getarmor_organ(organ, ARMOR_BULLET)
+		if(prob(20 + max(P.damage_types[BRUTE] - armor, -10)))
+			var/obj/item/material/shard/shrapnel/SP = new()
+			SP.name = (P.name != "shrapnel")? "[P.name] shrapnel" : "shrapnel"
+			SP.desc = "[SP.desc] It looks like it was fired from [P.shot_from]."
+			SP.loc = organ
+			if(length(P.matter))
+				SP.material = P.matter[1]
+				SP.amount = P.matter[SP.material] // amount no longer randomized
+			organ.embed(SP)
 
 
-	//Embed or sever artery
-	if(P.can_embed() && !(species.species_flags & SPECIES_FLAG_NO_EMBED) && prob(22.5 + max(penetrating_damage, -10)) && !(prob(50) && (organ.sever_artery())))
-		var/obj/item/material/shard/shrapnel/SP = new()
-		SP.SetName((P.name != "shrapnel")? "[P.name] shrapnel" : "shrapnel")
-		SP.desc = "[SP.desc] It looks like it was fired from [P.shot_from]."
-		SP.loc = organ
-		organ.embed(SP)
-
-	var/blocked = ..(P, def_zone)
-
-	projectile_hit_bloody(P, P.damage*blocked_mult(blocked), def_zone)
-
-	return blocked
-
-/mob/living/carbon/human/stun_effect_act(var/stun_amount, var/agony_amount, var/def_zone)
-	var/obj/item/organ/external/affected = get_organ(check_zone(def_zone))
-	if(!affected)
+/mob/living/carbon/human/hit_impact(damage, dir, hit_zone)
+	if(incapacitated(INCAPACITATION_DEFAULT|INCAPACITATION_BUCKLED_PARTIALLY))
+		return
+	if(damage < stats.getStat(STAT_TGH))
+		..()
 		return
 
-	var/siemens_coeff = get_siemens_coefficient_organ(affected)
-	stun_amount *= siemens_coeff
-	agony_amount *= siemens_coeff
-	agony_amount *= affected.get_agony_multiplier()
+	if(!dir) // Same turf as the source
+		return
 
-	affected.stun_act(stun_amount, agony_amount)
+	var/r_dir = reverse_dir[dir]
+	var/hit_dirs = (r_dir in cardinal) ? r_dir : list(r_dir & NORTH|SOUTH, r_dir & EAST|WEST)
+
+	if(hit_zone == BP_R_LEG || hit_zone == BP_L_LEG)
+		if(prob(60 - stats.getStat(STAT_TGH)))
+			step(src, pick(cardinal - hit_dirs))
+			visible_message(SPAN_WARNING("[src] stumbles around."))
+
+/mob/living/carbon/human/stun_effect_act(var/stun_amount, var/agony_amount, var/def_zone)
+
+	var/obj/item/organ/external/affected = get_organ(check_zone(def_zone))
+
+//	No siemens coefficient calculations now, it's all done with armor "Energy" protection stat
+
+	switch (def_zone)
+		if(BP_L_ARM, BP_R_ARM)
+			var/obj/item/organ/external/hand = get_organ(def_zone)
+
+			if(hand && hand.mob_can_unequip(src) && (stun_amount || agony_amount > 10))
+				msg_admin_attack("[src.name] ([src.ckey]) was disarmed by a stun effect")
+
+				drop_from_inventory(hand)
+				if (BP_IS_ROBOTIC(affected))
+					emote("pain", 1, "drops what they were holding, their [affected.name] malfunctioning!")
+				else
+					var/emote_scream = pick("screams in pain and ", "lets out a sharp cry and ", "cries out and ")
+					emote("pain", 1, "[(species && species.flags & NO_PAIN) ? "" : emote_scream ]drops what they were holding in their [affected.name]!")
 
 	..(stun_amount, agony_amount, def_zone)
 
@@ -94,20 +100,46 @@ meteor_act
 			var/obj/item/organ/external/organ = organs_by_name[organ_name]
 			if(organ)
 				var/weight = organ_rel_size[organ_name]
-				armorval += (getarmor_organ(organ, type) * weight) //use plain addition here because we are calculating an average
+				armorval += getarmor_organ(organ, type) * weight
 				total += weight
-	return (armorval/max(total, 1))
+
+	armorval = armorval/max(total, 1)
+
+	if(armorval > 75) // Reducing the risks from powergaming
+		switch (type)
+			if(ARMOR_MELEE, ARMOR_BULLET, ARMOR_ENERGY)
+				armorval = (75+(armorval-75)/2)
+
+	return armorval
+
+/mob/living/carbon/human/getarmorablative(var/def_zone, var/type)
+
+	var/obj/item/rig/R = get_equipped_item(slot_back)
+	if(istype(R))
+		if(R.ablative_armor && (type in list(ARMOR_MELEE, ARMOR_BULLET, ARMOR_ENERGY, ARMOR_BOMB)))
+			return R.ablative_armor
+	return FALSE
+
+//Returns true if the ablative armor successfully took damage
+/mob/living/carbon/human/damageablative(var/def_zone, var/damage_taken)
+
+	var/obj/item/rig/R = get_equipped_item(slot_back)
+	if(istype(R))
+		if(R.ablative_armor)
+			R.ablative_armor = max(R.ablative_armor - damage_taken / R.ablation, 0)
+			return TRUE
+	return FALSE
 
 //this proc returns the Siemens coefficient of electrical resistivity for a particular external organ.
-/mob/living/carbon/human/proc/get_siemens_coefficient_organ(var/obj/item/organ/external/def_zone)
+/mob/living/carbon/human/proc/get_siemens_coefficient_organ(obj/item/organ/external/def_zone)
 	if (!def_zone)
 		return 1.0
 
-	var/siemens_coefficient = max(species.siemens_coefficient,0)
+	var/siemens_coefficient = species.siemens_coefficient
 
 	var/list/clothing_items = list(head, wear_mask, wear_suit, w_uniform, gloves, shoes) // What all are we checking?
 	for(var/obj/item/clothing/C in clothing_items)
-		if(istype(C) && (C.body_parts_covered & def_zone.body_part)) // Is that body part being targeted covered?
+		if((C.body_parts_covered & def_zone.body_part)) // Is that body part being targeted covered?
 			siemens_coefficient *= C.siemens_coefficient
 
 	return siemens_coefficient
@@ -115,19 +147,27 @@ meteor_act
 //this proc returns the armour value for a particular external organ.
 /mob/living/carbon/human/proc/getarmor_organ(var/obj/item/organ/external/def_zone, var/type)
 	if(!type || !def_zone) return 0
-	if(!istype(def_zone))
-		def_zone = get_organ(check_zone(def_zone))
-	if(!def_zone)
-		return 0
 	var/protection = 0
 	var/list/protective_gear = list(head, wear_mask, wear_suit, w_uniform, gloves, shoes)
-	for(var/obj/item/clothing/gear in protective_gear)
-		if(gear.body_parts_covered & def_zone.body_part)
-			protection = add_armor(protection, gear.armor[type])
-		if(gear.accessories.len)
-			for(var/obj/item/clothing/accessory/bling in gear.accessories)
-				if(bling.body_parts_covered & def_zone.body_part)
-					protection = add_armor(protection, bling.armor[type])
+	if(def_zone.armor)
+		protection = 100 - (100 - def_zone.armor.getRating(type)) * (100 - protection) * 0.01 // Converts armor into multiplication form, stacks them, then converts them back
+
+	for(var/gear in protective_gear)
+		if(gear && istype(gear ,/obj/item/clothing))
+			var/obj/item/clothing/C = gear
+			if(istype(C) && C.body_parts_covered & def_zone.body_part && C.armor)
+				protection = 100 - (100 - C.armor.vars[type]) * (100 - protection) * 0.01 // Same as above
+
+	var/obj/item/shield/shield = has_shield()
+
+	if(shield)
+		protection += shield.armor[type]
+
+	if (protection > 75) // reducing the risks from powergaming
+		switch (type)
+			if (ARMOR_MELEE,ARMOR_BULLET,ARMOR_ENERGY) protection = (75+protection/2)
+			else return protection
+
 	return protection
 
 /mob/living/carbon/human/proc/check_head_coverage()
@@ -142,10 +182,10 @@ meteor_act
 	return 0
 
 //Used to check if they can be fed food/drinks/pills
-/mob/living/carbon/human/check_mouth_coverage()
+/mob/living/carbon/human/proc/check_mouth_coverage()
 	var/list/protective_gear = list(head, wear_mask, wear_suit, w_uniform)
 	for(var/obj/item/gear in protective_gear)
-		if(istype(gear) && (gear.body_parts_covered & FACE) && !(gear.item_flags & ITEM_FLAG_FLEXIBLEMATERIAL))
+		if(istype(gear) && (gear.body_parts_covered & FACE) && !(gear.item_flags & FLEXIBLEMATERIAL))
 			return gear
 	return null
 
@@ -154,280 +194,215 @@ meteor_act
 		if(!shield) continue
 		. = shield.handle_shield(src, damage, damage_source, attacker, def_zone, attack_text)
 		if(.) return
+
+	if(istype(damage_source, /obj/item/projectile))
+		var/obj/item/rig/R = back
+		if(R)
+			R.block_bullet(src, damage_source, def_zone)
 	return 0
 
-/mob/living/carbon/human/resolve_item_attack(obj/item/I, mob/living/carbon/human/user, var/target_zone, var/special = FALSE)
-	for (var/obj/item/grab/G in grabbed_by)
-		if(G.resolve_item_attack(user, I, target_zone))
-			return null
+/mob/living/carbon/human/proc/has_shield()
+	for(var/obj/item/shield/shield in list(l_hand, r_hand))
+		if(!shield) continue
+		return shield
+	return FALSE
 
-	if(user == src) // Attacking yourself can't miss
-		return target_zone
+/mob/living/carbon/human/proc/handle_blocking(var/damage)
+	var/stat_affect = 0.3 //lowered to 0.2 if we are blocking with an item
+	var/item_size_affect = 0 //the bigger the thing you hold is, the more damage you can block
+	var/toughness = max(1, stats.getStat(STAT_TGH))
+	//passive blocking with shields is handled differently(code is above this proc)
+	if(get_active_hand())//are we blocking with an item?
+		var/obj/item/I = get_active_hand()
+		if(istype(I))
+			item_size_affect = I.w_class * 5
+			stat_affect = 0.2
+	damage -= (toughness * stat_affect + item_size_affect)
+	return max(0, damage)
 
-	var/accuracy_penalty = user.melee_accuracy_mods()
+/mob/living/carbon/human/proc/grab_redirect_attack(var/mob/living/carbon/human/attacker, var/obj/item/grab/G, var/obj/item/I)
+	var/mob/living/carbon/human/grabbed = G.affecting
+	visible_message(SPAN_DANGER("[src] redirects the blow at [grabbed]!"), SPAN_DANGER("You redirect the blow at [grabbed]!"))
+	//check what we are being hit with, a hand(I is null), or an item?
+	//quickly turn blocking off and on to prevent looping(since we are attacking again)
+	blocking = FALSE
+	if(istype(I, /obj/item))
+		grabbed.attackby(I, attacker)
+	else
+		grabbed.attack_hand(attacker)//and now it's not our problems
+	blocking = TRUE
+	//change our block state depending on grab level
+	if(G.state >= GRAB_NECK)
+		return //block remains active
+	else if(G.state >= GRAB_AGGRESSIVE)
+		stop_blocking()
+		return //block is turned off
+	else
+		stop_blocking()
+		drop_from_inventory(G)
+		G.loc = null
+		qdel(G)
+		return //block is turned off, grab is GONE
 
-	if(special)
-		if(user.atk_intent == I_DUAL)
-			accuracy_penalty += 25
-
-	var/hit_zone = get_zone_with_miss_chance(target_zone, src, accuracy_penalty)
-
-	if(special)
-		switch(user.atk_intent)
-			if(I_AIMED)//More accurate attack
-				hit_zone = target_zone
-
-	if(attempt_dodge())
+/mob/living/carbon/human/resolve_item_attack(obj/item/I, mob/living/user, var/target_zone)
+	if(check_attack_throat(I, user))
 		return null
 
-	if(!hit_zone)
-		visible_message("<span class='danger'>\The [user] misses [src] with \the [I]!</span>")
-		return null
-
+	var/hit_zone = check_zone(target_zone)
 	if(check_shields(I.force, I, user, target_zone, "the [I.name]"))
 		return null
 
 	var/obj/item/organ/external/affecting = get_organ(hit_zone)
 	if (!affecting || affecting.is_stump())
-		to_chat(user, "<span class='danger'>They are missing that limb!</span>")
+		to_chat(user, SPAN_DANGER("They are missing that limb!"))
 		return null
-
-	if(user.statscheck(skills = user.SKILL_LEVEL(melee)) == CRIT_FAILURE || (prob(50) && is_hellbanned()))
-		user.resolve_critical_miss(I)
-		return null
-
-	var/blocked = run_armor_check(hit_zone, "melee", I.armor_penetration, "Your armor has protected your [affecting.name].", "Your armor has softened the blow to your [affecting.name].")
-
-
-	if(blocked == 100)
-		visible_message("<span class='danger'>[user] [I.get_attack_name()] [src]'s [affecting.name] with the [I], but it does no damage!")
-		return null
-
-	if(hit_zone == BP_CHEST || hit_zone == BP_MOUTH || hit_zone == BP_THROAT || hit_zone == BP_HEAD)//If we're lying and we're trying to aim high, we won't be able to hit.
-		if(user.lying && !src.lying)
-			to_chat(user, "<span class='notice'><b>I can't reach their [affecting.name]!</span></b>")
-			return null
 
 	return hit_zone
 
-/mob/living/carbon/human/hit_with_weapon(obj/item/I, mob/living/user, var/effective_force, var/hit_zone, var/special = FALSE)
+/mob/living/carbon/human/hit_with_weapon(obj/item/I, mob/living/user, var/effective_force, var/hit_zone)
 	var/obj/item/organ/external/affecting = get_organ(hit_zone)
 	if(!affecting)
-		return //should be prevented by attacked_with_item() but for sanity.
-
-	var/aim_zone = user.zone_sel.selecting
+		return FALSE//should be prevented by attacked_with_item() but for sanity.
 
 
-	var/obj/item/organ/external/aimed = get_organ(aim_zone)
-
-	var/organ_hit = affecting.name//This is spaghetti, but it's done so that it recognizes when you hit the throat, and when you hit something else instead.
-
-	if(aim_zone == BP_THROAT)
-		organ_hit = "throat"
-
-	var/blocked = run_armor_check(hit_zone, "melee", I.armor_penetration, "Your armor has protected your [affecting.name].", "Your armor has softened the blow to your [affecting.name].")
-
-
-	if(hit_zone != aim_zone && (aim_zone != BP_MOUTH) &&  (aim_zone != BP_THROAT) && (aim_zone != BP_EYES))//This is ugly but it works.
-		visible_message("<span class='danger'>[user] aimed for [src]\'s [aimed.name], but [I.get_attack_name()] \his [organ_hit] instead.</span> <span class='combat_success'>[(blocked < 20 && blocked > 1)  ? "Slight damage was done." : ""]</span>")
-
-	else if(blocked < 20 && blocked > 1)//This is ugly and it doesn't work.
-		visible_message("<span class='danger'>[user] [I.get_attack_name()] [src]\'s [organ_hit] with the [I.name]!<span class='danger'> <span class='combat_success'>Slight damage was done.</span>")
-
-	else
-		visible_message("<span class='danger'>[user] [I.get_attack_name()] [src]\'s [organ_hit] with the [I.name]!<span class='danger'>")
-
-	aggro_npc()
-	standard_weapon_hit_effects(I, user, effective_force, blocked, hit_zone, special)
-
-	return blocked
-
-/mob/living/carbon/human/standard_weapon_hit_effects(obj/item/I, mob/living/user, var/effective_force, var/blocked, var/hit_zone, var/special = FALSE)
-	var/obj/item/organ/external/affecting = get_organ(hit_zone)
-	if(!affecting)
-		return 0
-
-	if(user.STAT_LEVEL(str))//If they have strength then add it.
-		effective_force *= strToDamageModifier(user.STAT_LEVEL(str))
-
-	if(special)
-		switch(user.atk_intent)
-			if(I_STRONG)//Offensive attacks do even more damage.
-				effective_force += I.force
-			if(I_WEAK)
-				effective_force = (effective_force/2) //Half the amount of force.
-
-	if(user.atk_intent == I_GUARD && user.combat_mode)//If we're guarding then hit for less damage.
-		effective_force = (effective_force * 0.25)
-
-	if(user.atk_intent == I_DEFENSE && user.combat_mode)
-		effective_force = (effective_force * 0.40)
-
-	if(effective_force > 10 || effective_force >= 5 && prob(33))
-		forcesay(GLOB.hit_appends)	//forcesay checks stat already
-
-	//Ok this block of text handles cutting arteries, tendons, and limbs off.
-	//First we cut an artery, the reason for that, is that arteries are funninly enough, not that lethal, and don't have the biggest impact. They'll still make you bleed out, but they're less immediately lethal.
-	if(I.sharp && prob(I.sharpness * 2) && !(affecting.status & ORGAN_ARTERY_CUT))
-		affecting.sever_artery()
-		if(affecting.artery_name == "carotid artery")
-			src.visible_message("<span class='danger'>[user] slices [src]'s throat!</span>")
-		else
-			src.visible_message("<span class='danger'>[user] slices open [src]'s [affecting.artery_name] artery!</span>")
-
-	//Next tendon, which disables the limb, but does not remove it, making it easier to fix, and less lethal, than losing it.
-	else if(I.sharp && (I.sharpness * 2) && !(affecting.status & ORGAN_TENDON_CUT) && affecting.has_tendon)//Yes this is the same exactly probability again. But I'm running it seperate because I don't want the two to be exclusive.
-		affecting.sever_tendon()
-		src.visible_message("<span class='danger'>[user] slices open [src]'s [affecting.tendon_name] tendon!</span>")
-
-	//Finally if we pass all that, we cut the limb off. This should reduce the number of one hit sword kills.
-	else if(I.sharp && I.edge)
-		if(prob(I.sharpness * strToDamageModifier(user.my_stats[STAT(str)].level)))
-			affecting.droplimb(0, DROPLIMB_EDGE)
-
-	var/obj/item/organ/external/head/O = locate(/obj/item/organ/external/head) in src.organs
-
-	if(I.damtype == BRUTE && !I.edge && prob(I.force * (hit_zone == BP_MOUTH ? 6 : 0)) && O)//Knocking out teeth.
-		if(O.knock_out_teeth(get_dir(user, src), round(rand(28, 38) * ((I.force*1.5)/100))))
-			src.visible_message("<span class='danger'>[src]'s teeth sail off in an arc!</span>", \
-								"<span class='userdanger'>[src]'s teeth sail off in an arc!</span>")
-
-	else if((I.damtype == BRUTE || I.damtype == PAIN) && prob(25 + (effective_force * 2)))//Knocking them out.
-		if(!stat)
-			if(headcheck(hit_zone))
-				//Harder to score a stun but if you do it lasts a bit longer
-				if(prob(effective_force))
-					visible_message("<span class='danger'>[src] [species.knockout_message]</span>")
-					apply_effect(20, PARALYZE, blocked)
-			else
-				//Easier to score a stun but lasts less time
-				if(prob(effective_force + 10))
-					visible_message("<span class='danger'>[src] has been knocked down!</span>")
-					apply_effect(6, WEAKEN, blocked)
-		//Apply blood
-		attack_bloody(I, user, effective_force, hit_zone)
-
-	//This was commented out because critical successes are OP as shit. Now they're back.
-	/*
 	if(ishuman(user))
 		var/mob/living/carbon/human/H = user
-		if(H.statscheck(skills = H.SKILL_LEVEL(melee)) == CRIT_SUCCESS)
-			resolve_critical_hit()
-	*/ //And now it's commented out again.
+		H.stop_blocking()
 
-	if(hit_zone == BP_R_HAND || hit_zone == BP_L_HAND)
-		var/list/holding= list(src.get_active_hand(), src.get_inactive_hand())
-		for(var/obj/item/II in holding)
-			if(II && prob(15 + (user.SKILL_LEVEL(melee)) *10))//Skills are base 10 so I'm multiplying by 10
-				II.disarm(src)
-				return
+	visible_message("<span class='danger'>[src] has been [I.attack_verb.len? pick(I.attack_verb) : "attacked"] in the [affecting.name] with [I.name] by [user]!</span>")
 
-	apply_damage(effective_force, I.damtype, hit_zone, blocked, I.damage_flags(), used_weapon=I)
+	standard_weapon_hit_effects(I, user, effective_force, hit_zone)
 
-	receive_damage()//The little animation that plays when someone gets hit.
+	return TRUE
 
-	return 1
+/mob/living/carbon/human/standard_weapon_hit_effects(obj/item/I, mob/living/user, var/effective_force, var/hit_zone)
+	var/obj/item/organ/external/affecting = get_organ(hit_zone)
+	if(!affecting)
+		return FALSE
 
-/mob/living/carbon/human/proc/attack_bloody(obj/item/W, mob/living/attacker, var/effective_force, var/hit_zone)
-	if(W.damtype != BRUTE)
-		return
+	if(blocking)
+		if(istype(get_active_hand(), /obj/item/grab))//we are blocking with a human shield! We redirect the attack. You know, because grab doesn't exist as an item.
+			var/obj/item/grab/G = get_active_hand()
+			grab_redirect_attack(G, I)
+			return FALSE
+		else
+			stop_blocking()
+			src.attack_log += text("\[[time_stamp()]\] <font color='orange'>Blocked attack of [user.name] ([user.ckey])</font>")
+			user.attack_log += text("\[[time_stamp()]\] <font color='orange'>Attack has been blocked by [src.name] ([src.ckey])</font>")
+			visible_message(SPAN_WARNING("[src] blocks the blow!"), SPAN_WARNING("You block the blow!"))
+			effective_force = handle_blocking(effective_force)
+			if(effective_force == 0)
+				visible_message(SPAN_DANGER("The attack has been completely negated!"))
+				return FALSE
 
-	//make non-sharp low-force weapons less likely to be bloodied
-	if(W.sharp || prob(effective_force*4))
-		if(!(W.atom_flags & ATOM_FLAG_NO_BLOOD))
-			W.add_blood(src)
-	else
-		return //if the weapon itself didn't get bloodied than it makes little sense for the target to be bloodied either
+	//If not blocked, handle broad strike attacks
+	if(((I.sharp && I.edge && user.a_intent == I_DISARM) || I.forced_broad_strike) && (!istype(I, /obj/item/tool/sword/nt/spear) || !istype(I, /obj/item/tele_spear) || !istype(I, /obj/item/tool/spear)))
+		var/list/L[] = BP_ALL_LIMBS
+		effective_force /= 3
+		L.Remove(hit_zone)
+		for(var/i in 1 to 2)
+			var/temp_zone = pick(L)
+			L.Remove(temp_zone)
+			..(I, user, effective_force, temp_zone)
 
-	//getting the weapon bloodied is easier than getting the target covered in blood, so run prob() again
-	if(prob(33 + W.sharp*10))
-		var/turf/location = loc
-		if(istype(location, /turf/simulated))
-			location.add_blood(src)
-		if(ishuman(attacker))
-			var/mob/living/carbon/human/H = attacker
-			if(get_dist(H, src) <= 1) //people with TK won't get smeared with blood
-				H.bloody_body(src)
-				H.bloody_hands(src)
+	//Push attacks
+	if(hit_zone == BP_GROIN && I.push_attack && user.a_intent == I_DISARM)
+		step_glide(src, get_dir(user, src), DELAY2GLIDESIZE(0.4 SECONDS))
+		visible_message(SPAN_WARNING("[src] is pushed away by the attack!"))
+	else if(!..())
+		return FALSE
+	if(effective_force > 10 || effective_force >= 5 && prob(33))
+		forcesay(hit_appends)	//forcesay checks stat already
 
-		switch(hit_zone)
-			if(BP_HEAD)
-				if(wear_mask)
-					wear_mask.add_blood(src)
-					update_inv_wear_mask(0)
-				if(head)
-					head.add_blood(src)
-					update_inv_head(0)
-				if(glasses && prob(33))
-					glasses.add_blood(src)
-					update_inv_glasses(0)
-			if(BP_CHEST)
-				bloody_body(src)
+		//Apply screenshake
+		if(I.screen_shake && prob(70))
+			shake_camera(src, 0.5, 1)
 
-	//All this is copypasta'd from projectile code. Basically there's a cool splat animation when someone gets hit by something.
-	var/splatter_dir = dir
-	var/turf/target_loca = get_turf(src)
-	splatter_dir = get_dir(attacker, target_loca)
-	target_loca = get_step(target_loca, splatter_dir)
-	var/blood_color = "#C80000"
-	blood_color = src.species.blood_color
-	new /obj/effect/overlay/temp/dir_setting/bloodsplatter(get_turf(src), splatter_dir, blood_color)
-	var/obj/effect/decal/cleanable/blood/B = blood_splatter(target_loca, src, 1, splatter_dir)
-	B.icon_state = pick("dir_splatter_1","dir_splatter_2")
-	var/scale = min(1, round(effective_force / 50, 0.2))
-	var/matrix/M = new()
-	B.transform = M.Scale(scale)
-	//target_loca.add_blood(src)
+		var/turf/target_location = get_turf(src)
 
-/mob/living/carbon/human/proc/projectile_hit_bloody(obj/item/projectile/P, var/effective_force, var/hit_zone)
-	if(P.damage_type != BRUTE || P.nodamage)
-		return
-	if(!(P.sharp || prob(effective_force*4)))
-		return
-	if(prob(effective_force))
-		var/turf/location = loc
-		if(istype(location, /turf/simulated))
-			location.add_blood(src)
+		// Blood splatter
+		var/blood_color = species.blood_color
+		if(blood_color)
+			//Apply blood
+			if(!((I.flags & NOBLOODY)||(I.item_flags & NOBLOODY)))
+				I.add_blood(src)
+			var/splatter_dir = dir
+			splatter_dir = get_dir(user, target_location)
+			target_location = get_step(target_location, splatter_dir)
+			new /obj/effect/overlay/temp/dir_setting/bloodsplatter(loc, splatter_dir, blood_color)
+			target_location.add_blood(src)
 
-		switch(hit_zone)
-			if(BP_HEAD)
-				if(wear_mask)
-					wear_mask.add_blood(src)
-					update_inv_wear_mask(0)
-				if(head)
-					head.add_blood(src)
-					update_inv_head(0)
-				if(glasses && prob(33))
-					glasses.add_blood(src)
-					update_inv_glasses(0)
-			if(BP_CHEST)
-				bloody_body(src)
+		//Intervention attacks
+		if(prob(max(5, min(30, 30 - stats.getStat(STAT_TGH)/2.5)))) //This is hell. 30% is default chance, 5% is minimum which is met at 80 TGH.
+			//See if we have any guns that might go off,
+			for(var/obj/item/gun/W in get_both_hands())
+				if(W && prob(40))
+					visible_message(SPAN_DANGER("[src]'s [W] goes off during the struggle!"))
+					W.Fire(target_location, src)
+					return TRUE
+			//else do other types of intervention attacks
+			var/intervention_type = pick("out of breath", "bloodstains", "winded")
+			switch(intervention_type)
+				if("bloodstains")
+					if(blood_color)
+						var/turf/location = loc
+						if(istype(location, /turf))
+							location.add_blood(src)
+						if(ishuman(user))
+							var/mob/living/carbon/human/H = user
+							if(get_dist(H, src) <= 1) //people with TK won't get smeared with blood
+								H.bloody_body(src)
+								H.bloody_hands(src)
 
-/mob/living/carbon/human/proc/attack_joint(var/obj/item/organ/external/organ, var/obj/item/W, var/effective_force, var/dislocate_mult, var/blocked)
-	if(!organ || (organ.dislocated == 2) || (organ.dislocated == -1) || blocked >= 100)
-		return 0
-	if(W.damtype != BRUTE)
-		return 0
+							if(prob(40))
+								if(wear_mask)
+									wear_mask.add_blood(src)
+									update_inv_wear_mask(0)
+								if(head)
+									head.add_blood(src)
+									update_inv_head(0)
+								if(glasses)
+									glasses.add_blood(src)
+									update_inv_glasses(0)
+							else
+								bloody_body(src)
+						visible_message(SPAN_WARNING("Blood stains [src]'s clothes!"), SPAN_DANGER("Blood seeps through your clothes and your heart skips a beat!"))
+						sanity.changeLevel(-5)
 
-	//want the dislocation chance to be such that the limb is expected to dislocate after dealing a fraction of the damage needed to break the limb
-	var/dislocate_chance = effective_force/(dislocate_mult * organ.min_broken_damage * config.organ_health_multiplier)*100
-	if(prob(dislocate_chance * blocked_mult(blocked)))
+				if("out of breath")
+					if(!stat)
+						visible_message(SPAN_WARNING("[src] gasps in pain!"), SPAN_DANGER("Pain jolts through your nerves!"))
+						adjustOxyLoss(10)
+						adjustHalLoss(5)
+
+				if("winded")
+					visible_message(SPAN_WARNING("[src] is winded!"), SPAN_DANGER("You feel disoriented!"))
+					confused = max(confused, 2)
+					external_recoil(40)
+					var/obj/item/item_in_active_hand = get_active_hand()
+					if(recoil >= 60 && item_in_active_hand)
+						if(istype(item_in_active_hand, /obj/item/grab))
+							break_all_grabs(user) //See about breaking grips or pulls
+							playsound(loc, 'sound/weapons/thudswoosh.ogg', 50, 1, -1)
+							return TRUE
+						if(item_in_active_hand.wielded && recoil < 80)
+							playsound(loc, 'sound/weapons/punchmiss.ogg', 25, 1, -1)
+							return TRUE
+						unEquip(item_in_active_hand)
+						visible_message(SPAN_DANGER("[user] has disarmed [src]!"))
+						playsound(loc, 'sound/weapons/thudswoosh.ogg', 50, 1, -1)
+						return TRUE
+	return TRUE
+
+/mob/living/carbon/human/proc/attack_joint(var/obj/item/organ/external/organ, var/obj/item/W)
+	if(!organ || (organ.nerve_struck == 2) || (organ.nerve_struck == -1))
+		return FALSE
+	//There was blocked var, removed now. For the sake of game balance, it was just replaced by 2
+	if(prob(W.force / 2))
 		visible_message("<span class='danger'>[src]'s [organ.joint] [pick("gives way","caves in","crumbles","collapses")]!</span>")
-		organ.dislocate(1)
-		return 1
-	return 0
-
-/mob/living/carbon/human/emag_act(var/remaining_charges, mob/user, var/emag_source)
-	var/obj/item/organ/external/affecting = get_organ(user.zone_sel.selecting)
-	if(!affecting || !(affecting.robotic >= ORGAN_ROBOT))
-		to_chat(user, "<span class='warning'>That limb isn't robotic.</span>")
-		return -1
-	if(affecting.sabotaged)
-		to_chat(user, "<span class='warning'>[src]'s [affecting.name] is already sabotaged!</span>")
-		return -1
-	to_chat(user, "<span class='notice'>You sneakily slide [emag_source] into the dataport on [src]'s [affecting.name] and short out the safeties.</span>")
-	affecting.sabotaged = 1
-	return 1
+		organ.nerve_strike_add(1)
+		return TRUE
+	return FALSE
 
 //this proc handles being hit by a thrown atom
 /mob/living/carbon/human/hitby(atom/movable/AM as mob|obj,var/speed = THROWFORCE_SPEED_DIVISOR)
@@ -438,28 +413,19 @@ meteor_act
 			if(canmove && !restrained())
 				if(isturf(O.loc))
 					put_in_active_hand(O)
-					visible_message("<span class='warning'>[src] catches [O]!</span>")
+					visible_message(SPAN_WARNING("[src] catches [O]!"))
 					throw_mode_off()
 					return
 
 		var/dtype = O.damtype
-		var/throw_damage = O.throwforce*(speed/THROWFORCE_SPEED_DIVISOR)
-
+		var/throw_damage = O.throwforce
 		var/zone
-		if (istype(O.thrower, /mob/living))
+		if (isliving(O.thrower))
 			var/mob/living/L = O.thrower
-			zone = check_zone(L.zone_sel.selecting)
+			zone = check_zone(L.targeted_organ)
 		else
-			zone = ran_zone(BP_CHEST,75)	//Hits a random part of the body, geared towards the chest
-
-		//check if we hit
-		var/miss_chance = 15
-		if (O.throw_source)
-			var/distance = get_dist(O.throw_source, loc)
-			miss_chance = max(15*(distance-2), 0)
-		zone = get_zone_with_miss_chance(zone, src, miss_chance, ranged_attack=1)
-
-		if(zone && O.thrower != src)
+			zone = ran_zone(BP_CHEST, 75)//Hits a random part of the body, geared towards the chest
+		if(zone && O.thrower != src) //does the target have a shield?
 			var/shield_check = check_shields(throw_damage, O, thrower, zone, "[O]")
 			if(shield_check == PROJECTILE_FORCE_MISS)
 				zone = null
@@ -467,29 +433,48 @@ meteor_act
 				return
 
 		if(!zone)
-			visible_message("<span class='notice'>\The [O] misses [src] narrowly!</span>")
-			playsound(loc, 'sound/weapons/punchmiss.ogg', 50, 1)
+			visible_message(SPAN_NOTICE("\The [O] misses [src] narrowly!"))
 			return
 
+
 		O.throwing = 0		//it hit, so stop moving
+		/// Get hit with glass shards , your fibers are on them now, or with a rod idk.
+		O.add_fibers(src)
 
 		var/obj/item/organ/external/affecting = get_organ(zone)
 		var/hit_area = affecting.name
-		//var/datum/wound/created_wound
 
-		src.visible_message("<span class='warning'>\The [src] has been hit in the [hit_area] by \the [O].</span>")
-		var/armor = run_armor_check(affecting, "melee", O.armor_penetration, "Your armor has protected your [hit_area].", "Your armor has softened hit to your [hit_area].") //I guess "melee" is the best fit here
-		if(armor < 100)
-			var/damage_flags = O.damage_flags()
-			if(prob(armor))
-				damage_flags &= ~(DAM_SHARP|DAM_EDGE)
-			apply_damage(throw_damage, dtype, zone, armor, damage_flags, O)
+		if (O.is_hot() >= HEAT_MOBIGNITE_THRESHOLD)
+			IgniteMob()
+
+		src.visible_message("\red [src] has been hit in the [hit_area] by [O].")
+
+		damage_through_armor(throw_damage, dtype, null, ARMOR_MELEE, null, used_weapon = O, sharp = is_sharp(O), edge = has_edge(O))
 
 		if(ismob(O.thrower))
 			var/mob/M = O.thrower
 			var/client/assailant = M.client
 			if(assailant)
-				admin_attack_log(M, src, "Threw \an [O] at their victim.", "Had \an [O] thrown at them", "threw \an [O] at")
+				src.attack_log += text("\[[time_stamp()]\] <font color='orange'>Has been hit with a [O], thrown by [M.name] ([assailant.ckey])</font>")
+				M.attack_log += text("\[[time_stamp()]\] <font color='red'>Hit [src.name] ([src.ckey]) with a thrown [O]</font>")
+				if(!ismouse(src))
+					msg_admin_attack("[src.name] ([src.ckey]) was hit by a [O], thrown by [M.name] ([assailant.ckey]) (<A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[src.x];Y=[src.y];Z=[src.z]'>JMP</a>)")
+
+		//thrown weapon embedded object code.
+		if(istype(O,/obj/item))
+			var/obj/item/I = O
+			if (I && I.damtype == BRUTE && !I.anchored && !is_robot_module(I))
+				var/damage = throw_damage
+				var/sharp = is_sharp(I)
+
+				//blunt objects should really not be embedding in things unless a huge amount of force is involved
+
+				var/embed_threshold = sharp? 3*I.w_class : 9*I.w_class
+
+
+				var/embed_chance = (damage - embed_threshold)*I.embed_mult
+				if (embed_chance > 0 && prob(embed_chance))
+					affecting.embed(I)
 
 		// Begin BS12 momentum-transfer code.
 		var/mass = 1.5
@@ -501,7 +486,7 @@ meteor_act
 		if(O.throw_source && momentum >= THROWNOBJ_KNOCKBACK_SPEED)
 			var/dir = get_dir(O.throw_source, src)
 
-			visible_message("<span class='warning'>\The [src] staggers under the impact!</span>","<span class='warning'>You stagger under the impact!</span>")
+			visible_message("\red [src] staggers under the impact!","\red You stagger under the impact!")
 			src.throw_at(get_edge_target_turf(src,dir),1,momentum)
 
 			if(!O || !src) return
@@ -511,16 +496,17 @@ meteor_act
 
 				if(T)
 					src.loc = T
-					visible_message("<span class='warning'>[src] is pinned to the wall by [O]!</span>","<span class='warning'>You are pinned to the wall by [O]!</span>")
-					src.anchored = 1
+					visible_message(SPAN_WARNING("[src] is pinned to the wall by [O]!"),SPAN_WARNING("You are pinned to the wall by [O]!"))
+					src.anchored = TRUE
 					src.pinned += O
 
-/mob/living/carbon/human/embed(var/obj/O, var/def_zone=null, var/datum/wound/supplied_wound)
+/mob/living/carbon/human/embed(var/obj/O, var/def_zone)
 	if(!def_zone) ..()
 
 	var/obj/item/organ/external/affecting = get_organ(def_zone)
 	if(affecting)
-		affecting.embed(O, supplied_wound = supplied_wound)
+		affecting.embed(O)
+
 
 /mob/living/carbon/human/proc/bloody_hands(var/mob/living/source, var/amount = 2)
 	if (gloves)
@@ -546,12 +532,18 @@ meteor_act
 	// Tox and oxy don't matter to suits.
 	if(damtype != BURN && damtype != BRUTE) return
 
+	// The rig might soak this hit, if we're wearing one.
+	if(back && istype(back,/obj/item/rig))
+		var/obj/item/rig/rig = back
+		rig.take_hit(damage)
+
 	// We may also be taking a suit breach.
 	if(!wear_suit) return
 	if(!istype(wear_suit,/obj/item/clothing/suit/space)) return
 	var/obj/item/clothing/suit/space/SS = wear_suit
 	var/penetrated_dam = max(0,(damage - SS.breach_threshold))
-	if(penetrated_dam) SS.create_breaches(damtype, penetrated_dam)
+	if(prob(20 + (penetrated_dam * SS.resilience))) SS.create_breaches(damtype, penetrated_dam) // changed into a probability calculation based on the degree of penetration by Plasmatik. you can tune resilience to drastically change breaching chances.
+																			// at maximum penetration, breaches are always created, at 1 penetration, they have a 20% chance to form
 
 /mob/living/carbon/human/reagent_permeability()
 	var/perm = 0
@@ -561,9 +553,7 @@ meteor_act
 		"upper_torso" = THERMAL_PROTECTION_UPPER_TORSO,
 		"lower_torso" = THERMAL_PROTECTION_LOWER_TORSO,
 		"legs" = THERMAL_PROTECTION_LEG_LEFT + THERMAL_PROTECTION_LEG_RIGHT,
-		"feet" = THERMAL_PROTECTION_FOOT_LEFT + THERMAL_PROTECTION_FOOT_RIGHT,
 		"arms" = THERMAL_PROTECTION_ARM_LEFT + THERMAL_PROTECTION_ARM_RIGHT,
-		"hands" = THERMAL_PROTECTION_HAND_LEFT + THERMAL_PROTECTION_HAND_RIGHT
 		)
 
 	for(var/obj/item/clothing/C in src.get_equipped_items())
@@ -577,145 +567,10 @@ meteor_act
 			perm_by_part["lower_torso"] *= C.permeability_coefficient
 		if(C.body_parts_covered & LEGS)
 			perm_by_part["legs"] *= C.permeability_coefficient
-		if(C.body_parts_covered & FEET)
-			perm_by_part["feet"] *= C.permeability_coefficient
 		if(C.body_parts_covered & ARMS)
 			perm_by_part["arms"] *= C.permeability_coefficient
-		if(C.body_parts_covered & HANDS)
-			perm_by_part["hands"] *= C.permeability_coefficient
 
 	for(var/part in perm_by_part)
 		perm += perm_by_part[part]
 
 	return perm
-
-/mob/living/carbon/human/kick_act(var/mob/living/user)
-	if(!..())//If we can't kick then this doesn't happen.
-		return
-	if(user == src)//Can't kick yourself dummy.
-		return
-	if(user.stat)
-		return
-
-	if(ticker.current_state == GAME_STATE_FINISHED)
-		to_chat(user, "<span class='warning'>The battle is over! There is no need to fight!</span>")
-		return
-
-	if(aspect_chosen(/datum/aspect/trenchmas))
-		return
-
-	var/hit_zone = user.zone_sel.selecting
-	var/too_high_message = "You can't reach that high."
-	var/obj/item/organ/external/affecting = get_organ(hit_zone)
-	if(!affecting || affecting.is_stump())
-		to_chat(user, "<span class='danger'>They are missing that limb!</span>")
-		return
-
-	if(ishuman(user))
-		var/mob/living/carbon/human/attacker = user
-		if(attacker.warfare_faction)
-			if(attacker.warfare_faction == src.warfare_faction && src.stat != DEAD)
-				to_chat(attacker, "<big>[src] is on my side!</big>")
-				log_and_message_admins("[attacker] has kicked his teammate [src]!", attacker)
-				GLOB.ff_incidents++
-
-	var/armour = run_armor_check(hit_zone, "melee")
-	switch(hit_zone)
-		if(BP_CHEST)//If we aim for the chest we kick them in the direction we're facing.
-			if(lying)
-				var/turf/target = get_turf(src.loc)
-				var/range = src.throw_range
-				var/throw_dir = get_dir(user, src)
-				for(var/i = 1; i < range; i++)
-					var/turf/new_turf = get_step(target, throw_dir)
-					target = new_turf
-					if(new_turf.density)
-						break
-				src.throw_at(target, rand(1,3), src.throw_speed)
-			if(user.lying)
-				to_chat(user, too_high_message)
-				return
-
-		if(BP_MOUTH)//If we aim for the mouth then we kick their teeth out.
-			if(lying)
-				if(istype(affecting, /obj/item/organ/external/head) && prob(95))
-					var/obj/item/organ/external/head/U = affecting
-					U.knock_out_teeth(get_dir(user, src), rand(1,3))//Knocking out one tooth at a time.
-			else
-				to_chat(user, too_high_message)
-				return
-
-		if(BP_HEAD)
-			if(!lying)
-				to_chat(user, too_high_message)
-				return
-
-	var/kickdam = rand(2,7)
-	kickdam *= strToDamageModifier(user.my_stats[STAT(str)].level)
-	user.adjustStaminaLoss(rand(10,15))//Kicking someone is a big deal.
-	if(kickdam)
-		playsound(user.loc, 'sound/weapons/kick.ogg', 50, 0)
-		apply_damage(kickdam, BRUTE, hit_zone, armour)
-		user.visible_message("<span class=danger>[user] kicks [src] in the [affecting.name]!<span>")
-		admin_attack_log(user, src, "Has kicked [src]", "Has been kicked by [user].")
-	else
-		user.visible_message("<span class=danger>[user] tried to kick [src] in the [affecting.name], but missed!<span>")
-		playsound(loc, 'sound/weapons/punchmiss.ogg', 50, 1)
-
-
-//We crit failed, let's see what happens to us.
-/mob/living/proc/resolve_critical_miss(var/obj/item/I)
-	var/result = rand(1,3)
-
-	if(!I)
-		visible_message("<span class='danger'>[src] punches themself in the face!</span>")
-		attack_hand(src)
-		return
-
-	switch(result)
-		if(1)//They drop their weapon.
-			visible_message("<span class='danger'><big>CRITICAL FAILURE!</big></span>")
-			I.disarm(src)
-			return
-		if(2)
-			visible_message("<span class='danger'><big>CRITICAL FAILURE! [src] botches the attack, stumbles, and falls!</big></span>")
-			playsound(loc, 'sound/weapons/punchmiss.ogg', 50, 1)
-			KnockDown()
-			return
-		if(3)
-			visible_message("<span class='danger'><big>CRITICAL FAILURE! [src] botches the attack and hits themself!</big></span>")
-			I.attack(src, src, zone_sel)
-			apply_damage(rand(5,10), BRUTE)
-
-
-/mob/living/proc/resolve_critical_miss_unarmed()
-	visible_message("<span class='danger'>[src] punches themself in the face!</span>")
-	attack_hand(src)
-	return
-
-/mob/living/proc/resolve_critical_hit()
-	var/result = rand(1,3)
-
-	switch(result)
-		if(1)
-			visible_message("<span class='danger'><big>CRITICAL HIT! IT MUST BE PAINFUL</big></span>")
-			apply_damage(rand(5,10), BRUTE)
-			return
-
-		if(2)
-			visible_message("<span class='danger'><big>CRITICAL HIT! [src] is stunned!</big></span>")
-			Weaken(1)
-			Stun(3)
-			return
-
-		if(3)
-			visible_message("<span class='danger'><big>CRITICAL HIT! [src] is knocked unconcious by the blow!</big></span>")
-			apply_effect(10, PARALYZE)
-			return
-
-
-//Add screaming here.
-/mob/living/carbon/human/IgniteMob()
-	..()
-	if(fire_stacks)
-		agony_scream(fire = TRUE)

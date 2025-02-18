@@ -5,14 +5,15 @@
 	desc = "Shoots things into space."
 	icon = 'icons/obj/stationobjs.dmi'
 	icon_state = "mass_driver"
-	anchored = 1.0
-	use_power = 1
+	anchored = TRUE
+	layer = LOW_OBJ_LAYER
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 2
 	active_power_usage = 50
 
-	var/power = 1.0
-	var/code = 1.0
-	var/id = 1.0
+	var/power = 1
+	var/code = 1
+	var/id = 1
 	var/drive_range = 50 //this is mostly irrelevant since current mass drivers throw into space, but you could make a lower-range mass driver for interstation transport or something I guess.
 	var/_wifi_id
 	var/datum/wifi/receiver/button/mass_driver/wifi_receiver
@@ -34,11 +35,11 @@
 	var/O_limit
 	var/atom/target = get_edge_target_turf(src, dir)
 	for(var/atom/movable/O in loc)
-		if(!O.anchored||istype(O, /obj/mecha))//Mechs need their launch platforms.
+		if(!O.anchored || istype(O, /mob/living/exosuit))//Mechs need their launch platforms.
 			O_limit++
 			if(O_limit >= 20)
 				for(var/mob/M in hearers(src, null))
-					to_chat(M, "<span class='notice'>The mass driver lets out a screech, it mustn't be able to handle any more items.</span>")
+					to_chat(M, SPAN_NOTICE("The mass driver lets out a screech, it mustn't be able to handle any more items."))
 				break
 			use_power(500)
 			spawn( 0 )

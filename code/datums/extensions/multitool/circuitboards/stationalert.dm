@@ -1,5 +1,5 @@
-/datum/extension/interactive/multitool/circuitboards/stationalert/get_interact_window(var/obj/item/device/multitool/M, var/mob/user)
-	var/obj/item/circuitboard/stationalert/SA = holder
+/datum/extension/multitool/circuitboards/stationalert/get_interact_window(var/obj/item/tool/multitool/M, var/mob/user)
+	var/obj/item/electronics/circuitboard/stationalert/SA = holder
 	. += "<b>Alarm Sources</b><br>"
 	. += "<table>"
 	for(var/datum/alarm_handler/AH in SSalarm.all_handlers)
@@ -12,8 +12,8 @@
 		. += "</tr>"
 	. += "</table>"
 
-/datum/extension/interactive/multitool/circuitboards/stationalert/on_topic(href, href_list, user)
-	var/obj/item/circuitboard/stationalert/SA = holder
+/datum/extension/multitool/circuitboards/stationalert/on_topic(href, href_list, user)
+	var/obj/item/electronics/circuitboard/stationalert/SA = holder
 	if(href_list["add"])
 		var/datum/alarm_handler/AH = locate(href_list["add"]) in SSalarm.all_handlers
 		if(AH)

@@ -20,8 +20,8 @@ var/global/list/map_count = list()
 	var/preserve_map = 1
 
 	// Turf paths.
-	var/wall_type =  /turf/simulated/wall
-	var/floor_type = /turf/simulated/floor
+	var/wall_type =  /turf/wall
+	var/floor_type = /turf/floor
 	var/target_turf_type
 
 	// Storage for the final iteration of the map.
@@ -31,8 +31,7 @@ var/global/list/map_count = list()
 	// Test to see if rand_seed() can be used reliably.
 	var/priority_process
 
-/datum/random_map/New(var/seed, var/tx, var/ty, var/tz, var/tlx, var/tly, var/do_not_apply, var/do_not_announce, var/never_be_priority = 0)
-
+/datum/random_map/New(var/seed, var/tx, var/ty, var/tz, var/tlx, var/tly, var/do_not_apply, var/do_not_announce)
 	// Store this for debugging.
 	if(!map_count[descriptor])
 		map_count[descriptor] = 1
@@ -53,19 +52,18 @@ var/global/list/map_count = list()
 	set_map_size()
 
 	var/start_time = world.timeofday
-	if(!do_not_announce) admin_notice("<span class='danger'>Generating [name].</span>", R_DEBUG)
-	CHECK_TICK
+	if(!do_not_announce) admin_notice(SPAN_DANGER("Generating [name]."), R_DEBUG)
+	sleep(-1)
 
 	// Testing needed to see how reliable this is (asynchronous calls, called during worldgen), DM ref is not optimistic
 	if(seed)
-		rand_seed(seed)
-		priority_process = !never_be_priority
+		priority_process = 1
 
 	for(var/i = 0;i<max_attempts;i++)
 		if(generate())
-			if(!do_not_announce) admin_notice("<span class='danger'>[capitalize(name)] generation completed in [round(0.1*(world.timeofday-start_time),0.1)] seconds.</span>", R_DEBUG)
+			if(!do_not_announce) admin_notice(SPAN_DANGER("[capitalize(name)] generation completed in [round(0.1*(world.timeofday-start_time),0.1)] seconds."), R_DEBUG)
 			return
-	if(!do_not_announce) admin_notice("<span class='danger'>[capitalize(name)] failed to generate ([round(0.1*(world.timeofday-start_time),0.1)] seconds): could not produce sane map.</span>", R_DEBUG)
+	if(!do_not_announce) admin_notice(SPAN_DANGER("[capitalize(name)] failed to generate ([round(0.1*(world.timeofday-start_time),0.1)] seconds): could not produce sane map."), R_DEBUG)
 
 /datum/random_map/proc/get_map_cell(var/x,var/y)
 	if(!map)
@@ -119,6 +117,7 @@ var/global/list/map_count = list()
 				map[current_cell] = WALL_CHAR
 			else
 				map[current_cell] = FLOOR_CHAR
+			CHECK_TICK
 
 /datum/random_map/proc/clear_map()
 	for(var/x = 1, x <= limit_x, x++)
@@ -154,9 +153,9 @@ var/global/list/map_count = list()
 
 	for(var/x = 1, x <= limit_x, x++)
 		for(var/y = 1, y <= limit_y, y++)
-			if(!priority_process)
-				CHECK_TICK
+			if(!priority_process) sleep(-1)
 			apply_to_turf(x,y)
+			CHECK_TICK
 
 /datum/random_map/proc/apply_to_turf(var/x,var/y)
 	var/current_cell = get_map_cell(x,y)
@@ -167,7 +166,7 @@ var/global/list/map_count = list()
 		return 0
 	var/newpath = get_appropriate_path(map[current_cell])
 	if(newpath)
-		T.ChangeTurf(newpath)
+		T.ChangeTurf(newpath, 1, 1)
 	get_additional_spawns(map[current_cell],T,get_spawn_dir(x, y))
 	return T
 

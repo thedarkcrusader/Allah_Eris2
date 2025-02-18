@@ -3,10 +3,10 @@
 
 	icon = 'icons/obj/atmos.dmi'
 	icon_state = "psiphon:0"
-	density = 1
+	density = TRUE
 	w_class = ITEM_SIZE_NORMAL
 
-	var/on = 0
+	var/on = FALSE
 	var/direction_out = 0 //0 = siphoning, 1 = releasing
 	var/target_pressure = ONE_ATMOSPHERE
 
@@ -23,7 +23,7 @@
 
 /obj/machinery/portable_atmospherics/powered/pump/New()
 	..()
-	cell = new/obj/item/cell/apc(src)
+	cell = new/obj/item/cell/medium/high(src)
 
 	var/list/air_mix = StandardAirMix()
 	src.air_contents.adjust_multi("oxygen", air_mix["oxygen"], "nitrogen", air_mix["nitrogen"])
@@ -108,6 +108,9 @@
 
 	src.updateDialog()
 
+/obj/machinery/portable_atmospherics/powered/pump/return_air()
+	return air_contents
+
 /obj/machinery/portable_atmospherics/powered/pump/attack_ai(var/mob/user)
 	src.add_hiddenprint(user)
 	return src.attack_hand(user)
@@ -116,9 +119,9 @@
 	return src.attack_hand(user)
 
 /obj/machinery/portable_atmospherics/powered/pump/attack_hand(var/mob/user)
-	ui_interact(user)
+	nano_ui_interact(user)
 
-/obj/machinery/portable_atmospherics/powered/pump/ui_interact(mob/user, ui_key = "rcon", datum/nanoui/ui=null, force_open=1)
+/obj/machinery/portable_atmospherics/powered/pump/nano_ui_interact(mob/user, ui_key = "rcon", datum/nanoui/ui=null, force_open=NANOUI_FOCUS)
 	var/list/data[0]
 	data["portConnected"] = connected_port ? 1 : 0
 	data["tankPressure"] = round(air_contents.return_pressure() > 0 ? air_contents.return_pressure() : 0)
@@ -135,29 +138,32 @@
 	if (holding)
 		data["holdingTank"] = list("name" = holding.name, "tankPressure" = round(holding.air_contents.return_pressure() > 0 ? holding.air_contents.return_pressure() : 0))
 
-	ui = SSnanoui.try_update_ui(user, src, ui_key, ui, data, force_open)
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
-		ui = new(user, src, ui_key, "portpump.tmpl", "Portable Pump", 480, 410, state = GLOB.physical_state)
+		ui = new(user, src, ui_key, "portpump.tmpl", "Portable Pump", 480, 410, state =GLOB.physical_state)
 		ui.set_initial_data(data)
 		ui.open()
 		ui.set_auto_update(1)
 
-/obj/machinery/portable_atmospherics/powered/pump/OnTopic(user, href_list)
+/obj/machinery/portable_atmospherics/powered/pump/Topic(href, href_list)
+	if(..())
+		return 1
+
 	if(href_list["power"])
 		on = !on
-		. = TOPIC_REFRESH
+		. = 1
 	if(href_list["direction"])
 		direction_out = !direction_out
-		. = TOPIC_REFRESH
+		. = 1
 	if (href_list["remove_tank"])
 		if(holding)
-			holding.dropInto(loc)
+			holding.loc = loc
 			holding = null
-		. = TOPIC_REFRESH
+		. = 1
 	if (href_list["pressure_adj"])
 		var/diff = text2num(href_list["pressure_adj"])
 		target_pressure = min(10*ONE_ATMOSPHERE, max(0, target_pressure+diff))
-		. = TOPIC_REFRESH
+		. = 1
 
 	if(.)
 		update_icon()

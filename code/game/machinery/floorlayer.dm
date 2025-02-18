@@ -3,9 +3,9 @@
 	name = "automatic floor layer"
 	icon = 'icons/obj/stationobjs.dmi'
 	icon_state = "pipe_d"
-	density = 1
+	density = TRUE
 	var/turf/old_turf
-	var/on = 0
+	var/on = FALSE
 	var/obj/item/stack/tile/T
 	var/list/mode = list("dismantle"=0,"laying"=0,"collect"=0)
 
@@ -13,8 +13,8 @@
 	T = new/obj/item/stack/tile/floor(src)
 	..()
 
-/obj/machinery/floorlayer/Move(new_turf,M_Dir)
-	..()
+/obj/machinery/floorlayer/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
+	. = ..()
 
 	if(on)
 		if(mode["dismantle"])
@@ -27,7 +27,7 @@
 			CollectTiles(old_turf)
 
 
-	old_turf = new_turf
+	old_turf = NewLoc
 
 /obj/machinery/floorlayer/attack_hand(mob/user as mob)
 	on=!on
@@ -36,7 +36,7 @@
 
 /obj/machinery/floorlayer/attackby(var/obj/item/W as obj, var/mob/user as mob)
 
-	if(isWrench(W))
+	if (istype(W, /obj/item/tool/wrench))
 		var/m = input("Choose work mode", "Mode") as null|anything in mode
 		mode[m] = !mode[m]
 		var/O = mode[m]
@@ -44,41 +44,41 @@
 		return
 
 	if(istype(W, /obj/item/stack/tile))
-		to_chat(user, "<span class='notice'>\The [W] successfully loaded.</span>")
+		to_chat(user, SPAN_NOTICE("\The [W] successfully loaded."))
 		user.drop_item(T)
 		TakeTile(T)
 		return
 
-	if(isCrowbar(W))
+	if(istype(W, /obj/item/tool/crowbar))
 		if(!length(contents))
-			to_chat(user, "<span class='notice'>\The [src] is empty.</span>")
+			to_chat(user, SPAN_NOTICE("\The [src] is empty."))
 		else
 			var/obj/item/stack/tile/E = input("Choose remove tile type.", "Tiles") as null|anything in contents
 			if(E)
-				to_chat(user, "<span class='notice'>You remove the [E] from /the [src].</span>")
+				to_chat(user, SPAN_NOTICE("You remove the [E] from /the [src]."))
 				E.loc = src.loc
 				T = null
 		return
 
-	if(isScrewdriver(W))
+	if(istype(W, /obj/item/tool/screwdriver))
 		T = input("Choose tile type.", "Tiles") as null|anything in contents
 		return
 	..()
 
-/obj/machinery/floorlayer/examine(mob/user)
-	. = ..()
+/obj/machinery/floorlayer/examine(mob/user, extra_description = "")
 	var/dismantle = mode["dismantle"]
 	var/laying = mode["laying"]
 	var/collect = mode["collect"]
-	var/message = "<span class='notice'>\The [src] [!T?"don't ":""]has [!T?"":"[T.get_amount()] [T] "]tile\s, dismantle is [dismantle?"on":"off"], laying is [laying?"on":"off"], collect is [collect?"on":"off"].</span>"
-	to_chat(user, message)
+	extra_description += SPAN_NOTICE("\The [src] [!T?"don't ":""]has [!T?"":"[T.get_amount()] [T] "]tile\s, dismantle is [dismantle?"on":"off"], laying is [laying?"on":"off"], collect is [collect?"on":"off"].")
+	..(user, extra_description)
+
 /obj/machinery/floorlayer/proc/reset()
 	on=0
 	return
 
 /obj/machinery/floorlayer/proc/dismantleFloor(var/turf/new_turf)
-	if(istype(new_turf, /turf/simulated/floor))
-		var/turf/simulated/floor/T = new_turf
+	if(istype(new_turf, /turf/floor))
+		var/turf/floor/T = new_turf
 		if(!T.is_plating())
 			T.make_plating(!(T.broken || T.burnt))
 	return new_turf.is_plating()

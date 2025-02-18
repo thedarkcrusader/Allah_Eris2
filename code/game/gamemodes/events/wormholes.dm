@@ -1,65 +1,53 @@
-/proc/wormhole_event()
-	spawn()
-		var/list/pick_turfs = list()
-		for(var/turf/simulated/floor/T in world)
-			if(T.z in GLOB.using_map.station_levels)
-				pick_turfs += T
+/*
+	Wormholes is an uncommon moderate event which spawns several connected pairs of wormholes around the
+	ship.These wormholes are semi-stable and will last for a significant quantity of time. Anywhere from
+	a few minutes to several hours, effectively permanantly connecting areas.
 
-		if(pick_turfs.len)
-			//All ready. Announce that bad juju is afoot.
-			GLOB.using_map.space_time_anomaly_detected_annoncement()
+	This may require engineering to wall them off, or ironhammer to guard them, to prevent unauthorised access
+	If conveniently placed,they may also offer new, rapid transit routes around the ship
+*/
+/datum/storyevent/wormholes
+	id = "wormholes"
+	name = "wormholes"
 
-			//prob(20) can be approximated to 1 wormhole every 5 turfs!
-			//admittedly less random but totally worth it >_<
-			var/event_duration = 3000	//~5 minutes in ticks
-			var/number_of_selections = (pick_turfs.len/5)+1	//+1 to avoid division by zero!
-			var/sleep_duration = round( event_duration / number_of_selections )
-			var/end_time = world.time + event_duration	//the time by which the event should have ended
+	weight = 0.4
+	event_type = /datum/event/wormholes
+	event_pools = list(EVENT_LEVEL_MODERATE = POOL_THRESHOLD_MODERATE)
+	tags = list(TAG_POSITIVE, TAG_COMMUNAL)
 
-			var/increment =	max(1,round(number_of_selections/50))
-//			log_debug("number_of_selections: [number_of_selections] | sleep_duration: [sleep_duration]")
+////////////////////////////////////////////////////////
+/datum/event/wormholes
+	//The duration ranges from fairly long, to basically forever
+	var/min_duration = 5 MINUTES
+	var/max_duration = 3 HOURS
 
+	var/number_of_wormholes
 
-			var/i = 1
-			while( 1 )
+	var/list/wormhole_tiles = list()
 
-				//we've run into overtime. End the event
-				if( end_time < world.time )
-//					log_debug("we've run into overtime. End the event")
+/datum/event/wormholes/setup()
+	number_of_wormholes = rand(2,8)
+	for (var/i = 1; i <= number_of_wormholes*2; i++)
+		var/area/A
+		if (prob(15))
+			//15% chance to allow maintenance areas in the search
+			A = random_ship_area(TRUE, FALSE)
+		else
+			A = random_ship_area(TRUE, TRUE)
+		var/turf/T = A.random_space()
+		if(!T)
+			//We somehow failed to find a turf, decrement i so we get another go
+			i--
+			continue
+		wormhole_tiles.Add(T)
 
-					return
-				if( !pick_turfs.len )
-//					log_debug("we've run out of turfs to pick. End the event")
-
-					return
-
-				//loop it round
-				i += increment
-				i %= pick_turfs.len
-				i++
-
-				//get our enter and exit locations
-				var/turf/simulated/floor/enter = pick_turfs[i]
-				pick_turfs -= enter							//remove it from pickable turfs list
-				if( !enter || !istype(enter) )	continue	//sanity
-
-				var/turf/simulated/floor/exit = pick(pick_turfs)
-				pick_turfs -= exit
-				if( !exit || !istype(exit) )	continue	//sanity
-
-				create_wormhole(enter,exit)
-
-				sleep(sleep_duration)						//have a well deserved nap!
+/datum/event/wormholes/announce()
+	command_announcement.Announce("Space-time anomalies detected on the ship. There is no additional data.", "Anomaly Alert", new_sound = 'sound/AI/spanomalies.ogg')
 
 
-//maybe this proc can even be used as an admin tool for teleporting players without ruining immulsions?
-/proc/create_wormhole(var/turf/enter as turf, var/turf/exit as turf)
-	var/obj/effect/portal/P = new /obj/effect/portal( enter )
-	P.target = exit
-	P.creator = null
-	P.icon = 'icons/obj/objects.dmi'
-	P.failchance = 0
-	P.icon_state = "anom"
-	P.SetName("wormhole")
-	spawn(rand(300,600))
-		qdel(P)
+/datum/event/wormholes/start()
+	for (var/i = 1; i <= number_of_wormholes; i++)
+		var/turf/enter = pick_n_take(wormhole_tiles)
+		var/turf/exit = pick_n_take(wormhole_tiles)
+		new /obj/effect/portal/wormhole(enter, rand(min_duration, max_duration),exit)
+

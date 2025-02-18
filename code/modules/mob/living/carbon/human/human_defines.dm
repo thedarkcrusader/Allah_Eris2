@@ -1,89 +1,76 @@
 /mob/living/carbon/human
-	plane = HUMAN_PLANE
+	//first and last name
+	var/first_name
+	var/last_name
 
 	//Hair colour and style
-	var/r_hair = 0
-	var/g_hair = 0
-	var/b_hair = 0
+	var/hair_color = "#000000"
 	var/h_style = "Bald"
 
 	//Facial hair colour and style
-	var/r_facial = 0
-	var/g_facial = 0
-	var/b_facial = 0
+	var/facial_color = "#000000"
 	var/f_style = "Shaved"
 
 	//Eye colour
-	var/r_eyes = 0
-	var/g_eyes = 0
-	var/b_eyes = 0
+	var/eyes_color = "#000000"
 
-	var/s_tone = 0  //Skin tone
-	var/s_base = "" //Skin base
+	var/s_tone = 0	//Skin tone
 
 	//Skin colour
-	var/r_skin = 0
-	var/g_skin = 0
-	var/b_skin = 0
+	var/skin_color = "#000000"
 
 	var/size_multiplier = 1 //multiplier for the mob's icon size
 	var/damage_multiplier = 1 //multiplies melee combat damage
 	var/icon_update = 1 //whether icon updating shall take place
 
-	var/lip_style = null	//no lipstick by default- arguably misleading, as it could be used for general makeup
+	var/lip_style	//no lipstick by default- arguably misleading, as it could be used for general makeup
 
-	//var/age = 30		//Player's age (pure fluff)
-	var/b_type = "A+"	//Player's bloodtype
+	var/age = 30		//Player's age (pure fluff)
 
 	var/list/worn_underwear = list()
 
 	var/datum/backpack_setup/backpack_setup
 
-	// General information
-	var/home_system = ""
-	var/citizenship = ""
-	var/personal_faction = ""
-
 	//Equipment slots
-	var/obj/item/wear_suit = null
-	var/obj/item/w_uniform = null
-	var/obj/item/shoes = null
-	var/obj/item/belt = null
-	var/obj/item/gloves = null
-	var/obj/item/glasses = null
-	var/obj/item/head = null
-	var/obj/item/l_ear = null
-	var/obj/item/r_ear = null
-	var/obj/item/wear_id = null
-	var/obj/item/r_store = null
-	var/obj/item/l_store = null
-	var/obj/item/s_store = null
-	var/obj/item/tie_slot = null
+	var/obj/item/wear_suit
+	var/obj/item/w_uniform
+	var/obj/item/shoes
+	var/obj/item/belt
+	var/obj/item/gloves
+	var/obj/item/glasses
+	var/obj/item/head
+	var/obj/item/l_ear
+	var/obj/item/r_ear
+	var/obj/item/wear_id
+	var/obj/item/r_store
+	var/obj/item/l_store
+	var/obj/item/s_store
 
-	var/used_skillpoints = 0
-	var/list/skills = list()
-
-	var/icon/stand_icon = null
-	var/icon/lying_icon = null
+	var/icon/stand_icon
+	var/icon/lying_icon
 
 	var/voice = ""	//Instead of new say code calling GetVoice() over and over and over, we're just going to ask this variable, which gets updated in Life()
 
+	var/speech_problem_flag = 0
+
+	var/miming //Toggle for the mime's abilities.
 	var/special_voice = "" // For changing our voice. Used by a symptom.
 
+	var/ability_last = 0 // world.time when last proc from "Ability" tab have been used
 	var/last_dam = -1	//Used for determining if we need to process all organs or just some or even none.
 	var/list/bad_external_organs = list()// organs we check until they are good.
 
+	var/punch_damage_increase = 0 // increases... punch damage... can be affected by clothing or implants.
+
 	var/xylophone = 0 //For the spoooooooky xylophone cooldown
 
-	var/mob/remoteview_target = null
+	var/mob/remoteview_target
+	var/remoteviewer = FALSE //Acts as an override for remoteview_target viewing, see human/life.dm: handle_vision()
 	var/hand_blood_color
 
-	var/list/flavor_texts = list()
 	var/gunshot_residue
-	var/pulling_punches    // Are you trying not to hurt your opponent?
-	var/full_prosthetic    // We are a robutt.
-	var/robolimb_count = 0 // Number of robot limbs.
-	var/last_attack = 0    // The world_time where an unarmed attack was done
+	var/holding_back // Are you trying not to hurt your opponent?
+	var/blocking = FALSE //ready to block melee attacks?
 
 	mob_bump_flag = HUMAN
 	mob_push_flags = ~HEAVY
@@ -95,7 +82,6 @@
 	var/equipment_vision_flags				// Extra vision flags from equipped items
 	var/equipment_see_invis					// Max see invibility level granted by equipped items
 	var/equipment_prescription				// Eye prescription granted by equipped items
-	var/equipment_light_protection
 	var/list/equipment_overlays = list()	// Extra overlays from equipped items
 
 	var/med_record = ""
@@ -103,27 +89,22 @@
 	var/gen_record = ""
 	var/exploit_record = ""
 
-	var/datum/mil_branch/char_branch = null
-	var/datum/mil_rank/char_rank = null
-
 	var/stance_damage = 0 //Whether this mob's ability to stand has been affected
+	var/identifying_gender // In case the human identifies as another gender than it's biological
+	mob_classification = CLASSIFICATION_ORGANIC | CLASSIFICATION_HUMANOID
 
-	var/obj/machinery/machine_visual //machine that is currently applying visual effects to this mob. Only used for camera monitors currently.
+	var/datum/sanity/sanity
 
-	var/innate_heal = 1
+	var/rest_points = 0
 
-	var/shock_stage
+	var/style = 0
+	var/max_style = MAX_HUMAN_STYLE
 
-	var/obj/screen/arrow_to/tracking
+	var/shock_resist = 0 // Resistance to paincrit
 
-	var/obj/item/grab/current_grab_type 	// What type of grab they use when they grab someone.
-	var/skin_state = SKIN_NORMAL
-	var/obj/screen/fov = null//The screen object because I can't figure out how the hell TG does their screen objects so I'm just using legacy code.
-	var/obj/screen/fov_mask = null
-	var/usefov = TRUE
-	var/decaylevel = 0 //For rotting bodies
-	var/branded = null	//For whether or not they've been branded, and what they've been branded with.
-	var/banished = FALSE //For whether or not they've been banished by the magistrate.
-	var/is_anonymous = FALSE //Used when examined and speaking for whether or not they're anonymous
-	var/coldbreath = FALSE //dumb snowflake bullshit for coldbreath don't worry about it g
-	var/last_words = null
+	var/language_blackout = 0
+	var/suppress_communication = 0
+
+	var/momentum_speed = 0 // The amount of run-up
+	var/momentum_dir = 0 // Direction of run-up
+	var/momentum_reduction_timer

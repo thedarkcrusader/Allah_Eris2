@@ -5,36 +5,20 @@
 	item_state = "clipboard"
 	throwforce = 0
 	w_class = ITEM_SIZE_SMALL
+	item_flags = DRAG_AND_DROP_UNEQUIP
 	throw_speed = 3
 	throw_range = 10
+	spawn_tags = SPAWN_TAG_ITEM
 	var/obj/item/pen/haspen		//The stored pen.
 	var/obj/item/toppaper	//The topmost piece of paper.
 	slot_flags = SLOT_BELT
-	matter = list(DEFAULT_WALL_MATERIAL = 70)
 
-/obj/item/clipboard/New()
+/obj/item/clipboard/Initialize(mapload)
+	. = ..()
 	update_icon()
 
-/obj/item/clipboard/MouseDrop(obj/over_object as obj) //Quick clipboard fix. -Agouri
-	if(ishuman(usr))
-		var/mob/M = usr
-		if(!(istype(over_object, /obj/screen) ))
-			return ..()
-
-		if(!M.restrained() && !M.stat)
-			switch(over_object.name)
-				if("r_hand")
-					if(M.unEquip(src))
-						M.put_in_r_hand(src)
-				if("l_hand")
-					if(M.unEquip(src))
-						M.put_in_l_hand(src)
-
-			add_fingerprint(usr)
-			return
-
 /obj/item/clipboard/update_icon()
-	overlays.Cut()
+	cut_overlays()
 	if(toppaper)
 		overlays += toppaper.icon_state
 		overlays += toppaper.overlays
@@ -50,7 +34,7 @@
 		W.loc = src
 		if(istype(W, /obj/item/paper))
 			toppaper = W
-		to_chat(user, "<span class='notice'>You clip the [W] onto \the [src].</span>")
+		to_chat(user, SPAN_NOTICE("You clip the [W] onto \the [src]."))
 		update_icon()
 
 	else if(istype(toppaper) && istype(W, /obj/item/pen))
@@ -103,7 +87,7 @@
 					usr.drop_item()
 					W.loc = src
 					haspen = W
-					to_chat(usr, "<span class='notice'>You slot the pen into \the [src].</span>")
+					to_chat(usr, SPAN_NOTICE("You slot the pen into \the [src]."))
 
 		else if(href_list["write"])
 			var/obj/item/P = locate(href_list["write"])
@@ -148,7 +132,7 @@
 
 			if(P && (P.loc == src) && istype(P, /obj/item/paper) )
 
-				if(!(istype(usr, /mob/living/carbon/human) || isghost(usr) || istype(usr, /mob/living/silicon)))
+				if(!(ishuman(usr) || isghost(usr) || issilicon(usr)))
 					usr << browse("<HTML><HEAD><TITLE>[P.name]</TITLE></HEAD><BODY>[stars(P.info)][P.stamps]</BODY></HTML>", "window=[P.name]")
 					onclose(usr, "[P.name]")
 				else
@@ -164,7 +148,7 @@
 			var/obj/item/P = locate(href_list["top"])
 			if(P && (P.loc == src) && istype(P, /obj/item/paper) )
 				toppaper = P
-				to_chat(usr, "<span class='notice'>You move [P.name] to the top.</span>")
+				to_chat(usr, SPAN_NOTICE("You move [P.name] to the top."))
 
 		//Update everything
 		attack_self(usr)

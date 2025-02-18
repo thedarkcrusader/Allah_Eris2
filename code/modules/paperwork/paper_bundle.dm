@@ -4,12 +4,11 @@
 	icon = 'icons/obj/bureaucracy.dmi'
 	icon_state = "paper"
 	item_state = "paper"
-	randpixel = 8
 	throwforce = 0
 	w_class = ITEM_SIZE_SMALL
 	throw_range = 2
 	throw_speed = 1
-	layer = ABOVE_OBJ_LAYER
+	layer = 4
 	attack_verb = list("bapped")
 	var/page = 1    // current page
 	var/list/pages = list()  // Ordered list of pages as they are to be displayed. Can be different order than src.contents.
@@ -21,7 +20,7 @@
 	if (istype(W, /obj/item/paper/carbon))
 		var/obj/item/paper/carbon/C = W
 		if (!C.iscopy && !C.copied)
-			to_chat(user, "<span class='notice'>Take off the carbon copy first.</span>")
+			to_chat(user, SPAN_NOTICE("Take off the carbon copy first."))
 			add_fingerprint(user)
 			return
 	// adding sheets
@@ -43,7 +42,7 @@
 		to_chat(user, "<span class='notice'>You add \the [W.name] to [(src.name == "paper bundle") ? "the paper bundle" : src.name].</span>")
 		qdel(W)
 	else
-		if(istype(W, /obj/item/tape_roll))
+		if(W.has_quality(QUALITY_ADHESIVE))
 			return 0
 		if(istype(W, /obj/item/pen))
 			usr << browse("", "window=[name]") //Closes the dialog
@@ -91,14 +90,14 @@
 				qdel(src)
 
 			else
-				to_chat(user, "<span class='warning'>You must hold \the [P] steady to burn \the [src].</span>")
+				to_chat(user, "\red You must hold \the [P] steady to burn \the [src].")
 
-/obj/item/paper_bundle/examine(mob/user)
-	if(..(user, 1))
-		src.show_content(user)
+/obj/item/paper_bundle/examine(mob/user, extra_description = "")
+	if(get_dist(user, src) < 2)
+		show_content(user)
 	else
-		to_chat(user, "<span class='notice'>It is too far away.</span>")
-	return
+		extra_description += SPAN_NOTICE("It is too far away.")
+	..(user, extra_description)
 
 /obj/item/paper_bundle/proc/show_content(mob/user as mob)
 	var/dat
@@ -122,7 +121,7 @@
 
 	if(istype(pages[page], /obj/item/paper))
 		var/obj/item/paper/P = W
-		if(!(istype(usr, /mob/living/carbon/human) || isghost(usr) || istype(usr, /mob/living/silicon)))
+		if(!(ishuman(usr) || isghost(usr) || issilicon(usr)))
 			dat+= "<HTML><HEAD><TITLE>[P.name]</TITLE></HEAD><BODY>[stars(P.info)][P.stamps]</BODY></HTML>"
 		else
 			dat+= "<HTML><HEAD><TITLE>[P.name]</TITLE></HEAD><BODY>[P.info][P.stamps]</BODY></HTML>"
@@ -132,9 +131,9 @@
 		user << browse_rsc(P.img, "tmp_photo.png")
 		user << browse(dat + "<html><head><title>[P.name]</title></head>" \
 		+ "<body style='overflow:hidden'>" \
-		+ "<div> <img src='tmp_photo.png' width = '180'" \
+		+ "<div> <img src='tmp_photo.png' width = '[32*P.photo_size]'" \
 		+ "[P.scribble ? "<div> Written on the back:<br><i>[P.scribble]</i>" : null]"\
-		+ "</body></html>", "window=[name]")
+		+ "</body></html>", "window=[name]; size=[32*P.photo_size]x[32*P.photo_size]")
 
 /obj/item/paper_bundle/attack_self(mob/user as mob)
 	src.show_content(user)
@@ -143,8 +142,7 @@
 	return
 
 /obj/item/paper_bundle/Topic(href, href_list)
-	if(..())
-		return 1
+	..()
 	if((src in usr.contents) || (istype(src.loc, /obj/item/folder) && (src.loc in usr.contents)))
 		usr.set_machine(src)
 		var/obj/item/in_hand = usr.get_active_hand()
@@ -165,7 +163,7 @@
 			usr.put_in_hands(W)
 			pages.Remove(pages[page])
 
-			to_chat(usr, "<span class='notice'>You remove the [W.name] from the bundle.</span>")
+			to_chat(usr, SPAN_NOTICE("You remove the [W.name] from the bundle."))
 
 			if(pages.len <= 1)
 				var/obj/item/paper/P = src[1]
@@ -179,11 +177,11 @@
 				page = pages.len
 
 			update_icon()
-
+	else
+		to_chat(usr, SPAN_NOTICE("You need to hold it in hands!"))
+	if (ismob(src.loc) ||ismob(src.loc.loc))
 		src.attack_self(usr)
 		updateUsrDialog()
-	else
-		to_chat(usr, "<span class='notice'>You need to hold it in hands!</span>")
 
 /obj/item/paper_bundle/verb/rename()
 	set name = "Rename bundle"
@@ -192,7 +190,7 @@
 
 	var/n_name = sanitizeSafe(input(usr, "What would you like to label the bundle?", "Bundle Labelling", null)  as text, MAX_NAME_LEN)
 	if((loc == usr || loc.loc && loc.loc == usr) && usr.stat == 0)
-		SetName("[(n_name ? text("[n_name]") : "paper")]")
+		name = "[(n_name ? text("[n_name]") : "paper")]"
 	add_fingerprint(usr)
 	return
 
@@ -202,10 +200,10 @@
 	set category = "Object"
 	set src in usr
 
-	to_chat(usr, "<span class='notice'>You loosen the bundle.</span>")
+	to_chat(usr, SPAN_NOTICE("You loosen the bundle."))
 	for(var/obj/O in src)
-		O.dropInto(usr.loc)
-		O.reset_plane_and_layer()
+		O.loc = usr.loc
+		O.layer = initial(O.layer)
 		O.add_fingerprint(usr)
 	usr.drop_from_inventory(src)
 	qdel(src)

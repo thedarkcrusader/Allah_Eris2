@@ -1,20 +1,33 @@
 /obj/item/storage/belt
 	name = "belt"
 	desc = "Can hold various things."
-	icon = 'icons/obj/clothing/belts.dmi'
-	icon_state = "utilitybelt"
-	item_state = "utility"
-	//storage_slots = 7
-	max_storage_space = DEFAULT_BOX_STORAGE
+	icon = 'icons/inventory/belt/icon.dmi'
+	icon_state = "utility"
+	storage_slots = 7
 	max_w_class = ITEM_SIZE_NORMAL
+	max_storage_space = DEFAULT_NORMAL_STORAGE
 	slot_flags = SLOT_BELT
+	matter = list(MATERIAL_BIOMATTER = 4, MATERIAL_PLASTIC = 5)
 	attack_verb = list("whipped", "lashed", "disciplined")
+	bad_type = /obj/item/storage/belt
+	rarity_value = 10
+	spawn_tags = SPAWN_TAG_BELT
+
+	var/show_above_suit = 0
+
+/obj/item/storage/belt/Initialize()
+	. = ..()
+	if (!item_state)
+		item_state = icon_state
 
 /obj/item/storage/belt/verb/toggle_layer()
 	set name = "Switch Belt Layer"
 	set category = "Object"
 
-	use_alt_layer = !use_alt_layer
+	if(show_above_suit == -1)
+		to_chat(usr, SPAN_NOTICE("\The [src] cannot be worn above your suit!"))
+		return
+	show_above_suit = !show_above_suit
 	update_icon()
 
 /obj/item/storage/update_icon()
@@ -23,64 +36,87 @@
 		M.update_inv_belt()
 
 
-/obj/item/storage/belt/get_mob_overlay(mob/user_mob, slot)
-	var/image/ret = ..()
-	if(slot == slot_belt_str && contents.len)
-		for(var/obj/item/I in contents)
-			ret.overlays += image("icon" = 'icons/mob/onmob/belt.dmi', "icon_state" = "[I.item_state ? I.item_state : I.icon_state]")
-	return ret
-
 /obj/item/storage/belt/utility
-	name = "tool-belt"
-	desc = "A belt of durable leather, festooned with hooks, slots, and pouches."
-	description_info = "The tool-belt has enough slots to carry a full engineer's toolset: screwdriver, crowbar, wrench, welder, cable coil, and multitool. Simply click the belt to move a tool to one of its slots."
-	description_fluff = "Good hide is hard to come by in certain regions of the galaxy. When they can't come across it, most TSCs will outfit their crews with toolbelts made of synthesized leather."
-	description_antag = "Only amateurs skip grabbing a tool-belt."
-	icon_state = "utilitybelt"
-	item_state = "utility"
+	name = "tool belt"
+	desc = "Can hold various tools."
+	icon_state = "utility"
+	spawn_tags = SPAWN_TAG_BELT_UTILITY
 	can_hold = list(
-		///obj/item/combitool,
-		/obj/item/crowbar,
-		/obj/item/screwdriver,
-		/obj/item/weldingtool,
-		/obj/item/wirecutters,
-		/obj/item/wrench,
-		/obj/item/device/multitool,
-		/obj/item/device/flashlight,
+		/obj/item/tool,
+		/obj/item/device/lightreplacer,
+		/obj/item/rcd,
+		/obj/item/device/lighting/toggleable/flashlight,
+		/obj/item/device/radio,
 		/obj/item/stack/cable_coil,
 		/obj/item/device/t_scanner,
-		/obj/item/device/analyzer,
+		/obj/item/device/scanner/gas,
 		/obj/item/taperoll/engineering,
 		/obj/item/device/robotanalyzer,
-		/obj/item/material/minihoe,
-		/obj/item/material/hatchet,
-		/obj/item/device/analyzer/plant_analyzer,
-		/obj/item/taperoll,
+		/obj/item/tool/minihoe,
+		/obj/item/tool/hatchet,
+		/obj/item/device/scanner/plant,
+		/obj/item/device/scanner/mining,
 		/obj/item/extinguisher/mini,
-		/obj/item/marshalling_wand
-		)
+		/obj/item/hand_labeler,
+		/obj/item/clothing/gloves,
+		/obj/item/clothing/glasses,
+		/obj/item/flame/lighter,
+		/obj/item/cell/small,
+		/obj/item/cell/medium,
+		/obj/item/grenade/chem_grenade/cleaner,
+		/obj/item/grenade/chem_grenade/antiweed,
+		/obj/item/grenade/chem_grenade/metalfoam,
+		/obj/item/gun/projectile/flare_gun
+	)
+	price_tag = 200
+/obj/item/storage/belt/utility/full
+	rarity_value = 50
 
+/obj/item/storage/belt/utility/full/populate_contents()
+	new /obj/item/tool/screwdriver(src)
+	new /obj/item/tool/wrench(src)
+	new /obj/item/tool/weldingtool(src)
+	new /obj/item/tool/crowbar(src)
+	new /obj/item/tool/wirecutters(src)
+	new /obj/item/stack/cable_coil/random(src)
 
-/obj/item/storage/belt/utility/full/New()
-	..()
-	new /obj/item/screwdriver(src)
-	new /obj/item/wrench(src)
-	new /obj/item/weldingtool(src)
-	new /obj/item/crowbar(src)
-	new /obj/item/wirecutters(src)
-	new /obj/item/stack/cable_coil(src,30,pick("red","yellow","orange"))
+/obj/item/storage/belt/utility/technomancer
+	spawn_blacklisted = TRUE
 
+/obj/item/storage/belt/utility/technomancer/populate_contents()
+	new /obj/item/tool/screwdriver/electric(src)
+	new /obj/item/tool/wrench/big_wrench(src)
+	new /obj/item/tool/weldingtool/advanced(src)
+	new /obj/item/tool/crowbar/pneumatic(src)
+	new /obj/item/tool/wirecutters/armature(src)
+	new /obj/item/tool/shovel/power(src)
+	new /obj/item/stack/cable_coil/random(src)
+	
+/obj/item/storage/belt/utility/roboticist
+	spawn_blacklisted = TRUE
 
-/obj/item/storage/belt/utility/atmostech/New()
-	..()
-	new /obj/item/screwdriver(src)
-	new /obj/item/wrench(src)
-	new /obj/item/weldingtool(src)
-	new /obj/item/crowbar(src)
-	new /obj/item/wirecutters(src)
-	new /obj/item/device/t_scanner(src)
-
-
+/obj/item/storage/belt/utility/roboticist/populate_contents()
+	new /obj/item/tool/screwdriver(src)
+	new /obj/item/tool/wrench(src)
+	new /obj/item/tool/weldingtool(src)
+	new /obj/item/tool/crowbar(src)
+	new /obj/item/tool/wirecutters/pliers(src)
+	new /obj/item/stack/cable_coil/random(src)
+	new /obj/item/tool/multitool(src)
+	
+/obj/item/storage/belt/utility/neotheology
+	name = "neotheology utility belt"
+	desc = "Waist-held holy items."
+	icon_state = "utility_neotheology"
+	rarity_value = 20
+	can_hold_extra = list(
+		/obj/item/book/ritual/cruciform,
+		/obj/item/implant/core_implant/cruciform,
+		/obj/item/soap,
+		/obj/item/reagent_containers/spray/cleaner,
+		/obj/item/reagent_containers/food/drinks/bottle/ntcahors
+	)
+	spawn_blacklisted = TRUE
 
 /obj/item/storage/belt/medical
 	name = "medical belt"
@@ -88,104 +124,108 @@
 	icon_state = "medicalbelt"
 	item_state = "medical"
 	can_hold = list(
-		/obj/item/device/healthanalyzer,
+		/obj/item/bodybag,
+		/obj/item/clothing/mask/surgical,
+		/obj/item/clothing/head/surgery,
+		/obj/item/clothing/gloves/latex,
+		/obj/item/clothing/glasses/hud/health,
+		/obj/item/device/scanner/health,
+		/obj/item/device/radio/headset,
+		/obj/item/device/lighting/toggleable/flashlight,
+		/obj/item/reagent_containers/blood,
 		/obj/item/reagent_containers/dropper,
 		/obj/item/reagent_containers/glass/beaker,
 		/obj/item/reagent_containers/glass/bottle,
 		/obj/item/reagent_containers/pill,
 		/obj/item/reagent_containers/syringe,
-		/obj/item/flame/lighter/zippo,
+		/obj/item/reagent_containers/hypospray,
+		/obj/item/flame/lighter,
+		/obj/item/cell/small,
 		/obj/item/storage/fancy/cigarettes,
 		/obj/item/storage/pill_bottle,
+		/obj/item/tool/bonesetter,
+		/obj/item/tool/scalpel,
+		/obj/item/tool/scalpel/advanced,
+		/obj/item/tool/scalpel/laser,
+		/obj/item/tool/surgicaldrill,
+		/obj/item/tool/cautery,
+		/obj/item/tool/retractor,
+		/obj/item/tool/saw/circular,
+		/obj/item/tool/hemostat,
 		/obj/item/stack/medical,
-		/obj/item/device/flashlight/pen,
-		/obj/item/clothing/mask/surgical,
-		/obj/item/clothing/head/surgery,
-		/obj/item/clothing/gloves/latex,
-		/obj/item/reagent_containers/hypospray,
-		/obj/item/clothing/glasses/hud/health,
-		/obj/item/crowbar,
-		/obj/item/device/flashlight,
-		/obj/item/taperoll,
-		/obj/item/extinguisher/mini,
-		/obj/item/wirecutters,
-		/obj/item/reagent_containers/glass/ampule,
-		/obj/item/suture
-		)
-
-/obj/item/storage/belt/medical/full
-	icon_state = "warfare_belt"
-	item_state = "warfare_belt"
-	max_storage_space = 16
-
-/obj/item/storage/belt/medical/full/New()
-	..()
-	new /obj/item/reagent_containers/hypospray/autoinjector/blood(src)
-	new /obj/item/reagent_containers/hypospray/autoinjector/revive(src)
-	new /obj/item/reagent_containers/hypospray/autoinjector/revive(src)
-	new /obj/item/reagent_containers/hypospray/autoinjector/morphine(src)
-	new /obj/item/reagent_containers/glass/ampule/morphine(src)
-	new /obj/item/suture(src)
-	new /obj/item/wirecutters(src)
-	new /obj/item/device/healthanalyzer(src)
+		/obj/item/stack/nanopaste,
+		/obj/item/taperoll/medical
+	)
+	rarity_value = 15
 
 /obj/item/storage/belt/medical/emt
 	name = "EMT utility belt"
 	desc = "A sturdy black webbing belt with attached pouches."
 	icon_state = "emsbelt"
 	item_state = "emsbelt"
+	can_hold_extra = list(
+		/obj/item/device/radio/off,
+		/obj/item/inflatable_dispenser,
+		/obj/item/tool/crowbar,
+		/obj/item/extinguisher/mini,
+		/obj/item/device/flash,
+		/obj/item/device/lighting/toggleable/flashlight,
+		/obj/item/gun/projectile/selfload,
+		/obj/item/modular_computer/tablet/moebius/preset
+	)
 
-/obj/item/storage/belt/security
-	name = "security belt"
-	desc = "Can hold security gear like handcuffs and flashes."
-	icon_state = "securitybelt"
-	item_state = "security"
+/obj/item/storage/belt/tactical
+	name = "tactical belt"
+	desc = "Can hold various military and security equipment."
+	icon_state = "tactical_belt"
+	rarity_value = 20
 	can_hold = list(
-		/obj/item/crowbar,
 		/obj/item/grenade,
 		/obj/item/reagent_containers/spray/pepper,
 		/obj/item/handcuffs,
+		/obj/item/tool/crowbar,
 		/obj/item/device/flash,
+		/obj/item/clothing/gloves,
 		/obj/item/clothing/glasses,
-		/obj/item/ammo_casing/shotgun,
+		/obj/item/ammo_casing,
 		/obj/item/ammo_magazine,
-		/obj/item/reagent_containers/food/snacks/donut/,
-		/obj/item/melee/baton,
-		/obj/item/gun/energy/taser,
-		/obj/item/gun/energy/stunrevolver,
+		/obj/item/cell/small,
+		/obj/item/cell/medium,
+		/obj/item/reagent_containers/food/snacks/donut, //meme, but fine
 		/obj/item/flame/lighter,
-		/obj/item/clothing/glasses/hud/security,
-		/obj/item/device/flashlight,
-		/obj/item/device/pda,
+		/obj/item/device/lighting/toggleable/flashlight,
+		/obj/item/modular_computer/pda,
 		/obj/item/device/radio/headset,
 		/obj/item/device/hailer,
 		/obj/item/device/megaphone,
 		/obj/item/melee,
-		/obj/item/gun/projectile/sec,
-		/obj/item/taperoll,
-		/obj/item/device/holowarrant,
-		/obj/item/magnetic_ammo
-		)
+		/obj/item/gun/projectile/selfload,
+		/obj/item/gun/projectile/flare_gun,
+		/obj/item/gun/projectile/giskard,
+		/obj/item/gun/energy/gun/martin,
+		/obj/item/taperoll
+	)
 
-/obj/item/storage/belt/soulstone
-	name = "soul stone belt"
-	desc = "Designed for ease of access to the shards during a fight, as to not let a single enemy spirit slip away."
-	icon_state = "soulstonebelt"
-	item_state = "soulstonebelt"
-	storage_slots = 6
-	can_hold = list(
-		/obj/item/device/soulstone
-		)
+/obj/item/storage/belt/tactical/ironhammer
+	name = "ironhammer tactical belt"
+	icon_state = "tactical_ironhammer"
+	spawn_blacklisted = TRUE
 
-/obj/item/storage/belt/soulstone/full/New()
-	..()
-	new /obj/item/device/soulstone(src)
-	new /obj/item/device/soulstone(src)
-	new /obj/item/device/soulstone(src)
-	new /obj/item/device/soulstone(src)
-	new /obj/item/device/soulstone(src)
-	new /obj/item/device/soulstone(src)
-
+/obj/item/storage/belt/tactical/neotheology
+	name = "neotheology tactical belt"
+	desc = "Can hold various military and security equipment."
+	icon_state = "tactical_neotheology"
+	rarity_value = 40
+	can_hold_extra = list(
+		/obj/item/book/ritual/cruciform,
+		/obj/item/implant/core_implant/cruciform,
+		/obj/item/tool/knife/neotritual,
+		/obj/item/gun/energy/crossbow,
+		/obj/item/tool/knife/dagger/nt,
+		/obj/item/gun/energy/nt_svalinn,
+		/obj/item/reagent_containers/food/drinks/bottle/ntcahors
+	)
+	spawn_blacklisted = TRUE
 
 /obj/item/storage/belt/champion
 	name = "championship belt"
@@ -195,34 +235,21 @@
 	storage_slots = 1
 	can_hold = list(
 		/obj/item/clothing/mask/luchador
-		)
+	)
+	spawn_blacklisted = TRUE
 
-/obj/item/storage/belt/security/tactical
-	name = "combat belt"
-	desc = "Can hold security gear like handcuffs and flashes, with more pouches for more storage."
-	icon_state = "swatbelt"
-	item_state = "swatbelt"
-	storage_slots = 9
+/obj/item/storage/belt/holding
+	name = "belt of holding"
+	desc = "The greatest in pants-supporting bluespace technology."
+	icon_state = "holdingbelt"
+	item_state = "holdingbelt"
+	storage_slots = 14
+	max_w_class = ITEM_SIZE_BULKY
+	max_storage_space = DEFAULT_HUGE_STORAGE * 1.25
+	matter = list(MATERIAL_STEEL = 6, MATERIAL_GOLD = 6, MATERIAL_DIAMOND = 2, MATERIAL_URANIUM = 3)
+	origin_tech = list(TECH_BLUESPACE = 4)
+	spawn_blacklisted = TRUE
 
-/obj/item/storage/belt/waistpack
-	name = "waist pack"
-	desc = "A small bag designed to be worn on the waist. May make your butt look big."
-	icon_state = "fannypack_white"
-	item_state = "fannypack_white"
-	storage_slots = null
-	max_w_class = ITEM_SIZE_SMALL
-	max_storage_space = ITEM_SIZE_SMALL * 4
-	slot_flags = SLOT_BELT | SLOT_BACK
-
-/obj/item/storage/belt/waistpack/big
-	name = "large waist pack"
-	desc = "An bag designed to be worn on the waist. Definitely makes your butt look big."
-	icon_state = "fannypack_big_white"
-	item_state = "fannypack_big_white"
-	w_class = ITEM_SIZE_LARGE
-	max_w_class = ITEM_SIZE_NORMAL
-	max_storage_space = ITEM_SIZE_NORMAL * 4
-
-/obj/item/storage/belt/waistpack/big/New()
+/obj/item/storage/belt/holding/New()
 	..()
-	slowdown_per_slot[slot_belt] = 3
+	bluespace_entropy(4, get_turf(src))

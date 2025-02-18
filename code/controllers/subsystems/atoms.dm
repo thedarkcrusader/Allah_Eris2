@@ -6,64 +6,77 @@
 SUBSYSTEM_DEF(atoms)
 	name = "Atoms"
 	init_order = INIT_ORDER_ATOMS
-	flags = SS_NO_FIRE | SS_NEEDS_SHUTDOWN
+	flags = SS_NO_FIRE
 
-	initialized = INITIALIZATION_INSSATOMS
 	var/old_initialized
 
-	var/list/late_loaders
-	var/list/created_atoms
+	var/list/late_loaders = list()
 
 	var/list/BadInitializeCalls = list()
+
+	///initAtom() adds the atom its creating to this list iff InitializeAtoms() has been given a list to populate as an argument
+	var/list/created_atoms
+
+	initialized = INITIALIZATION_INSSATOMS
 
 /datum/controller/subsystem/atoms/Initialize(timeofday)
 	initialized = INITIALIZATION_INNEW_MAPLOAD
 	InitializeAtoms()
+	initialized = INITIALIZATION_INNEW_REGULAR
 	return ..()
 
-/datum/controller/subsystem/atoms/proc/InitializeAtoms(list/atoms)
+/datum/controller/subsystem/atoms/proc/InitializeAtoms(list/atoms, list/atoms_to_return = null)
 	if(initialized == INITIALIZATION_INSSATOMS)
 		return
 
-	initialized = INITIALIZATION_INNEW_MAPLOAD
+	var/previous_state = null
+	if(initialized != INITIALIZATION_INNEW_MAPLOAD)
+		previous_state = initialized
+		initialized = INITIALIZATION_INNEW_MAPLOAD
 
-	LAZYINITLIST(late_loaders)
+	if (atoms_to_return)
+		LAZYINITLIST(created_atoms)
 
 	var/count
 	var/list/mapload_arg = list(TRUE)
+
 	if(atoms)
-		created_atoms = list()
 		count = atoms.len
-		for(var/I in atoms)
-			var/atom/A = I
+		for(var/I in 1 to count)
+			var/atom/A = atoms[I]
 			if(!A.initialized)
-				if(InitAtom(I, mapload_arg))
-					atoms -= I
 				CHECK_TICK
+				InitAtom(A, TRUE, mapload_arg)
 	else
 		count = 0
 		for(var/atom/A in world)
 			if(!A.initialized)
-				InitAtom(A, mapload_arg)
+				InitAtom(A, FALSE, mapload_arg)
 				++count
 				CHECK_TICK
 
-	report_progress("Initialized [count] atom\s")
+	testing("Initialized [count] atoms")
+	pass(count)
 
-	initialized = INITIALIZATION_INNEW_REGULAR
+	if(previous_state != initialized)
+		initialized = previous_state
 
 	if(late_loaders.len)
-		for(var/I in late_loaders)
-			var/atom/A = I
-			A.LateInitialize(arglist(mapload_arg))
-		report_progress("Late initialized [late_loaders.len] atom\s")
+		for(var/I in 1 to late_loaders.len)
+			var/atom/A = late_loaders[I]
+			//I hate that we need this
+			if(QDELETED(A))
+				continue
+			A.LateInitialize()
+		testing("Late initialized [late_loaders.len] atoms")
 		late_loaders.Cut()
 
-	if(atoms)
-		. = created_atoms + atoms
+	if (created_atoms)
+		atoms_to_return += created_atoms
 		created_atoms = null
 
-/datum/controller/subsystem/atoms/proc/InitAtom(atom/A, list/arguments)
+/// Init this specific atom
+/datum/controller/subsystem/atoms/proc/InitAtom(atom/A, from_template = FALSE, list/arguments)
 	var/the_type = A.type
 	if(QDELING(A))
 		BadInitializeCalls[the_type] |= BAD_INIT_QDEL_BEFORE
@@ -81,25 +94,29 @@ SUBSYSTEM_DEF(atoms)
 	if(result != INITIALIZE_HINT_NORMAL)
 		switch(result)
 			if(INITIALIZE_HINT_LATELOAD)
-				if(arguments[1])	//mapload
+				if(arguments[1]) //mapload
 					late_loaders += A
 				else
-					A.LateInitialize(arglist(arguments))
+					A.LateInitialize()
 			if(INITIALIZE_HINT_QDEL)
 				qdel(A)
+				qdeleted = TRUE
+			if(INITIALIZE_HINT_QDEL_FORCE)
+				qdel(A, force = TRUE)
 				qdeleted = TRUE
 			else
 				BadInitializeCalls[the_type] |= BAD_INIT_NO_HINT
 
-	if(!A)	//possible harddel
+	if(!A) //possible harddel
 		qdeleted = TRUE
 	else if(!A.initialized)
 		BadInitializeCalls[the_type] |= BAD_INIT_DIDNT_INIT
+	else
+		//SEND_SIGNAL_OLD(A,COMSIG_ATOM_AFTER_SUCCESSFUL_INITIALIZE)
+		if(created_atoms && from_template && ispath(the_type, /atom/movable))//we only want to populate the list with movables
+			created_atoms += A.GetAllContents()
 
 	return qdeleted || QDELING(A)
-
-/datum/controller/subsystem/atoms/stat_entry(msg)
-	..("Bad Initialize Calls:[BadInitializeCalls.len]")
 
 /datum/controller/subsystem/atoms/proc/map_loader_begin()
 	old_initialized = initialized
@@ -132,9 +149,14 @@ SUBSYSTEM_DEF(atoms)
 /datum/controller/subsystem/atoms/Shutdown()
 	var/initlog = InitLog()
 	if(initlog)
-		text2file(initlog, "[GLOB.log_directory]/initialize.log")
+		text2file(initlog, "data/logs/initialize.log")
 
-#undef BAD_INIT_QDEL_BEFORE
-#undef BAD_INIT_DIDNT_INIT
-#undef BAD_INIT_SLEPT
-#undef BAD_INIT_NO_HINT
+/client/proc/cmd_display_init_log()
+	set category = "Debug"
+	set name = "Display Initialize() Log"
+	set desc = "Displays a list of things that didn't handle Initialize() properly."
+
+	if(!LAZYLEN(SSatoms.BadInitializeCalls))
+		to_chat(usr, SPAN_NOTICE("BadInit list is empty."))
+	else
+		usr << browse(replacetext(SSatoms.InitLog(), "\n", "<br>"), "window=initlog")

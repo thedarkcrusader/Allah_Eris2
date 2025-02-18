@@ -6,9 +6,9 @@
 	icon = 'icons/obj/machines/particle_accelerator2.dmi'
 	icon_state = "control_box"
 	reference = "control_box"
-	anchored = 0
-	density = 1
-	use_power = 0
+	anchored = FALSE
+	density = TRUE
+	use_power = NO_POWER_USE
 	idle_power_usage = 500
 	active_power_usage = 70000 //70 kW per unit of strength
 	construction_state = 0
@@ -20,7 +20,6 @@
 	var/assembled = 0
 	var/parts = null
 	var/datum/wires/particle_acc/control_box/wires = null
-	var/obj/machinery/sunreactor/center/reactor = null
 
 /obj/machinery/particle_accelerator/control_box/New()
 	wires = new(src)
@@ -43,7 +42,7 @@
 
 /obj/machinery/particle_accelerator/control_box/update_state()
 	if(construction_state < 3)
-		update_use_power(0)
+		set_power_use(NO_POWER_USE)
 		assembled = 0
 		active = 0
 		for(var/obj/structure/particle_accelerator/part in connected_parts)
@@ -53,7 +52,7 @@
 		connected_parts = list()
 		return
 	if(!part_scan())
-		update_use_power(1)
+		set_power_use(IDLE_POWER_USE)
 		active = 0
 		connected_parts = list()
 
@@ -83,7 +82,7 @@
 /obj/machinery/particle_accelerator/control_box/Topic(href, href_list)
 	..()
 	//Ignore input if we are broken, !silicon guy cant touch us, or nonai controlling from super far away
-	if(stat & (BROKEN|NOPOWER) || (get_dist(src, usr) > 1 && !istype(usr, /mob/living/silicon)) || (get_dist(src, usr) > 8 && !istype(usr, /mob/living/silicon/ai)))
+	if(stat & (BROKEN|NOPOWER) || (get_dist(src, usr) > 1 && !issilicon(usr)) || (get_dist(src, usr) > 8 && !isAI(usr)))
 		usr.unset_machine()
 		usr << browse(null, "window=pacontrol")
 		return
@@ -139,12 +138,12 @@
 		strength_change()
 
 /obj/machinery/particle_accelerator/control_box/power_change()
-	. = ..()
+	..()
 	if(stat & NOPOWER)
 		active = 0
-		update_use_power(0)
+		set_power_use(NO_POWER_USE)
 	else if(!stat && construction_state == 3)
-		update_use_power(1)
+		set_power_use(IDLE_POWER_USE)
 	return
 
 
@@ -155,35 +154,6 @@
 			investigate_log("lost a connected part; It <font color='red'>powered down</font>.","singulo")
 			src.toggle_power()
 			return
-
-		for(var/obj/machinery/sunreactor/emitter/PEm)
-			PEm.icon_state="emitter_passive"
-			sleep(30)
-			PEm.icon_state="emitter_active"
-			PEm.emit_particle(src.strength)
-
-		for(var/obj/machinery/sunreactor/beam/BEp)
-			BEp.invisibility = 0
-			BEp.luminosity = 1
-		for(var/obj/machinery/sunreactor/tube_g_v_u/TEup)
-			sleep(4)
-			TEup.icon_state="t_glass_v_2"
-			playsound(src.loc, 'sound/effects/screech.ogg', 75, 1)
-
-		for(var/obj/machinery/sunreactor/tube_g_h_l/TEleft)
-			sleep(8)
-			TEleft.icon_state="t_glass_h_2"
-			playsound(src.loc, 'sound/effects/screech.ogg', 75, 1)
-
-		for(var/obj/machinery/sunreactor/tube_g_v_d/TEdown)
-			sleep(12)
-			TEdown.icon_state="t_glass_v_2"
-			playsound(src.loc, 'sound/effects/screech.ogg', 75, 1)
-
-		for(var/obj/machinery/sunreactor/tube_g_h_r/TEright)
-			sleep(16)
-			TEright.icon_state="t_glass_h_2"
-			playsound(src.loc, 'sound/effects/screech.ogg', 75, 1)
 		//emit some particles
 		for(var/obj/structure/particle_accelerator/particle_emitter/PE in connected_parts)
 			if(PE)
@@ -246,13 +216,13 @@
 	message_admins("PA Control Computer turned [active ?"ON":"OFF"] by [key_name(usr, usr.client)](<A HREF='?_src_=holder;adminmoreinfo=\ref[usr]'>?</A>) in ([x],[y],[z] - <A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[x];Y=[y];Z=[z]'>JMP</a>)",0,1)
 	log_game("PA Control Computer turned [active ?"ON":"OFF"] by [usr.ckey]([usr]) in ([x],[y],[z])")
 	if(src.active)
-		update_use_power(2)
+		set_power_use(ACTIVE_POWER_USE)
 		for(var/obj/structure/particle_accelerator/part in connected_parts)
 			part.strength = src.strength
 			part.powered = 1
 			part.update_icon()
 	else
-		update_use_power(1)
+		set_power_use(IDLE_POWER_USE)
 		for(var/obj/structure/particle_accelerator/part in connected_parts)
 			part.strength = null
 			part.powered = 0
@@ -262,15 +232,14 @@
 
 /obj/machinery/particle_accelerator/control_box/interact(mob/user)
 	if((get_dist(src, user) > 1) || (stat & (BROKEN|NOPOWER)))
-		if(!istype(user, /mob/living/silicon))
+		if(!issilicon(user))
 			user.unset_machine()
 			user << browse(null, "window=pacontrol")
 			return
 	user.set_machine(src)
-	reactor = locate(/obj/machinery/sunreactor/center)
+
 	var/dat = ""
 	dat += "Particle Accelerator Control Panel<BR>"
-	dat += "Temperature: ~[reactor.energy].000c<BR>"
 	dat += "<A href='?src=\ref[src];close=1'>Close</A><BR><BR>"
 	dat += "Status:<BR>"
 	if(!assembled)

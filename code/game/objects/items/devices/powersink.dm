@@ -5,15 +5,16 @@
 	desc = "A nulling power sink which drains energy from electrical systems."
 	icon_state = "powersink0"
 	item_state = "electronic"
-	w_class = ITEM_SIZE_LARGE
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
-	throwforce = 5
+	w_class = ITEM_SIZE_BULKY
+	flags = CONDUCT
+	throwforce = WEAPON_FORCE_PAINFUL
 	throw_speed = 1
 	throw_range = 2
+	spawn_blacklisted = TRUE
 
-	matter = list(DEFAULT_WALL_MATERIAL = 750,"waste" = 750)
+	matter = list(MATERIAL_PLASTIC = 8, MATERIAL_STEEL = 8, MATERIAL_GLASS = 3)
 
-	origin_tech = list(TECH_POWER = 3, TECH_ILLEGAL = 5)
+	origin_tech = list(TECH_POWER = 3, TECH_COVERT = 5)
 	var/drain_rate = 1500000		// amount of power to drain per tick
 	var/apc_drain_rate = 5000 		// Max. amount drained from single APC. In Watts.
 	var/dissipation_rate = 20000	// Passive dissipation of drained power. In Watts.
@@ -25,38 +26,37 @@
 	var/datum/powernet/PN			// Our powernet
 	var/obj/structure/cable/attached		// the attached cable
 
-/obj/item/device/powersink/Destroy()
-	if(mode == 2)
-		STOP_PROCESSING_POWER_OBJECT(src)
+/obj/item/device/powersink/Initialize(mapload)
 	. = ..()
 
-/obj/item/device/powersink/attackby(var/obj/item/I, var/mob/user)
-	if(isScrewdriver(I))
-		if(mode == 0)
-			var/turf/T = loc
-			if(isturf(T) && !!T.is_plating())
-				attached = locate() in T
-				if(!attached)
-					to_chat(user, "No exposed cable here to attach to.")
-					return
+/obj/item/device/powersink/attackby(obj/item/I, mob/user)
+	if(QUALITY_SCREW_DRIVING in I.tool_qualities)
+		if(I.use_tool(user, src, WORKTIME_FAST, QUALITY_SCREW_DRIVING, FAILCHANCE_EASY, required_stat = STAT_MEC))
+			if(mode == 0)
+				var/turf/T = loc
+				if(isturf(T) && !!T.is_plating())
+					attached = locate() in T
+					if(!attached)
+						to_chat(user, "No exposed cable here to attach to.")
+						return
+					else
+						anchored = TRUE
+						mode = 1
+						src.visible_message(SPAN_NOTICE("[user] attaches [src] to the cable!"))
+						return
 				else
-					anchored = 1
-					mode = 1
-					src.visible_message("<span class='notice'>[user] attaches [src] to the cable!</span>")
+					to_chat(user, "Device must be placed over an exposed cable to attach to it.")
 					return
 			else
-				to_chat(user, "Device must be placed over an exposed cable to attach to it.")
-				return
-		else
-			if (mode == 2)
-				STOP_PROCESSING_POWER_OBJECT(src)
-			anchored = 0
-			mode = 0
-			src.visible_message("<span class='notice'>[user] detaches [src] from the cable!</span>")
-			set_light(0)
-			icon_state = "powersink0"
+				if (mode == 2)
+					STOP_PROCESSING(SSmachines, src)
+				anchored = FALSE
+				mode = 0
+				src.visible_message(SPAN_NOTICE("[user] detaches [src] from the cable!"))
+				set_light(0)
+				icon_state = "powersink0"
 
-			return
+				return
 	else
 		..()
 
@@ -68,16 +68,16 @@
 		if(0)
 			..()
 		if(1)
-			src.visible_message("<span class='notice'>[user] activates [src]!</span>")
+			src.visible_message(SPAN_NOTICE("[user] activates [src]!"))
 			mode = 2
 			icon_state = "powersink1"
-			START_PROCESSING_POWER_OBJECT(src)
+			START_PROCESSING(SSmachines, src)
 		if(2)  //This switch option wasn't originally included. It exists now. --NeoFite
-			src.visible_message("<span class='notice'>[user] deactivates [src]!</span>")
+			src.visible_message(SPAN_NOTICE("[user] deactivates [src]!"))
 			mode = 1
 			set_light(0)
 			icon_state = "powersink0"
-			STOP_PROCESSING_POWER_OBJECT(src)
+			STOP_PROCESSING(SSmachines, src)
 
 /obj/item/device/powersink/pwr_drain()
 	if(!attached)
@@ -120,7 +120,7 @@
 	if(power_drained > max_power * 0.95)
 		playsound(src, 'sound/effects/screech.ogg', 100, 1, 1)
 	if(power_drained >= max_power)
-		explosion(src.loc, 3,6,9,12)
+		explosion(get_turf(src), 1500, 100)
 		qdel(src)
 		return
 	if(attached && attached.powernet)

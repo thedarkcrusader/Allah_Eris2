@@ -18,9 +18,9 @@ field_generator power level display
 	desc = "A large thermal battery that projects a high amount of energy when powered."
 	icon = 'icons/obj/machines/field_generator.dmi'
 	icon_state = "Field_Gen"
-	anchored = 0
-	density = 1
-	use_power = 0
+	anchored = FALSE
+	density = TRUE
+	use_power = NO_POWER_USE
 	var/const/num_power_levels = 6	// Total number of power level icon has
 	var/Varedit_start = 0
 	var/Varpower = 0
@@ -59,6 +59,7 @@ field_generator power level display
 	..()
 	fields = list()
 	connected_gens = list()
+	return
 
 /obj/machinery/field_generator/Process()
 	if(Varedit_start == 1)
@@ -66,7 +67,7 @@ field_generator power level display
 			active = 1
 			state = 2
 			power = field_generator_max_power
-			anchored = 1
+			anchored = TRUE
 			warming_up = 3
 			start_fields()
 			update_icon()
@@ -75,6 +76,7 @@ field_generator power level display
 	if(src.active == 2)
 		calc_power()
 		update_icon()
+	return
 
 
 /obj/machinery/field_generator/attack_hand(mob/user as mob)
@@ -96,62 +98,57 @@ field_generator power level display
 		return
 
 
-/obj/machinery/field_generator/attackby(obj/item/W, mob/user)
+/obj/machinery/field_generator/attackby(obj/item/I, mob/user)
 	if(active)
 		to_chat(user, "The [src] needs to be off.")
 		return
-	else if(isWrench(W))
-		switch(state)
-			if(0)
-				state = 1
-				playsound(src.loc, 'sound/items/Ratchet.ogg', 75, 1)
-				user.visible_message("[user.name] secures [src.name] to the floor.", \
-					"You secure the external reinforcing bolts to the floor.", \
-					"You hear ratchet")
-				src.anchored = 1
-			if(1)
-				state = 0
-				playsound(src.loc, 'sound/items/Ratchet.ogg', 75, 1)
-				user.visible_message("[user.name] unsecures [src.name] reinforcing bolts from the floor.", \
-					"You undo the external reinforcing bolts.", \
-					"You hear ratchet")
-				src.anchored = 0
-			if(2)
-				to_chat(user, "<span class='warning'> The [src.name] needs to be unwelded from the floor.</span>")
-				return
-	else if(isWelder(W))
-		var/obj/item/weldingtool/WT = W
-		switch(state)
-			if(0)
-				to_chat(user, "<span class='warning'>The [src.name] needs to be wrenched to the floor.</span>")
-				return
-			if(1)
-				if (WT.remove_fuel(0,user))
-					playsound(src.loc, 'sound/items/Welder2.ogg', 50, 1)
-					user.visible_message("[user.name] starts to weld the [src.name] to the floor.", \
-						"You start to weld the [src] to the floor.", \
-						"You hear welding")
-					if (do_after(user,20,src))
-						if(!src || !WT.isOn()) return
-						state = 2
-						to_chat(user, "You weld the field generator to the floor.")
-				else
+
+	var/list/usable_qualities = list()
+	if(state == 0 || state == 1)
+		usable_qualities.Add(QUALITY_BOLT_TURNING)
+	if(state == 1 || state == 2)
+		usable_qualities.Add(QUALITY_WELDING)
+
+	var/tool_type = I.get_tool_type(user, usable_qualities, src)
+	switch(tool_type)
+
+		if(QUALITY_BOLT_TURNING)
+			if(state == 0)
+				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_EASY, required_stat = STAT_MEC))
+					user.visible_message("[user.name] secures [src.name] to the floor.", \
+						"You secure the external reinforcing bolts to the floor.", \
+						"You hear ratchet")
+					anchored = TRUE
+					state = 1
 					return
-			if(2)
-				if (WT.remove_fuel(0,user))
-					playsound(src.loc, 'sound/items/Welder2.ogg', 50, 1)
-					user.visible_message("[user.name] starts to cut the [src.name] free from the floor.", \
-						"You start to cut the [src] free from the floor.", \
-						"You hear welding")
-					if (do_after(user,20,src))
-						if(!src || !WT.isOn()) return
-						state = 1
-						to_chat(user, "You cut the [src] free from the floor.")
-				else
+			if(state == 1)
+				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_EASY, required_stat = STAT_MEC))
+					user.visible_message("[user.name] unsecures [src.name] reinforcing bolts from the floor.", \
+						"You undo the external reinforcing bolts.", \
+						"You hear ratchet")
+					anchored = FALSE
+					state = 0
 					return
-	else
-		..()
-		return
+			return
+
+		if(QUALITY_WELDING)
+			if(state == 1)
+				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_EASY, required_stat = STAT_MEC))
+					to_chat(user, SPAN_NOTICE("You weld the field generator to the floor."))
+					state = 2
+					return
+			if(state == 2)
+				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_EASY, required_stat = STAT_MEC))
+					to_chat(user, SPAN_NOTICE("You cut the [src] free from the floor."))
+					state = 1
+					return
+			return
+
+		if(ABORT_CHECK)
+			return
+
+	..()
+	return
 
 
 /obj/machinery/field_generator/emp_act()
@@ -159,7 +156,7 @@ field_generator power level display
 
 /obj/machinery/field_generator/bullet_act(var/obj/item/projectile/Proj)
 	if(istype(Proj, /obj/item/projectile/beam))
-		power += Proj.damage * EMITTER_DAMAGE_POWER_TRANSFER
+		power += Proj.damage_types[BURN] * EMITTER_DAMAGE_POWER_TRANSFER
 		update_icon()
 	return 0
 
@@ -209,7 +206,7 @@ field_generator power level display
 		return 1
 	else
 		for(var/mob/M in viewers(src))
-			M.show_message("<span class='warning'>\The [src] shuts down!</span>")
+			M.show_message("\red \The [src] shuts down!")
 		turn_off()
 		investigate_log("ran out of power and <font color='red'>deactivated</font>","singulo")
 		src.power = 0
@@ -310,12 +307,12 @@ field_generator power level display
 /obj/machinery/field_generator/proc/cleanup()
 	clean_up = 1
 	for (var/obj/machinery/containment_field/F in fields)
-		if (QDELETED(F))
+		if (isnull(F))
 			continue
 		qdel(F)
 	fields = list()
 	for(var/obj/machinery/field_generator/FG in connected_gens)
-		if (QDELETED(FG))
+		if (isnull(FG))
 			continue
 		FG.connected_gens.Remove(src)
 		if(!FG.clean_up)//Makes the other gens clean up as well
@@ -330,7 +327,7 @@ field_generator power level display
 	//I want to avoid using global variables.
 	spawn(1)
 		var/temp = 1 //stops spam
-		for(var/obj/singularity/O in SSmachines.machinery)
+		for(var/obj/singularity/O in GLOB.machines)
 			if(O.last_warning && temp)
 				if((world.time - O.last_warning) > 50) //to stop message-spam
 					temp = 0
