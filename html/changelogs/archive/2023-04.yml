@@ -48,7 +48,7 @@
   - rscadd: KS-23, KS-23 disk
   - imageadd: added KS-23.dmi
   - code_imp: added ks23.dm, modified excelsior.dm/guns.dm
-  - config: added the ks-23 to cev_eris.dme
+  - config: added the ks-23 to IS12Warfare.dme
   Trilbyspaceclone:
   - bugfix: Ports over SoJ fix to deconstruction prayer exploit
   thevandie:

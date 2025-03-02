@@ -1,4 +1,4 @@
-environment = "cev_eris.dme"
+environment = "IS12Warfare.dme"
 
 [langserver]
 dreamchecker = true
