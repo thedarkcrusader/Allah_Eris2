@@ -15,7 +15,7 @@ jobs:
       group: run_linters-${{ github.ref }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Restore SpacemanDMM cache
         uses: actions/cache@v3
         with:
@@ -61,7 +61,7 @@ jobs:
       group: compile_all_maps-${{ github.ref }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Restore BYOND cache
         uses: actions/cache@v3
         with:
@@ -89,7 +89,7 @@ jobs:
       group: run_all_tests-${{ github.ref }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Restore BYOND cache
         uses: actions/cache@v3
         with:
@@ -129,7 +129,7 @@ jobs:
     name: Compare Screenshot Tests
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       # If we ever add more artifacts, this is going to break, but it'll be obvious.
       - name: Download screenshot tests
         uses: actions/download-artifact@v3
@@ -166,7 +166,7 @@ jobs:
       group: test_windows-${{ github.ref }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Restore Yarn cache
         uses: actions/cache@v3
         with:
