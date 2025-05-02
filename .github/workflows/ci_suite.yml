@@ -117,7 +117,7 @@ jobs:
           bash tools/ci/run_server.sh ${{ matrix.map }}
       - name: Upload screenshot tests
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test_artifacts_${{ matrix.map }}
           path: data/screenshots_new/
@@ -153,7 +153,7 @@ jobs:
           echo ${{ github.event.pull_request.number }} > artifacts/screenshot_comparisons/pull_request_number.txt
       - name: Upload bad screenshots
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: bad-screenshots
           path: artifacts/screenshot_comparisons
@@ -185,7 +185,7 @@ jobs:
           md deploy
           bash tools/deploy.sh ./deploy
       - name: Deploy artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy
           path: deploy
