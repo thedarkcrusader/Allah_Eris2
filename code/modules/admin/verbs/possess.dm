@@ -1,38 +1,20 @@
-/proc/possess(obj/O as obj)
-	set name = "Possess Obj"
-	set category = "Object"
 
-	if(istype(O,/obj/singularity))
-		if(config.forbid_singulo_possession)
-			to_chat(usr, "It is forbidden to possess singularities.")
-			return
+ADMIN_VERB_AND_CONTEXT_MENU(possess, R_POSSESS, "Possess Obj", "Possess an object.", ADMIN_CATEGORY_OBJECT, obj/target in world)
+	var/result = user.mob.AddComponent(/datum/component/object_possession, target)
 
-	log_and_message_admins("has possessed [O]")
+	if(isnull(result)) // trigger a safety movement just in case we yonk
+		user.mob.forceMove(get_turf(user.mob))
+		return
 
-	if(!usr.control_object) //If you're not already possessing something...
-		usr.name_archive = usr.real_name
+	var/turf/target_turf = get_turf(target)
+	var/message = "[key_name(user)] has possessed [target] ([target.type]) at [AREACOORD(target_turf)]"
+	message_admins(message)
+	log_admin(message)
 
-	usr.forceMove(O)
-	usr.real_name = O.name
-	usr.SetName(O.name)
-	usr.client.eye = O
-	usr.control_object = O
-	usr.ReplaceMovementHandler(/datum/movement_handler/mob/admin_possess)
+	BLACKBOX_LOG_ADMIN_VERB("Possess Object")
 
-/proc/release(obj/O)
-	set name = "Release Obj"
-	set category = "Object"
-	//usr.loc = get_turf(usr)
-
-	if(usr.control_object && usr.name_archive) //if you have a name archived and if you are actually relassing an object
-		usr.RemoveMovementHandler(/datum/movement_handler/mob/admin_possess)
-		usr.real_name = usr.name_archive
-		usr.SetName(usr.real_name)
-		if(ishuman(usr))
-			var/mob/living/carbon/human/H = usr
-			H.SetName(H.get_visible_name())
-//		usr.regenerate_icons() //So the name is updated properly
-
-	usr.forceMove(O.loc) // Appear where the object you were controlling is -- TLE
-	usr.client.eye = usr
-	usr.control_object = null
+ADMIN_VERB(release, R_POSSESS, "Release Object", "Stop possessing an object.", ADMIN_CATEGORY_OBJECT)
+	var/possess_component = user.mob.GetComponent(/datum/component/object_possession)
+	if(!isnull(possess_component))
+		qdel(possess_component)
+	BLACKBOX_LOG_ADMIN_VERB("Release Object")

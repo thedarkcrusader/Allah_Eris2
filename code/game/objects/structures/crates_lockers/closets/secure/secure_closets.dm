@@ -1,29 +1,34 @@
 /obj/structure/closet/secure_closet
 	name = "secure locker"
-	desc = "A card-locked storage unit."
-	icon = 'icons/obj/closet.dmi'
-	icon_state = "secure1"
-	density = TRUE
-	opened = FALSE
-	broken = FALSE
+	desc = "It's a card-locked storage unit."
 	locked = TRUE
+	icon_state = "secure"
+	max_integrity = 250
+	armor_type = /datum/armor/closet_secure_closet
 	secure = TRUE
-	wall_mounted = 0 //never solid (You can always pass over it)
-	health = 200
-	spawn_tags = SPAWN_TAG_CLOSET_SECURE
-	spawn_blacklisted = TRUE
+	damage_deflection = 20
+	material_drop_amount = 5
 
-/obj/structure/closet/secure_closet/req_breakout()
-	if(!opened && locked) return TRUE
-	return ..() //It's a secure closet, but isn't locked.
+/datum/armor/closet_secure_closet
+	melee = 30
+	bullet = 50
+	laser = 50
+	energy = 100
+	fire = 80
+	acid = 80
 
-/obj/structure/closet/secure_closet/break_open()
-	desc += " It appears to be broken."
-	broken = TRUE
-	locked = FALSE
-	..()
+/obj/structure/closet/secure_closet/Initialize(mapload)
+	. = ..()
+	RegisterSignal(SSdcs, COMSIG_GLOB_GREY_TIDE, PROC_REF(grey_tide))
 
-/obj/structure/closet/secure_closet/reinforced
-	icon = 'icons/obj/closet.dmi'
-	icon_state = "hop"
-	icon_lock = "reinforced"
+/obj/structure/closet/secure_closet/proc/grey_tide(datum/source, list/grey_tide_areas)
+	SIGNAL_HANDLER
+
+	if(!is_station_level(z))
+		return
+
+	for(var/area_type in grey_tide_areas)
+		if(!istype(get_area(src), area_type))
+			continue
+		locked = FALSE
+		update_appearance(UPDATE_ICON)

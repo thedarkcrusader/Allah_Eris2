@@ -24,7 +24,7 @@
 
 	if(isobserver(user))
 		// If they turn on ghost AI control, admins can always interact.
-		if(isghost(user) && is_admin(user))
+		if(isAdminGhostAI(user))
 			. = max(., UI_INTERACTIVE)
 
 		// Regular ghosts can always at least view if in range.
@@ -61,26 +61,25 @@
  */
 /mob/proc/shared_ui_interaction(src_object)
 	// Close UIs if mindless.
-	if(!client) // && !HAS_TRAIT(src, TRAIT_PRESERVE_UI_WITHOUT_CLIENT))
+	if(!client && !HAS_TRAIT(src, TRAIT_PRESERVE_UI_WITHOUT_CLIENT))
 		return UI_CLOSE
-	// Disable UIs if unconcious.
+	// Disable UIs if unconscious.
 	else if(stat)
 		return UI_DISABLED
-	// Update UIs if incapicitated but concious.
-	else if(incapacitated())
+	// Update UIs if incapicitated but conscious.
+	else if(incapacitated)
 		return UI_UPDATE
 	return UI_INTERACTIVE
 
-/mob/living/shared_ui_interaction(src_object)
+/mob/living/shared_ui_interaction(atom/src_object)
 	. = ..()
-	// downgrade from UI_INTERACTIVE to UI_UPDATE when lying or resting.
-	if((lying || resting) && . == UI_INTERACTIVE)
+	if(!(mobility_flags & MOBILITY_UI) && !(src_object.interaction_flags_atom & INTERACT_ATOM_IGNORE_MOBILITY) && . == UI_INTERACTIVE)
 		return UI_UPDATE
 
 /mob/living/silicon/ai/shared_ui_interaction(src_object)
 	// Disable UIs if the AI is unpowered.
-	// if(apc_override == src_object) //allows AI to (eventually) use the interface for their own APC even when out of power
-	// 	return UI_INTERACTIVE
+	if(apc_override == src_object) //allows AI to (eventually) use the interface for their own APC even when out of power
+		return UI_INTERACTIVE
 	if(lacks_power())
 		return UI_DISABLED
 	return ..()
@@ -102,6 +101,11 @@
  * return UI_state The state of the UI.
  */
 /mob/living/proc/shared_living_ui_distance(atom/movable/src_object, viewcheck = TRUE, allow_tk = TRUE)
+	var/obj/item/item_in_hand = get_active_held_item()
+	if(istype(item_in_hand, /obj/item/machine_remote)) //snowflake, this lets you interact with all.
+		var/obj/item/machine_remote/remote = item_in_hand
+		if(remote.controlling_machine_or_bot == src_object)
+			return UI_INTERACTIVE
 	// If the object is obscured, close it.
 	if(viewcheck && !(src_object in view(src)))
 		return UI_CLOSE
@@ -119,6 +123,6 @@
 	return UI_CLOSE
 
 /mob/living/carbon/human/shared_living_ui_distance(atom/movable/src_object, viewcheck = TRUE, allow_tk = TRUE)
-	if(allow_tk && get_dist(src, src_object) > tk_maxrange)
+	if(allow_tk && dna.check_mutation(/datum/mutation/human/telekinesis) && tkMaxRangeCheck(src, src_object))
 		return UI_INTERACTIVE
 	return ..()

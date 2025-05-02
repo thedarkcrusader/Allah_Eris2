@@ -1,5 +1,4 @@
-import { decodeHtmlEntities } from 'common/string';
-import { useBackend, useLocalState } from 'tgui/backend';
+import { useState } from 'react';
 import {
   Box,
   Button,
@@ -12,8 +11,11 @@ import {
   Table,
   TextArea,
   Tooltip,
-} from 'tgui/components';
-import { Window } from 'tgui/layouts';
+} from 'tgui-core/components';
+import { decodeHtmlEntities } from 'tgui-core/string';
+
+import { useBackend } from '../backend';
+import { Window } from '../layouts';
 
 type HoloPayData = {
   available_logos: string[];
@@ -27,22 +29,17 @@ type HoloPayData = {
   user: { name: string; balance: number };
 };
 
-const COPYRIGHT_SCROLLER = `Nanotrasen (c) 2525-2562. All sales final.
-Use of departmental funds is prohibited. For more information, visit
-the Head of Personnel. All rights reserved. All trademarks are property
-of their respective owners.`;
-
-export const HoloPay = (props, context) => {
-  const { data } = useBackend<HoloPayData>(context);
+export const HoloPay = (props) => {
+  const { data } = useBackend<HoloPayData>();
   const { owner } = data;
-  const [setupMode, setSetupMode] = useLocalState(context, 'setupMode', false);
+  const [setupMode, setSetupMode] = useState(false);
   // User clicked the "Setup" or "Done" button.
   const onClick = () => {
     setSetupMode(!setupMode);
   };
 
   return (
-    <Window height="300" width="250" title="Holo Pay">
+    <Window height={300} width={250} title="Holo Pay">
       <Window.Content>
         {!owner ? (
           <NoticeBox>Error! Swipe an ID first.</NoticeBox>
@@ -68,8 +65,8 @@ export const HoloPay = (props, context) => {
 /**
  * Displays the current user's bank information (if any)
  */
-const AccountDisplay = (props, context) => {
-  const { data } = useBackend<HoloPayData>(context);
+const AccountDisplay = (props) => {
+  const { data } = useBackend<HoloPayData>();
   const { user } = data;
   if (!user) {
     return <NoticeBox>Error! No account detected.</NoticeBox>;
@@ -77,7 +74,7 @@ const AccountDisplay = (props, context) => {
 
   return (
     <Section>
-      <Table fill>
+      <Table>
         <Table.Row>
           <Table.Cell>
             <Box color="label">
@@ -100,8 +97,8 @@ const AccountDisplay = (props, context) => {
  * Displays the payment processor. This is the main display.
  * Shows icon, name, payment button.
  */
-const TerminalDisplay = (props, context) => {
-  const { act, data } = useBackend<HoloPayData>(context);
+const TerminalDisplay = (props) => {
+  const { act, data } = useBackend<HoloPayData>();
   const { description, force_fee, name, owner, user, shop_logo } = data;
   const { onClick } = props;
   const is_owner = owner === user?.name;
@@ -121,8 +118,8 @@ const TerminalDisplay = (props, context) => {
       title="Terminal"
     >
       <Stack fill vertical>
-        <Stack.Item align="center">
-          <Icon color="good" name={shop_logo} size="5" />
+        <Stack.Item align="center" mt={3}>
+          <Icon color="good" name={shop_logo} size={5} />
         </Stack.Item>
         <Stack.Item grow textAlign="center">
           <Tooltip content={description} position="bottom">
@@ -164,15 +161,6 @@ const TerminalDisplay = (props, context) => {
             />
           )}
         </Stack.Item>
-        <Stack.Item>
-          {/* @ts-ignore */}
-          <marquee scrollamount="2">
-            <Box color="darkgray" fontSize="8px">
-              {COPYRIGHT_SCROLLER}
-            </Box>
-            {/* @ts-ignore */}
-          </marquee>
-        </Stack.Item>
       </Stack>
     </Section>
   );
@@ -181,10 +169,12 @@ const TerminalDisplay = (props, context) => {
 /**
  * User has clicked "setup" button. Changes vars on the holopay.
  */
-const SetupDisplay = (props, context) => {
-  const { act, data } = useBackend<HoloPayData>(context);
+const SetupDisplay = (props) => {
+  const { act, data } = useBackend<HoloPayData>();
   const { available_logos = [], force_fee, max_fee, name, shop_logo } = data;
   const { onClick } = props;
+
+  const [isValid, setIsValid] = useState(true);
 
   return (
     <Section
@@ -223,7 +213,8 @@ const SetupDisplay = (props, context) => {
             fluid
             height="3rem"
             maxLength={42}
-            onChange={(_, value) => {
+            expensive
+            onChange={(value) => {
               value?.length > 3 && act('rename', { name: value });
             }}
             placeholder={decodeHtmlEntities(name)}
@@ -237,7 +228,8 @@ const SetupDisplay = (props, context) => {
             <RestrictedInput
               fluid
               maxValue={max_fee}
-              onChange={(_, value) => act('fee', { amount: value })}
+              onEnter={(value) => isValid && act('fee', { amount: value })}
+              onValidationChange={setIsValid}
               value={force_fee}
             />
           </Tooltip>

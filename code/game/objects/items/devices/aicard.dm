@@ -1,153 +1,162 @@
-/obj/item/device/aicard
-	name = "inteliCard"
-	icon = 'icons/obj/pda.dmi'
+/obj/item/aicard
+	name = "intelliCard"
+	desc = "A storage device for AIs. Patent pending."
+	icon = 'icons/obj/aicards.dmi'
 	icon_state = "aicard" // aicard-full
-	item_state = "electronic"
-	w_class = ITEM_SIZE_SMALL
-	slot_flags = SLOT_BELT
-	origin_tech = list(TECH_DATA = 4, TECH_MATERIAL = 4)
-	matter = list(MATERIAL_STEEL = 1, MATERIAL_PLASTIC = 1, MATERIAL_GLASS = 1)
-	//spawn_blacklisted = TRUE//antag_item_targets??
-	var/mob/living/silicon/ai/carded_ai
-	var/flush
+	base_icon_state = "aicard"
+	inhand_icon_state = "electronic"
+	worn_icon_state = "electronic"
+	lefthand_file = 'icons/mob/inhands/items/devices_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/items/devices_righthand.dmi'
+	w_class = WEIGHT_CLASS_SMALL
+	slot_flags = ITEM_SLOT_BELT
+	item_flags = NOBLUDGEON
+	var/flush = FALSE
+	var/mob/living/silicon/ai/AI
 
-/obj/item/device/aicard/attack(mob/living/silicon/decoy/M, mob/user)
-	if (!istype (M, /mob/living/silicon/decoy))
-		return ..()
+/obj/item/aicard/Initialize(mapload)
+	. = ..()
+	if(mapload && HAS_TRAIT(SSstation, STATION_TRAIT_HUMAN_AI))
+		return INITIALIZE_HINT_QDEL
+	ADD_TRAIT(src, TRAIT_CASTABLE_LOC, INNATE_TRAIT)
+
+/obj/item/aicard/Destroy(force)
+	if(AI)
+		AI.ghostize(can_reenter_corpse = FALSE)
+		QDEL_NULL(AI)
+
+	return ..()
+
+/obj/item/aicard/aitater
+	name = "intelliTater"
+	desc = "A stylish upgrade (?) to the intelliCard."
+	icon_state = "aitater"
+	base_icon_state = "aitater"
+
+/obj/item/aicard/aispook
+	name = "intelliLantern"
+	desc = "A spoOoOoky upgrade to the intelliCard."
+	icon_state = "aispook"
+	base_icon_state = "aispook"
+
+/obj/item/aicard/suicide_act(mob/living/user)
+	user.visible_message(span_suicide("[user] is trying to upload [user.p_them()]self into [src]! That's not going to work out well!"))
+	return BRUTELOSS
+
+/obj/item/aicard/interact_with_atom(atom/interacting_with, mob/living/user, list/modifiers)
+	if(AI)
+		if(upload_ai(interacting_with, user))
+			return ITEM_INTERACT_SUCCESS
 	else
-		M.death()
-		to_chat(user, "<b>ERROR ERROR ERROR</b>")
+		if(capture_ai(interacting_with, user))
+			return ITEM_INTERACT_SUCCESS
 
-/obj/item/device/aicard/attack_self(mob/user)
+	return NONE
 
-	nano_ui_interact(user)
+/// Tries to get an AI from the atom clicked
+/obj/item/aicard/proc/capture_ai(atom/from_what, mob/living/user)
+	from_what.transfer_ai(AI_TRANS_TO_CARD, user, null, src)
+	if(isnull(AI))
+		return FALSE
 
-/obj/item/device/aicard/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state =GLOB.inventory_state)
-	var/data[0]
-	data["has_ai"] = carded_ai != null
-	if(carded_ai)
-		data["name"] = carded_ai.name
-		data["hardware_integrity"] = carded_ai.hardware_integrity()
-		data["backup_capacitor"] = carded_ai.backup_capacitor()
-		data["radio"] = !carded_ai.aiRadio.disabledAi
-		data["wireless"] = !carded_ai.control_disabled
-		data["operational"] = carded_ai.stat != DEAD
-		data["flushing"] = flush
+	log_silicon("[key_name(user)] carded [key_name(AI)]", list(src))
+	update_appearance()
+	AI.cancel_camera()
+	RegisterSignal(AI, COMSIG_MOB_STATCHANGE, PROC_REF(on_ai_stat_change))
+	return TRUE
 
-		var/laws[0]
-		for(var/datum/ai_law/AL in carded_ai.laws.all_laws())
-			laws[++laws.len] = list("index" = AL.get_index(), "law" = sanitize(AL.law))
-		data["laws"] = laws
-		data["has_laws"] = laws.len
+/// Tries to upload the AI we have captured to the atom clicked
+/obj/item/aicard/proc/upload_ai(atom/to_what, mob/living/user)
+	var/mob/living/silicon/ai/old_ai = AI
+	to_what.transfer_ai(AI_TRANS_FROM_CARD, user, AI, src)
+	if(!isnull(AI))
+		return FALSE
 
-	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
-	if (!ui)
-		ui = new(user, src, ui_key, "aicard.tmpl", "[name]", 600, 400, state = state)
-		ui.set_initial_data(data)
-		ui.open()
-		ui.set_auto_update(1)
+	log_combat(user, old_ai, "uploaded", src, "to [to_what].")
+	update_appearance()
+	old_ai.cancel_camera()
+	UnregisterSignal(old_ai, COMSIG_MOB_STATCHANGE)
+	return TRUE
 
-/obj/item/device/aicard/Topic(href, href_list, state)
-	if(..())
-		return 1
+/obj/item/aicard/proc/on_ai_stat_change(datum/source, new_stat, old_stat)
+	SIGNAL_HANDLER
 
-	if(!carded_ai)
-		return 1
+	if(new_stat == DEAD || old_stat == DEAD)
+		update_appearance()
 
-	var/user = usr
-	if (href_list["wipe"])
-		var/confirm = alert("Are you sure you want to wipe this card's memory? This cannot be undone once started.", "Confirm Wipe", "Yes", "No")
-		if(confirm == "Yes" && (CanUseTopic(user, state) == STATUS_INTERACTIVE))
-			admin_attack_log(user, carded_ai, "Wiped using \the [src.name]", "Was wiped with \the [src.name]", "used \the [src.name] to wipe")
-			flush = 1
-			to_chat(carded_ai, "Your core files are being wiped!")
-			while (carded_ai && carded_ai.stat != DEAD)
-				carded_ai.adjustOxyLoss(2)
-				carded_ai.updatehealth()
-				sleep(10)
-			flush = 0
-	if (href_list["radio"])
-		carded_ai.aiRadio.disabledAi = text2num(href_list["radio"])
-		to_chat(carded_ai, "<span class='warning'>Your Subspace Transceiver has been [carded_ai.aiRadio.disabledAi ? "disabled" : "enabled"]!</span>")
-		to_chat(user, "<span class='notice'>You [carded_ai.aiRadio.disabledAi ? "disable" : "enable"] the AI's Subspace Transceiver.</span>")
-	if (href_list["wireless"])
-		carded_ai.control_disabled = text2num(href_list["wireless"])
-		to_chat(carded_ai, "<span class='warning'>Your wireless interface has been [carded_ai.control_disabled ? "disabled" : "enabled"]!</span>")
-		to_chat(user, "<span class='notice'>You [carded_ai.control_disabled ? "disable" : "enable"] the AI's wireless interface.</span>")
-		update_icon()
-	return 1
-
-/obj/item/device/aicard/update_icon()
-	overlays.Cut()
-	if(carded_ai)
-		if (!carded_ai.control_disabled)
-			overlays += image('icons/obj/pda.dmi', "aicard-on")
-		if(carded_ai.stat)
-			icon_state = "aicard-404"
-		else
-			icon_state = "aicard-full"
+/obj/item/aicard/update_name(updates)
+	. = ..()
+	if(AI)
+		name = "[initial(name)] - [AI.name]"
 	else
-		icon_state = "aicard"
+		name = initial(name)
 
-/obj/item/device/aicard/proc/grab_ai(var/mob/living/silicon/ai/ai, var/mob/living/user)
-	if(!ai.client)
-		to_chat(user, "<span class='danger'>ERROR:</span> AI [ai.name] is offline. Unable to download.")
-		return 0
+/obj/item/aicard/update_icon_state()
+	if(AI)
+		icon_state = "[base_icon_state][AI.stat == DEAD ? "-404" : "-full"]"
+	else
+		icon_state = base_icon_state
+	return ..()
 
-	if(carded_ai)
-		to_chat(user, "<span class='danger'>Transfer failed:</span> Existing AI found on remote terminal. Remove existing AI to install a new one.")
-		return 0
-
-	if(ai.malfunctioning)
-		to_chat(user, "<span class='danger'>ERROR:</span> Remote transfer interface disabled.")
-		return 0
-
-	if(istype(ai.loc, /turf/))
-		new /obj/structure/AIcore/deactivated(get_turf(ai))
-
-	ai.carded = 1
-	admin_attack_log(user, ai, "Carded with [src.name]", "Was carded with [src.name]", "used the [src.name] to card")
-	src.name = "[initial(name)] - [ai.name]"
-
-	ai.forceMove(src)
-	ai.destroy_eyeobj(src)
-	ai.cancel_camera()
-	ai.control_disabled = 1
-	ai.aiRestorePowerRoutine = 0
-	carded_ai = ai
-
-	if(ai.client)
-		to_chat(ai, "You have been downloaded to a mobile storage device. Remote access lost.")
-	if(user.client)
-		to_chat(user, "<span class='notice'><b>Transfer successful:</b></span> [ai.name] ([rand(1000,9999)].exe) removed from host terminal and stored within local memory.")
-
-	ai.canmove = 1
-	update_icon()
-	return 1
-
-/obj/item/device/aicard/proc/clear()
-	if(carded_ai && istype(carded_ai.loc, /turf))
-		carded_ai.canmove = 0
-		carded_ai.carded = 0
-	name = initial(name)
-	carded_ai = null
-	update_icon()
-
-/obj/item/device/aicard/see_emote(mob/living/M, text)
-	if(carded_ai && carded_ai.client)
-		var/rendered = "<span class='message'>[text]</span>"
-		carded_ai.show_message(rendered, 2)
-	..()
-
-/obj/item/device/aicard/show_message(msg, type, alt, alt_type)
-	if(carded_ai && carded_ai.client)
-		var/rendered = "<span class='message'>[msg]</span>"
-		carded_ai.show_message(rendered, type)
-	..()
-
-/obj/item/device/aicard/relaymove(var/mob/user, var/direction)
-	if(user.stat || user.stunned)
+/obj/item/aicard/update_overlays()
+	. = ..()
+	if(!AI?.control_disabled)
 		return
-	var/obj/item/rig/rig = src.get_rig()
-	if(istype(rig))
-		rig.forced_move(direction, user)
+	. += "[base_icon_state]-on"
+
+/obj/item/aicard/ui_state(mob/user)
+	return GLOB.hands_state
+
+/obj/item/aicard/ui_interact(mob/user, datum/tgui/ui)
+	ui = SStgui.try_update_ui(user, src, ui)
+	if(!ui)
+		ui = new(user, src, "Intellicard", name)
+		ui.open()
+
+/obj/item/aicard/ui_data()
+	var/list/data = list()
+	if(AI)
+		data["name"] = AI.name
+		data["laws"] = AI.laws.get_law_list(include_zeroth = TRUE, render_html = FALSE)
+		data["health"] = (AI.health + 100) / 2
+		data["wireless"] = !AI.control_disabled //todo disabled->enabled
+		data["radio"] = AI.radio_enabled
+		data["isDead"] = AI.stat == DEAD
+		data["isBraindead"] = AI.client ? FALSE : TRUE
+	data["wiping"] = flush
+	return data
+
+/obj/item/aicard/ui_act(action,params)
+	. = ..()
+	if(.)
+		return
+	switch(action)
+		if("wipe")
+			if(flush)
+				flush = FALSE
+			else
+				var/confirm = tgui_alert(usr, "Are you sure you want to wipe this card's memory?", name, list("Yes", "No"))
+				if(confirm == "Yes" && !..())
+					flush = TRUE
+					wipe_ai()
+			. = TRUE
+		if("wireless")
+			AI.control_disabled = !AI.control_disabled
+			to_chat(AI, span_warning("[src]'s wireless port has been [AI.control_disabled ? "disabled" : "enabled"]!"))
+			. = TRUE
+		if("radio")
+			AI.radio_enabled = !AI.radio_enabled
+			to_chat(AI, span_warning("Your Subspace Transceiver has been [AI.radio_enabled ? "enabled" : "disabled"]!"))
+			. = TRUE
+	update_appearance()
+
+/obj/item/aicard/proc/wipe_ai()
+	set waitfor = FALSE
+
+	if(AI && AI.loc == src)
+		to_chat(AI, span_userdanger("Your core files are being wiped!"))
+		while(AI.stat != DEAD && flush)
+			AI.adjustOxyLoss(5)
+			AI.updatehealth()
+			sleep(0.5 SECONDS)
+		flush = FALSE

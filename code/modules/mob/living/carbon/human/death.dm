@@ -1,107 +1,71 @@
-/mob/living/carbon/human/gib(max_range=3, keep_only_robotics=FALSE)
+GLOBAL_LIST_EMPTY(dead_players_during_shift)
+/mob/living/carbon/human/gib_animation()
+	new /obj/effect/temp_visual/gib_animation(loc, dna.species.gib_anim)
 
-	var/on_turf = istype(loc, /turf)
-
-	for(var/obj/item/organ/I in internal_organs)
-		if (!(keep_only_robotics && !(I.nature == MODIFICATION_SILICON)))
-			I.removed()
-			if(on_turf)
-				I.throw_at(get_edge_target_turf(src,pick(alldirs)),rand(1,max_range),30)
-
-	for(var/obj/item/organ/external/E in src.organs)
-		if (!(keep_only_robotics && !(E.nature == MODIFICATION_SILICON)))
-			E.droplimb(TRUE, DROPLIMB_EDGE, 1)
-			if(on_turf)
-				E.throw_at(get_edge_target_turf(src,pick(alldirs)),rand(1,max_range),30)
-
-	for(var/obj/item/D in src)
-		if (keep_only_robotics && istype(D, /obj/item/organ))
-			continue
-		else
-			drop_from_inventory(D)
-			D.throw_at(get_edge_target_turf(src,pick(alldirs)), rand(1,max_range), round(30/D.w_class))
-
-	..(species.gibbed_anim)
-	gibs(loc, src, null, species.flesh_color, species.blood_color)
-
-/mob/living/carbon/human/dust()
-	if(species)
-		..(species.dusted_anim, species.remains_type)
+/mob/living/carbon/human/spawn_gibs(drop_bitflags=NONE)
+	if(flags_1 & HOLOGRAM_1)
+		return
+	if(drop_bitflags & DROP_BODYPARTS)
+		new /obj/effect/gibspawner/human(drop_location(), src, get_static_viruses())
 	else
-		..()
+		new /obj/effect/gibspawner/human/bodypartless(drop_location(), src, get_static_viruses())
+
+/mob/living/carbon/human/spawn_dust(just_ash)
+	if(just_ash)
+		return ..()
+
+	var/bone_type = /obj/effect/decal/remains/human
+	if(isplasmaman(src))
+		bone_type = /obj/effect/decal/remains/plasma
+
+	var/obj/effect/decal/remains/human/bones = new bone_type(loc)
+	bones.pixel_z = -6
+	bones.pixel_w = rand(-1, 1)
 
 /mob/living/carbon/human/death(gibbed)
-	if(stat == DEAD) return
+	if(stat == DEAD)
+		return
+	stop_sound_channel(CHANNEL_HEARTBEAT)
+	var/obj/item/organ/heart/human_heart = get_organ_slot(ORGAN_SLOT_HEART)
+	human_heart?.beat = BEAT_NONE
+	human_heart?.Stop()
 
-	BITSET(hud_updateflag, HEALTH_HUD)
-	BITSET(hud_updateflag, STATUS_HUD)
-	BITSET(hud_updateflag, LIFE_HUD)
+	. = ..()
 
-	//Handle species-specific deaths.
-	species.handle_death(src)
+	if(client && !HAS_TRAIT(src, TRAIT_SUICIDED) && !(client in GLOB.dead_players_during_shift))
+		GLOB.dead_players_during_shift += client
 
-	callHook("death", list(src, gibbed))
+	if(SSticker.HasRoundStarted())
+		SSblackbox.ReportDeath(src)
+		log_message("has died (BRUTE: [src.getBruteLoss()], BURN: [src.getFireLoss()], TOX: [src.getToxLoss()], OXY: [src.getOxyLoss()]", LOG_ATTACK)
+		if(key) // Prevents log spamming of keyless mob deaths (like xenobio monkeys)
+			investigate_log("has died at [loc_name(src)].<br>\
+				BRUTE: [src.getBruteLoss()] BURN: [src.getFireLoss()] TOX: [src.getToxLoss()] OXY: [src.getOxyLoss()] STAM: [src.getStaminaLoss()]<br>\
+				<b>Brain damage</b>: [src.get_organ_loss(ORGAN_SLOT_BRAIN) || "0"]<br>\
+				<b>Blood volume</b>: [src.blood_volume]cl ([round((src.blood_volume / BLOOD_VOLUME_NORMAL) * 100, 0.1)]%)<br>\
+				<b>Reagents</b>:<br>[reagents_readout()]", INVESTIGATE_DEATHS)
+	to_chat(src, span_warning("You have died. Barring complete bodyloss, you can in most cases be revived by other players. If you do not wish to be brought back, use the \"Do Not Resuscitate\" verb in the ghost tab."))
 
-	if(wearing_rig)
-		wearing_rig.notify_ai(
-			SPAN_DANGER("Warning: user death event. Mobility control passed to integrated intelligence system.")
-		)
-	var/message = species.death_message
-	if(stats.getPerk(PERK_TERRIBLE_FATE))
-		message = "their inert body emits a strange sensation and a cold invades your body. Their screams before dying recount in your mind."
-	. = ..(gibbed,message)
-	if(!gibbed)
-		dizziness = 0
-		jitteriness = 0
-		handle_organs()
-		dead_HUD()
-		if(species.death_sound)
-			mob_playsound(loc, species.death_sound, 80, 1, 1)
-	handle_hud_list()
+/mob/living/carbon/human/proc/reagents_readout()
+	var/readout = "Blood:"
+	for(var/datum/reagent/reagent in reagents?.reagent_list)
+		readout += "<br>[round(reagent.volume, 0.001)] units of [reagent.name]"
 
-	var/obj/item/implant/core_implant/cruciform/C = get_core_implant(/obj/item/implant/core_implant/cruciform)
-	if(C && C.active)
-		lost_cruciforms |= C
-		var/obj/item/cruciform_upgrade/upgrade = C.upgrade
-		if(upgrade && upgrade.active && istype(upgrade, CUPGRADE_MARTYR_GIFT))
-			var/obj/item/cruciform_upgrade/martyr_gift/martyr = upgrade
-			visible_message(SPAN_DANGER("The [C] emit a massive light!"))
-			var/burn_damage_done
-			for(var/mob/living/L in oviewers(6, src))
-				if(ishuman(L))
-					var/mob/living/carbon/human/H = L
-					if(H in disciples)
-						continue
-					else if (H.random_organ_by_process(BP_SPCORE) || H.active_mutations.len)
-						burn_damage_done = (martyr.burn_damage / get_dist(src, H)) * 2
-						H.adjustFireLoss(burn_damage_done)
-					else
-						burn_damage_done = martyr.burn_damage / get_dist(src, H)
-						H.adjustFireLoss(burn_damage_done)
-					to_chat(H, SPAN_DANGER("You are get hurt by holy light!"))
-				else
-					burn_damage_done = martyr.burn_damage / get_dist(src, L)
-					L.damage_through_armor(burn_damage_done, BURN)
+	readout += "<br>Stomach:"
+	var/obj/item/organ/stomach/belly = get_organ_slot(ORGAN_SLOT_STOMACH)
+	for(var/datum/reagent/bile in belly?.reagents?.reagent_list)
+		if(!belly.food_reagents[bile.type])
+			readout += "<br>[round(bile.volume, 0.001)] units of [bile.name]"
 
-			qdel(martyr)
-			C.upgrade = null
+	return readout
 
+/mob/living/carbon/human/proc/makeSkeleton()
+	ADD_TRAIT(src, TRAIT_DISFIGURED, TRAIT_GENERIC)
+	set_species(/datum/species/skeleton)
+	return TRUE
 
-/mob/living/carbon/human/proc/ChangeToHusk()
-//	if(HUSK in mutations)	return
-
-	if(f_style)
-		f_style = "Shaved"	//we only change the icon_state of the hair datum, so it doesn't mess up their UI/UE
-	if(h_style)
-		h_style = "Bald"
-	update_hair(0)
-
-//	mutations.Add(HUSK)
-	status_flags |= DISFIGURED	//makes them unknown without fucking up other stuff like admintools
-	update_body(1)
-	return
-
-/mob/living/carbon/human/proc/Drain()
-	ChangeToHusk()
-	return
-
+/mob/living/carbon/proc/Drain()
+	become_husk(CHANGELING_DRAIN)
+	ADD_TRAIT(src, TRAIT_BADDNA, CHANGELING_DRAIN)
+	blood_volume = 0
+	return TRUE

@@ -1,5 +1,3 @@
-import { BooleanLike } from 'common/react';
-import { useBackend } from '../backend';
 import {
   Box,
   Button,
@@ -7,7 +5,10 @@ import {
   NoticeBox,
   ProgressBar,
   Section,
-} from '../components';
+} from 'tgui-core/components';
+import { BooleanLike } from 'tgui-core/react';
+
+import { useBackend } from '../backend';
 import { Window } from '../layouts';
 
 type Data = {
@@ -31,8 +32,8 @@ export const AiRestorer = () => {
   );
 };
 
-export const AiRestorerContent = (props, context) => {
-  const { act, data } = useBackend<Data>(context);
+export const AiRestorerContent = (props) => {
+  const { act, data } = useBackend<Data>();
   const {
     AI_present,
     error,

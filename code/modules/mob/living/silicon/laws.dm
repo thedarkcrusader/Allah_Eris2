@@ -1,114 +1,118 @@
-/mob/living/silicon
-	var/datum/ai_laws/laws = null
-	var/list/additional_law_channels = list("State" = "")
+/mob/living/silicon/proc/show_laws()
+	laws_sanity_check()
+	var/list/law_box = list(span_bold("Obey these laws:"))
+	law_box += laws.get_law_list(include_zeroth = TRUE)
+	to_chat(src, boxed_message(jointext(law_box, "\n")))
+
+/mob/living/silicon/proc/try_sync_laws()
+	return
 
 /mob/living/silicon/proc/laws_sanity_check()
-	if (!src.laws)
-		laws = new base_law_type
+	if (!laws)
+		make_laws()
 
-/mob/living/silicon/proc/has_zeroth_law()
-	return laws.zeroth_law != null
+/mob/living/silicon/proc/log_current_laws()
+	var/list/the_laws = laws.get_law_list(include_zeroth = TRUE)
+	var/lawtext = the_laws.Join(" ")
+	log_silicon("LAW: [key_name(src)] spawned with [lawtext]")
 
-/mob/living/silicon/proc/set_zeroth_law(var/law, var/law_borg)
+/mob/living/silicon/proc/deadchat_lawchange()
+	var/list/the_laws = laws.get_law_list(include_zeroth = TRUE)
+	var/lawtext = the_laws.Join("<br/>")
+	deadchat_broadcast("'s <b>laws were changed.</b> <a href='byond://?src=[REF(src)]&dead=1&printlawtext=[url_encode(lawtext)]'>View</a>", span_name("[src]"), follow_target=src, message_type=DEADCHAT_LAWCHANGE)
+
+/mob/living/silicon/proc/post_lawchange(announce = TRUE)
+	throw_alert(ALERT_NEW_LAW, /atom/movable/screen/alert/newlaw)
+	if(announce && last_lawchange_announce != world.time)
+		to_chat(src, span_bolddanger("Your laws have been changed."))
+		SEND_SOUND(src, sound('sound/machines/cryo_warning.ogg'))
+		// lawset modules cause this function to be executed multiple times in a tick, so we wait for the next tick in order to be able to see the entire lawset
+		addtimer(CALLBACK(src, PROC_REF(show_laws)), 0)
+		addtimer(CALLBACK(src, PROC_REF(deadchat_lawchange)), 0)
+		last_lawchange_announce = world.time
+
+/mob/living/silicon/proc/set_zeroth_law(law, law_borg, announce = TRUE)
 	laws_sanity_check()
 	laws.set_zeroth_law(law, law_borg)
-	log_law("has given [src] the zeroth law: '[law]'[law_borg ? " / '[law_borg]'" : ""]")
+	post_lawchange(announce)
 
-/mob/living/silicon/robot/set_zeroth_law(var/law, var/law_borg)
-	..()
-	if(tracking_entities)
-		to_chat(src, SPAN_WARNING("Internal camera is currently being accessed."))
-
-/mob/living/silicon/proc/add_ion_law(var/law)
-	laws_sanity_check()
-	laws.add_ion_law(law)
-	log_law("has given [src] the ion law: [law]")
-
-/mob/living/silicon/proc/add_inherent_law(var/law)
+/mob/living/silicon/proc/add_inherent_law(law, announce = TRUE)
 	laws_sanity_check()
 	laws.add_inherent_law(law)
-	log_law("has given [src] the inherent law: [law]")
+	lawcheck += law
+	post_lawchange(announce)
 
-/mob/living/silicon/proc/add_supplied_law(var/number, var/law)
+/mob/living/silicon/proc/clear_inherent_laws(announce = TRUE)
+	laws_sanity_check()
+	for (var/law in laws.inherent)
+		if (law in lawcheck)
+			lawcheck -= law
+	laws.clear_inherent_laws()
+	post_lawchange(announce)
+
+/mob/living/silicon/proc/add_supplied_law(number, law, announce = TRUE)
 	laws_sanity_check()
 	laws.add_supplied_law(number, law)
-	log_law("has given [src] the supplied law: [law]")
+	lawcheck += law
+	post_lawchange(announce)
 
-/mob/living/silicon/proc/delete_law(var/datum/ai_law/law)
+/mob/living/silicon/proc/clear_supplied_laws(announce = TRUE)
 	laws_sanity_check()
-	laws.delete_law(law)
-	log_law("has deleted a law belonging to [src]: [law.law]")
+	for(var/law in laws.supplied)
+		if (law in lawcheck)
+			lawcheck -= law
+	laws.clear_supplied_laws()
+	post_lawchange(announce)
 
-/mob/living/silicon/proc/clear_inherent_laws(var/silent = 0)
+/mob/living/silicon/proc/add_ion_law(law, announce = TRUE)
 	laws_sanity_check()
-	laws.clear_inherent_laws()
-	if(!silent)
-		log_law("cleared the inherent laws of [src]")
+	laws.add_ion_law(law)
+	ioncheck += law
+	post_lawchange(announce)
 
-/mob/living/silicon/proc/clear_ion_laws(var/silent = 0)
+/mob/living/silicon/proc/add_hacked_law(law, announce = TRUE)
+	laws_sanity_check()
+	laws.add_hacked_law(law)
+	hackedcheck += law
+	post_lawchange(announce)
+
+/mob/living/silicon/proc/replace_random_law(law, remove_law_groups, insert_law_group, announce = TRUE)
+	laws_sanity_check()
+	. = laws.replace_random_law(law, remove_law_groups, insert_law_group)
+	post_lawchange(announce)
+
+/mob/living/silicon/proc/shuffle_laws(list/groups, announce = TRUE)
+	laws_sanity_check()
+	laws.shuffle_laws(groups)
+	post_lawchange(announce)
+
+/mob/living/silicon/proc/remove_law(number, announce = TRUE)
+	laws_sanity_check()
+	. = laws.remove_law(number)
+	if (. in lawcheck)
+		lawcheck -= .
+	post_lawchange(announce)
+
+/mob/living/silicon/proc/clear_ion_laws(announce = TRUE)
 	laws_sanity_check()
 	laws.clear_ion_laws()
-	if(!silent)
-		log_law("cleared the ion laws of [src]")
+	ioncheck = list()
+	post_lawchange(announce)
 
-/mob/living/silicon/proc/clear_supplied_laws(var/silent = 0)
+/mob/living/silicon/proc/clear_hacked_laws(announce = TRUE)
 	laws_sanity_check()
-	laws.clear_supplied_laws()
-	if(!silent)
-		log_law("cleared the supplied laws of [src]")
+	laws.clear_hacked_laws()
+	hackedcheck = list()
+	post_lawchange(announce)
 
-/mob/living/silicon/proc/statelaws(var/datum/ai_laws/laws)
-	var/prefix = ""
-	switch(lawchannel)
-		if(MAIN_CHANNEL)
-			prefix = ";"
-		if("Binary")
-			prefix = "[get_language_prefix()]b"
-		else
-			if((lawchannel in additional_law_channels))
-				prefix = ":" + additional_law_channels[lawchannel]
-			else
-				prefix = ":" + get_radio_key_from_channel(lawchannel)
+/mob/living/silicon/proc/make_laws()
+	laws = new /datum/ai_laws
+	laws.set_laws_config()
+	laws.associate(src)
 
-	dostatelaws(lawchannel, prefix, laws)
-
-/mob/living/silicon/proc/dostatelaws(var/method, var/prefix, var/datum/ai_laws/laws)
-	if(stating_laws[prefix])
-		to_chat(src, SPAN_NOTICE("[method]: Already stating laws using this communication method."))
-		return
-
-	stating_laws[prefix] = 1
-
-	var/can_state = statelaw("[prefix] Current Active Laws:")
-
-	for(var/datum/ai_law/law in laws.laws_to_state())
-		can_state = statelaw("[prefix][law.get_index()]. [law.law]")
-		if(!can_state)
-			break
-
-	if(!can_state)
-		to_chat(src, SPAN_DANGER("[method]: Unable to state laws. Communication method unavailable."))
-	stating_laws[prefix] = 0
-
-/mob/living/silicon/proc/statelaw(var/law)
-	if(src.say(law))
-		sleep(10)
-		return 1
-
-	return 0
-
-/mob/living/silicon/proc/law_channels()
-	var/list/channels = new()
-	channels += MAIN_CHANNEL
-	channels += common_radio.channels
-	channels += additional_law_channels
-	channels += "Binary"
-	return channels
-
-/mob/living/silicon/proc/lawsync()
+/mob/living/silicon/proc/clear_zeroth_law(force, announce = TRUE)
 	laws_sanity_check()
-	laws.sort_laws()
-
-/mob/living/silicon/proc/log_law(var/law_message)
-	log_and_message_admins(law_message)
-	lawchanges += "[stationtime2text()] - [usr ? "[key_name(usr)]" : "EVENT"] [law_message]"
+	var/zeroth = laws.zeroth
+	if(laws.clear_zeroth_law(force))
+		lawcheck -= zeroth
+	post_lawchange(announce)

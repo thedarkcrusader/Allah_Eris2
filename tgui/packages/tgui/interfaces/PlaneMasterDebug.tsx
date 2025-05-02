@@ -1,24 +1,25 @@
-import { useBackend, useLocalState } from '../backend';
+import { sortBy } from 'common/collections';
+import { Component, createRef, RefObject } from 'react';
 import {
-  InfinitePlane,
-  Stack,
   Box,
   Button,
-  Modal,
   Dropdown,
-  Section,
+  InfinitePlane,
   LabeledList,
-  Tooltip,
+  Modal,
+  Section,
   Slider,
-} from '../components';
-import { sortBy } from 'common/collections';
-import { flow } from 'common/fp';
-import { classes, shallowDiffers } from 'common/react';
-import { Component, createRef, RefObject } from 'inferno';
-import { Window } from '../layouts';
+  Stack,
+  Tooltip,
+} from 'tgui-core/components';
+import { flow } from 'tgui-core/fp';
+import { classes, shallowDiffers } from 'tgui-core/react';
+
 import { resolveAsset } from '../assets';
+import { useBackend, useLocalState } from '../backend';
+import { Window } from '../layouts';
+import { Connection, Connections, Position } from './common/Connections';
 import { MOUSE_BUTTON_LEFT, noop } from './IntegratedCircuit/constants';
-import { Connections } from './IntegratedCircuit/Connections';
 
 enum ConnectionType {
   Relay,
@@ -109,18 +110,6 @@ interface AssocString {
   [index: string]: string;
 }
 
-type Position = {
-  x: number;
-  y: number;
-};
-
-type Connection = {
-  color: string;
-  from: Position;
-  to: Position;
-  ref: string;
-};
-
 type PlaneDebugData = {
   our_group: string;
   present_groups: string[];
@@ -136,15 +125,14 @@ type PlaneDebugData = {
 };
 
 // Stolen wholesale from fontcode
-const textWidth = (text, font, fontsize) => {
+function textWidth(text: string, font: string, fontsize: number) {
   // default font height is 12 in tgui
   font = fontsize + 'x ' + font;
   const c = document.createElement('canvas');
-  const ctx = c.getContext('2d') as any;
+  const ctx = c.getContext('2d') as CanvasRenderingContext2D;
   ctx.font = font;
-  const width = ctx.measureText(text).width;
-  return width;
-};
+  return ctx.measureText(text).width;
+}
 
 const planeToPosition = function (plane: Plane, index, is_incoming): Position {
   return {
@@ -170,7 +158,7 @@ const sortConnectionRefs = function (
   direction: ConnectionDirection,
   connectSources: AssocConnected,
 ) {
-  refs = sortBy((connection: ConnectionRef) => connection.sort_by)(refs);
+  refs = sortBy(refs, (connection: ConnectionRef) => connection.sort_by);
   refs.map((connection, index) => {
     let connectSource = connectSources[connection.ref];
     if (direction === ConnectionDirection.Outgoing) {
@@ -206,8 +194,8 @@ const addConnectionRefs = function (
 };
 
 // Takes a list of planes, uses the depth stack to position them
-const positionPlanes = function (context, connectSources: AssocConnected) {
-  const { data } = useBackend<PlaneDebugData>(context);
+const positionPlanes = (connectSources: AssocConnected) => {
+  const { data } = useBackend<PlaneDebugData>();
   const { plane_info, relay_info, filter_connect, depth_stack } = data;
 
   // First, we concatinate our connection sources
@@ -276,14 +264,15 @@ const positionPlanes = function (context, connectSources: AssocConnected) {
   // and get rid of the now unneeded parent refs
   const stack = depth_stack.map((layer) =>
     flow([
-      sortBy((plane: string) => plane_info[plane].plane),
-      sortBy((plane: string) => {
-        const read_from = plane_info[layer[plane]];
-        if (!read_from) {
-          return 0;
-        }
-        return read_from.plane;
-      }),
+      (planes) => sortBy(planes, (plane: string) => plane_info[plane].plane),
+      (planes) =>
+        sortBy(planes, (plane: string) => {
+          const read_from = plane_info[layer[plane]];
+          if (!read_from) {
+            return 0;
+          }
+          return read_from.plane;
+        }),
     ])(Object.keys(layer)),
   );
 
@@ -339,8 +328,8 @@ const arrayRemove = function (arr: any, value) {
 };
 
 export class PlaneMasterDebug extends Component {
-  constructor() {
-    super();
+  constructor(props) {
+    super(props);
     this.handlePortClick = this.handlePortClick.bind(this);
   }
 
@@ -348,7 +337,7 @@ export class PlaneMasterDebug extends Component {
     if (event.button !== MOUSE_BUTTON_LEFT) {
       return;
     }
-    const { act, data } = useBackend<PlaneDebugData>(this.context);
+    const { act, data } = useBackend<PlaneDebugData>();
     const { plane_info } = data;
 
     event.preventDefault();
@@ -389,17 +378,16 @@ export class PlaneMasterDebug extends Component {
   }
 
   render() {
-    const { act, data } = useBackend<PlaneDebugData>(this.context);
+    const { act, data } = useBackend<PlaneDebugData>();
     const { plane_info, mob_name } = data;
-    const [showAdd, setShowAdd] = useLocalState(this.context, 'showAdd', false);
+    const [showAdd, setShowAdd] = useLocalState('showAdd', false);
 
     const [connectSources, setConnectSouces] = useLocalState<AssocConnected>(
-      this.context,
       'connectionSources',
       {},
     );
 
-    positionPlanes(this.context, connectSources);
+    positionPlanes(connectSources);
 
     const connections: Connection[] = [];
 
@@ -419,7 +407,7 @@ export class PlaneMasterDebug extends Component {
       <Window width={1200} height={800} title={'Plane Debugging: ' + mob_name}>
         <Window.Content
           style={{
-            'background-image': 'none',
+            backgroundImage: 'none',
           }}
         >
           <InfinitePlane
@@ -490,17 +478,9 @@ class PlaneMaster extends Component<PlaneMasterProps> {
       act = noop,
       ...rest
     } = this.props as PlaneMasterProps;
-    const [showAdd, setShowAdd] = useLocalState(this.context, 'showAdd', false);
-    const [currentPlane, setCurrentPlane] = useLocalState(
-      this.context,
-      'currentPlane',
-      {},
-    );
-    const [readPlane, setReadPlane] = useLocalState(
-      this.context,
-      'readPlane',
-      '',
-    );
+    const [showAdd, setShowAdd] = useLocalState('showAdd', false);
+    const [currentPlane, setCurrentPlane] = useLocalState('currentPlane', {});
+    const [readPlane, setReadPlane] = useLocalState('readPlane', '');
 
     // Assigned onto the ports
     const PortOptions = {
@@ -528,7 +508,6 @@ class PlaneMaster extends Component<PlaneMasterProps> {
               ? 'ObjectComponent__Greyed_Content'
               : 'ObjectComponent__Content'
           }
-          unselectable="on"
           py={1}
           px={1}
         >
@@ -591,8 +570,8 @@ class Port extends Component<PortProps> {
   // But it's how it was being done in circuit code, so eh
   iconRef: RefObject<SVGCircleElement> | RefObject<HTMLSpanElement> | any;
 
-  constructor() {
-    super();
+  constructor(props) {
+    super(props);
     this.iconRef = createRef();
     this.handlePortMouseDown = this.handlePortMouseDown.bind(this);
   }
@@ -653,12 +632,12 @@ class Port extends Component<PortProps> {
   }
 }
 
-const DrawAbovePlane = (props, context) => {
-  const [showAdd, setShowAdd] = useLocalState(context, 'showAdd', false);
-  const [showInfo, setShowInfo] = useLocalState(context, 'showInfo', false);
-  const [readPlane, setReadPlane] = useLocalState(context, 'readPlane', '');
+const DrawAbovePlane = (props) => {
+  const [showAdd, setShowAdd] = useLocalState('showAdd', false);
+  const [showInfo, setShowInfo] = useLocalState('showInfo', false);
+  const [readPlane, setReadPlane] = useLocalState('readPlane', '');
 
-  const { act, data } = useBackend<PlaneDebugData>(context);
+  const { act, data } = useBackend<PlaneDebugData>();
   // Plane groups don't use relays right now, because of a byond bug
   // This exists mostly so enabling viewing them is easy and simple
   const { enable_group_view } = data;
@@ -672,7 +651,7 @@ const DrawAbovePlane = (props, context) => {
           <MobResetButton />
           <ToggleMirror />
           <VVButton />
-          <RefreshButton />
+          <RebuildButton />
         </>
       )}
       {!!enable_group_view && <GroupDropdown />}
@@ -682,10 +661,10 @@ const DrawAbovePlane = (props, context) => {
   );
 };
 
-const PlaneWindow = (props, context) => {
-  const { data, act } = useBackend<PlaneDebugData>(context);
+const PlaneWindow = (props) => {
+  const { data, act } = useBackend<PlaneDebugData>();
   const { plane_info } = data;
-  const [readPlane, setReadPlane] = useLocalState(context, 'readPlane', '');
+  const [readPlane, setReadPlane] = useLocalState('readPlane', '');
 
   const workingPlane: Plane = plane_info[readPlane];
 
@@ -693,6 +672,13 @@ const PlaneWindow = (props, context) => {
   const doc_html = {
     __html: workingPlane.documentation,
   };
+
+  const setAlpha = (event, value) =>
+    act('set_alpha', {
+      edit: workingPlane.our_ref,
+      alpha: value,
+    });
+
   return (
     <Section
       top="27px"
@@ -709,7 +695,7 @@ const PlaneWindow = (props, context) => {
           <MobResetButton no_position />
           <ToggleMirror no_position />
           <VVButton no_position />
-          <RefreshButton no_position />
+          <RebuildButton no_position />
         </>
       }
     >
@@ -796,18 +782,8 @@ const PlaneWindow = (props, context) => {
           maxValue={255}
           step={1}
           stepPixelSize={1.9}
-          onDrag={(e, value) =>
-            act('set_alpha', {
-              edit: workingPlane.our_ref,
-              alpha: value,
-            })
-          }
-          onChange={(e, value) =>
-            act('set_alpha', {
-              edit: workingPlane.our_ref,
-              alpha: value,
-            })
-          }
+          onDrag={setAlpha}
+          onChange={setAlpha}
         >
           Alpha ({workingPlane.alpha})
         </Slider>
@@ -816,10 +792,10 @@ const PlaneWindow = (props, context) => {
   );
 };
 
-const InfoButton = (props, context) => {
-  const [showInfo, setShowInfo] = useLocalState(context, 'showInfo', false);
+const InfoButton = (props) => {
+  const [showInfo, setShowInfo] = useLocalState('showInfo', false);
   const { no_position } = props;
-  const foreign = has_foreign_mob(context);
+  const foreign = has_foreign_mob();
 
   return (
     <Button
@@ -833,10 +809,10 @@ const InfoButton = (props, context) => {
   );
 };
 
-const MobResetButton = (props, context): any => {
-  const { act } = useBackend(context);
+const MobResetButton = (props): any => {
+  const { act } = useBackend();
   const { no_position } = props;
-  if (!has_foreign_mob(context)) {
+  if (!has_foreign_mob()) {
     return;
   }
 
@@ -853,8 +829,8 @@ const MobResetButton = (props, context): any => {
   );
 };
 
-const ToggleMirror = (props, context) => {
-  const { act, data } = useBackend<PlaneDebugData>(context);
+const ToggleMirror = (props) => {
+  const { act, data } = useBackend<PlaneDebugData>();
   const { no_position } = props;
   const { tracking_active } = data;
 
@@ -874,14 +850,14 @@ const ToggleMirror = (props, context) => {
   );
 };
 
-const has_foreign_mob = function (context) {
-  const { data } = useBackend<PlaneDebugData>(context);
+const has_foreign_mob = () => {
+  const { data } = useBackend<PlaneDebugData>();
   const { mob_ref, our_ref } = data;
   return mob_ref !== our_ref;
 };
 
-const VVButton = (props, context) => {
-  const { act } = useBackend(context);
+const VVButton = (props) => {
+  const { act } = useBackend();
   const { no_position } = props;
 
   return (
@@ -896,8 +872,8 @@ const VVButton = (props, context) => {
   );
 };
 
-const GroupDropdown = (props, context) => {
-  const { act, data } = useBackend<PlaneDebugData>(context);
+const GroupDropdown = (props) => {
+  const { act, data } = useBackend<PlaneDebugData>();
   const { our_group, present_groups } = data;
 
   return (
@@ -909,7 +885,6 @@ const GroupDropdown = (props, context) => {
         <Dropdown
           options={present_groups}
           selected={our_group}
-          displayText={our_group}
           onSelected={(value) =>
             act('set_group', {
               target_group: value,
@@ -921,8 +896,8 @@ const GroupDropdown = (props, context) => {
   );
 };
 
-const RefreshButton = (props, context) => {
-  const { act } = useBackend(context);
+const RebuildButton = (props) => {
+  const { act } = useBackend();
   const { no_position } = props;
 
   return (
@@ -931,35 +906,33 @@ const RefreshButton = (props, context) => {
       right={no_position ? '' : '6px'}
       position={no_position ? '' : 'absolute'}
       icon="recycle"
-      onClick={() => act('refresh')}
-      tooltip="Refreshes ALL plane masters. Kinda laggy, but useful"
+      onClick={() => act('rebuild')}
+      tooltip="Rebuilds ALL plane masters. Kinda laggy, but useful"
     />
   );
 };
 
-const ClosePlaneWindow = (props, context) => {
-  const [readPlane, setReadPlane] = useLocalState(context, 'readPlane', '');
+const ClosePlaneWindow = (props) => {
+  const [readPlane, setReadPlane] = useLocalState('readPlane', '');
   return <Button icon="times" onClick={() => setReadPlane('')} />;
 };
 
-const AddModal = (props, context) => {
-  const { act, data } = useBackend<PlaneDebugData>(context);
+const AddModal = (props) => {
+  const { act, data } = useBackend<PlaneDebugData>();
   const { plane_info } = data;
 
-  const [showAdd, setShowAdd] = useLocalState(context, 'showAdd', false);
+  const [showAdd, setShowAdd] = useLocalState('showAdd', false);
   const [currentPlane, setCurrentPlane] = useLocalState<Plane>(
-    context,
     'currentPlane',
     {} as Plane,
   );
   const [currentTarget, setCurrentTarget] = useLocalState<Plane>(
-    context,
     'currentTarget',
     {} as Plane,
   );
 
   const plane_list = Object.keys(plane_info).map((plane) => plane_info[plane]);
-  const planes = sortBy((plane: Plane) => -plane.plane)(plane_list);
+  const planes = sortBy(plane_list, (plane: Plane) => -plane.plane);
 
   const plane_options = planes.map((plane) => plane.name);
 
@@ -1000,8 +973,8 @@ const AddModal = (props, context) => {
   );
 };
 
-const InfoModal = (props, context) => {
-  const [showInfo, setShowInfo] = useLocalState(context, 'showInfo', false);
+const InfoModal = (props) => {
+  const [showInfo, setShowInfo] = useLocalState('showInfo', false);
   const pain = '';
   const display = {
     __html: pain,

@@ -1,31 +1,75 @@
 /obj/effect/decal/cleanable/crayon
 	name = "rune"
-	desc = "A rune drawn in crayon."
-	icon = 'icons/obj/rune.dmi'
-	layer = TURF_DECAL_LAYER
-	anchored = TRUE
-	random_rotation = 0
+	desc = "Graffiti. Damn kids."
+	icon = 'icons/effects/crayondecal.dmi'
+	icon_state = "rune1"
+	gender = NEUTER
+	mergeable_decal = FALSE
+	flags_1 = ALLOW_DARK_PAINTS_1
+	var/do_icon_rotate = TRUE
+	var/rotation = 0
+	var/paint_colour = COLOR_WHITE
 
-	New(location,main = "#FFFFFF",shade = "#000000",var/type = "graffiti")
-		..()
-		loc = location
+/obj/effect/decal/cleanable/crayon/Initialize(mapload, main, type, e_name, graf_rot, alt_icon = null, desc_override = null)
+	. = ..()
+	if(isclosedturf(loc) && loc.density)
+		// allows for wall graffiti to be seen
+		SET_PLANE_IMPLICIT(src, GAME_PLANE)
+		layer = CLEANABLE_OBJECT_LAYER
+	if(e_name)
+		name = e_name
+	if(desc_override)
+		desc = "[desc_override]"
+	else
+		desc = "A [name] vandalizing the station."
+	if(alt_icon)
+		icon = alt_icon
+	if(type)
+		icon_state = type
+	if(graf_rot)
+		rotation = graf_rot
+	if(rotation && do_icon_rotate)
+		var/matrix/M = matrix()
+		M.Turn(rotation)
+		src.transform = M
+	if(main)
+		paint_colour = main
+	add_atom_colour(paint_colour, FIXED_COLOUR_PRIORITY)
+	RegisterSignal(src, COMSIG_OBJ_PAINTED, PROC_REF(on_painted))
 
-		name = type
-		desc = "A [type] drawn in crayon."
+/obj/effect/decal/cleanable/crayon/NeverShouldHaveComeHere(turf/here_turf)
+	return isgroundlessturf(here_turf)
 
-		switch(type)
-			if("rune")
-				type = "rune[rand(1,6)]"
-			if("graffiti")
-				type = pick("amyjon","face","matt","revolution","engie","guy","end","dwarf","uboa")
+/obj/effect/decal/cleanable/crayon/proc/on_painted(datum/source, mob/user, obj/item/toy/crayon/spraycan/spraycan, is_dark_color)
+	SIGNAL_HANDLER
+	var/cost = spraycan.all_drawables[icon_state] || CRAYON_COST_DEFAULT
+	if (HAS_TRAIT(user, TRAIT_TAGGER))
+		cost *= 0.5
+	spraycan.use_charges(user, cost, requires_full = FALSE)
+	return DONT_USE_SPRAYCAN_CHARGES
 
-		var/icon/mainOverlay = new/icon('icons/effects/crayondecal.dmi',"[type]",2.1)
-		var/icon/shadeOverlay = new/icon('icons/effects/crayondecal.dmi',"[type]s",2.1)
+///Common crayon decals in map.
+/obj/effect/decal/cleanable/crayon/rune4
+	icon_state = "rune4"
+	paint_colour = COLOR_CRAYON_RED
 
-		mainOverlay.Blend(main,ICON_ADD)
-		shadeOverlay.Blend(shade,ICON_ADD)
+/obj/effect/decal/cleanable/crayon/rune2
+	icon_state = "rune2"
 
-		overlays += mainOverlay
-		overlays += shadeOverlay
+/obj/effect/decal/cleanable/crayon/x
+	icon_state = "x"
+	name = "graffiti"
+	paint_colour = COLOR_CRAYON_ORANGE
 
-		add_hiddenprint(usr)
+/obj/effect/decal/cleanable/crayon/l
+	icon_state = "l"
+
+/obj/effect/decal/cleanable/crayon/i
+	icon_state = "i"
+
+/obj/effect/decal/cleanable/crayon/e
+	icon_state = "e"
+
+/obj/effect/decal/cleanable/crayon/i/orange
+	name = "graffiti"
+	paint_colour = COLOR_CRAYON_ORANGE

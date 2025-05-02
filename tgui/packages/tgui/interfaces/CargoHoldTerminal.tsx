@@ -1,12 +1,13 @@
-import { BooleanLike } from 'common/react';
-import { useBackend } from '../backend';
 import {
   AnimatedNumber,
   Box,
   Button,
   LabeledList,
   Section,
-} from '../components';
+} from 'tgui-core/components';
+import { BooleanLike } from 'tgui-core/react';
+
+import { useBackend } from '../backend';
 import { Window } from '../layouts';
 
 type Data = {
@@ -16,8 +17,8 @@ type Data = {
   status_report: string;
 };
 
-export const CargoHoldTerminal = (props, context) => {
-  const { act, data } = useBackend<Data>(context);
+export const CargoHoldTerminal = (props) => {
+  const { act, data } = useBackend<Data>();
   const { points, pad, sending, status_report } = data;
 
   return (

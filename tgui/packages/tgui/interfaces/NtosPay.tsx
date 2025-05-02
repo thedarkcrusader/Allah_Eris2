@@ -1,17 +1,19 @@
-import { NtosWindow } from '../layouts';
-import { useBackend } from '../backend';
+import { useState } from 'react';
 import {
-  Stack,
-  Section,
   Box,
   Button,
+  Divider,
   Input,
+  NoticeBox,
+  RestrictedInput,
+  Section,
+  Stack,
   Table,
   Tooltip,
-  NoticeBox,
-  Divider,
-  RestrictedInput,
-} from '../components';
+} from 'tgui-core/components';
+
+import { useBackend } from '../backend';
+import { NtosWindow } from '../layouts';
 
 type Data = {
   name: string;
@@ -25,47 +27,48 @@ type Transactions = {
   adjusted_money: number;
   reason: string;
 };
-let name_to_token, money_to_send, token;
 
-export const NtosPay = (props, context) => {
-  const { data } = useBackend<Data>(context);
-  const { name } = data;
-
-  if (!name) {
-    return (
-      <NtosWindow width={512} height={130}>
-        <NtosWindow.Content>
-          <NoticeBox>
-            You need to insert your ID card into the card slot in order to use
-            this application.
-          </NoticeBox>
-        </NtosWindow.Content>
-      </NtosWindow>
-    );
-  }
-
+export const NtosPay = (props) => {
   return (
     <NtosWindow width={495} height={655}>
       <NtosWindow.Content>
-        <Stack fill vertical>
-          <Stack.Item>
-            <Introduction />
-          </Stack.Item>
-          <Stack.Item>
-            <TransferSection />
-          </Stack.Item>
-          <Stack.Item grow>
-            <TransactionHistory />
-          </Stack.Item>
-        </Stack>
+        <NtosPayContent />
       </NtosWindow.Content>
     </NtosWindow>
   );
 };
 
+export const NtosPayContent = (props) => {
+  const { data } = useBackend<Data>();
+  const { name } = data;
+
+  if (!name) {
+    return (
+      <NoticeBox>
+        You need to insert your ID card into the card slot in order to use this
+        application.
+      </NoticeBox>
+    );
+  }
+
+  return (
+    <Stack fill vertical>
+      <Stack.Item>
+        <Introduction />
+      </Stack.Item>
+      <Stack.Item>
+        <TransferSection />
+      </Stack.Item>
+      <Stack.Item grow>
+        <TransactionHistory />
+      </Stack.Item>
+    </Stack>
+  );
+};
+
 /** Displays the user's name and balance. */
-const Introduction = (props, context) => {
-  const { data } = useBackend<Data>(context);
+const Introduction = (props) => {
+  const { data } = useBackend<Data>();
   const { name, owner_token, money } = data;
   return (
     <Section textAlign="center">
@@ -81,23 +84,28 @@ const Introduction = (props, context) => {
 };
 
 /** Displays the transfer section. */
-const TransferSection = (props, context) => {
-  const { act, data } = useBackend<Data>(context);
+const TransferSection = (props) => {
+  const { act, data } = useBackend<Data>();
   const { money, wanted_token } = data;
+
+  const [token, setToken] = useState('');
+  const [moneyToSend, setMoneyToSend] = useState(1);
+  const [nameToToken, setNameToToken] = useState('');
+  const [moneyToSendIsValid, setMoneyToSendIsValid] = useState(true);
 
   return (
     <Stack>
       <Stack.Item>
-        <Section vertical title="Transfer Money">
+        <Section title="Transfer Money">
           <Box>
             <Tooltip
-              content="Enter the pay token of the account you want to trasfer credits."
+              content="Enter the pay token of the account you want to transfer credits to."
               position="top"
             >
               <Input
                 placeholder="Pay Token"
                 width="190px"
-                onChange={(e, value) => (token = value)}
+                onChange={setToken}
               />
             </Tooltip>
           </Box>
@@ -109,19 +117,22 @@ const TransferSection = (props, context) => {
               width="83px"
               minValue={1}
               maxValue={money}
-              onChange={(_, value) => (money_to_send = value)}
-              value={1}
+              onChange={setMoneyToSend}
+              onValidationChange={setMoneyToSendIsValid}
+              value={moneyToSend}
             />
           </Tooltip>
           <Button
-            content="Send credits"
+            disabled={!moneyToSendIsValid}
             onClick={() =>
               act('Transaction', {
                 token: token,
-                amount: money_to_send,
+                amount: moneyToSend,
               })
             }
-          />
+          >
+            Send credits
+          </Button>
         </Section>
       </Stack.Item>
       <Stack.Item>
@@ -130,16 +141,17 @@ const TransferSection = (props, context) => {
             <Input
               placeholder="Full name of account."
               width="190px"
-              onChange={(e, value) => (name_to_token = value)}
+              onChange={setNameToToken}
             />
             <Button
-              content="Get it"
               onClick={() =>
                 act('GetPayToken', {
-                  wanted_name: name_to_token,
+                  wanted_name: nameToToken,
                 })
               }
-            />
+            >
+              Get it
+            </Button>
           </Box>
           <Divider hidden />
           <Box nowrap>{wanted_token}</Box>
@@ -150,17 +162,17 @@ const TransferSection = (props, context) => {
 };
 
 /** Displays the transaction history. */
-const TransactionHistory = (props, context) => {
-  const { data } = useBackend<Data>(context);
+const TransactionHistory = (props) => {
+  const { data } = useBackend<Data>();
   const { transaction_list = [] } = data;
 
   return (
     <Section fill title="Transaction History">
       <Section fill scrollable title={<TableHeaders />}>
         <Table>
-          {transaction_list.map((log) => (
+          {transaction_list.map((log, index) => (
             <Table.Row
-              key={log}
+              key={index}
               className="candystripe"
               color={log.adjusted_money < 1 ? 'red' : 'green'}
             >
@@ -178,7 +190,7 @@ const TransactionHistory = (props, context) => {
 };
 
 /** Renders a set of sticky headers */
-const TableHeaders = (props, context) => {
+const TableHeaders = (props) => {
   return (
     <Table>
       <Table.Row>

@@ -1,12 +1,22 @@
-/mob/living/silicon/gib()
-	..("gibbed-r")
-	gibs(loc, null, /obj/effect/gibspawner/robot)
+/mob/living/silicon/spawn_gibs()
+	new /obj/effect/gibspawner/robot(drop_location(), src)
 
-/mob/living/silicon/dust()
-	..("dust-r", /obj/item/remains/robot)
+/mob/living/silicon/spawn_dust(just_ash)
+	if(just_ash)
+		return ..()
 
-/mob/living/silicon/death(gibbed,deathmessage)
-	if(in_contents_of(/obj/machinery/recharge_station))//exit the recharge station
-		var/obj/machinery/recharge_station/RC = loc
-		RC.go_out()
-	return ..(gibbed,deathmessage)
+	var/obj/effect/decal/remains/robot/robones = new(loc)
+	robones.pixel_z = -6
+	robones.pixel_w = rand(-1, 1)
+
+/mob/living/silicon/death(gibbed)
+	diag_hud_set_status()
+	diag_hud_set_health()
+	update_health_hud()
+	return ..()
+
+/mob/living/silicon/get_visible_suicide_message()
+	return "[src] is powering down. It looks like [p_theyre()] trying to commit suicide."
+
+/mob/living/silicon/get_blind_suicide_message()
+	return "You hear a long, hissing electronic whine."

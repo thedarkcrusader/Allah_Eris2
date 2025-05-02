@@ -1,6 +1,13 @@
-import { BooleanLike } from 'common/react';
+import {
+  Box,
+  Button,
+  LabeledList,
+  NoticeBox,
+  Section,
+} from 'tgui-core/components';
+import { BooleanLike } from 'tgui-core/react';
+
 import { useBackend } from '../backend';
-import { Box, Button, LabeledList, NoticeBox, Section } from '../components';
 import { Window } from '../layouts';
 
 type Data = {
@@ -10,8 +17,8 @@ type Data = {
   target: string;
 };
 
-export const BluespaceArtillery = (props, context) => {
-  const { act, data } = useBackend<Data>(context);
+export const BluespaceArtillery = (props) => {
+  const { act, data } = useBackend<Data>();
   const { notice, connected, unlocked, target } = data;
 
   return (

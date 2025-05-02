@@ -1,6 +1,7 @@
-import { BooleanLike } from 'common/react';
+import { NoticeBox } from 'tgui-core/components';
+import { BooleanLike } from 'tgui-core/react';
+
 import { useBackend } from '../backend';
-import { NoticeBox } from '../components';
 import { Window } from '../layouts';
 import { LaunchpadControl } from './LaunchpadConsole';
 
@@ -9,8 +10,8 @@ type Data = {
   pad_closed: BooleanLike;
 };
 
-export const LaunchpadRemote = (props, context) => {
-  const { data } = useBackend<Data>(context);
+export const LaunchpadRemote = (props) => {
+  const { data } = useBackend<Data>();
   const { has_pad, pad_closed } = data;
 
   return (

@@ -1,110 +1,96 @@
+/// Any humanoid (non-Xeno) mob, such as humans, plasmamen, lizards.
 /mob/living/carbon/human
-	//first and last name
-	var/first_name
-	var/last_name
+	name = "Unknown"
+	real_name = "Unknown"
+	icon = 'icons/mob/human/human.dmi'
+	icon_state = "human_basic"
+	appearance_flags = KEEP_TOGETHER|TILE_BOUND|PIXEL_SCALE|LONG_GLIDE
+	hud_possible = list(HEALTH_HUD,STATUS_HUD,ID_HUD,WANTED_HUD,IMPLOYAL_HUD,IMPSEC_FIRST_HUD,IMPSEC_SECOND_HUD,ANTAG_HUD,GLAND_HUD,FAN_HUD)
+	hud_type = /datum/hud/human
+	pressure_resistance = 25
+	buckle_lying = 0
+	mob_biotypes = MOB_ORGANIC|MOB_HUMANOID
+	can_be_shoved_into = TRUE
+	initial_language_holder = /datum/language_holder/empty // We get stuff from our species
+	flags_1 = PREVENT_CONTENTS_EXPLOSION_1
+	max_grab = GRAB_KILL
 
 	//Hair colour and style
-	var/hair_color = "#000000"
-	var/h_style = "Bald"
+	var/hair_color = COLOR_BLACK
+	var/hairstyle = "Bald"
+
+	///Colours used for hair and facial hair gradients.
+	var/list/grad_color = list(
+		COLOR_BLACK,	//Hair Gradient Color
+		COLOR_BLACK,	//Facial Hair Gradient Color
+	)
+	///Styles used for hair and facial hair gradients.
+	var/list/grad_style = list(
+		"None",	//Hair Gradient Style
+		"None",	//Facial Hair Gradient Style
+	)
 
 	//Facial hair colour and style
-	var/facial_color = "#000000"
-	var/f_style = "Shaved"
+	var/facial_hair_color = COLOR_BLACK
+	var/facial_hairstyle = "Shaved"
 
-	//Eye colour
-	var/eyes_color = "#000000"
+	// Base "natural" eye color
+	var/eye_color_left = COLOR_BLACK
+	var/eye_color_right = COLOR_BLACK
+	/// Var used to keep track of a human mob having a heterochromatic right eye. To ensure prefs don't overwrite shit
+	var/eye_color_heterochromatic = FALSE
+	// Eye color overrides assoc lists - priority key to hex color
+	var/list/eye_color_left_overrides
+	var/list/eye_color_right_overrides
 
-	var/s_tone = 0	//Skin tone
+	var/skin_tone = "caucasian1" //Skin tone
 
-	//Skin colour
-	var/skin_color = "#000000"
+	var/lip_style = null //no lipstick by default- arguably misleading, as it could be used for general makeup
+	var/lip_color = COLOR_WHITE
 
-	var/size_multiplier = 1 //multiplier for the mob's icon size
-	var/damage_multiplier = 1 //multiplies melee combat damage
-	var/icon_update = 1 //whether icon updating shall take place
+	var/age = 30 //Player's age
 
-	var/lip_style	//no lipstick by default- arguably misleading, as it could be used for general makeup
+	/// Which body type to use
+	var/physique = MALE
 
-	var/age = 30		//Player's age (pure fluff)
-
-	var/list/worn_underwear = list()
-
-	var/datum/backpack_setup/backpack_setup
+	//consider updating /mob/living/carbon/human/copy_clothing_prefs() if adding more of these
+	var/underwear = "Nude" //Which underwear the player wants
+	var/underwear_color = COLOR_BLACK
+	var/undershirt = "Nude" //Which undershirt the player wants
+	var/socks = "Nude" //Which socks the player wants
+	var/backpack = DBACKPACK //Which backpack type the player has chosen.
+	var/jumpsuit_style = PREF_SUIT //suit/skirt
 
 	//Equipment slots
-	var/obj/item/wear_suit
-	var/obj/item/w_uniform
-	var/obj/item/shoes
-	var/obj/item/belt
-	var/obj/item/gloves
-	var/obj/item/glasses
-	var/obj/item/head
-	var/obj/item/l_ear
-	var/obj/item/r_ear
-	var/obj/item/wear_id
-	var/obj/item/r_store
-	var/obj/item/l_store
-	var/obj/item/s_store
+	var/obj/item/clothing/wear_suit = null
+	var/obj/item/clothing/w_uniform = null
+	var/obj/item/belt = null
+	var/obj/item/wear_id = null
+	var/obj/item/r_store = null
+	var/obj/item/l_store = null
+	var/obj/item/s_store = null
 
-	var/icon/stand_icon
-	var/icon/lying_icon
-
-	var/voice = ""	//Instead of new say code calling GetVoice() over and over and over, we're just going to ask this variable, which gets updated in Life()
-
-	var/speech_problem_flag = 0
-
-	var/miming //Toggle for the mime's abilities.
 	var/special_voice = "" // For changing our voice. Used by a symptom.
 
-	var/ability_last = 0 // world.time when last proc from "Ability" tab have been used
-	var/last_dam = -1	//Used for determining if we need to process all organs or just some or even none.
-	var/list/bad_external_organs = list()// organs we check until they are good.
+	var/datum/physiology/physiology
 
-	var/punch_damage_increase = 0 // increases... punch damage... can be affected by clothing or implants.
+	var/account_id
 
-	var/xylophone = 0 //For the spoooooooky xylophone cooldown
+	var/hardcore_survival_score = 0
 
-	var/mob/remoteview_target
-	var/remoteviewer = FALSE //Acts as an override for remoteview_target viewing, see human/life.dm: handle_vision()
-	var/hand_blood_color
+	/// How many "units of blood" we have on our hands
+	var/blood_in_hands = 0
 
-	var/gunshot_residue
-	var/holding_back // Are you trying not to hurt your opponent?
-	var/blocking = FALSE //ready to block melee attacks?
+	/// The core temperature of the human compaired to the skin temp of the body
+	var/coretemperature = BODYTEMP_NORMAL
 
-	mob_bump_flag = HUMAN
-	mob_push_flags = ~HEAVY
-	mob_swap_flags = ~HEAVY
+	///Exposure to damaging heat levels increases stacks, stacks clean over time when temperatures are lower. Stack is consumed to add a wound.
+	var/heat_exposure_stacks = 0
 
-	var/flash_protection = 0				// Total level of flash protection
-	var/equipment_tint_total = 0			// Total level of visualy impairing items
-	var/equipment_darkness_modifier			// Darkvision modifier from equipped items
-	var/equipment_vision_flags				// Extra vision flags from equipped items
-	var/equipment_see_invis					// Max see invibility level granted by equipped items
-	var/equipment_prescription				// Eye prescription granted by equipped items
-	var/list/equipment_overlays = list()	// Extra overlays from equipped items
+	/// When an braindead player has their equipment fiddled with, we log that info here for when they come back so they know who took their ID while they were DC'd for 30 seconds
+	var/list/afk_thefts
 
-	var/med_record = ""
-	var/sec_record = ""
-	var/gen_record = ""
-	var/exploit_record = ""
-
-	var/stance_damage = 0 //Whether this mob's ability to stand has been affected
-	var/identifying_gender // In case the human identifies as another gender than it's biological
-	mob_classification = CLASSIFICATION_ORGANIC | CLASSIFICATION_HUMANOID
-
-	var/datum/sanity/sanity
-
-	var/rest_points = 0
-
-	var/style = 0
-	var/max_style = MAX_HUMAN_STYLE
-
-	var/shock_resist = 0 // Resistance to paincrit
-
-	var/language_blackout = 0
-	var/suppress_communication = 0
-
-	var/momentum_speed = 0 // The amount of run-up
-	var/momentum_dir = 0 // Direction of run-up
-	var/momentum_reduction_timer
+	/// Base height of the mob, modified by stuff like dwarfism or species
+	VAR_PRIVATE/base_mob_height = HUMAN_HEIGHT_MEDIUM
+	/// Actual height of the mob. Don't touch this one, it is set via update_mob_height()
+	VAR_FINAL/mob_height = HUMAN_HEIGHT_MEDIUM

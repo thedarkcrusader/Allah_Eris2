@@ -1,63 +1,77 @@
-
 /obj/machinery/computer/station_alert
 	name = "station alert console"
 	desc = "Used to access the station's automated alert system."
-	icon_keyboard = "tech_key"
 	icon_screen = "alert:0"
-	light_color = COLOR_LIGHTING_CYAN_MACHINERY
-	circuit = /obj/item/electronics/circuitboard/stationalert
-	var/datum/nano_module/alarm_monitor/alarm_monitor
-	var/monitor_type = /datum/nano_module/alarm_monitor
+	icon_keyboard = "atmos_key"
+	circuit = /obj/item/circuitboard/computer/station_alert
+	light_color = LIGHT_COLOR_CYAN
+	/// Station alert datum for showing alerts UI
+	var/datum/station_alert/alert_control
 
-/obj/machinery/computer/station_alert/engineering
-	monitor_type = /datum/nano_module/alarm_monitor/engineering
-
-/obj/machinery/computer/station_alert/security
-	monitor_type = /datum/nano_module/alarm_monitor/security
-
-/obj/machinery/computer/station_alert/all
-	monitor_type = /datum/nano_module/alarm_monitor/all
-
-/obj/machinery/computer/station_alert/Initialize()
-	alarm_monitor = new monitor_type(src)
-	alarm_monitor.register_alarm(src, TYPE_PROC_REF(/atom, update_icon))
+/obj/machinery/computer/station_alert/examine(mob/user)
 	. = ..()
-	if(monitor_type)
-		register_monitor(new monitor_type(src))
+	var/obj/item/circuitboard/computer/station_alert/my_circuit = circuit
+	. += span_info("The console is set to [my_circuit.station_only ? "track all station and mining alarms" : "track alarms on the same z-level"].")
+
+/obj/machinery/computer/station_alert/Initialize(mapload)
+	link_alerts()
+	return ..()
+
+/obj/machinery/computer/station_alert/on_construction(mob/user)
+	. = ..()
+	link_alerts()
 
 /obj/machinery/computer/station_alert/Destroy()
+	QDEL_NULL(alert_control)
+	return ..()
+
+/obj/machinery/computer/station_alert/ui_interact(mob/user)
 	. = ..()
-	unregister_monitor()
+	alert_control.ui_interact(user)
 
-/obj/machinery/computer/station_alert/proc/register_monitor(var/datum/nano_module/alarm_monitor/monitor)
-	if(monitor.host != src)
+/obj/machinery/computer/station_alert/on_set_machine_stat(old_value)
+	if(machine_stat & BROKEN)
+		alert_control.listener.prevent_alarm_changes()
+	else
+		alert_control.listener.allow_alarm_changes()
+
+/obj/machinery/computer/station_alert/update_overlays()
+	. = ..()
+	if(machine_stat & (NOPOWER|BROKEN))
 		return
+	if(length(alert_control.listener.alarms))
+		. += "alert:2"
 
-	alarm_monitor = monitor
-	alarm_monitor.register_alarm(src, TYPE_PROC_REF(/atom, update_icon))
+/**
+ * Clears out any active alert_control listeners, then sets up a new one based on the circuit settings
+ */
+/obj/machinery/computer/station_alert/proc/link_alerts()
+	//Start from scratch, clear out the existing alert listeners
+	QDEL_NULL(alert_control)
 
-/obj/machinery/computer/station_alert/proc/unregister_monitor()
-	if(alarm_monitor)
-		alarm_monitor.unregister_alarm(src)
-		qdel(alarm_monitor)
-		alarm_monitor = null
+	//Then we check the circuit to determine if it should show alarms from Station & Mining areas,
+	//or Local (z-level) areas
+	var/obj/item/circuitboard/computer/station_alert/my_circuit = circuit
+	if(my_circuit.station_only)
+		name = "station alert console"
+		var/list/alert_areas
+		alert_areas = (GLOB.the_station_areas + typesof(/area/mine))
+		alert_control = new(src, list(ALARM_ATMOS, ALARM_FIRE, ALARM_POWER), listener_areas = alert_areas, title = name)
+	else
+		name = "local alert console"
+		alert_control = new(src, list(ALARM_ATMOS, ALARM_FIRE, ALARM_POWER), list(z), title = name)
+	RegisterSignals(alert_control.listener, list(COMSIG_ALARM_LISTENER_TRIGGERED, COMSIG_ALARM_LISTENER_CLEARED), PROC_REF(update_alarm_display))
 
-/obj/machinery/computer/station_alert/attack_hand(mob/user)
-	if(..())
-		return
-	nano_ui_interact(user)
+/**
+ * Signal handler for calling an icon update in case an alarm is added or cleared
+ *
+ * Arguments:
+ * * source The datum source of the signal
+ */
+/obj/machinery/computer/station_alert/proc/update_alarm_display(datum/source)
+	SIGNAL_HANDLER
+	update_icon()
 
-/obj/machinery/computer/station_alert/nano_ui_interact(mob/user)
-	if(alarm_monitor)
-		alarm_monitor.nano_ui_interact(user)
-
-/obj/machinery/computer/station_alert/nano_container()
-	return alarm_monitor
-
-/obj/machinery/computer/station_alert/update_icon()
-	icon_screen = initial(icon_screen)
-	if(!(stat & (BROKEN|NOPOWER)))
-		if(alarm_monitor)
-			if(alarm_monitor.has_major_alarms(get_z(src)))
-				icon_screen = "alert:2"
-	..()
+// Subtype which only checks station areas and the mining station
+/obj/machinery/computer/station_alert/station_only
+	circuit = /obj/item/circuitboard/computer/station_alert/station_only

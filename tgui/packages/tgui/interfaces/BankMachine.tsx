@@ -1,13 +1,14 @@
-import { BooleanLike } from 'common/react';
-import { useBackend } from '../backend';
 import {
   AnimatedNumber,
   Button,
   LabeledList,
   NoticeBox,
   Section,
-} from '../components';
-import { formatMoney } from '../format';
+} from 'tgui-core/components';
+import { formatMoney } from 'tgui-core/format';
+import { BooleanLike } from 'tgui-core/react';
+
+import { useBackend } from '../backend';
 import { Window } from '../layouts';
 
 type Data = {
@@ -16,8 +17,8 @@ type Data = {
   station_name: string;
 };
 
-export const BankMachine = (props, context) => {
-  const { act, data } = useBackend<Data>(context);
+export const BankMachine = (props) => {
+  const { act, data } = useBackend<Data>();
   const { current_balance, siphoning, station_name } = data;
 
   return (

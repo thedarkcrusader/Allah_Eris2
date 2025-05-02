@@ -6,41 +6,18 @@
 	icon = 'icons/obj/machines/mining_machines.dmi'
 	icon_state = "unloader"
 	density = TRUE
-	anchored = TRUE
-	var/unload_amt = 20
-	var/input_dir = null
-	var/output_dir = null
+	input_dir = WEST
+	output_dir = EAST
+	needs_item_input = TRUE
+	processing_flags = START_PROCESSING_MANUALLY
 
-
-/obj/machinery/mineral/unloading_machine/New()
-	..()
-	spawn()
-		//Locate our output and input machinery.
-		var/obj/marker = null
-		marker = locate(/obj/landmark/machinery/input) in range(1, loc)
-		if(marker)
-			input_dir = get_dir(src, marker)
-		marker = locate(/obj/landmark/machinery/output) in range(1, loc)
-		if(marker)
-			output_dir = get_dir(src, marker)
-
-/obj/machinery/mineral/unloading_machine/Process()
-	if(output_dir && input_dir)
-		var/turf/input = get_step(src, input_dir)
-		var/obj/structure/ore_box/BOX = locate() in input
-		if(BOX)
-			var/turf/output = get_step(src, output_dir)
-			var/i = 0
-			for(var/obj/item/ore/O in BOX.contents)
-				O.forceMove(output)
-				if(++i>=unload_amt)
-					return
-
-		if(locate(/obj/item/ore) in input)
-			var/obj/item/ore/O
-			for(var/i = 0; i<unload_amt; i++)
-				O = locate(/obj/item/ore) in input
-				if(O)
-					O.forceMove(get_step(src, output_dir))
-				else
-					break
+/obj/machinery/mineral/unloading_machine/pickup_item(datum/source, atom/movable/target, direction)
+	if(QDELETED(target))
+		return
+	if(istype(target, /obj/structure/ore_box))
+		var/obj/structure/ore_box/box = target
+		for(var/obj/item/stack/ore/O in box)
+			unload_mineral(O)
+	else if(istype(target, /obj/item/stack/ore))
+		var/obj/item/stack/ore/O = target
+		unload_mineral(O)

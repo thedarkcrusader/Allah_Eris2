@@ -1,344 +1,264 @@
-//This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:32
-
-
-/*
-
-	All telecommunications interactions:
-
-*/
-
-#define STATION_Z list(1,2,3,4,5)
-#define TELECOMM_Z 3
+// This file is separate from telecommunications.dm to isolate the implementation
+// of basic interactions with the machines.
 
 /obj/machinery/telecomms
-	var/temp = "" // output message
-	var/construct_op = 0
+	/// The current temporary frequency used to add new filtered frequencies
+	/// options.
+	var/tempfreq = FREQ_COMMON
+	/// Illegal frequencies that can't be listened to by telecommunication servers.
+	var/list/banned_frequencies = list(
+		FREQ_SYNDICATE,
+		FREQ_CENTCOM,
+		FREQ_CTF_RED,
+		FREQ_CTF_YELLOW,
+		FREQ_CTF_GREEN,
+		FREQ_CTF_BLUE,
+	)
 
+/obj/machinery/telecomms/attackby(obj/item/attacking_item, mob/user, list/modifiers)
 
-/obj/machinery/telecomms/attackby(obj/item/I, mob/user)
-	if(default_deconstruction(I, user))
+	var/icon_closed = initial(icon_state)
+	var/icon_open = "[initial(icon_state)]_o"
+	if(!on)
+		icon_closed = "[initial(icon_state)]_off"
+		icon_open = "[initial(icon_state)]_o_off"
+
+	if(default_deconstruction_screwdriver(user, icon_open, icon_closed, attacking_item))
 		return
-
-	if(default_part_replacement(I, user))
-		return
-
-	// Hardcoded tool paths are bad, but the tcomm code relies a "buffer" function that only the actual multitool has
-	// I really don't want to try and fix that now, so it stays that way
-	if(istype(I, /obj/item/tool/multitool))
+	// Using a multitool lets you access the receiver's interface
+	else if(attacking_item.tool_behaviour == TOOL_MULTITOOL)
 		attack_hand(user)
+
+	else if(default_deconstruction_crowbar(attacking_item))
+		return
+	else
+		return ..()
+
+/obj/machinery/telecomms/ui_interact(mob/user, datum/tgui/ui)
+	ui = SStgui.try_update_ui(user, src, ui)
+	if(!ui)
+		ui = new(user, src, "Telecomms")
+		ui.open()
+
+/obj/machinery/telecomms/ui_data(mob/user)
+	var/list/data = list()
+
+	data += add_option()
+
+	data["minfreq"] = MIN_FREE_FREQ
+	data["maxfreq"] = MAX_FREE_FREQ
+	data["frequency"] = tempfreq
+
+	var/obj/item/multitool/heldmultitool = get_multitool(user)
+	data["multitool"] = heldmultitool
+
+	if(heldmultitool)
+		data["multibuff"] = heldmultitool.buffer
+
+	data["toggled"] = toggled
+	data["id"] = id
+	data["network"] = network
+	data["prefab"] = autolinkers.len ? TRUE : FALSE
+
+	var/list/linked = list()
+	var/i = 0
+	data["linked"] = list()
+	for(var/obj/machinery/telecomms/machine in links)
+		i++
+		if(machine.hide && !hide)
+			continue
+		var/list/entry = list()
+		entry["index"] = i
+		entry["name"] = machine.name
+		entry["id"] = machine.id
+		linked += list(entry)
+	data["linked"] = linked
+
+	var/list/frequencies = list()
+	data["frequencies"] = list()
+	for(var/x in freq_listening)
+		frequencies += list(x)
+	data["frequencies"] = frequencies
+
+	return data
+
+/obj/machinery/telecomms/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
+	. = ..()
+	if(.)
 		return
 
-	// REPAIRING: Use Nanopaste to repair 10-20 integrity points.
-	if(istype(I, /obj/item/stack/nanopaste))
-		var/obj/item/stack/nanopaste/T = I
-		if(integrity < 100) //Damaged, let's repair!
-			if(T.use(1))
-				integrity = between(0, integrity + rand(10,20), 100)
-				to_chat(usr, SPAN_WARNING("You apply nanopaste to [src], repairing some of the damage."))
-		else
-			to_chat(usr, SPAN_WARNING("This machine is already in perfect condition."))
-		return
-
-
-/obj/machinery/telecomms/attack_hand(var/mob/user as mob)
-
-	// You need a multitool to use this, or be silicon
-	if(!issilicon(user))
-		// istype returns false if the value is null
-		if(!istype(user.get_active_hand(), /obj/item/tool/multitool))
+	var/mob/living/current_user = usr
+	if(!HAS_SILICON_ACCESS(current_user))
+		if(!istype(current_user.get_active_held_item(), /obj/item/multitool))
 			return
 
-	if(stat & (BROKEN|NOPOWER))
-		return
+	var/obj/item/multitool/heldmultitool = get_multitool(current_user)
 
-	var/obj/item/tool/multitool/P = get_multitool(user)
-
-	user.set_machine(src)
-	var/dat
-	dat = "<font face = \"Courier\"><HEAD><TITLE>[src.name]</TITLE></HEAD><center><H3>[src.name] Access</H3></center>"
-	dat += "<br>[temp]<br>"
-	dat += "<br>Power Status: <a href='?src=\ref[src];input=toggle'>[src.toggled ? "On" : "Off"]</a>"
-	if(on && toggled)
-		if(id != "" && id)
-			dat += "<br>Identification String: <a href='?src=\ref[src];input=id'>[id]</a>"
-		else
-			dat += "<br>Identification String: <a href='?src=\ref[src];input=id'>NULL</a>"
-		dat += "<br>Network: <a href='?src=\ref[src];input=network'>[network]</a>"
-		dat += "<br>Prefabrication: [autolinkers.len ? "TRUE" : "FALSE"]"
-		if(hide) dat += "<br>Shadow Link: ACTIVE</a>"
-
-		//Show additional options for certain machines.
-		dat += Options_Menu()
-
-		dat += "<br>Linked Network Entities: <ol>"
-
-		var/i = 0
-		for(var/obj/machinery/telecomms/T in links)
-			i++
-			if(T.hide && !src.hide)
-				continue
-			dat += "<li>\ref[T] [T.name] ([T.id])  <a href='?src=\ref[src];unlink=[i]'>\[X\]</a></li>"
-		dat += "</ol>"
-
-		dat += "<br>Filtering Frequencies: "
-
-		i = 0
-		if(length(freq_listening))
-			for(var/x in freq_listening)
-				i++
-				if(i < length(freq_listening))
-					dat += "[format_frequency(x)] GHz<a href='?src=\ref[src];delete=[x]'>\[X\]</a>; "
+	switch(action)
+		if("toggle")
+			toggled = !toggled
+			update_power()
+			update_appearance()
+			current_user.log_message("toggled [toggled ? "On" : "Off"] [src].", LOG_GAME)
+			. = TRUE
+		if("id")
+			if(params["value"])
+				if(length(params["value"]) > 32)
+					to_chat(current_user, span_warning("Error: Machine ID too long!"))
+					playsound(src, 'sound/machines/buzz/buzz-sigh.ogg', 50, TRUE)
+					return
 				else
-					dat += "[format_frequency(x)] GHz<a href='?src=\ref[src];delete=[x]'>\[X\]</a>"
-		else
-			dat += "NONE"
-
-		dat += "<br>  <a href='?src=\ref[src];input=freq'>\[Add Filter\]</a>"
-		dat += "<hr>"
-
-		if(P)
-			var/obj/machinery/telecomms/device = P.get_buffer()
-			if(istype(device))
-				dat += "<br><br>MULTITOOL BUFFER: [device] ([device.id]) <a href='?src=\ref[src];link=1'>\[Link\]</a> <a href='?src=\ref[src];flush=1'>\[Flush\]"
+					id = params["value"]
+					current_user.log_message("has changed the ID for [src] to [id].", LOG_GAME)
+					. = TRUE
+		if("network")
+			if(params["value"])
+				if(length(params["value"]) > 15)
+					to_chat(current_user, span_warning("Error: Network name too long!"))
+					playsound(src, 'sound/machines/buzz/buzz-sigh.ogg', 50, TRUE)
+					return
+				else
+					for(var/obj/machinery/telecomms/linked_machine in links)
+						remove_link(linked_machine)
+					network = params["value"]
+					links = list()
+					current_user.log_message("has changed the network for [src] to [network].", LOG_GAME)
+					. = TRUE
+		if("tempfreq")
+			if(params["value"])
+				tempfreq = text2num(params["value"]) * 10
+		if("freq")
+			if(tempfreq in banned_frequencies)
+				to_chat(current_user, span_warning("Error: Interference preventing filtering frequency: \"[tempfreq / 10] kHz\""))
+				playsound(src, 'sound/machines/buzz/buzz-sigh.ogg', 50, TRUE)
 			else
-				dat += "<br><br>MULTITOOL BUFFER: <a href='?src=\ref[src];buffer=1'>\[Add Machine\]</a>"
+				if(!(tempfreq in freq_listening))
+					freq_listening.Add(tempfreq)
+					current_user.log_message("added frequency [tempfreq] for [src].", LOG_GAME)
+					. = TRUE
+		if("delete")
+			freq_listening.Remove(params["value"])
+			current_user.log_message("removed frequency [params["value"]] for [src].", LOG_GAME)
+			. = TRUE
+		if("unlink")
+			var/obj/machinery/telecomms/machine_to_unlink = links[text2num(params["value"])]
+			if(machine_to_unlink)
+				. = remove_link(machine_to_unlink, current_user)
+		if("link")
+			if(heldmultitool)
+				var/obj/machinery/telecomms/machine_to_link = heldmultitool.buffer
+				. = add_new_link(machine_to_link, current_user)
+		if("buffer")
+			heldmultitool.set_buffer(src)
+			. = TRUE
+		if("flush")
+			heldmultitool.set_buffer(null)
+			. = TRUE
 
-	dat += "</font>"
-	temp = ""
-	user << browse(dat, "window=tcommachine;size=520x500;can_resize=0")
-	onclose(user, "dormitory")
+	add_act(action, params)
+	. = TRUE
 
+/// Adds new_connection to src's links list AND vice versa. Also updates `links_by_telecomms_type`.
+/obj/machinery/telecomms/proc/add_new_link(obj/machinery/telecomms/new_connection, mob/user)
+	if(!istype(new_connection) || new_connection == src)
+		return FALSE
 
-// Off-Site Relays
-//
-// You are able to send/receive signals from the station's z level (changeable in the STATION_Z #define) if
-// the relay is on the telecomm satellite (changable in the TELECOMM_Z #define)
-/*
+	if((new_connection in links) && (src in new_connection.links))
+		return FALSE
 
-/obj/machinery/telecomms/relay/proc/toggle_level()
+	links |= new_connection
+	new_connection.links |= src
 
-	var/turf/position = get_turf(src)
+	LAZYADDASSOCLIST(links_by_telecomms_type, new_connection.telecomms_type, new_connection)
+	LAZYADDASSOCLIST(new_connection.links_by_telecomms_type, telecomms_type, src)
 
-	// Toggle on/off getting signals from the station or the current Z level
-	if(src.listening_levels == STATION_Z) // equals the station
-		src.listening_levels = TELECOMM_Z
-		return 1
-	else if(position.z == TELECOMM_Z)
-		src.listening_levels = STATION_Z
-		return 1
-	return 0
-*/
-// Returns a multitool from a user depending on their mobtype.
+	if(user)
+		user.log_message("linked [src] for [new_connection].", LOG_GAME)
+	return TRUE
 
-/obj/machinery/telecomms/proc/get_multitool(mob/user as mob)
+/// Removes old_connection from src's links list AND vice versa. Also updates `links_by_telecomms_type`.
+/obj/machinery/telecomms/proc/remove_link(obj/machinery/telecomms/old_connection, mob/user)
+	if(!istype(old_connection) || old_connection == src)
+		return FALSE
 
-	var/obj/item/tool/multitool/P = null
-	// Let's double check
-	if(!issilicon(user) && istype(user.get_active_hand(), /obj/item/tool/multitool))
-		P = user.get_active_hand()
-	else if(isAI(user))
-		var/mob/living/silicon/ai/U = user
-		P = U.aiMulti
-	else if(isrobot(user) && in_range(user, src))
-		if(istype(user.get_active_hand(), /obj/item/tool/multitool))
-			P = user.get_active_hand()
-	return P
+	if(old_connection in links)
+		links -= old_connection
+		LAZYREMOVEASSOC(links_by_telecomms_type, old_connection.telecomms_type, old_connection)
 
-// Additional Options for certain machines. Use this when you want to add an option to a specific machine.
-// Example of how to use below.
+	if(src in old_connection.links)
+		old_connection.links -= src
+		LAZYREMOVEASSOC(old_connection.links_by_telecomms_type, telecomms_type, src)
 
-/obj/machinery/telecomms/proc/Options_Menu()
-	return ""
+	if(user)
+		user.log_message("unlinked [src] and [old_connection].", LOG_GAME)
 
-/*
-// Add an option to the processor to switch processing mode. (COMPRESS -> UNCOMPRESS or UNCOMPRESS -> COMPRESS)
-/obj/machinery/telecomms/processor/Options_Menu()
-	var/dat = "<br>Processing Mode: <A href='?src=\ref[src];process=1'>[process_mode ? "UNCOMPRESS" : "COMPRESS"]</a>"
-	return dat
-*/
-// The topic for Additional Options. Use this for checking href links for your specific option.
-// Example of how to use below.
-/obj/machinery/telecomms/proc/Options_Topic(href, href_list)
+	return TRUE
+
+/**
+ * Wrapper for adding additional options to a machine's interface.
+ *
+ * Returns a list, or `null` if it wasn't implemented by the machine.
+ */
+/obj/machinery/telecomms/proc/add_option()
 	return
 
-/*
-/obj/machinery/telecomms/processor/Options_Topic(href, href_list)
+/obj/machinery/telecomms/bus/add_option()
+	var/list/data = list()
+	data["type"] = "bus"
+	data["changefrequency"] = change_frequency
+	return data
 
-	if(href_list["process"])
-		temp = "<font color = #666633>-% Processing mode changed. %-</font>"
-		src.process_mode = !src.process_mode
-*/
+/obj/machinery/telecomms/relay/add_option()
+	var/list/data = list()
+	data["type"] = "relay"
+	data["broadcasting"] = broadcasting
+	data["receiving"] = receiving
+	return data
 
-// RELAY
+/**
+ * Wrapper for adding another time of action for `ui_act()`, rather than
+ * having you override `ui_act` yourself.
+ *
+ * Returns `TRUE` if the action was handled, nothing if not.
+ */
+/obj/machinery/telecomms/proc/add_act(action, params)
+	return
 
-/obj/machinery/telecomms/relay/Options_Menu()
-	var/dat = ""
-/*
-	if(src.z == TELECOMM_Z)
-		dat += "<br>Signal Locked to Station: <A href='?src=\ref[src];change_listening=1'>[listening_levels == STATION_Z ? "TRUE" : "FALSE"]</a>"
-*/
-	dat += "<br>Broadcasting: <A href='?src=\ref[src];broadcast=1'>[broadcasting ? "YES" : "NO"]</a>"
-	dat += "<br>Receiving:    <A href='?src=\ref[src];receive=1'>[receiving ? "YES" : "NO"]</a>"
-	return dat
+/obj/machinery/telecomms/relay/add_act(action, params)
+	switch(action)
+		if("broadcast")
+			broadcasting = !broadcasting
+			. = TRUE
+		if("receive")
+			receiving = !receiving
+			. = TRUE
 
-/obj/machinery/telecomms/relay/Options_Topic(href, href_list)
-
-	if(href_list["receive"])
-		receiving = !receiving
-		temp = "<font color = #666633>-% Receiving mode changed. %-</font>"
-	if(href_list["broadcast"])
-		broadcasting = !broadcasting
-		temp = "<font color = #666633>-% Broadcasting mode changed. %-</font>"
-/*
-	if(href_list["change_listening"])
-		//Lock to the station OR lock to the current position!
-		//You need at least two receivers and two broadcasters for this to work, this includes the machine.
-		var/result = toggle_level()
-		if(result)
-			temp = "<font color = #666633>-% [src]'s signal has been successfully changed.</font>"
-		else
-			temp = "<font color = #666633>-% [src] could not lock it's signal onto the station. Two broadcasters or receivers required.</font>"
-*/
-// BUS
-
-/obj/machinery/telecomms/bus/Options_Menu()
-	var/dat = "<br>Change Signal Frequency: <A href='?src=\ref[src];change_freq=1'>[change_frequency ? "YES ([change_frequency])" : "NO"]</a>"
-	return dat
-
-/obj/machinery/telecomms/bus/Options_Topic(href, href_list)
-
-	if(href_list["change_freq"])
-
-		var/newfreq = input(usr, "Specify a new frequency for new signals to change to. Enter null to turn off frequency changing. Decimals assigned automatically.", src, network) as null|num
-		if(canAccess(usr))
+/obj/machinery/telecomms/bus/add_act(action, params)
+	switch(action)
+		if("change_freq")
+			var/newfreq = text2num(params["value"]) * 10
 			if(newfreq)
-				if(findtext(num2text(newfreq), "."))
-					newfreq *= 10 // shift the decimal one place
 				if(newfreq < 10000)
 					change_frequency = newfreq
-					temp = "<font color = #666633>-% New frequency to change to assigned: \"[newfreq] GHz\" %-</font>"
-			else
-				change_frequency = 0
-				temp = "<font color = #666633>-% Frequency changing deactivated %-</font>"
+					. = TRUE
+				else
+					change_frequency = 0
 
+/// Returns a multitool from a user depending on their mobtype.
+/obj/machinery/telecomms/proc/get_multitool(mob/user)
+	. = null
+	if(isAI(user))
+		var/mob/living/silicon/ai/U = user
+		return U.aiMulti
 
-/obj/machinery/telecomms/Topic(href, href_list)
-
-	if(!issilicon(usr))
-		if(!istype(usr.get_active_hand(), /obj/item/tool/multitool))
-			return
-
-	if(stat & (BROKEN|NOPOWER))
+	var/obj/item/held_item = user.get_active_held_item()
+	if(QDELETED(held_item))
+		return
+	held_item = held_item.get_proxy_attacker_for(src, user) //for borgs omni tool
+	if(held_item.tool_behaviour != TOOL_MULTITOOL)
 		return
 
-	var/obj/item/tool/multitool/P = get_multitool(usr)
-
-	if(href_list["input"])
-		switch(href_list["input"])
-
-			if("toggle")
-
-				src.toggled = !src.toggled
-				temp = "<font color = #666633>-% [src] has been [src.toggled ? "activated" : "deactivated"].</font>"
-				update_power()
-
-			/*
-			if("hide")
-				src.hide = !hide
-				temp = "<font color = #666633>-% Shadow Link has been [src.hide ? "activated" : "deactivated"].</font>"
-			*/
-
-			if("id")
-				var/newid = copytext(reject_bad_text(input(usr, "Specify the new ID for this machine", src, id) as null|text),1,MAX_MESSAGE_LEN)
-				if(newid && canAccess(usr))
-					id = newid
-					temp = "<font color = #666633>-% New ID assigned: \"[id]\" %-</font>"
-
-			if("network")
-				var/newnet = input(usr, "Specify the new network for this machine. This will break all current links.", src, network) as null|text
-				if(newnet && canAccess(usr))
-
-					if(length(newnet) > 15)
-						temp = "<font color = #666633>-% Too many characters in new network tag %-</font>"
-
-					else
-						for(var/obj/machinery/telecomms/T in links)
-							T.links.Remove(src)
-
-						network = newnet
-						links = list()
-						temp = "<font color = #666633>-% New network tag assigned: \"[network]\" %-</font>"
-
-
-			if("freq")
-				var/newfreq = input(usr, "Specify a new frequency to filter (GHz). Decimals assigned automatically.", src, network) as null|num
-				if(newfreq && canAccess(usr))
-					if(findtext(num2text(newfreq), "."))
-						newfreq *= 10 // shift the decimal one place
-					if(!(newfreq in freq_listening) && newfreq < 10000)
-						freq_listening.Add(newfreq)
-						temp = "<font color = #666633>-% New frequency filter assigned: \"[newfreq] GHz\" %-</font>"
-
-	if(href_list["delete"])
-
-		// changed the layout about to workaround a pesky runtime -- Doohl
-
-		var/x = text2num(href_list["delete"])
-		temp = "<font color = #666633>-% Removed frequency filter [x] %-</font>"
-		freq_listening.Remove(x)
-
-	if(href_list["unlink"])
-
-		if(text2num(href_list["unlink"]) <= length(links))
-			var/obj/machinery/telecomms/T = links[text2num(href_list["unlink"])]
-			temp = "<font color = #666633>-% Removed \ref[T] [T.name] from linked entities. %-</font>"
-
-			// Remove link entries from both T and src.
-
-			if(src in T.links)
-				T.links.Remove(src)
-			links.Remove(T)
-
-	if(href_list["link"])
-
-		if(P)
-			var/obj/machinery/telecomms/device = P.get_buffer()
-			if(istype(device) && device != src)
-				if(!(src in device.links))
-					device.links.Add(src)
-
-				if(!(device in src.links))
-					src.links.Add(device)
-
-				temp = "<font color = #666633>-% Successfully linked with \ref[device] [device.name] %-</font>"
-
-			else
-				temp = "<font color = #666633>-% Unable to acquire buffer %-</font>"
-
-	if(href_list["buffer"])
-
-		P.set_buffer(src)
-		var/atom/buffer = P.get_buffer()
-		temp = "<font color = #666633>-% Successfully stored \ref[buffer] [buffer.name] in buffer %-</font>"
-
-
-	if(href_list["flush"])
-
-		temp = "<font color = #666633>-% Buffer successfully flushed. %-</font>"
-		P.set_buffer(null)
-
-	src.Options_Topic(href, href_list)
-
-	usr.set_machine(src)
-	src.add_fingerprint(usr)
-	playsound(loc, 'sound/machines/machine_switch.ogg', 100, 1)
-
-	updateUsrDialog()
-
-/obj/machinery/telecomms/proc/canAccess(var/mob/user)
-	if(issilicon(user) || in_range(user, src))
-		return 1
-	return 0
-
-#undef TELECOMM_Z
-#undef STATION_Z
+	if(!HAS_SILICON_ACCESS(user))
+		return held_item
+	if(iscyborg(user) && in_range(user, src))
+		return held_item

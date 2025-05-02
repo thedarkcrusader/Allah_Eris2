@@ -1,43 +1,63 @@
+#define IS_FINITE__UNSAFE(a) (!isinf(a) && !isnan(a))
+#define IS_FINITE(a) (isnum(a) && IS_FINITE__UNSAFE(a))
+
 // Credits to Nickr5 for the useful procs I've taken from his library resource.
 // This file is quadruple wrapped for your pleasure
 // (
 
 #define NUM_E 2.71828183
 
-#define M_PI						3.1416
-#define INFINITY				1e31	//closer then enough
+#define PI 3.1416
+#define INFINITY 1e31 //closer then enough
 
 #define SHORT_REAL_LIMIT 16777216
 
-#define SQRTWO 1.414
+//"fancy" math for calculating time in ms from tick_usage percentage and the length of ticks
+//percent_of_tick_used * (ticklag * 100(to convert to ms)) / 100(percent ratio)
+//collapsed to percent_of_tick_used * tick_lag
+#define TICK_DELTA_TO_MS(percent_of_tick_used) ((percent_of_tick_used) * world.tick_lag)
+#define TICK_USAGE_TO_MS(starting_tickusage) (TICK_DELTA_TO_MS(TICK_USAGE_REAL - starting_tickusage))
 
 #define PERCENT(val) (round((val)*100, 0.1))
-#define CLAMP01(x) (CLAMP(x, 0, 1))
+#define CLAMP01(x) (clamp(x, 0, 1))
 
-#define SIGN(x) ( x < 0 ? -1  : 1 )
+//time of day but automatically adjusts to the server going into the next day within the same round.
+//for when you need a reliable time number that doesn't depend on byond time.
+#define REALTIMEOFDAY (world.timeofday + (MIDNIGHT_ROLLOVER * MIDNIGHT_ROLLOVER_CHECK))
+#define MIDNIGHT_ROLLOVER_CHECK ( GLOB.rollovercheck_last_timeofday != world.timeofday ? update_midnight_rollover() : GLOB.midnight_rollovers )
+
+/// Gets the sign of x, returns -1 if negative, 0 if 0, 1 if positive
+#define SIGN(x) ( ((x) > 0) - ((x) < 0) )
+
+/// Returns the integer closest to 0 from a division
+#define SIGNED_FLOOR_DIVISION(x, y) (SIGN(x) * FLOOR(abs(x) / y, 1))
 
 #define CEILING(x, y) ( -round(-(x) / (y)) * (y) )
 
-#define DIST_EUCLIDIAN(x1,y1,x2,y2) (sqrt((x1-x2)**2 + (y1-y2)**2))
+#define ROUND_UP(x) ( -round(-(x)))
+
+/// Probabilistic rounding: Adds 1 to the integer part of x with a probability equal to the decimal part of x.
+/// ie. ROUND_PROB(40.25) returns 40 with 75% probability, and 41 with 25% probability.
+#define ROUND_PROB(x) ( floor(x) + (prob(fract(x) * 100)) )
+
+/// Returns the number of digits in a number. Only works on whole numbers.
+/// This is marginally faster than string interpolation -> length
+#define DIGITS(x) (ROUND_UP(log(10, x)))
 
 // round() acts like floor(x, 1) by default but can't handle other values
 #define FLOOR(x, y) ( round((x) / (y)) * (y) )
 
-#define QUANTIZE(variable) (round(variable, 0.0001))
-
-#define CLAMP(CLVALUE,CLMIN,CLMAX) ( max( (CLMIN), min((CLVALUE), (CLMAX)) ) )
-
 // Similar to clamp but the bottom rolls around to the top and vice versa. min is inclusive, max is exclusive
-#define WRAP(val, min, max) ( min == max ? min : (val) - (round(((val) - (min))/((max) - (min))) * ((max) - (min))) )
+#define WRAP(val, min, max) clamp(( min == max ? min : (val) - (round(((val) - (min))/((max) - (min))) * ((max) - (min))) ),min,max)
+
+/// Increments a value and wraps it if it exceeds some value. Can be used to circularly iterate through a list through `idx = WRAP_UP(idx, length_of_list)`.
+#define WRAP_UP(val, max) (((val) % (max)) + 1)
 
 // Real modulus that handles decimals
-#define MODULUS(x, y) ( (x) - (y) * round((x) / (y)) )
-
-// Tangent
-#define TAN(x) (sin(x) / cos(x))
+#define MODULUS(x, y) ( (x) - FLOOR(x, y))
 
 // Cotangent
-#define COT(x) (1 / TAN(x))
+#define COT(x) (1 / tan(x))
 
 // Secant
 #define SEC(x) (1 / cos(x))
@@ -59,28 +79,11 @@
 // Used for calculating the radioactive strength falloff
 #define INVERSE_SQUARE(initial_strength,cur_distance,initial_distance) ( (initial_strength)*((initial_distance)**2/(cur_distance)**2) )
 
-// Vector algebra.
-#define SQUAREDNORM(x, y) (x**2 + y**)
-
-#define NORM(x, y) (sqrt(SQUAREDNORM(x, y)))
-
-#define ISPOWEROFTWO(val) ((val & (val-1)) == 0)
-
-#define ROUNDUPTOPOWEROFTWO(val) (2 ** -round(-log(2, val)))
-
 #define ISABOUTEQUAL(a, b, deviation) (deviation ? abs((a) - (b)) <= deviation : abs((a) - (b)) <= 0.1)
 
 #define ISEVEN(x) (x % 2 == 0)
 
 #define ISODD(x) (x % 2 != 0)
-
-//Probability based rounding that makes whole numbers out of decimals based on luck.
-//The decimal value is the probability to be rounded up.
-//Eg a value of 1.37 has a 37% chance to become 2, otherwise it is 1
-//Useful for game balance matters where the gulf caused by consistent rounding is too much
-#define ROUND_PROB(val) (val - (val % 1) + prob((val % 1) * 100))
-
-#define RAND_DECIMAL(lower, upper) (rand(0, upper - lower) + lower)
 
 // Returns true if val is from min to max, inclusive.
 #define ISINRANGE(val, min, max) (min <= val && val <= max)
@@ -97,6 +100,12 @@
 // amount=0.5 returns the mean of a and b.
 #define LERP(a, b, amount) ( amount ? ((a) + ((b) - (a)) * (amount)) : a )
 
+/**
+ * Performs an inverse linear interpolation between a, b, and a provided value between a and b
+ * This returns the amount that you would need to feed into a lerp between A and B to return the third value
+ */
+#define INVERSE_LERP(a, b, value) ((value - a) / (b - a))
+
 // Returns the nth root of x.
 #define ROOT(n, x) ((x) ** (1 / (n)))
 
@@ -105,9 +114,9 @@
 /proc/SolveQuadratic(a, b, c)
 	ASSERT(a)
 	. = list()
-	var/d		= b*b - 4 * a * c
+	var/d = b*b - 4 * a * c
 	var/bottom  = 2 * a
-	if(d < 0)
+	if(d < 0 || !IS_FINITE__UNSAFE(d) || !IS_FINITE__UNSAFE(bottom))
 		return
 	var/root = sqrt(d)
 	. += (-b + root) / bottom
@@ -119,9 +128,16 @@
 
 #define TORADIANS(degrees) ((degrees) * 0.0174532925)
 
+/// Gets shift x that would be required the bitflag (1<<x)
+/// We need the round because log has floating-point inaccuracy, and if we undershoot at all on list indexing we'll get the wrong index.
+#define TOBITSHIFT(bit) ( round(log(2, bit), 1) )
+
 // Will filter out extra rotations and negative rotations
 // E.g: 540 becomes 180. -180 becomes 180.
 #define SIMPLIFY_DEGREES(degrees) (MODULUS((degrees), 360))
+
+// 180s an angle
+#define REVERSE_ANGLE(degrees) (SIMPLIFY_DEGREES(degrees + 180))
 
 #define GET_ANGLE_OF_INCIDENCE(face, input) (MODULUS((face) - (input), 360))
 
@@ -162,7 +178,7 @@
 			R1 = rand(-ACCURACY,ACCURACY)/ACCURACY
 			R2 = rand(-ACCURACY,ACCURACY)/ACCURACY
 			working = R1*R1 + R2*R2
-		while(working >= 1 || working==0)
+		while(working >= 1 || working == 0)
 		working = sqrt(-2 * log(working) / working)
 		R1 *= working
 		gaussian_next = R2 * working
@@ -173,24 +189,24 @@
 	var/pixel_x = 0
 	var/pixel_y = 0
 	for(var/i in 1 to increments)
-		pixel_x += sin(angle)+16*sin(angle)*2
-		pixel_y += cos(angle)+16*cos(angle)*2
+		pixel_x += sin(angle)+(ICON_SIZE_X/2)*sin(angle)*2
+		pixel_y += cos(angle)+(ICON_SIZE_Y/2)*cos(angle)*2
 	var/new_x = starting.x
 	var/new_y = starting.y
-	while(pixel_x > 16)
-		pixel_x -= 32
+	while(pixel_x > (ICON_SIZE_X/2))
+		pixel_x -= ICON_SIZE_X
 		new_x++
-	while(pixel_x < -16)
-		pixel_x += 32
+	while(pixel_x < -(ICON_SIZE_X/2))
+		pixel_x += ICON_SIZE_X
 		new_x--
-	while(pixel_y > 16)
-		pixel_y -= 32
+	while(pixel_y > (ICON_SIZE_Y/2))
+		pixel_y -= ICON_SIZE_Y
 		new_y++
-	while(pixel_y < -16)
-		pixel_y += 32
+	while(pixel_y < -(ICON_SIZE_Y/2))
+		pixel_y += ICON_SIZE_Y
 		new_y--
-	new_x = CLAMP(new_x, 0, world.maxx)
-	new_y = CLAMP(new_y, 0, world.maxy)
+	new_x = clamp(new_x, 1, world.maxx)
+	new_y = clamp(new_y, 1, world.maxy)
 	return locate(new_x, new_y, starting.z)
 
 // Returns a list where [1] is all x values and [2] is all y values that overlap between the given pair of rectangles
@@ -213,58 +229,38 @@
 
 	return list(region_x1 & region_x2, region_y1 & region_y2)
 
-/proc/Mean(...)
-	var/sum = 0
-	for(var/val in args)
-		sum += val
-	return sum / args.len
+#define EXP_DISTRIBUTION(desired_mean) ( -(1/(1/desired_mean)) * log(rand(1, 1000) * 0.001) )
 
+#define LORENTZ_DISTRIBUTION(x, s) ( s*tan(TODEGREES(PI*(rand()-0.5))) + x )
+#define LORENTZ_CUMULATIVE_DISTRIBUTION(x, y, s) ( (1/PI)*TORADIANS(arctan((x-(y))/s)) + 1/2 )
+
+#define RULE_OF_THREE(a, b, x) ((a*x)/b)
+
+/// Converts a probability/second chance to probability/seconds_per_tick chance
+/// For example, if you want an event to happen with a 10% per second chance, but your proc only runs every 5 seconds, do `if(prob(100*SPT_PROB_RATE(0.1, 5)))`
+#define SPT_PROB_RATE(prob_per_second, seconds_per_tick) (1 - (1 - (prob_per_second)) ** (seconds_per_tick))
+
+/// Like SPT_PROB_RATE but easier to use, simply put `if(SPT_PROB(10, 5))`
+#define SPT_PROB(prob_per_second_percent, seconds_per_tick) (prob(100*SPT_PROB_RATE((prob_per_second_percent)/100, (seconds_per_tick))))
 // )
 
-// Round up
-proc/n_ceil(var/num)
-	if(isnum(num))
-		return round(num)+1
+// This value per these many units. Very unnecessary but helpful for readability (For example wanting 30 units of synthflesh to heal 50 damage - VALUE_PER(50, 30))
+#define VALUE_PER(value, per) (value / per)
 
-// Find leftmost bit using bitshifting
-proc/leftmost_bit(num)
-	var/pos = 0
-	if(num)
-		while(num > 0)
-			num >>= 1
-			pos++
-	return pos
+#define GET_TRUE_DIST(a, b) ((a == null || b == null) ? -1 : max(abs(a.x -b.x), abs(a.y-b.y), abs(a.z-b.z)))
 
-proc/get_vector(dir) // Accepts a directional string and returns a list containing an actual vector
-    switch(dir)
-        if(NORTH)
-            return list(0, 1)
-        if(NORTHEAST)
-            return list(1, 1)
-        if(EAST)
-            return list(1, 0)
-        if(SOUTHEAST)
-            return list(1, -1)
-        if(SOUTH)
-            return list(0, -1)
-        if(SOUTHWEST)
-            return list(-1, -1)
-        if(WEST)
-            return list(-1, 0)
-        if(NORTHWEST)
-            return list(-1, 1)
-        else if(!dir)
-            return list(1, 0)
+/// Returns the distance between a and b fully ignoring multiz (normal get_dist counts a z move as 1 extra distance)
+#define GET_CARDINAL_DIST(a, b) ((a == null || b == null) ? -1 : max(abs(a.x -b.x), abs(a.y-b.y)))
 
-proc/get_vector_angle(vec1, vec2) // Calculates the angle between two vectors, then returns the angle. Uses degrees instead of radians because BYOND expects trig functions to be called with degrees.
-    var/dot = vec1[1] * vec2[1] + vec1[2] * vec2[2] // Calculate the dot product
-    var/mag1 = sqrt((vec1[1] ** 2) + (vec1[2] ** 2)) // Calculate the magnitudes of the vectors
-    var/mag2 = sqrt((vec2[1] ** 2) + (vec2[2] ** 2))
-    var/angle = arccos(dot / (mag1 * mag2)) // Calculate the angle based on the dot product and magnitudes of the vectors
-    return angle
+//We used to use linear regression to approximate the answer, but Mloc realized this was actually faster.
+//And lo and behold, it is, and it's more accurate to boot.
+#define CHEAP_HYPOTENUSE(Ax, Ay, Bx, By) (sqrt((Ax - Bx) ** 2 + (Ay - By) ** 2)) //A squared + B squared = C squared
 
-#define T100C 373.15 //  100.0 degrees celsius
+/// The number of cells in a taxicab circle (rasterized diamond) of radius X.
+#define DIAMOND_AREA(X) (1 + 2*(X)*((X)+1))
 
+/// Returns a random decimal between x and y.
+#define RANDOM_DECIMAL(x, y) LERP((x), (y), rand())
 
-
-#define CELSIUS + T0C
+#define SI_COEFFICIENT "coefficient"
+#define SI_UNIT "unit"

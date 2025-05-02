@@ -2,16 +2,10 @@
 	. = ..()
 	if(!. || !client)
 		return FALSE
-
-	regenerate_icons()
-	client.create_UI(type)
-
 	if(stat != DEAD)
-		for(var/obj/machinery/ai_status_display/O in GLOB.ai_status_display_list) //change status
-			O.mode = 1
-			O.emotion = "Neutral"
+		if(lacks_power() && apc_override) //Placing this in Login() in case the AI doesn't have this link for whatever reason.
+			to_chat(usr, "[span_warning("Main power is unavailable, backup power in use. Diagnostics scan complete.")] <A href='byond://?src=[REF(src)];emergencyAPC=[TRUE]'>Local APC ready for connection.</A>")
+	set_eyeobj_visible(TRUE)
+	if(multicam_on)
+		end_multicam()
 	view_core()
-
-	client.CAN_MOVE_DIAGONALLY = TRUE
-	client.CH = new /datum/click_handler/ai(client)
-	old_client = client

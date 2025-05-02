@@ -1,18 +1,14 @@
 /mob/Logout()
-	// SEND_SIGNAL_OLD(src, COMSIG_MOB_LOGOUT)
-	// GLOB.logged_out_event.raise_event(src, my_client)
-	log_access("Logout: [key_name(src)]")
-	SSnano.user_logout(src) // this is used to clean up (remove) this user's Nano UIs
+	SEND_SIGNAL(src, COMSIG_MOB_LOGOUT)
+	log_message("[key_name(src)] is no longer owning mob [src]([src.type])", LOG_OWNERSHIP)
 	SStgui.on_logout(src)
-	GLOB.player_list -= src
-
-	if(admin_datums[src.ckey])
-		if (SSticker.current_state == GAME_STATE_PLAYING) //Only report this stuff if we are currently playing.
-			message_admins("Admin logout: [key_name(src)]")
-
-	if(client && client.UI)
-		client.UI.hide()
-
+	remove_from_player_list()
+	update_ambience_area(null) // Unset ambience vars so it plays again on login
 	..()
+
+	if(loc)
+		loc.on_log(FALSE)
+
+	become_uncliented()
 
 	return TRUE

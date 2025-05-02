@@ -1,217 +1,170 @@
-//This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:31
-
 /obj/machinery/computer/pod
-	name = "pod launch control console"
-	desc = "A control console for launching pods. Some people prefer firing Mechas."
-	icon_screen = "mass_driver"
-	light_color = COLOR_LIGHTING_GREEN_MACHINERY
-	circuit = /obj/item/electronics/circuitboard/pod
+	name = "mass driver launch control"
+	desc = "A combined blastdoor and mass driver control unit."
+	processing_flags = START_PROCESSING_MANUALLY
+	/// Connected mass driver
+	var/obj/machinery/mass_driver/connected = null
+	/// ID of the launch control
 	var/id = 1
-	var/obj/machinery/mass_driver/connected
-	var/timing = 0
+	/// If the launch timer counts down
+	var/timing = FALSE
+	/// Time before auto launch
 	var/time = 30
-	var/title = "Mass Driver Controls"
+	/// Range in which we search for a mass drivers and poddoors nearby
+	var/range = 4
+	/// Countdown timer for the mass driver's delayed launch functionality.
+	COOLDOWN_DECLARE(massdriver_countdown)
 
+/obj/machinery/computer/pod/Initialize(mapload)
+	. = ..()
+	for(var/obj/machinery/mass_driver/M in range(range, src))
+		if(M.id == id)
+			connected = M
+			break
 
-/obj/machinery/computer/pod/New()
-	..()
-	spawn( 5 )
-		for(var/obj/machinery/mass_driver/M in world)
-			if(M.id == id)
-				connected = M
-			else
-		return
-	return
+/obj/machinery/computer/pod/process(seconds_per_tick)
+	if(COOLDOWN_FINISHED(src, massdriver_countdown))
+		timing = FALSE
+		// alarm() sleeps, so we want to end processing first and can't rely on return PROCESS_KILL
+		end_processing()
+		alarm()
 
-
+/**
+ * Initiates launching sequence by checking if all components are functional, opening poddoors, firing mass drivers and then closing poddoors
+ */
 /obj/machinery/computer/pod/proc/alarm()
-	if(stat & (NOPOWER|BROKEN))
+	if(machine_stat & (NOPOWER|BROKEN))
 		return
 
-	if(!( connected ))
-		to_chat(viewers(null, null), "Cannot locate mass driver connector. Cancelling firing sequence!")
+	if(!connected)
+		say("Cannot locate mass driver connector. Cancelling firing sequence!")
 		return
 
-	for(var/obj/machinery/door/blast/M in world)
+	for(var/obj/machinery/door/poddoor/M in range(range, src))
 		if(M.id == id)
 			M.open()
 
-	sleep(20)
-
-	for(var/obj/machinery/mass_driver/M in world)
+	sleep(2 SECONDS)
+	for(var/obj/machinery/mass_driver/M in range(range, src))
 		if(M.id == id)
 			M.power = connected.power
 			M.drive()
 
-	sleep(50)
-	for(var/obj/machinery/door/blast/M in world)
+	sleep(5 SECONDS)
+	for(var/obj/machinery/door/poddoor/M in range(range, src))
 		if(M.id == id)
 			M.close()
-			return
-	return
 
-/*
-/obj/machinery/computer/pod/attackby(I as obj, user as mob)
-	if(istype(I, /obj/item/tool/screwdriver))
-		playsound(loc, 'sound/items/Screwdriver.ogg', 50, 1)
-		if(do_after(user, 20))
-			if(stat & BROKEN)
-				to_chat(user, SPAN_NOTICE("The broken glass falls out."))
-				var/obj/structure/computerframe/A = new /obj/structure/computerframe( loc )
-				new /obj/item/material/shard( loc )
+/obj/machinery/computer/pod/ui_interact(mob/user, datum/tgui/ui)
+	. = ..()
+	ui = SStgui.try_update_ui(user, src, ui)
+	if(!ui)
+		ui = new(user, src, "MassDriverControl", name)
+		ui.open()
 
-				//generate appropriate circuitboard. Accounts for /pod/old computer types
-				var/obj/item/electronics/circuitboard/pod/M = null
-				if(istype(src, /obj/machinery/computer/pod/old))
-					M = new /obj/item/electronics/circuitboard/olddoor( A )
-					if(istype(src, /obj/machinery/computer/pod/old/syndicate))
-						M = new /obj/item/electronics/circuitboard/syndicatedoor( A )
-					if(istype(src, /obj/machinery/computer/pod/old/swf))
-						M = new /obj/item/electronics/circuitboard/swfdoor( A )
-				else //it's not an old computer. Generate standard pod circuitboard.
-					M = new /obj/item/electronics/circuitboard/pod( A )
+/obj/machinery/computer/pod/ui_data(mob/user)
+	var/list/data = list()
+	// If the cooldown has finished, just display the time. If the cooldown hasn't finished, display the cooldown.
+	var/display_time = COOLDOWN_FINISHED(src, massdriver_countdown) ? time : COOLDOWN_TIMELEFT(src, massdriver_countdown) * 0.1
+	data["connected"] = connected ? TRUE : FALSE
+	data["seconds"] = round(display_time % 60)
+	data["minutes"] = round((display_time - data["seconds"]) / 60)
+	data["timing"] = timing
+	data["power"] = connected ? connected.power : 0.25
+	data["poddoor"] = FALSE
+	for(var/obj/machinery/door/poddoor/door in range(range, src))
+		if(door.id == id)
+			data["poddoor"] = TRUE
+			break
+	return data
 
-				for (var/obj/C in src)
-					C.loc = loc
-				M.id = id
-				A.circuit = M
-				A.state = 3
-				A.icon_state = "3"
-				A.anchored = TRUE
-				qdel(src)
-			else
-				to_chat(user, SPAN_NOTICE("You disconnect the monitor."))
-				var/obj/structure/computerframe/A = new /obj/structure/computerframe( loc )
-
-				//generate appropriate circuitboard. Accounts for /pod/old computer types
-				var/obj/item/electronics/circuitboard/pod/M = null
-				if(istype(src, /obj/machinery/computer/pod/old))
-					M = new /obj/item/electronics/circuitboard/olddoor( A )
-					if(istype(src, /obj/machinery/computer/pod/old/syndicate))
-						M = new /obj/item/electronics/circuitboard/syndicatedoor( A )
-					if(istype(src, /obj/machinery/computer/pod/old/swf))
-						M = new /obj/item/electronics/circuitboard/swfdoor( A )
-				else //it's not an old computer. Generate standard pod circuitboard.
-					M = new /obj/item/electronics/circuitboard/pod( A )
-
-				for (var/obj/C in src)
-					C.loc = loc
-				M.id = id
-				A.circuit = M
-				A.state = 4
-				A.icon_state = "4"
-				A.anchored = TRUE
-				qdel(src)
-	else
-		attack_hand(user)
-	return
-*/
-
-
-/obj/machinery/computer/pod/attack_hand(mob/user)
-	if(..())
+/obj/machinery/computer/pod/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
+	. = ..()
+	if(.)
+		return
+	if(!allowed(usr))
+		to_chat(usr, span_warning("Access denied."))
 		return
 
-	var/dat = "<HTML><BODY><TT><B>[title]</B>"
-	user.set_machine(src)
-	if(connected)
-		var/d2
-		if(timing)	//door controls do not need timers.
-			d2 = "<A href='?src=\ref[src];time=0'>Stop Time Launch</A>"
-		else
-			d2 = "<A href='?src=\ref[src];time=1'>Initiate Time Launch</A>"
-		var/second = time % 60
-		var/minute = (time - second) / 60
-		dat += "<HR>\nTimer System: [d2]\nTime Left: [minute ? "[minute]:" : null][second] <A href='?src=\ref[src];tp=-30'>-</A> <A href='?src=\ref[src];tp=-1'>-</A> <A href='?src=\ref[src];tp=1'>+</A> <A href='?src=\ref[src];tp=30'>+</A>"
-		var/temp = ""
-		var/list/L = list( 0.25, 0.5, 1, 2, 4, 8, 16 )
-		for(var/t in L)
-			if(t == connected.power)
-				temp += "[t] "
+	switch(action)
+		if("set_power")
+			if(!connected)
+				return
+			var/value = text2num(params["power"])
+			if(!value)
+				return
+			value = clamp(value, 0.25, 16)
+			connected.power = value
+			return TRUE
+		if("launch")
+			alarm()
+			return TRUE
+		if("time")
+			timing = !timing
+			if(timing)
+				COOLDOWN_START(src, massdriver_countdown, time SECONDS)
+				begin_processing()
 			else
-				temp += "<A href = '?src=\ref[src];power=[t]'>[t]</A> "
-		dat += "<HR>\nPower Level: [temp]<BR>\n<A href = '?src=\ref[src];alarm=1'>Firing Sequence</A><BR>\n<A href = '?src=\ref[src];drive=1'>Test Fire Driver</A><BR>\n<A href = '?src=\ref[src];door=1'>Toggle Outer Door</A><BR>"
-	else
-		dat += "<BR>\n<A href = '?src=\ref[src];door=1'>Toggle Outer Door</A><BR>"
-	dat += "<BR><BR><A href='?src=\ref[user];mach_close=computer'>Close</A></TT></BODY></HTML>"
-	user << browse(dat, "window=computer;size=400x500")
-	add_fingerprint(usr)
-	onclose(user, "computer")
-	return
-
-
-/obj/machinery/computer/pod/Process()
-	if(!..())
-		return
-	if(timing)
-		if(time > 0)
-			time = round(time) - 1
-		else
-			alarm()
-			time = 0
-			timing = 0
-		updateDialog()
-	return
-
-
-/obj/machinery/computer/pod/Topic(href, href_list)
-	if(..())
-		return 1
-	if((usr.contents.Find(src) || (in_range(src, usr) && istype(loc, /turf))) || (issilicon(usr)))
-		usr.set_machine(src)
-		if(href_list["power"])
-			var/t = text2num(href_list["power"])
-			t = min(max(0.25, t), 16)
-			if(connected)
-				connected.power = t
-		if(href_list["alarm"])
-			alarm()
-		if(href_list["drive"])
-			for(var/obj/machinery/mass_driver/M in GLOB.machines)
-				if(M.id == id)
-					M.power = connected.power
-					M.drive()
-
-		if(href_list["time"])
-			timing = text2num(href_list["time"])
-		if(href_list["tp"])
-			var/tp = text2num(href_list["tp"])
-			time += tp
-			time = min(max(round(time), 0), 120)
-		if(href_list["door"])
-			for(var/obj/machinery/door/blast/M in world)
+				time = COOLDOWN_TIMELEFT(src, massdriver_countdown) * 0.1
+				COOLDOWN_RESET(src, massdriver_countdown)
+				end_processing()
+			return TRUE
+		if("input")
+			var/value = text2num(params["adjust"])
+			if(!value)
+				return
+			value = round(time + value)
+			time = clamp(value, 0, 120)
+			return TRUE
+		if("door")
+			for(var/obj/machinery/door/poddoor/M in range(range, src))
 				if(M.id == id)
 					if(M.density)
 						M.open()
 					else
 						M.close()
-		updateUsrDialog()
-	return
-
-
+			return TRUE
+		if("driver_test")
+			for(var/obj/machinery/mass_driver/M in range(range, src))
+				if(M.id == id)
+					M.power = connected?.power
+					M.drive()
+			return TRUE
 
 /obj/machinery/computer/pod/old
+	name = "\improper DoorMex control console"
 	icon_state = "oldcomp"
-	icon_keyboard = null
 	icon_screen = "library"
-	name = "DoorMex Control Computer"
-	title = "Door Controls"
+	icon_keyboard = null
 
+/obj/machinery/computer/pod/old/mass_driver_controller
+	name = "\improper Mass Driver Controller"
+	icon = 'icons/obj/machines/wallmounts.dmi'
+	icon_state = "airlock_control_standby"
+	icon_screen = null
+	density = FALSE
 
+/obj/machinery/computer/pod/old/mass_driver_controller/ordnancedriver
+	id = MASSDRIVER_ORDNANCE
+
+//for maps where pod doors are outside of the standard 4 tile controller detection range (ie Pubbystation)
+/obj/machinery/computer/pod/old/mass_driver_controller/ordnancedriver/longrange
+	range = 6
+
+/obj/machinery/computer/pod/old/mass_driver_controller/chapelgun
+	id = MASSDRIVER_CHAPEL
+
+/obj/machinery/computer/pod/old/mass_driver_controller/trash
+	id = MASSDRIVER_DISPOSALS
+
+/obj/machinery/computer/pod/old/mass_driver_controller/shack
+	id = MASSDRIVER_SHACK
 
 /obj/machinery/computer/pod/old/syndicate
-	name = "ProComp Executive IIc"
-	desc = "Criminals often operate on a tight budget. Operates external airlocks."
-	title = "External Airlock Controls"
-	req_access = list(access_syndicate)
-
-/obj/machinery/computer/pod/old/syndicate/attack_hand(var/mob/user as mob)
-	if(!allowed(user))
-		to_chat(user, SPAN_WARNING("Access Denied"))
-		return
-	else
-		..()
+	name = "\improper ProComp Executive IIc"
+	desc = "The Syndicate operate on a tight budget. Operates external airlocks."
+	req_access = list(ACCESS_SYNDICATE)
 
 /obj/machinery/computer/pod/old/swf
-	name = "Magix System IV"
-	desc = "An arcane artifact that holds much magic. Running E-Knock 2.2: Sorceror's Edition"
+	name = "\improper Magix System IV"
+	desc = "An arcane artifact that holds much magic. Running E-Knock 2.2: Sorcerer's Edition."

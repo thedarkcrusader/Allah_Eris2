@@ -1,486 +1,411 @@
-/obj/structure/bigDelivery
-	desc = "A big wrapped package."
+/obj/item/delivery
+	icon = 'icons/obj/storage/wrapping.dmi'
+	inhand_icon_state = "deliverypackage"
+	var/giftwrapped = 0
+	var/sort_tag = 0
+	var/obj/item/paper/note
+	var/obj/item/barcode/sticker
+
+/obj/item/delivery/Initialize(mapload)
+	. = ..()
+	RegisterSignal(src, COMSIG_MOVABLE_DISPOSING, PROC_REF(disposal_handling))
+
+/**
+ * Initial check if manually unwrapping
+ */
+/obj/item/delivery/proc/attempt_pre_unwrap_contents(mob/user, time = 1.5 SECONDS)
+	to_chat(user, span_notice("You start to unwrap the package..."))
+	return do_after(user, time, target = user)
+
+/**
+ * Signals for unwrapping.
+ */
+/obj/item/delivery/proc/unwrap_contents()
+	if(!sticker)
+		return
+	for(var/atom/movable/movable_content as anything in contents)
+		SEND_SIGNAL(movable_content, COMSIG_ITEM_UNWRAPPED)
+
+/**
+ * Effects after completing unwrapping
+ */
+/obj/item/delivery/proc/post_unwrap_contents(mob/user, rip_open = TRUE)
+	var/turf/turf_loc = get_turf(user || src)
+	if(rip_open)
+		playsound(loc, 'sound/items/poster/poster_ripped.ogg', 50, TRUE)
+		new /obj/effect/decal/cleanable/wrapping(turf_loc)
+	else
+		playsound(loc, 'sound/items/box_cut.ogg', 50, TRUE)
+		new /obj/item/stack/package_wrap(turf_loc, 1)
+	for(var/atom/movable/movable_content as anything in contents)
+		movable_content.forceMove(turf_loc)
+
+	qdel(src)
+
+/obj/item/delivery/contents_explosion(severity, target)
+	switch(severity)
+		if(EXPLODE_DEVASTATE)
+			SSexplosions.high_mov_atom += contents
+		if(EXPLODE_HEAVY)
+			SSexplosions.med_mov_atom += contents
+		if(EXPLODE_LIGHT)
+			SSexplosions.low_mov_atom += contents
+
+/obj/item/delivery/atom_deconstruct(dissambled = TRUE)
+	unwrap_contents()
+	post_unwrap_contents()
+
+/obj/item/delivery/examine(mob/user)
+	. = ..()
+	if(note)
+		if(!in_range(user, src))
+			. += span_info("There's a [EXAMINE_HINT(note.name)] attached to it. You can't read it from here.")
+		else
+			. += span_info("There's a [EXAMINE_HINT(note.name)] attached to it...")
+			. += note.examine(user)
+	if(sticker)
+		. += span_notice("There's a [EXAMINE_HINT("barcode")] attached to the side. The package is marked for [EXAMINE_HINT("export.")]")
+	if(sort_tag)
+		. += span_notice("There's a [EXAMINE_HINT("sorting tag")] with the destination set to [EXAMINE_HINT("[GLOB.TAGGERLOCATIONS[sort_tag]].")]")
+
+/obj/item/delivery/proc/disposal_handling(disposal_source, obj/structure/disposalholder/disposal_holder, obj/machinery/disposal/disposal_machine, hasmob)
+	SIGNAL_HANDLER
+	if(!hasmob)
+		disposal_holder.destinationTag = sort_tag
+
+/obj/item/delivery/relay_container_resist_act(mob/living/user, obj/object)
+	if(ismovable(loc))
+		var/atom/movable/movable_loc = loc //can't unwrap the wrapped container if it's inside something.
+		movable_loc.relay_container_resist_act(user, object)
+		return
+	to_chat(user, span_notice("You lean on the back of [object] and start pushing to rip the wrapping around it."))
+	if(do_after(user, 5 SECONDS, target = object))
+		if(!user || user.stat != CONSCIOUS || user.loc != object || object.loc != src)
+			return
+		to_chat(user, span_notice("You successfully removed [object]'s wrapping!"))
+		object.forceMove(loc)
+		unwrap_contents()
+		post_unwrap_contents(user)
+	else
+		if(user.loc == src) //so we don't get the message if we resisted multiple times and succeeded.
+			to_chat(user, span_warning("You fail to remove [object]'s wrapping!"))
+
+/obj/item/delivery/update_icon_state()
+	. = ..()
+	icon_state = giftwrapped ? "gift[base_icon_state]" : base_icon_state
+
+/obj/item/delivery/update_overlays()
+	. = ..()
+	if(sort_tag)
+		. += "[base_icon_state]_sort"
+	if(note)
+		. += "[base_icon_state]_note"
+	if(sticker)
+		. += "[base_icon_state]_barcode"
+
+/obj/item/delivery/attackby(obj/item/item, mob/user, list/modifiers)
+	if(istype(item, /obj/item/dest_tagger))
+		var/obj/item/dest_tagger/dest_tagger = item
+
+		if(sort_tag != dest_tagger.currTag)
+			var/tag = uppertext(GLOB.TAGGERLOCATIONS[dest_tagger.currTag])
+			to_chat(user, span_notice("*[tag]*"))
+			sort_tag = dest_tagger.currTag
+			playsound(loc, 'sound/machines/beep/twobeep_high.ogg', 100, TRUE)
+			update_appearance()
+	else if(IS_WRITING_UTENSIL(item))
+		if(!user.can_write(item))
+			return
+		var/str = tgui_input_text(user, "Label text?", "Set label", max_length = MAX_NAME_LEN)
+		if(!user.can_perform_action(src))
+			return
+		if(!str || !length(str))
+			to_chat(user, span_warning("Invalid text!"))
+			return
+		playsound(src, SFX_WRITING_PEN, 50, TRUE, SHORT_RANGE_SOUND_EXTRARANGE, SOUND_FALLOFF_EXPONENT + 3, ignore_walls = FALSE)
+		user.visible_message(span_notice("[user] labels [src] as [str]."))
+		name = "[name] ([str])"
+
+	else if(istype(item, /obj/item/stack/wrapping_paper) && !giftwrapped)
+		var/obj/item/stack/wrapping_paper/wrapping_paper = item
+		if(wrapping_paper.use(3))
+			user.visible_message(span_notice("[user] wraps the package in festive paper!"))
+			giftwrapped = TRUE
+			greyscale_config = text2path("/datum/greyscale_config/gift[icon_state]")
+			set_greyscale(colors = wrapping_paper.greyscale_colors)
+			update_appearance()
+		else
+			to_chat(user, span_warning("You need more paper!"))
+
+	else if(istype(item, /obj/item/paper))
+		if(note)
+			to_chat(user, span_warning("This package already has a note attached!"))
+			return
+		if(!user.transferItemToLoc(item, src))
+			to_chat(user, span_warning("For some reason, you can't attach [item]!"))
+			return
+		user.visible_message(span_notice("[user] attaches [item] to [src]."), span_notice("You attach [item] to [src]."))
+		note = item
+		update_appearance()
+
+	else if(istype(item, /obj/item/universal_scanner))
+		var/obj/item/universal_scanner/sales_tagger = item
+		if(sales_tagger.scanning_mode != SCAN_SALES_TAG)
+			return
+		if(sticker)
+			to_chat(user, span_warning("This package already has a barcode attached!"))
+			return
+		if(!(sales_tagger.payments_acc))
+			to_chat(user, span_warning("Swipe an ID on [sales_tagger] first!"))
+			return
+		if(sales_tagger.paper_count <= 0)
+			to_chat(user, span_warning("[sales_tagger] is out of paper!"))
+			return
+		user.visible_message(span_notice("[user] attaches a barcode to [src]."), span_notice("You attach a barcode to [src]."))
+		sales_tagger.paper_count -= 1
+		sticker = new /obj/item/barcode(src)
+		sticker.payments_acc = sales_tagger.payments_acc	//new tag gets the tagger's current account.
+		sticker.cut_multiplier = sales_tagger.cut_multiplier	//same, but for the percentage taken.
+
+		for(var/obj/wrapped_item in get_all_contents())
+			if(HAS_TRAIT(wrapped_item, TRAIT_NO_BARCODES))
+				continue
+			wrapped_item.AddComponent(/datum/component/pricetag, sticker.payments_acc, sales_tagger.cut_multiplier)
+		update_appearance()
+
+	else if(istype(item, /obj/item/barcode))
+		var/obj/item/barcode/stickerA = item
+		if(sticker)
+			to_chat(user, span_warning("This package already has a barcode attached!"))
+			return
+		if(!(stickerA.payments_acc))
+			to_chat(user, span_warning("This barcode seems to be invalid. Guess it's trash now."))
+			return
+		if(!user.transferItemToLoc(item, src))
+			to_chat(user, span_warning("For some reason, you can't attach [item]!"))
+			return
+		sticker = stickerA
+		for(var/obj/wrapped_item in get_all_contents())
+			if(HAS_TRAIT(wrapped_item, TRAIT_NO_BARCODES))
+				continue
+			wrapped_item.AddComponent(/datum/component/pricetag, sticker.payments_acc, sticker.cut_multiplier)
+		update_appearance()
+
+	else if(istype(item, /obj/item/boxcutter))
+		var/obj/item/boxcutter/boxcutter_item = item
+		if(HAS_TRAIT(boxcutter_item, TRAIT_TRANSFORM_ACTIVE))
+			if(!attempt_pre_unwrap_contents(user, time = 0.5 SECONDS))
+				return
+			unwrap_contents()
+			balloon_alert(user, "cutting open package...")
+			post_unwrap_contents(user, rip_open = FALSE)
+		else
+			balloon_alert(user, "prime the boxcutter!")
+
+	else
+		return ..()
+
+/**
+ * # Wrapped up crates and lockers - too big to carry.
+ */
+/obj/item/delivery/big
 	name = "large parcel"
-	icon = 'icons/obj/storage.dmi'
+	desc = "A large delivery parcel."
 	icon_state = "deliverycloset"
 	density = TRUE
-	flags = NOBLUDGEON
-	mouse_drag_pointer = MOUSE_ACTIVE_POINTER
-	var/obj/wrapped
-	var/sortTag
-	var/examtext
-	var/nameset = 0
-	var/label_y
-	var/label_x
-	var/tag_x
+	interaction_flags_item = 0 // Disable the ability to pick it up. Wow!
+	layer = BELOW_OBJ_LAYER
+	pass_flags_self = PASSSTRUCTURE
+	interaction_flags_atom = INTERACT_ATOM_ATTACK_HAND
+	w_class = WEIGHT_CLASS_GIGANTIC
 
-/obj/structure/bigDelivery/attack_hand(mob/user as mob)
-	unwrap()
-
-/obj/structure/bigDelivery/proc/unwrap()
-	if(src.wrapped && (src.wrapped in src.contents)) //sometimes items can disappear. For example, bombs. --rastaf0
-		wrapped.forceMove(get_turf(src.loc))
-		if(istype(wrapped, /obj/structure/closet))
-			var/obj/structure/closet/O = wrapped
-			O.welded = 0
-	qdel(src)
-
-/obj/structure/bigDelivery/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W, /obj/item/device/destTagger))
-		var/obj/item/device/destTagger/O = W
-		if(O.currTag)
-			if(src.sortTag != O.currTag)
-				to_chat(user, SPAN_NOTICE("You have labeled the destination as [O.currTag]."))
-				if(!src.sortTag)
-					src.sortTag = O.currTag
-					update_icon()
-				else
-					src.sortTag = O.currTag
-				playsound(src.loc, 'sound/machines/twobeep.ogg', 50, 1)
-			else
-				to_chat(user, SPAN_WARNING("The package is already labeled for [O.currTag]."))
-		else
-			to_chat(user, SPAN_WARNING("You need to set a destination first!"))
-
-	else if(istype(W, /obj/item/pen))
-		switch(alert("What would you like to alter?",,"Title","Description", "Cancel"))
-			if("Title")
-				var/str = sanitizeSafe(input(usr,"Label text?","Set label",""), MAX_NAME_LEN)
-				if(!str || !length(str))
-					to_chat(usr, SPAN_WARNING(" Invalid text."))
-					return
-				user.visible_message("\The [user] titles \the [src] with \a [W], marking down: \"[str]\"",\
-				"<span class='notice'>You title \the [src]: \"[str]\"</span>",\
-				"You hear someone scribbling a note.")
-				playsound(src.loc, 'sound/effects/PEN_Ball_Point_Pen_Circling_01_mono.ogg', 50, 1)
-				name = "[name] ([str])"
-				if(!examtext && !nameset)
-					nameset = 1
-					update_icon()
-				else
-					nameset = 1
-			if("Description")
-				var/str = sanitize(input(usr,"Label text?","Set label",""))
-				if(!str || !length(str))
-					to_chat(usr, "\red Invalid text.")
-					return
-				if(!examtext && !nameset)
-					examtext = str
-					update_icon()
-				else
-					examtext = str
-				user.visible_message("\The [user] labels \the [src] with \a [W], scribbling down: \"[examtext]\"",\
-				"<span class='notice'>You label \the [src]: \"[examtext]\"</span>",\
-				"You hear someone scribbling a note.")
-				playsound(src.loc, 'sound/effects/PEN_Ball_Point_Pen_Circling_01_mono.ogg', 50, 1)
-	return
-
-/obj/structure/bigDelivery/update_icon()
-	overlays = new()
-	if(nameset || examtext)
-		var/image/I = new/image('icons/obj/storage.dmi',"delivery_label")
-		if(icon_state == "deliverycloset")
-			I.pixel_x = 2
-			if(label_y == null)
-				label_y = rand(-6, 11)
-			I.pixel_y = label_y
-		else if(icon_state == "deliverycrate")
-			if(label_x == null)
-				label_x = rand(-8, 6)
-			I.pixel_x = label_x
-			I.pixel_y = -3
-		overlays += I
-	if(src.sortTag)
-		var/image/I = new/image('icons/obj/storage.dmi',"delivery_tag")
-		if(icon_state == "deliverycloset")
-			if(tag_x == null)
-				tag_x = rand(-2, 3)
-			I.pixel_x = tag_x
-			I.pixel_y = 9
-		else if(icon_state == "deliverycrate")
-			if(tag_x == null)
-				tag_x = rand(-8, 6)
-			I.pixel_x = tag_x
-			I.pixel_y = -3
-		overlays += I
-
-/obj/structure/bigDelivery/examine(mob/user, extra_description = "")
-	if(get_dist(user, src) < 5)
-		if(sortTag)
-			extra_description += SPAN_NOTICE("\nIt is labeled \"[sortTag]\"")
-		if(examtext)
-			extra_description += SPAN_NOTICE("\nIt has a note attached which reads, \"[examtext]\"")
-	..(user, extra_description)
-
-/obj/item/smallDelivery
-	desc = "A small wrapped package."
-	name = "small parcel"
-	icon = 'icons/obj/storage.dmi'
-	icon_state = "deliverycrate3"
-	var/obj/item/wrapped
-	var/sortTag
-	var/examtext
-	var/nameset = 0
-	var/tag_x
-
-/obj/item/smallDelivery/attack_self(mob/user as mob)
-	if (src.wrapped && (src.wrapped in src.contents)) //sometimes items can disappear. For example, bombs. --rastaf0
-		wrapped.forceMove(user.loc)
-		if(ishuman(user))
-			user.put_in_hands(wrapped)
-		else
-			wrapped.forceMove(get_turf(src))
-
-	qdel(src)
-	return
-
-/obj/item/smallDelivery/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W, /obj/item/device/destTagger))
-		var/obj/item/device/destTagger/O = W
-		if(O.currTag)
-			if(src.sortTag != O.currTag)
-				to_chat(user, SPAN_NOTICE("You have labeled the destination as [O.currTag]."))
-				if(!src.sortTag)
-					src.sortTag = O.currTag
-					update_icon()
-				else
-					src.sortTag = O.currTag
-				playsound(src.loc, 'sound/machines/twobeep.ogg', 50, 1)
-				playsound(src,'sound/effects/FOLEY_Gaffer_Tape_Tear_mono.ogg',100,2)
-			else
-				to_chat(user, SPAN_WARNING("The package is already labeled for [O.currTag]."))
-		else
-			to_chat(user, SPAN_WARNING("You need to set a destination first!"))
-
-	else if(istype(W, /obj/item/pen))
-		switch(alert("What would you like to alter?",,"Title","Description", "Cancel"))
-			if("Title")
-				var/str = sanitizeSafe(input(usr,"Label text?","Set label",""), MAX_NAME_LEN)
-				if(!str || !length(str))
-					to_chat(usr, SPAN_WARNING(" Invalid text."))
-					return
-				user.visible_message("\The [user] titles \the [src] with \a [W], marking down: \"[str]\"",\
-				"<span class='notice'>You title \the [src]: \"[str]\"</span>",\
-				"You hear someone scribbling a note.")
-				playsound(src.loc, 'sound/effects/PEN_Ball_Point_Pen_Circling_01_mono.ogg', 50, 1)
-				name = "[name] ([str])"
-				if(!examtext && !nameset)
-					nameset = 1
-					update_icon()
-				else
-					nameset = 1
-
-			if("Description")
-				var/str = sanitize(input(usr,"Label text?","Set label",""))
-				if(!str || !length(str))
-					to_chat(usr, "\red Invalid text.")
-					return
-				if(!examtext && !nameset)
-					examtext = str
-					update_icon()
-				else
-					examtext = str
-				user.visible_message("\The [user] labels \the [src] with \a [W], scribbling down: \"[examtext]\"",\
-				"<span class='notice'>You label \the [src]: \"[examtext]\"</span>",\
-				"You hear someone scribbling a note.")
-				playsound(src.loc, 'sound/effects/PEN_Ball_Point_Pen_Circling_01_mono.ogg', 50, 1)
-	return
-
-/obj/item/smallDelivery/update_icon()
-	overlays = new()
-	if((nameset || examtext) && icon_state != "deliverycrate1")
-		var/image/I = new/image('icons/obj/storage.dmi',"delivery_label")
-		if(icon_state == "deliverycrate5")
-			I.pixel_y = -1
-		overlays += I
-	if(src.sortTag)
-		var/image/I = new/image('icons/obj/storage.dmi',"delivery_tag")
-		switch(icon_state)
-			if("deliverycrate1")
-				I.pixel_y = -5
-			if("deliverycrate2")
-				I.pixel_y = -2
-			if("deliverycrate3")
-				I.pixel_y = 0
-			if("deliverycrate4")
-				if(tag_x == null)
-					tag_x = rand(0,5)
-				I.pixel_x = tag_x
-				I.pixel_y = 3
-			if("deliverycrate5")
-				I.pixel_y = -3
-		overlays += I
-
-/obj/item/smallDelivery/examine(mob/user, extra_description = "")
-	if(get_dist(user, src) < 4)
-		if(sortTag)
-			extra_description += SPAN_NOTICE("\nIt is labeled \"[sortTag]\"")
-		if(examtext)
-			extra_description += SPAN_NOTICE("\nIt has a note attached which reads, \"[examtext]\"")
-	..(user, extra_description)
-
-/obj/item/packageWrap
-	name = "package wrapper"
-	icon = 'icons/obj/items.dmi'
-	icon_state = "deliveryPaper"
-	w_class = ITEM_SIZE_NORMAL
-	spawn_tags = SPAWN_TAG_ITEM_UTILITY
-	rarity_value = 50
-	price_tag = 20
-	var/amount = 25.0
-
-
-/obj/item/packageWrap/afterattack(var/obj/target as obj, mob/user as mob, proximity)
-	if(!proximity) return
-	if(!istype(target))	//this really shouldn't be necessary (but it is).	-Pete
+/obj/item/delivery/big/interact(mob/user)
+	if(!attempt_pre_unwrap_contents(user))
 		return
-	if(istype(target, /obj/item/smallDelivery) || istype(target,/obj/structure/bigDelivery) \
-	|| istype(target, /obj/item/gift) || istype(target, /obj/item/evidencebag))
-		return
-	if(target.anchored)
-		return
-	if(target in user)
-		return
-	if(user in target) //no wrapping closets that you are inside - it's not physically possible
-		return
+	unwrap_contents()
+	post_unwrap_contents()
 
-	user.attack_log += text("\[[time_stamp()]\] <font color='blue'>Has used [src.name] on \ref[target]</font>")
-	playsound(src,'sound/machines/PAPER_Fold_01_mono.ogg',100,1)
+/**
+ * # Wrapped up items small enough to carry.
+ */
+/obj/item/delivery/small
+	name = "parcel"
+	desc = "A brown paper delivery parcel."
+	icon_state = "deliverypackage3"
 
-	if (istype(target, /obj/item) && !(istype(target, /obj/item/storage) && !istype(target,/obj/item/storage/box)))
-		var/obj/item/O = target
-		if (src.amount > 1)
-			var/obj/item/smallDelivery/P = new /obj/item/smallDelivery(get_turf(O.loc))	//Aaannd wrap it up!
-			if(!istype(O.loc, /turf))
-				if(user.client)
-					user.client.screen -= O
-			P.wrapped = O
-			O.forceMove(P)
-			P.w_class = O.w_class
-			var/i = round(O.w_class)
-			if(i in list(1,2,3,4,5))
-				P.icon_state = "deliverycrate[i]"
-				switch(i)
-					if(1) P.name = "tiny parcel"
-					if(3) P.name = "normal-sized parcel"
-					if(4) P.name = "large parcel"
-					if(5) P.name = "huge parcel"
-			if(i < 1)
-				P.icon_state = "deliverycrate1"
-				P.name = "tiny parcel"
-			if(i > 5)
-				P.icon_state = "deliverycrate5"
-				P.name = "huge parcel"
-			P.add_fingerprint(usr)
-			O.add_fingerprint(usr)
-			src.add_fingerprint(usr)
-			src.amount -= 1
-			user.visible_message("\The [user] wraps \a [target] with \a [src].",\
-			SPAN_NOTICE("You wrap \the [target], leaving [amount] units of paper on \the [src]."),\
-			"You hear someone taping paper around a small object.")
-	else if (istype(target, /obj/structure/closet/crate))
-		var/obj/structure/closet/crate/O = target
-		if (src.amount > 3 && !O.opened)
-			var/obj/structure/bigDelivery/P = new /obj/structure/bigDelivery(get_turf(O.loc))
-			P.icon_state = "deliverycrate"
-			P.wrapped = O
-			O.forceMove(P)
-			src.amount -= 3
-			user.visible_message("\The [user] wraps \a [target] with \a [src].",\
-			SPAN_NOTICE("You wrap \the [target], leaving [amount] units of paper on \the [src]."),\
-			"You hear someone taping paper around a large object.")
-		else if(src.amount < 3)
-			to_chat(user, SPAN_WARNING("You need more paper."))
-	else if (istype (target, /obj/structure/closet))
-		var/obj/structure/closet/O = target
-		if (src.amount > 3 && !O.opened)
-			var/obj/structure/bigDelivery/P = new /obj/structure/bigDelivery(get_turf(O.loc))
-			P.wrapped = O
-			O.welded = 1
-			O.forceMove(P)
-			src.amount -= 3
-			user.visible_message("\The [user] wraps \a [target] with \a [src].",\
-			SPAN_NOTICE("You wrap \the [target], leaving [amount] units of paper on \the [src]."),\
-			"You hear someone taping paper around a large object.")
-		else if(src.amount < 3)
-			to_chat(user, SPAN_WARNING("You need more paper."))
+/obj/item/delivery/small/attack_self(mob/user)
+	if(!attempt_pre_unwrap_contents(user))
+		return
+	user.temporarilyRemoveItemFromInventory(src, TRUE)
+	unwrap_contents()
+	for(var/atom/movable/movable_content as anything in contents)
+		user.put_in_hands(movable_content)
+	post_unwrap_contents(user)
+
+/obj/item/delivery/small/attack_self_tk(mob/user)
+	if(ismob(loc))
+		var/mob/M = loc
+		M.temporarilyRemoveItemFromInventory(src, TRUE)
+		for(var/atom/movable/movable_content as anything in contents)
+			M.put_in_hands(movable_content)
 	else
-		to_chat(user, "\blue The object you are trying to wrap is unsuitable for the sorting machinery!")
-	if (src.amount <= 0)
-		new /obj/item/c_tube( src.loc )
-		qdel(src)
-		return
-	return
+		for(var/atom/movable/movable_content as anything in contents)
+			movable_content.forceMove(loc)
 
-/obj/item/packageWrap/examine(mob/user, extra_description = "")
-	if(get_dist(user, src) < 2)
-		extra_description += SPAN_NOTICE("\nThere are [amount] units of package wrap left!")
-	..(user, extra_description)
+	unwrap_contents()
+	post_unwrap_contents(user)
+	return ITEM_INTERACT_BLOCKING
 
-/obj/structure/bigDelivery/Destroy()
-	if(wrapped) //sometimes items can disappear. For example, bombs. --rastaf0
-		wrapped.loc = (get_turf(loc))
-		if(istype(wrapped, /obj/structure/closet))
-			var/obj/structure/closet/O = wrapped
-			O.welded = 0
-	var/turf/T = get_turf(src)
-	for(var/atom/movable/AM in contents)
-		AM.loc = T
-	. = ..()
-
-/obj/item/device/destTagger
+/obj/item/dest_tagger
 	name = "destination tagger"
 	desc = "Used to set the destination of properly wrapped packages."
-	icon_state = "dest_tagger"
-	matter = list(MATERIAL_PLASTIC = 2, MATERIAL_GLASS = 1)
-	rarity_value = 50
-	var/currTag = 0
+	icon = 'icons/obj/devices/tool.dmi'
+	icon_state = "cargo tagger"
+	worn_icon_state = "cargotagger"
+	var/currTag = 0 //Destinations are stored in code\globalvars\lists\flavor_misc.dm
+	var/locked_destination = FALSE //if true, users can't open the destination tag window to prevent changing the tagger's current destination
+	w_class = WEIGHT_CLASS_TINY
+	inhand_icon_state = "electronic"
+	lefthand_file = 'icons/mob/inhands/items/devices_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/items/devices_righthand.dmi'
+	obj_flags = CONDUCTS_ELECTRICITY
+	slot_flags = ITEM_SLOT_BELT
 
-	w_class = ITEM_SIZE_SMALL
-	item_state = "electronic"
-	flags = CONDUCT
-	slot_flags = SLOT_BELT
+/obj/item/dest_tagger/borg
+	name = "cyborg destination tagger"
+	desc = "Used to fool the disposal mail network into thinking that you're a harmless parcel. Does actually work as a regular destination tagger as well."
 
-/obj/item/device/destTagger/proc/openwindow(mob/user as mob)
-	var/dat = "<tt><center><h1><b>TagMaster 2.3</b></h1></center>"
+/obj/item/dest_tagger/suicide_act(mob/living/user)
+	user.visible_message(span_suicide("[user] begins tagging [user.p_their()] final destination! It looks like [user.p_theyre()] trying to commit suicide!"))
+	if (islizard(user))
+		to_chat(user, span_notice("*HELL*"))//lizard nerf
+	else
+		to_chat(user, span_notice("*HEAVEN*"))
+	playsound(src, 'sound/machines/beep/twobeep_high.ogg', 100, TRUE)
+	return BRUTELOSS
 
-	dat += "<table style='width:100%; padding:4px;'><tr>"
-	for(var/i = 1, i <= tagger_locations.len, i++)
-		dat += "<td><a href='?src=\ref[src];nextTag=[tagger_locations[i]]'>[tagger_locations[i]]</a></td>"
+/** Standard TGUI actions */
+/obj/item/dest_tagger/ui_interact(mob/user, datum/tgui/ui)
+	add_fingerprint(user)
+	ui = SStgui.try_update_ui(user, src, ui)
+	if(!ui)
+		ui = new(user, src, "DestinationTagger", name)
+		ui.set_autoupdate(FALSE)
+		ui.open()
 
-		if (i%4==0)
-			dat += "</tr><tr>"
+/** If the user dropped the tagger */
+/obj/item/dest_tagger/ui_state(mob/user)
+	return GLOB.inventory_state
 
-	dat += "</tr></table><br>Current Selection: [currTag ? currTag : "None"]</tt>"
-	dat += "<br><a href='?src=\ref[src];nextTag=CUSTOM'>Enter custom location.</a>"
-	user << browse(dat, "window=destTagScreen;size=450x375")
-	onclose(user, "destTagScreen")
+/** User activates in hand */
+/obj/item/dest_tagger/attack_self(mob/user)
+	if(!locked_destination)
+		ui_interact(user)
+		return
 
-/obj/item/device/destTagger/attack_self(mob/user as mob)
-	openwindow(user)
-	return
+/** Data sent to TGUI window */
+/obj/item/dest_tagger/ui_data(mob/user)
+	var/list/data = list()
+	data["locations"] = GLOB.TAGGERLOCATIONS
+	data["currentTag"] = currTag
+	return data
 
-/obj/item/device/destTagger/Topic(href, href_list)
-	if(..())
-		return 1
-
-	if(href_list["nextTag"] && (href_list["nextTag"] in tagger_locations))
-		src.currTag = href_list["nextTag"]
-	if(href_list["nextTag"] == "CUSTOM")
-		var/dest = input("Please enter custom location.", "Location", src.currTag ? src.currTag : "None")
-		if(dest != "None")
-			src.currTag = dest
-		else
-			src.currTag = 0
-	openwindow(usr)
-
-/obj/machinery/disposal/deliveryChute
-	name = "Delivery chute"
-	desc = "A chute for big and small packages alike!"
-	density = TRUE
-	icon_state = "intake"
-	layer = BELOW_OBJ_LAYER //So that things being ejected are visible
-	var/c_mode = 0
-
-/obj/machinery/disposal/deliveryChute/New()
-	..()
-	spawn(5)
-		trunk = locate() in src.loc
-		if(trunk)
-			trunk.linked = src	// link the pipe trunk to self
-
-/obj/machinery/disposal/deliveryChute/interact()
-	return
-
-/obj/machinery/disposal/deliveryChute/update()
-	return
-
-/obj/machinery/disposal/deliveryChute/Bumped(var/atom/movable/AM) //Go straight into the chute
-	if(istype(AM, /obj/item/projectile) || istype(AM, /obj/effect))	return
-	if(AM.loc && src.loc)
-		switch(dir)
-			if(NORTH)
-				if(AM.loc.y != src.loc.y+1) return
-			if(EAST)
-				if(AM.loc.x != src.loc.x+1) return
-			if(SOUTH)
-				if(AM.loc.y != src.loc.y-1) return
-			if(WEST)
-				if(AM.loc.x != src.loc.x-1) return
-
-	if(isobj(AM) || ismob(AM))
-		AM.forceMove(src)
-	src.flush()
-
-/obj/machinery/disposal/deliveryChute/flush()
-	flushing = 1
-	flick("intake-closing", src)
-	var/obj/structure/disposalholder/H = new()	// virtual holder object which actually
-												// travels through the pipes.
-	air_contents = new()		// new empty gas resv.
-
-	sleep(10)
-	playsound(src, 'sound/machines/disposalflush.ogg', 50, 0, 0)
-	sleep(5) // wait for animation to finish
-
-	H.init(src)	// copy the contents of disposer to holder
-
-	H.start(src) // start the holder processing movement
-	flushing = 0
-	// now reset disposal state
-	flush = 0
-	if(mode == DISPOSALS_CHARGED)
-		mode = DISPOSALS_CHARGING
-	update()
-	return
-
-/obj/machinery/disposal/deliveryChute/get_eject_turf()
-	return get_ranged_target_turf(src, dir, 10)
-
-/obj/machinery/disposal/deliveryChute/attackby(var/obj/item/I, var/mob/user)
-
-	var/list/usable_qualities = list(QUALITY_SCREW_DRIVING)
-	if(c_mode == 1)
-		usable_qualities.Add(QUALITY_WELDING)
-
-	var/tool_type = I.get_tool_type(user, usable_qualities, src)
-	switch(tool_type)
-
-		if(QUALITY_SCREW_DRIVING)
-			if(length(contents))
-				to_chat(user, "Eject the items first!")
-				return
-
-			if(mode != DISPOSALS_OFF)
-				to_chat(user, "Turn off the pump first!")
-				return
-
-			var/used_sound = mode ? 'sound/machines/Custom_screwdriverclose.ogg' : 'sound/machines/Custom_screwdriveropen.ogg'
-			if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, tool_type, FAILCHANCE_EASY, required_stat = STAT_MEC, instant_finish_tier = 30, forced_sound = used_sound))
-				to_chat(user, "You [panel_open ? "attach" : "remove"] the screws around the power connection.")
-				panel_open = !panel_open
-				return
-
-			return
-
-		if(QUALITY_WELDING)
-			if(!panel_open || mode != DISPOSALS_OFF)
-				to_chat(user, "You cannot work on the delivery chute if it is not turned off with its power connection exposed.")
-				return
-
-			if(I.use_tool(user, src, WORKTIME_NORMAL, tool_type, FAILCHANCE_VERY_EASY))
-				to_chat(user, "You sliced the floorweld off the delivery chute.")
-				var/obj/structure/disposalconstruct/C = new (src.loc)
-				src.transfer_fingerprints_to(C)
-				C.pipe_type = PIPE_TYPE_INTAKE
-				C.anchored = TRUE
-				C.density = TRUE
-				C.update()
-				qdel(src)
-
-			return
-
-/obj/machinery/disposal/deliveryChute/Destroy()
-	if(trunk)
-		trunk.linked = null
+/** User clicks a button on the tagger */
+/obj/item/dest_tagger/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
 	. = ..()
+	if(.)
+		return
+	switch(action)
+		if("change")
+			var/new_tag = round(text2num(params["index"]))
+			if(new_tag == currTag || new_tag < 1 || new_tag > length(GLOB.TAGGERLOCATIONS))
+				return
+			currTag = new_tag
+	return TRUE
+
+/obj/item/sales_tagger
+	name = "sales tagger"
+	desc = "A scanner that lets you tag wrapped items for sale, splitting the profit between you and cargo."
+	icon = 'icons/obj/devices/scanner.dmi'
+	icon_state = "sales tagger"
+	worn_icon_state = "salestagger"
+	inhand_icon_state = "electronic"
+	lefthand_file = 'icons/mob/inhands/items/devices_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/items/devices_righthand.dmi'
+	w_class = WEIGHT_CLASS_TINY
+	slot_flags = ITEM_SLOT_BELT
+	///The account which is receiving the split profits.
+	var/datum/bank_account/payments_acc = null
+	var/paper_count = 10
+	var/max_paper_count = 20
+	///The person who tagged this will receive the sale value multiplied by this number.
+	var/cut_multiplier = 0.5
+	///Maximum value for cut_multiplier.
+	var/cut_max = 0.5
+	///Minimum value for cut_multiplier.
+	var/cut_min = 0.01
+
+/obj/item/sales_tagger/examine(mob/user)
+	. = ..()
+	. += span_notice("[src] has [paper_count]/[max_paper_count] available barcodes. Refill with paper.")
+	. += span_notice("Profit split on sale is currently set to [round(cut_multiplier*100)]%. <b>Alt-click</b> to change.")
+	if(payments_acc)
+		. += span_notice("<b>Ctrl-click</b> to clear the registered account.")
+
+/obj/item/sales_tagger/attackby(obj/item/item, mob/living/user, list/modifiers)
+	. = ..()
+	if(isidcard(item))
+		var/obj/item/card/id/potential_acc = item
+		if(potential_acc.registered_account)
+			if(payments_acc == potential_acc.registered_account)
+				to_chat(user, span_notice("ID card already registered."))
+				return
+			else
+				payments_acc = potential_acc.registered_account
+				playsound(src, 'sound/machines/ping.ogg', 40, TRUE)
+				to_chat(user, span_notice("[src] registers the ID card. Tag a wrapped item to create a barcode."))
+		else if(!potential_acc.registered_account)
+			to_chat(user, span_warning("This ID card has no account registered!"))
+			return
+	if(istype(item, /obj/item/paper))
+		if (!(paper_count >= max_paper_count))
+			paper_count += 10
+			qdel(item)
+			if (paper_count >= max_paper_count)
+				paper_count = max_paper_count
+				to_chat(user, span_notice("[src]'s paper supply is now full."))
+				return
+			to_chat(user, span_notice("You refill [src]'s paper supply, you have [paper_count] left."))
+			return
+		else
+			to_chat(user, span_notice("[src]'s paper supply is full."))
+			return
+
+/obj/item/sales_tagger/attack_self(mob/user)
+	. = ..()
+	if(paper_count <= 0)
+		to_chat(user, span_warning("You're out of paper!'."))
+		return
+	if(!payments_acc)
+		to_chat(user, span_warning("You need to swipe [src] with an ID card first."))
+		return
+	paper_count -= 1
+	playsound(src, 'sound/machines/click.ogg', 40, TRUE)
+	to_chat(user, span_notice("You print a new barcode."))
+	var/obj/item/barcode/new_barcode = new /obj/item/barcode(src)
+	new_barcode.payments_acc = payments_acc		// The sticker gets the scanner's registered account.
+	new_barcode.cut_multiplier = cut_multiplier		// Also the registered percent cut.
+	user.put_in_hands(new_barcode)
+
+/obj/item/sales_tagger/item_ctrl_click(mob/user)
+	payments_acc = null
+	to_chat(user, span_notice("You clear the registered account."))
+	return CLICK_ACTION_SUCCESS
+
+/obj/item/sales_tagger/click_alt(mob/user)
+	var/potential_cut = input("How much would you like to pay out to the registered card?","Percentage Profit ([round(cut_min*100)]% - [round(cut_max*100)]%)") as num|null
+	if(!potential_cut)
+		cut_multiplier = initial(cut_multiplier)
+	cut_multiplier = clamp(round(potential_cut/100, cut_min), cut_min, cut_max)
+	to_chat(user, span_notice("[round(cut_multiplier*100)]% profit will be received if a package with a barcode is sold."))
+	return CLICK_ACTION_SUCCESS

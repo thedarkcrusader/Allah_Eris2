@@ -1,142 +1,235 @@
-/obj/item/device/assembly/mousetrap
+/obj/item/assembly/mousetrap
 	name = "mousetrap"
 	desc = "A handy little spring-loaded trap for catching pesty rodents."
-	description_antag = "Can be used with a signaller to create backpacks that explode upon being open"
 	icon_state = "mousetrap"
-	origin_tech = list(TECH_COMBAT = 1)
-	matter = list(MATERIAL_PLASTIC = 1, MATERIAL_STEEL = 1)
+	inhand_icon_state = "mousetrap"
+	custom_materials = list(/datum/material/iron=SMALL_MATERIAL_AMOUNT)
+	assembly_behavior = ASSEMBLY_TOGGLEABLE_INPUT
 	var/armed = FALSE
-	var/prob_catch = 100
+	drop_sound = 'sound/items/handling/component_drop.ogg'
+	pickup_sound = 'sound/items/handling/component_pickup.ogg'
+	var/obj/item/host = null
+	var/turf/host_turf = null
 
+/**
+ * update_host: automatically setup host and host_turf
+ *
+ * Arguments:
+ * * force: Re-register signals even if the host or loc is unchanged
+ */
+/obj/item/assembly/mousetrap/proc/update_host(force = FALSE)
+	var/obj/item/newhost
+	// Pick the first valid object in this list:
+	// Wiring datum's owner
+	// assembly holder's attached object
+	// assembly holder itself
+	// us
+	newhost = connected?.holder || holder?.master || holder || src
 
-	examine(mob/user)
-		..(user)
-		if(armed)
-			to_chat(user, "It looks like it's armed.")
+	// ok look
+	// previously this wasn't working and thus no concern, but I made mousetraps work with wires
+	// specifically in step-on-the-mousetrap mode, ie, when you enter its turf
+	// and as a consequence, you can put a mousetrap in door wires and it will be set off
+	// the first time someone walks through a door (enters the door's loc)
+	// that's an interesting mechanic (bolt open a door for example) but it's not appropriate for a mousetrap
+	// similarly if used on say an apc's wires it would go into effect when someone walked by it.  Not appropriate.
+	// other assemblies could be made to do something similar instead.
+	// mousetrap assemblies will still receive on-found notifications when you open a wiring panel
+	// and (whether reasonable or not) mousetraps that do this do still trigger wires
+	// the point is for now step-on-mousetrap mode should only work on items
+	// maybe it should never have been an assembly in the first place.
 
-	update_icon()
-		if(armed)
-			icon_state = "mousetraparmed"
-		else
-			icon_state = "mousetrap"
-		if(holder)
-			holder.update_icon()
-
-/obj/item/device/assembly/mousetrap/proc/triggered(var/mob/living/target, var/type = "feet")
-	if(!armed || !istype(target))
+	// tl;dr only trigger step-on mode if the host is an item
+	if(!istype(newhost,/obj/item))
+		if(host)
+			UnregisterSignal(host,COMSIG_MOVABLE_MOVED)
+			host = src
+		if(isturf(host_turf))
+			UnregisterSignal(host_turf,COMSIG_ATOM_ENTERED)
+			host_turf = null
 		return
 
-	//var/types = target.get_classification()
-	if(ismouse(target))
-		var/mob/living/simple_animal/mouse/M = target
-		visible_message("<span class='danger'>SPLAT!</span>")
-		M.splat()
-	else
-		var/zone = "chest"
-		if(ishuman(target) && target.mob_size)
-			var/mob/living/carbon/human/H = target
-			switch(type)
-				if("feet")
-					zone = pick(BP_L_LEG , BP_R_LEG)
-					if(!H.shoes)
-						H.adjustHalLoss(500/(target.mob_size))//Halloss instead of instant knockdown
-						//Mainly for the benefit of giant monsters like vaurca breeders
-				if(BP_L_ARM , BP_R_ARM)
-					zone = type
-					if(!H.gloves)
-						H.adjustHalLoss(250/(target.mob_size))
-		if (!isrobot(target))
-			target.damage_through_armor(rand(15,30), HALLOSS, zone, ARMOR_MELEE, used_weapon = src)
-			target.damage_through_armor(rand(8,15), BRUTE, zone, ARMOR_MELEE, used_weapon = src)
+	// If host changed
+	if((newhost != host) || force)
+		if(host)
+			UnregisterSignal(host,COMSIG_MOVABLE_MOVED)
+		host = newhost
+		RegisterSignal(host,COMSIG_MOVABLE_MOVED, PROC_REF(holder_movement))
 
-	playsound(target.loc, 'sound/effects/snap.ogg', 50, 1)
-	layer = MOB_LAYER - 0.2
-	armed = FALSE
-	update_icon()
-	pulse(0)
+	// If host moved
+	if((host_turf != host.loc) || force)
+		if(isturf(host_turf))
+			UnregisterSignal(host_turf,COMSIG_ATOM_ENTERED)
+			host_turf = null
+		if(isturf(host.loc))
+			host_turf = host.loc
+			RegisterSignal(host_turf,COMSIG_ATOM_ENTERED, PROC_REF(on_entered))
+		else
+			host_turf = null
 
+/obj/item/assembly/mousetrap/holder_movement()
+	. = ..()
+	update_host()
 
-/obj/item/device/assembly/mousetrap/attack_self(mob/living/user as mob)
+/obj/item/assembly/mousetrap/Initialize(mapload)
+	. = ..()
+	update_host(force = TRUE)
+
+/obj/item/assembly/mousetrap/examine(mob/user)
+	. = ..()
+	. += span_notice("The pressure plate is [armed?"primed":"safe"].")
+
+/obj/item/assembly/mousetrap/activate()
+	if(..())
+		armed = !armed
+		if(!armed)
+			if(ishuman(usr))
+				var/mob/living/carbon/human/user = usr
+				if((HAS_TRAIT(user, TRAIT_DUMB) || HAS_TRAIT(user, TRAIT_CLUMSY)) && prob(50))
+					to_chat(user, span_warning("Your hand slips, setting off the trigger!"))
+					pulse()
+		update_appearance()
+		playsound(loc, 'sound/items/weapons/handcuffs.ogg', 30, TRUE, -3)
+
+/obj/item/assembly/mousetrap/update_icon_state()
+	icon_state = "mousetrap[armed ? "armed" : ""]"
+	return ..()
+
+/obj/item/assembly/mousetrap/update_icon(updates=ALL)
+	. = ..()
+	holder?.update_icon(updates)
+
+/obj/item/assembly/mousetrap/on_attach()
+	. = ..()
+	update_host()
+
+/obj/item/assembly/mousetrap/on_detach()
+	. = ..()
+	update_host()
+
+/obj/item/assembly/mousetrap/proc/triggered(mob/target, type = "feet")
 	if(!armed)
-		to_chat(user, "<span class='notice'>You arm [src].</span>")
+		return
+	armed = FALSE // moved to the top because you could trigger it more than once under some circumstances
+	update_appearance()
+	var/obj/item/bodypart/affecting = null
+	if(ishuman(target))
+		var/mob/living/carbon/human/victim = target
+		if(HAS_TRAIT(victim, TRAIT_PIERCEIMMUNE))
+			playsound(src, 'sound/effects/snap.ogg', 50, TRUE)
+			pulse()
+			return FALSE
+		switch(type)
+			if("feet")
+				if(!victim.shoes)
+					affecting = victim.get_bodypart(pick(GLOB.leg_zones))
+					victim.Paralyze(6 SECONDS)
+				else
+					to_chat(victim, span_notice("Your [victim.shoes.name] protects you from [src]."))
+			if(BODY_ZONE_PRECISE_L_HAND, BODY_ZONE_PRECISE_R_HAND)
+				if(!victim.gloves)
+					affecting = victim.get_bodypart(type)
+					victim.Stun(6 SECONDS)
+				else
+					to_chat(victim, span_notice("Your [victim.gloves.name] protects you from [src]."))
+		if(affecting)
+			victim.apply_damage(1, BRUTE, affecting, wound_bonus = CANT_WOUND)
+	else if(ismouse(target))
+		var/mob/living/basic/mouse/splatted = target
+		visible_message(span_bolddanger("SPLAT!"))
+		splatted.splat() // mousetraps are instadeath for mice
+
+	else if(isregalrat(target))
+		visible_message(span_bolddanger("Skreeeee!")) //He's simply too large to be affected by a tiny mouse trap.
+
+	playsound(src, 'sound/effects/snap.ogg', 50, TRUE)
+	pulse()
+
+/**
+ * clumsy_check: Sets off the mousetrap if handled by a clown (with some probability)
+ *
+ * Arguments:
+ * * user: The mob handling the trap
+ */
+/obj/item/assembly/mousetrap/proc/clumsy_check(mob/living/carbon/human/user)
+	if(!armed || !user)
+		return FALSE
+	if((HAS_TRAIT(user, TRAIT_DUMB) || HAS_TRAIT(user, TRAIT_CLUMSY)) && prob(50))
+		var/which_hand = BODY_ZONE_PRECISE_L_HAND
+		if(IS_RIGHT_INDEX(user.active_hand_index))
+			which_hand = BODY_ZONE_PRECISE_R_HAND
+		triggered(user, which_hand)
+		user.visible_message(span_warning("[user] accidentally sets off [src], breaking their fingers."), \
+			span_warning("You accidentally trigger [src]!"))
+		return TRUE
+	return FALSE
+
+/obj/item/assembly/mousetrap/attack_self(mob/living/carbon/human/user)
+	if(!armed)
+		to_chat(user, span_notice("You arm [src]."))
 	else
-/*		if((CLUMSY in user.mutations)&& prob(50))
-			var/which_hand = "l_hand"
-			if(!user.hand)
-				which_hand = "r_hand"
-			triggered(user, which_hand)
-			user.visible_message("<span class='warning'>[user] accidentally sets off [src], breaking their fingers.</span>", \
-								 "<span class='warning'>You accidentally trigger [src]!</span>")
+		if(clumsy_check(user))
 			return
-*/
-		to_chat(user, "<span class='notice'>You disarm [src].</span>")
+		to_chat(user, span_notice("You disarm [src]."))
 	armed = !armed
-	update_icon()
-	playsound(user.loc, 'sound/weapons/handcuffs.ogg', 30, 1, -3)
+	update_appearance()
+	playsound(src, 'sound/items/weapons/handcuffs.ogg', 30, TRUE, -3)
 
 
-/obj/item/device/assembly/mousetrap/attack_hand(mob/living/user as mob)
-/*	if(armed)
-		if((CLUMSY in user.mutations) && prob(50))
-			var/which_hand = "l_hand"
-			if(!user.hand)
-				which_hand = "r_hand"
-			triggered(user, which_hand)
-			user.visible_message("<span class='warning'>[user] accidentally sets off [src], breaking their fingers.</span>", \
-								 "<span class='warning'>You accidentally trigger [src]!</span>")
-			return
-*/
-	..()
+// Clumsy check only
+/obj/item/assembly/mousetrap/attack_hand(mob/living/carbon/human/user, list/modifiers)
+	if(clumsy_check(user))
+		return
+	return ..()
 
 
-/obj/item/device/assembly/mousetrap/Crossed(AM as mob|obj)
+/obj/item/assembly/mousetrap/proc/on_entered(datum/source, atom/movable/AM as mob|obj)
+	SIGNAL_HANDLER
 	if(armed)
-		if(ismouse(AM))
-			triggered(AM)
-		else if(istype(AM, /mob/living))
-			var/mob/living/L = AM
-			var/true_prob_catch = prob_catch - L.skill_to_evade_traps()
-			if(!prob(true_prob_catch))
-				return ..()
-			triggered(L)
-			L.visible_message("<span class='warning'>[L] accidentally steps on [src].</span>", \
-							  "<span class='warning'>You accidentally step on [src]</span>")
+		if(ismob(AM))
+			var/mob/MM = AM
+			if(!(MM.movement_type & MOVETYPES_NOT_TOUCHING_GROUND))
+				if(ishuman(AM))
+					var/mob/living/carbon/H = AM
+					if(H.move_intent == MOVE_INTENT_RUN)
+						INVOKE_ASYNC(src, PROC_REF(triggered), H)
+						H.visible_message(span_warning("[H] accidentally steps on [src]."), \
+							span_warning("You accidentally step on [src]"))
+				else if(ismouse(MM) || isregalrat(MM))
+					INVOKE_ASYNC(src, PROC_REF(triggered), MM)
+		else if(AM.density) // For mousetrap grenades, set off by anything heavy
+			INVOKE_ASYNC(src, PROC_REF(triggered), AM)
 
-	..()
-
-
-/obj/item/device/assembly/mousetrap/on_found(mob/finder as mob)
+/obj/item/assembly/mousetrap/on_found(mob/finder)
 	if(armed)
-		finder.visible_message("<span class='warning'>[finder] accidentally sets off [src], breaking their fingers.</span>", \
-							   "<span class='warning'>You accidentally trigger [src]!</span>")
-		triggered(finder, finder.hand ? "l_hand" : "r_hand")
-		return TRUE	//end the search!
+		if(finder)
+			finder.visible_message(span_warning("[finder] accidentally sets off [src], breaking their fingers."), \
+							   span_warning("You accidentally trigger [src]!"))
+			triggered(finder, (IS_RIGHT_INDEX(finder.active_hand_index)) ? BODY_ZONE_PRECISE_R_HAND : BODY_ZONE_PRECISE_L_HAND)
+			return TRUE //end the search!
+		else
+			visible_message(span_warning("[src] snaps shut!"))
+			triggered(loc)
+			return FALSE
 	return FALSE
 
 
-/obj/item/device/assembly/mousetrap/hitby(A as mob|obj)
+/obj/item/assembly/mousetrap/hitby(atom/movable/AM, skipcatch, hitpush, blocked, datum/thrownthing/throwingdatum)
 	if(!armed)
 		return ..()
-	visible_message("<span class='warning'>[src] is triggered by [A].</span>")
+	visible_message(span_warning("[src] is triggered by [AM]."))
 	triggered(null)
 
 
-/obj/item/device/assembly/mousetrap/armed
+/obj/item/assembly/mousetrap/Destroy()
+	if(host)
+		UnregisterSignal(host,COMSIG_MOVABLE_MOVED)
+		host = null
+	if(isturf(host_turf))
+		UnregisterSignal(host_turf,COMSIG_ATOM_ENTERED)
+		host_turf = null
+	return ..()
+
+/obj/item/assembly/mousetrap/armed
 	icon_state = "mousetraparmed"
 	armed = TRUE
-	rarity_value = 12.5
-	spawn_frequency = 10
-	spawn_blacklisted = FALSE
-	spawn_tags = SPAWN_TAG_TRAP_ARMED
-
-
-/obj/item/device/assembly/mousetrap/verb/hide_under()
-	set src in oview(1)
-	set name = "Hide"
-	set category = "Object"
-
-	if(usr.stat)
-		return
-
-	layer = TURF_LAYER+0.2
-	to_chat(usr, "<span class='notice'>You hide [src].</span>")

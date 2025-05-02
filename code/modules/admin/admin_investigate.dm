@@ -1,51 +1,67 @@
-//By Carnwennan
+/atom/proc/investigate_log(message, subject)
+	if(!message)
+		return
+	if(!subject)
+		CRASH("No subject provided for investigate_log")
+	var/F = file("[GLOB.log_directory]/[subject].html")
+	var/source = "[src]"
 
-//This system was made as an alternative to all the in-game lists and variables used to log stuff in-game.
-//lists and variables are great. However, they have several major flaws:
-//Firstly, they use memory. TGstation has one of the highest memory usage of all the ss13 branches.
-//Secondly, they are usually stored in an object. This means that they aren't centralised. It also means that
-//the data is lost when the object is deleted! This is especially annoying for things like the singulo engine!
-#define INVESTIGATE_DIR "data/investigate/"
+	if(isliving(src))
+		var/mob/living/source_mob = src
+		source += " ([source_mob.ckey ? source_mob.ckey : "*no key*"])"
 
-//SYSTEM
-/proc/investigate_subject2file(var/subject)
-	return file("[INVESTIGATE_DIR][subject].html")
+	WRITE_FILE(F, "[time_stamp(format = "YYYY-MM-DD hh:mm:ss")] [REF(src)] ([x],[y],[z]) || [source] [message]<br>")
 
-/hook/startup/proc/resetInvestigate()
-	investigate_reset()
-	return 1
+ADMIN_VERB(investigate_show, R_NONE, "Investigate", "Browse various detailed logs.", ADMIN_CATEGORY_GAME)
+	var/static/list/investigates = list(
+		INVESTIGATE_ACCESSCHANGES,
+		INVESTIGATE_ATMOS,
+		INVESTIGATE_BOTANY,
+		INVESTIGATE_CARGO,
+		INVESTIGATE_CRAFTING,
+		INVESTIGATE_DEATHS,
+		INVESTIGATE_ENGINE,
+		INVESTIGATE_EXPERIMENTOR,
+		INVESTIGATE_GRAVITY,
+		INVESTIGATE_HALLUCINATIONS,
+		INVESTIGATE_HYPERTORUS,
+		INVESTIGATE_PORTAL,
+		INVESTIGATE_PRESENTS,
+		INVESTIGATE_RADIATION,
+		INVESTIGATE_RECORDS,
+		INVESTIGATE_RESEARCH,
+		INVESTIGATE_WIRES,
+	)
 
-/proc/investigate_reset()
-	if(fdel(INVESTIGATE_DIR))	return 1
-	return 0
+	var/list/logs_present = list("notes, memos, watchlist")
+	var/list/logs_missing = list("---")
 
-/atom/proc/investigate_log(var/message, var/subject)
-	if(!message)	return
-	var/F = investigate_subject2file(subject)
-	if(!F)	return
-	F << "<small>[time2text(world.timeofday,"hh:mm")] \ref[src] ([x],[y],[z])</small> || [src] [message]<br>"
+	for(var/subject in investigates)
+		var/temp_file = file("[GLOB.log_directory]/[subject].html")
+		if(fexists(temp_file))
+			logs_present += subject
+		else
+			logs_missing += "[subject] (empty)"
 
-//ADMINVERBS
-//various admintools for investigation. Such as a singulo grief-log
-/client/proc/investigate_show(subject in list("hrefs","notes","singulo","telesci","atmos","chemistry"))
-	set name = "Investigate"
-	set category = "Admin"
-	if(!holder)	return
-	switch(subject)
-		if("singulo", "telesci", "atmos", "chemistry")			//general one-round-only stuff
-			var/F = investigate_subject2file(subject)
-			if(!F)
-				to_chat(src, "<font color='red'>Error: admin_investigate: [INVESTIGATE_DIR][subject] is an invalid path or cannot be accessed.</font>")
-				return
-			src << browse(F,"window=investigate[subject];size=800x300")
+	var/list/combined = sort_list(logs_present) + sort_list(logs_missing)
 
-		if("hrefs")				//persistant logs and stuff
-			if(config && config.log_hrefs)
-				if(href_logfile)
-					src << browse(href_logfile,"window=investigate[subject];size=800x300")
-				else
-					to_chat(src, "<font color='red'>Error: admin_investigate: No href logfile found.</font>")
-					return
-			else
-				to_chat(src, "<font color='red'>Error: admin_investigate: Href Logging is not on.</font>")
-				return
+	var/selected = tgui_input_list(user, "Investigate what?", "Investigation", combined)
+	if(isnull(selected))
+		return
+	if(!(selected in combined) || selected == "---")
+		return
+
+	selected = replacetext(selected, " (empty)", "")
+
+	if(selected == "notes, memos, watchlist" && check_rights(R_ADMIN))
+		browse_messages()
+		return
+
+	var/F = file("[GLOB.log_directory]/[selected].html")
+	if(!fexists(F))
+		to_chat(user, span_danger("No [selected] logfile was found."), confidential = TRUE)
+		return
+
+	var/datum/browser/browser = new(user, "investigate[selected]", "Investigation of [selected]", 800, 300)
+	browser.set_content(file2text(F))
+	browser.open()

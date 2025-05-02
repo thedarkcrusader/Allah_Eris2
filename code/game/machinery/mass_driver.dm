@@ -1,54 +1,82 @@
-//This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:31
-
 /obj/machinery/mass_driver
 	name = "mass driver"
-	desc = "Shoots things into space."
-	icon = 'icons/obj/stationobjs.dmi'
+	desc = "The finest in spring-loaded piston toy technology, now on a space station near you."
+	icon = 'icons/obj/machines/floor.dmi'
 	icon_state = "mass_driver"
-	anchored = TRUE
-	layer = LOW_OBJ_LAYER
-	use_power = IDLE_POWER_USE
-	idle_power_usage = 2
-	active_power_usage = 50
-
+	circuit = /obj/item/circuitboard/machine/mass_driver
 	var/power = 1
 	var/code = 1
 	var/id = 1
-	var/drive_range = 50 //this is mostly irrelevant since current mass drivers throw into space, but you could make a lower-range mass driver for interstation transport or something I guess.
-	var/_wifi_id
-	var/datum/wifi/receiver/button/mass_driver/wifi_receiver
+	var/drive_range = 10
+	var/power_per_obj = 1000
 
-/obj/machinery/mass_driver/Initialize()
+/obj/machinery/mass_driver/Initialize(mapload)
 	. = ..()
-	if(_wifi_id)
-		wifi_receiver = new(_wifi_id, src)
+	wires = new /datum/wires/mass_driver(src)
+
+/obj/machinery/mass_driver/chapelgun
+	name = "holy driver"
+	id = MASSDRIVER_CHAPEL
+
+/obj/machinery/mass_driver/ordnance
+	id = MASSDRIVER_ORDNANCE
+
+/obj/machinery/mass_driver/trash
+	id = MASSDRIVER_DISPOSALS
+
+/obj/machinery/mass_driver/shack
+	id = MASSDRIVER_SHACK
 
 /obj/machinery/mass_driver/Destroy()
-	qdel(wifi_receiver)
-	wifi_receiver = null
+	for(var/obj/machinery/computer/pod/control as anything in SSmachines.get_machines_by_type_and_subtypes(/obj/machinery/computer/pod))
+		if(control.id == id)
+			control.connected = null
 	return ..()
 
+/obj/machinery/mass_driver/connect_to_shuttle(mapload, obj/docking_port/mobile/port, obj/docking_port/stationary/dock)
+	id = "[port.shuttle_id]_[id]"
+
 /obj/machinery/mass_driver/proc/drive(amount)
-	if(stat & (BROKEN|NOPOWER))
+	if(machine_stat & (BROKEN|NOPOWER) || panel_open)
 		return
-	use_power(500)
+	use_energy(power_per_obj)
 	var/O_limit
 	var/atom/target = get_edge_target_turf(src, dir)
 	for(var/atom/movable/O in loc)
-		if(!O.anchored || istype(O, /mob/living/exosuit))//Mechs need their launch platforms.
+		if(!O.anchored || ismecha(O)) //Mechs need their launch platforms.
+			if(ismob(O) && !isliving(O))
+				continue
 			O_limit++
 			if(O_limit >= 20)
-				for(var/mob/M in hearers(src, null))
-					to_chat(M, SPAN_NOTICE("The mass driver lets out a screech, it mustn't be able to handle any more items."))
+				audible_message(span_notice("[src] lets out a screech, it doesn't seem to be able to handle the load."))
 				break
-			use_power(500)
-			spawn( 0 )
-				O.throw_at(target, drive_range * power, power)
+			use_energy(power_per_obj)
+			O.throw_at(target, drive_range * power, power)
 	flick("mass_driver1", src)
-	return
+
+/obj/machinery/mass_driver/attackby(obj/item/item, mob/living/user, list/modifiers)
+
+	if(is_wire_tool(item) && panel_open)
+		wires.interact(user)
+		return
+	if(default_deconstruction_screwdriver(user, "mass_driver_o", "mass_driver", item))
+		return
+	if(default_change_direction_wrench(user, item))
+		return
+	if(default_deconstruction_crowbar(item))
+		return
+
+	return ..()
+
+/obj/machinery/mass_driver/RefreshParts()
+	. = ..()
+	for(var/datum/stock_part/servo/new_servo in component_parts)
+		drive_range += new_servo.tier * 10
 
 /obj/machinery/mass_driver/emp_act(severity)
-	if(stat & (BROKEN|NOPOWER))
+	. = ..()
+	if (. & EMP_PROTECT_SELF)
+		return
+	if(machine_stat & (BROKEN|NOPOWER) || panel_open)
 		return
 	drive()
-	..(severity)

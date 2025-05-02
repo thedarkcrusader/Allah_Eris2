@@ -1,6 +1,15 @@
-import { Component } from 'inferno';
+import { Component, MouseEvent } from 'react';
+import {
+  Box,
+  Button,
+  Dropdown,
+  Input,
+  Section,
+  Stack,
+} from 'tgui-core/components';
+import { BooleanLike } from 'tgui-core/react';
+
 import { useBackend } from '../backend';
-import { Box, Stack, Section, Input, Button, Dropdown } from '../components';
 import { Window } from '../layouts';
 
 type Response = {
@@ -17,7 +26,7 @@ type CircuitSignalHandlerState = {
   signal_id: string;
   responseList: Response[];
   parameterList: Parameter[];
-  global: Boolean;
+  global: BooleanLike;
 };
 
 type CircuitSignalHandlerData = {
@@ -51,7 +60,7 @@ export class CircuitSignalHandler extends Component<
   }
 
   render() {
-    const { act, data } = useBackend<CircuitSignalHandlerData>(this.context);
+    const { act, data } = useBackend<CircuitSignalHandlerData>();
     const { responseList, parameterList, signal_id, global } = this
       .state as CircuitSignalHandlerState;
     const { global_port_types } = data;
@@ -66,7 +75,7 @@ export class CircuitSignalHandler extends Component<
                     placeholder="Signal ID"
                     value={signal_id}
                     fluid
-                    onChange={(e, value) => this.setState({ signal_id: value })}
+                    onChange={(value) => this.setState({ signal_id: value })}
                   />
                 </Stack.Item>
                 <Stack.Item>
@@ -92,7 +101,7 @@ export class CircuitSignalHandler extends Component<
                             responseList.splice(index, 1);
                             this.setState({ parameterList });
                           }}
-                          onEnter={(e, value) => {
+                          onChange={(value) => {
                             const param = responseList[index];
                             param.name = value;
                             this.setState({ parameterList });
@@ -141,7 +150,7 @@ export class CircuitSignalHandler extends Component<
                             param.datatype = type;
                             this.setState({ parameterList });
                           }}
-                          onEnter={(e, value) => {
+                          onChange={(value) => {
                             const param = parameterList[index];
                             param.name = value;
                             this.setState({ parameterList });
@@ -191,19 +200,19 @@ export class CircuitSignalHandler extends Component<
 }
 
 type EntryProps = {
-  onRemove: (e: MouseEvent) => any;
-  onEnter: (e: MouseEvent, value: string) => any;
+  onRemove: (e: MouseEvent<HTMLDivElement>) => any;
+  onChange: (value: string) => any;
   onSetOption?: (type: string) => any;
   name: string;
   current_option: string;
   options?: string[];
 };
 
-const Entry = (props: EntryProps, context) => {
+const Entry = (props: EntryProps) => {
   const {
     onRemove,
-    onEnter,
-    onSetOption,
+    onChange,
+    onSetOption = () => null,
     name,
     current_option,
     options = [],
@@ -214,16 +223,16 @@ const Entry = (props: EntryProps, context) => {
     <Stack.Item {...rest}>
       <Stack>
         <Stack.Item grow>
-          <Input placeholder="Name" value={name} onChange={onEnter} fluid />
+          <Input placeholder="Name" value={name} onChange={onChange} fluid />
         </Stack.Item>
         <Stack.Item>
-          {(options.length && (
+          {options.length > 0 ? (
             <Dropdown
-              displayText={current_option}
+              selected={current_option}
               options={options}
               onSelected={onSetOption}
             />
-          )) || (
+          ) : (
             <Box textAlign="center" py="2px" px={2}>
               {current_option}
             </Box>

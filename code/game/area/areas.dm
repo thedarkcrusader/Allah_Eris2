@@ -1,117 +1,207 @@
-#define STARTUP_STAGE 1
-#define MAIN_STAGE 2
-#define WIND_DOWN_STAGE 3
-#define END_STAGE 4
-
+/**
+ * # area
+ *
+ * A grouping of tiles into a logical space, mostly used by map editors
+ */
 /area
-	name = "Unknown"
-	icon = 'icons/turf/areas.dmi'
+	name = "Space"
+	icon = 'icons/area/areas_misc.dmi'
 	icon_state = "unknown"
-	plane = BLACKNESS_PLANE // Keeping this on the default plane, GAME_PLANE, will make area overlays fail to render on FLOOR_PLANE
 	layer = AREA_LAYER
-	level = null
+	//Keeping this on the default plane, GAME_PLANE, will make area overlays fail to render on FLOOR_PLANE.
+	plane = AREA_PLANE
 	mouse_opacity = MOUSE_OPACITY_TRANSPARENT
-	luminosity = TRUE
-	var/dynamic_lighting = TRUE
+	invisibility = INVISIBILITY_LIGHTING
+
+	/// List of all turfs currently inside this area as nested lists indexed by zlevel.
+	/// Acts as a filtered version of area.contents For faster lookup
+	/// (area.contents is actually a filtered loop over world)
+	/// Semi fragile, but it prevents stupid so I think it's worth it
+	var/list/list/turf/turfs_by_zlevel = list()
+	/// turfs_by_z_level can hold MASSIVE lists, so rather then adding/removing from it each time we have a problem turf
+	/// We should instead store a list of turfs to REMOVE from it, then hook into a getter for it
+	/// There is a risk of this and contained_turfs leaking, so a subsystem will run it down to 0 incrementally if it gets too large
+	/// This uses the same nested list format as turfs_by_zlevel
+	var/list/list/turf/turfs_to_uncontain_by_zlevel = list()
+
+	var/area_flags = VALID_TERRITORY | BLOBS_ALLOWED | UNIQUE_AREA | CULT_PERMITTED
+
+	///Do we have an active fire alarm?
+	var/fire = FALSE
+	///A var for whether the area allows for detecting fires/etc. Disabled or enabled at a fire alarm, checked by fire locks.
+	var/fire_detect = TRUE
+	///A list of all fire locks in this area. Used by fire alarm panels when resetting fire locks or activating all in an area
+	var/list/firedoors
+	///A list of firelocks currently active. Used by fire alarms when setting their icons.
+	var/list/active_firelocks
+	///A list of all fire alarms in this area. Used by firelocks and burglar alarms to change icon state.
+	var/list/firealarms = list()
+	///Alarm type to count of sources. Not usable for ^ because we handle fires differently
+	var/list/active_alarms = list()
+	/// The current alarm fault status
+	var/fault_status = AREA_FAULT_NONE
+	/// The source machinery for the area's fault status
+	var/fault_location
+	///List of all lights in our area
+	var/list/lights = list()
+	///We use this just for fire alarms, because they're area based right now so one alarm going poof shouldn't prevent you from clearing your alarms listing. Fire alarms and fire locks will set and clear alarms.
+	var/datum/alarm_handler/alarm_manager
+
 	var/lightswitch = TRUE
-	var/fire
-	var/atmos = TRUE
-	var/atmosalm = FALSE
-	var/poweralm = TRUE
-	var/party
-	var/eject
-	var/is_maintenance = FALSE
-	var/debug = 0
-	var/area_light_color		//Used by lights to create different light on different departments and locations
-	var/has_gravity = 1
-	var/cached_gravity = 1		//stores updated has_gravity even if it's blocked
-	var/no_air
-	var/air_doors_activated = 0
-	var/sound_env = STANDARD_STATION
-	var/holomap_color // Color of this area on station holomap
-	var/vessel = "CEV Eris" // Consoles can only control shields on the same vessel as them
-	var/ship_area = FALSE
 
+	/// All beauty in this area combined, only includes indoor area.
+	var/totalbeauty = 0
+	/// Beauty average per open turf in the area
+	var/beauty = 0
+	/// If a room is too big it doesn't have beauty.
+	var/beauty_threshold = 150
+
+	/// For space, the asteroid, lavaland, etc. Used with blueprints or with weather to determine if we are adding a new area (vs editing a station room)
+	var/outdoors = FALSE
+
+	/// Size of the area in open turfs, only calculated for indoors areas.
+	var/areasize = 0
+
+	/// Bonus mood for being in this area
+	var/mood_bonus = 0
+	/// Mood message for being here, only shows up if mood_bonus != 0
+	var/mood_message = "This area is pretty nice!"
+	/// Does the mood bonus require a trait?
+	var/mood_trait
+
+	///Will objects this area be needing power?
 	var/requires_power = TRUE
+	/// This gets overridden to 1 for space in area/.
 	var/always_unpowered = FALSE
-	var/power_light = TRUE
+
+	var/obj/machinery/power/apc/apc = null
+
 	var/power_equip = TRUE
+	var/power_light = TRUE
 	var/power_environ = TRUE
+	var/power_apc_charge = TRUE
+	/// The default gravity for the area
+	var/default_gravity = ZERO_GRAVITY
 
-	var/used_equip = 0
-	var/used_light = 0
-	var/used_environ = 0
+	var/parallax_movedir = 0
 
-	var/static_equip
-	var/static_light = 0
-	var/static_environ
+	var/ambience_index = AMBIENCE_GENERIC
+	///A list of sounds to pick from every so often to play to clients.
+	var/list/ambientsounds
+	///Does this area immediately play an ambience track upon enter?
+	var/forced_ambience = FALSE
+	///The background droning loop that plays 24/7
+	var/ambient_buzz = 'sound/ambience/general/shipambience.ogg'
+	///The volume of the ambient buzz
+	var/ambient_buzz_vol = 35
+	///Used to decide what the minimum time between ambience is
+	var/min_ambience_cooldown = 4 SECONDS
+	///Used to decide what the maximum time between ambience is
+	var/max_ambience_cooldown = 10 SECONDS
 
-	var/bluespace_entropy = 0
-	var/bluespace_hazard_threshold = 100
+	flags_1 = CAN_BE_DIRTY_1
 
-	var/uid
-	var/global/global_uid = 0
-	var/tmp/camera_id = 0 // For automatic c_tag setting
+	var/list/cameras
 
-	var/list/air_vent_names = list()
-	var/list/air_scrub_names = list()
-	var/list/air_vent_info = list()
-	var/list/air_scrub_info = list()
-	var/list/turret_controls = list() // Turrets use this list to see if individual power/lethal settings are allowed
-	var/list/all_doors = list()		//Added by Strumpetplaya - Alarm Change - Contains a list of doors adjacent to this area
-	var/list/ambience = list('sound/ambience/ambigen1.ogg','sound/ambience/ambigen3.ogg','sound/ambience/ambigen4.ogg','sound/ambience/ambigen5.ogg','sound/ambience/ambigen6.ogg','sound/ambience/ambigen7.ogg','sound/ambience/ambigen8.ogg','sound/ambience/ambigen9.ogg','sound/ambience/ambigen10.ogg','sound/ambience/ambigen11.ogg','sound/ambience/ambigen12.ogg','sound/ambience/ambigen14.ogg')
-	var/list/forced_ambience
+	/// Typepath to limit the areas (subtypes included) that atoms in this area can smooth with. Used for shuttles.
+	var/area/area_limited_icon_smoothing
 
-	// Each area may have at most one media source that plays songs into that area.
-	// We keep track of that source so any mob entering the area can lookup what to play.
-	var/atom/gravity_blocker	//ref to antigrav
-	var/turf/base_turf //The base turf type of the area, which can be used to override the z-level's base turf
-	var/obj/machinery/media/media_source = null
-	var/obj/machinery/power/apc/apc
-	var/obj/machinery/alarm/master_air_alarm
-	var/datum/turf_initializer/turf_initializer = null
-	var/datum/area_sanity/sanity
+	/// The energy usage of the area in the last machines SS tick.
+	var/list/energy_usage
+
+	/// Wire assignment for airlocks in this area
+	var/airlock_wires = /datum/wires/airlock
+
+	///This datum, if set, allows terrain generation behavior to be ran on Initialize()
+	var/datum/map_generator/map_generator
+
+	///Used to decide what kind of reverb the area makes sound have
+	var/sound_environment = SOUND_ENVIRONMENT_NONE
+
+	/// List of all air vents in the area
+	var/list/obj/machinery/atmospherics/components/unary/vent_pump/air_vents = list()
+
+	/// List of all air scrubbers in the area
+	var/list/obj/machinery/atmospherics/components/unary/vent_scrubber/air_scrubbers = list()
+
+	/// Are shuttles allowed to dock in this area
+	var/allow_shuttle_docking = FALSE
+
+/**
+ * A list of teleport locations
+ *
+ * Adding a wizard area teleport list because motherfucking lag -- Urist
+ * I am far too lazy to make it a proper list of areas so I'll just make it run the usual teleport routine at the start of the game
+ */
+GLOBAL_LIST_EMPTY(teleportlocs)
+
+/**
+ * Generate a list of turfs you can teleport to from the areas list
+ *
+ * Includes areas if they're not a shuttle or not not teleport or have no contents
+ *
+ * The chosen turf is the first item in the areas contents that is a station level
+ *
+ * The returned list of turfs is sorted by name
+ */
+/proc/process_teleport_locs()
+	for(var/area/AR as anything in get_sorted_areas())
+		if(istype(AR, /area/shuttle) || AR.area_flags & NOTELEPORT)
+			continue
+		if(GLOB.teleportlocs[AR.name])
+			continue
+		if (!AR.has_contained_turfs())
+			continue
+		if (is_station_level(AR.z))
+			GLOB.teleportlocs[AR.name] = AR
 
 /**
  * Called when an area loads
+ *
+ *  Adds the item to the GLOB.areas_by_type list based on area type
  */
 /area/New()
-	uid = ++global_uid
-	all_areas += src
-	if(ship_area)
-		ship_areas[src] = TRUE //Adds ourselves to the list of all ship areas
-
-	// Some atoms would like to use power in Initialize()
-	if(!requires_power)
-		power_light = FALSE
-		power_equip = FALSE
-		power_environ = FALSE
-
-	sanity = new(src)
-
-	if(dynamic_lighting)
-		luminosity = FALSE
-
-	. = ..()
+	// This interacts with the map loader, so it needs to be set immediately
+	// rather than waiting for atoms to initialize.
+	if (area_flags & UNIQUE_AREA)
+		GLOB.areas_by_type[type] = src
+	GLOB.areas += src
+	energy_usage = new /list(AREA_USAGE_LEN) // Some atoms would like to use power in Initialize()
+	alarm_manager = new(src) // just in case
+	return ..()
 
 /*
- * Initalize this area
+ * Initialize this area
+ *
+ * initializes the dynamic area lighting and also registers the area with the z level via
+ * reg_in_areas_in_z
  *
  * returns INITIALIZE_HINT_LATELOAD
  */
-/area/Initialize()
+/area/Initialize(mapload)
 	icon_state = ""
+	if(!ambientsounds)
+		ambientsounds = GLOB.ambience_assoc[ambience_index]
 
-	if(!requires_power || !apc)
-		power_light = FALSE
-		power_equip = FALSE
-		power_environ = FALSE
+	if(requires_power)
+		luminosity = 0
+	else
+		power_light = TRUE
+		power_equip = TRUE
+		power_environ = TRUE
 
-	for(var/turf/T in src)
-		if(turf_initializer)
-			turf_initializer.Initialize(T)
+		if(static_lighting)
+			luminosity = 0
 
-	..()
+	. = ..()
+
+	if(!static_lighting)
+		blend_mode = BLEND_MULTIPLY
+
+	reg_in_areas_in_z()
+
+	update_base_lighting()
+
 	return INITIALIZE_HINT_LATELOAD
 
 /**
@@ -119,370 +209,434 @@
  */
 /area/LateInitialize()
 	power_change() // all machines set to current power level, also updates icon
+	update_beauty()
 
-/area/proc/get_cameras()
-	var/list/cameras = list()
-	for (var/obj/machinery/camera/C in src)
-		cameras += C
-	return cameras
+/// Generate turfs, including cool cave wall gen
+/area/proc/RunTerrainGeneration()
+	if(map_generator)
+		map_generator = new map_generator()
+		var/list/turfs = list()
+		for(var/turf/T in contents)
+			turfs += T
+		map_generator.generate_terrain(turfs, src)
 
-/area/proc/get_camera_tag(var/obj/machinery/camera/C)
-	return "[name] #[camera_id++]"
+/// Populate the previously generated terrain with mobs and objects
+/area/proc/RunTerrainPopulation()
+	if(map_generator)
+		var/list/turfs = list()
+		for(var/turf/T in contents)
+			turfs += T
+		map_generator.populate_terrain(turfs, src)
 
-/area/proc/atmosalert(danger_level, var/alarm_source)
-	if (danger_level == 0)
-		atmosphere_alarm.clearAlarm(src, alarm_source)
-	else
-		atmosphere_alarm.triggerAlarm(src, alarm_source, severity = danger_level)
+/area/proc/test_gen()
+	if(map_generator)
+		var/list/turfs = list()
+		for(var/turf/T in contents)
+			turfs += T
+		map_generator.generate_terrain(turfs, src)
 
-	//Check all the alarms before lowering atmosalm. Raising is perfectly fine.
-	for (var/obj/machinery/alarm/AA in src)
-		if (!(AA.stat & (NOPOWER|BROKEN)) && !AA.shorted && AA.report_danger_level)
-			danger_level = max(danger_level, AA.danger_level)
-
-	if(danger_level != atmosalm)
-		if (danger_level < 1 && atmosalm >= 1)
-			//closing the doors on red and opening on green provides a bit of hysteresis that will hopefully prevent fire doors from opening and closing repeatedly due to noise
-			air_doors_open()
-		else if (danger_level >= 2 && atmosalm < 2)
-			air_doors_close()
-
-		atmosalm = danger_level
-		for (var/obj/machinery/alarm/AA in src)
-			AA.update_icon()
-
-		return 1
+/// Returns the highest zlevel that this area contains turfs for
+/area/proc/get_highest_zlevel()
+	for (var/area_zlevel in length(turfs_by_zlevel) to 1 step -1)
+		if (length(turfs_to_uncontain_by_zlevel) >= area_zlevel)
+			if (length(turfs_by_zlevel[area_zlevel]) - length(turfs_to_uncontain_by_zlevel[area_zlevel]) > 0)
+				return area_zlevel
+		else
+			if (length(turfs_by_zlevel[area_zlevel]))
+				return area_zlevel
 	return 0
 
-/area/proc/air_doors_close()
-	if(!air_doors_activated)
-		air_doors_activated = 1
-		for(var/obj/machinery/door/firedoor/D in all_doors)
-			D.close()
+/// Returns a nested list of lists with all turfs split by zlevel.
+/// only zlevels with turfs are returned. The order of the list is not guaranteed.
+/area/proc/get_zlevel_turf_lists()
+	if(length(turfs_to_uncontain_by_zlevel))
+		cannonize_contained_turfs()
 
-/area/proc/air_doors_open()
-	if(air_doors_activated)
-		air_doors_activated = 0
-		for(var/obj/machinery/door/firedoor/D in all_doors)
-			D.open()
+	var/list/zlevel_turf_lists = list()
+
+	for (var/list/zlevel_turfs as anything in turfs_by_zlevel)
+		if (length(zlevel_turfs))
+			zlevel_turf_lists += list(zlevel_turfs)
+
+	return zlevel_turf_lists
+
+/// Returns a list with all turfs in this zlevel.
+/area/proc/get_turfs_by_zlevel(zlevel)
+	if (length(turfs_to_uncontain_by_zlevel) >= zlevel && length(turfs_to_uncontain_by_zlevel[zlevel]))
+		cannonize_contained_turfs_by_zlevel(zlevel)
+
+	if (length(turfs_by_zlevel) < zlevel)
+		return list()
+
+	return turfs_by_zlevel[zlevel]
 
 
-/area/proc/fire_alert()
-	if(!fire)
-		fire = 1	//used for firedoor checks
-		updateicon()
-		mouse_opacity = 0
-		for(var/obj/machinery/door/firedoor/D in all_doors)
-			D.close()
+/// Merges a list containing all of the turfs zlevel lists from get_zlevel_turf_lists inside one list. Use get_zlevel_turf_lists() or get_turfs_by_zlevel() unless you need all the turfs in one list to avoid generating large lists
+/area/proc/get_turfs_from_all_zlevels()
+	. = list()
+	for (var/list/zlevel_turfs as anything in get_zlevel_turf_lists())
+		. += zlevel_turfs
 
-/area/proc/fire_reset()
-	if (fire)
-		fire = 0	//used for firedoor checks
-		updateicon()
-		mouse_opacity = 0
-		for(var/obj/machinery/door/firedoor/D in all_doors)
-			D.open()
+/// Ensures that the contained_turfs list properly represents the turfs actually inside us
+/area/proc/cannonize_contained_turfs_by_zlevel(zlevel_to_clean, _autoclean = TRUE)
+	// This is massively suboptimal for LARGE removal lists
+	// Try and keep the mass removal as low as you can. We'll do this by ensuring
+	// We only actually add to contained turfs after large changes (Also the management subsystem)
+	// Do your damndest to keep turfs out of /area/space as a stepping stone
+	// That sucker gets HUGE and will make this take actual seconds
+	if (zlevel_to_clean <= length(turfs_by_zlevel) && zlevel_to_clean <= length(turfs_to_uncontain_by_zlevel))
+		turfs_by_zlevel[zlevel_to_clean] -= turfs_to_uncontain_by_zlevel[zlevel_to_clean]
 
-/area/proc/readyalert()
-	if(!eject)
-		eject = 1
-		updateicon()
-	return
+	if (!_autoclean) // Removes empty lists from the end of this list
+		turfs_to_uncontain_by_zlevel[zlevel_to_clean] = list()
+		return
 
-/area/proc/readyreset()
-	if(eject)
-		eject = 0
-		updateicon()
-	return
+	var/new_length = length(turfs_to_uncontain_by_zlevel)
+	// Walk backwards thru the list
+	for (var/i in length(turfs_to_uncontain_by_zlevel) to 0 step -1)
+		if (i && length(turfs_to_uncontain_by_zlevel[i]))
+			break // Stop the moment we find a useful list
+		new_length = i
 
-/area/proc/partyalert()
-	if (!( party ))
-		party = 1
-		updateicon()
-		mouse_opacity = 0
-	return
+	if (new_length < length(turfs_to_uncontain_by_zlevel))
+		turfs_to_uncontain_by_zlevel.len = new_length
 
-/area/proc/partyreset()
-	if (party)
-		party = 0
-		mouse_opacity = 0
-		updateicon()
-		for(var/obj/machinery/door/firedoor/D in src)
-			D.open()
-	return
+	if (new_length >= zlevel_to_clean)
+		turfs_to_uncontain_by_zlevel[zlevel_to_clean] = list()
 
-/area/proc/updateicon()
 
-	///////weather
+/// Ensures that the contained_turfs list properly represents the turfs actually inside us
+/area/proc/cannonize_contained_turfs()
+	for (var/area_zlevel in 1 to length(turfs_to_uncontain_by_zlevel))
+		cannonize_contained_turfs_by_zlevel(area_zlevel, _autoclean = FALSE)
 
+	turfs_to_uncontain_by_zlevel = list()
+
+
+/// Returns TRUE if we have contained turfs, FALSE otherwise
+/area/proc/has_contained_turfs()
+	for (var/area_zlevel in 1 to length(turfs_by_zlevel))
+		if (length(turfs_to_uncontain_by_zlevel) >= area_zlevel)
+			if (length(turfs_by_zlevel[area_zlevel]) - length(turfs_to_uncontain_by_zlevel[area_zlevel]) > 0)
+				return TRUE
+		else
+			if (length(turfs_by_zlevel[area_zlevel]))
+				return TRUE
+	return FALSE
+
+/**
+ * Register this area as belonging to a z level
+ *
+ * Ensures the item is added to the SSmapping.areas_in_z list for this z
+ */
+/area/proc/reg_in_areas_in_z()
+	if(!has_contained_turfs())
+		return
+	var/list/areas_in_z = SSmapping.areas_in_z
+	update_areasize()
+	if(!z)
+		WARNING("No z found for [src]")
+		return
+	if(!areas_in_z["[z]"])
+		areas_in_z["[z]"] = list()
+	areas_in_z["[z]"] += src
+
+/**
+ * Destroy an area and clean it up
+ *
+ * Removes the area from GLOB.areas_by_type and also stops it processing on SSobj
+ *
+ * This is despite the fact that no code appears to put it on SSobj, but
+ * who am I to argue with old coders
+ */
+/area/Destroy()
+	if(GLOB.areas_by_type[type] == src)
+		GLOB.areas_by_type[type] = null
+	//this is not initialized until get_sorted_areas() is called so we have to do a null check
+	if(!isnull(GLOB.sortedAreas))
+		GLOB.sortedAreas -= src
+	//just for sanity sake cause why not
+	if(!isnull(GLOB.areas))
+		GLOB.areas -= src
+	if(!isnull(GLOB.custom_areas))
+		GLOB.custom_areas -= src
+	//machinery cleanup
+	STOP_PROCESSING(SSobj, src)
+	QDEL_NULL(alarm_manager)
+	firedoors = null
+	//atmos cleanup
+	firealarms = null
+	air_vents = null
+	air_scrubbers = null
+	//turf cleanup
+	turfs_by_zlevel = null
+	turfs_to_uncontain_by_zlevel = null
+	//parent cleanup
+	return ..()
+
+/**
+ * Close and lock a door passed into this proc
+ *
+ * Does this need to exist on area? probably not
+ */
+/area/proc/close_and_lock_door(obj/machinery/door/DOOR)
+	set waitfor = FALSE
+	DOOR.close()
+	if(DOOR.density)
+		DOOR.lock()
+
+/**
+ * Raise a burglar alert for this area
+ *
+ * Close and locks all doors in the area and alerts silicon mobs of a break in
+ *
+ * Alarm auto resets after 600 ticks
+ */
+/area/proc/burglaralert(obj/trigger)
+	//Trigger alarm effect
+	set_fire_effect(TRUE)
+	//Lockdown airlocks
+	for(var/obj/machinery/door/door in src)
+		close_and_lock_door(door)
+
+
+/**
+ * Set the fire alarm visual affects in an area
+ *
+ * Allows interested parties (lights and fire alarms) to react
+ */
+/area/proc/set_fire_effect(new_fire, fault_type, fault_source)
+	if(new_fire == fire)
+		return
+	fire = new_fire
+	fault_status = fault_type
+	if(fire)
+		fault_location = fault_source
+	else
+		fault_location = null
+	SEND_SIGNAL(src, COMSIG_AREA_FIRE_CHANGED, fire)
+
+/**
+ * Update the icon state of the area
+ *
+ * I'm not sure what the heck this does, something to do with weather being able to set icon
+ * states on areas?? where the heck would that even display?
+ */
+/area/update_icon_state()
 	var/weather_icon
 	for(var/V in SSweather.processing)
 		var/datum/weather/W = V
-		if(W.stage != END_STAGE && (src in get_areas(/area)))
+		if(W.stage != END_STAGE && (src in W.impacted_areas))
 			W.update_areas()
 			weather_icon = TRUE
 	if(!weather_icon)
 		icon_state = null
+	return ..()
 
-	////////////weather
-
-	if ((fire || eject || party || atmosalm == 2) && (!requires_power||power_environ) && !istype(src, /area/space))//If it doesn't require power, can still activate this proc.
-		if(fire)
-			for(var/obj/machinery/light/L in src)
-				if(istype(L, /obj/machinery/light/small))
-					continue
-				L.set_red()
-		else if (atmosalm == 2)
-			for(var/obj/machinery/light/L in src)
-				if(istype(L, /obj/machinery/light/small))
-					continue
-				L.set_blue()
-		else if(!fire && eject && !party && !(atmosalm == 2))
-			for(var/obj/machinery/light/L in src)
-				if(istype(L, /obj/machinery/light/small))
-					continue
-				L.set_red()
-		else if(party && !fire && !eject && !(atmosalm == 2))
-			icon_state = "party"
-	else
-	//	new lighting behaviour with obj lights
-		icon_state = null
-		for(var/obj/machinery/light/L in src)
-			if(istype(L, /obj/machinery/light/small))
-				continue
-			L.reset_color()
+/**
+ * Update the icon of the area (overridden to always be null for space
+ */
+/area/space/update_icon_state()
+	SHOULD_CALL_PARENT(FALSE)
+	icon_state = null
 
 
-/*
-#define EQUIP 1
-#define LIGHT 2
-#define ENVIRON 3
-*/
-
-/area/proc/powered(var/chan)		// return true if the area has power to given channel
+/**
+ * Returns int 1 or 0 if the area has power for the given channel
+ *
+ * evaluates a mixture of variables mappers can set, requires_power, always_unpowered and then
+ * per channel power_equip, power_light, power_environ
+ */
+/area/proc/powered(chan) // return true if the area has power to given channel
 
 	if(!requires_power)
-		return 1
+		return TRUE
 	if(always_unpowered)
-		return 0
+		return FALSE
 	switch(chan)
-		if(STATIC_EQUIP)
+		if(AREA_USAGE_EQUIP)
 			return power_equip
-		if(STATIC_LIGHT)
+		if(AREA_USAGE_LIGHT)
 			return power_light
-		if(STATIC_ENVIRON)
+		if(AREA_USAGE_ENVIRON)
 			return power_environ
 
-	return 0
-
-// called when power status changes
-/area/proc/power_change()
-	for(var/obj/machinery/M in src)	// for each machine in the area
-		M.power_change()			// reverify power status (to update icons etc.)
-	SEND_SIGNAL_OLD(src, COMSIG_AREA_APC_POWER_CHANGE)
-	if (fire || eject || party)
-		updateicon()
-
-/area/proc/usage(var/chan)
-	var/used = 0
-	switch(chan)
-		if(TOTAL)
-			used += static_light + static_equip + static_environ + used_equip + used_light + used_environ
-		if(STATIC_EQUIP)
-			used += static_equip + used_equip
-		if(STATIC_LIGHT)
-			used += static_light + used_light
-		if(STATIC_ENVIRON)
-			used += static_environ + used_environ
-	return used
-
-/area/proc/addStaticPower(value, powerchannel)
-	switch(powerchannel)
-		if(STATIC_EQUIP)
-			static_equip += value
-		if(STATIC_LIGHT)
-			static_light += value
-		if(STATIC_ENVIRON)
-			static_environ += value
-
-/area/proc/removeStaticPower(value, powerchannel)
-	addStaticPower(-value, powerchannel)
-
-/area/proc/clear_usage()
-	used_equip = 0
-	used_light = 0
-	used_environ = 0
-
-/area/proc/use_power(var/amount, var/chan)
-	switch(chan)
-		if(STATIC_EQUIP)
-			used_equip += amount
-		if(STATIC_LIGHT)
-			used_light += amount
-		if(STATIC_ENVIRON)
-			used_environ += amount
-
-
-var/list/mob/living/forced_ambiance_list = new
-
-/area/Entered(A)
-	if(!isliving(A))
-		return
-
-	var/mob/living/L = A
-	if(!L.ckey)	return
-
-	if(!L.lastarea)
-		L.lastarea = get_area(L.loc)
-	var/area/newarea = get_area(L.loc)
-	var/area/oldarea = L.lastarea
-	if(oldarea.has_gravity != newarea.has_gravity)
-		if(newarea.has_gravity == 1 && !MOVING_DELIBERATELY(L)) // Being ready when you change areas allows you to avoid falling.
-			thunk(L)
-		L.update_floating()
-
-	L.lastarea = newarea
-	play_ambience(L)
-
-/area/proc/play_ambience(var/mob/living/L)
-    // Ambience goes down here -- make sure to list each area seperately for ease of adding things in later, thanks! Note: areas adjacent to each other should have the same sounds to prevent cutoff when possible.- LastyScratch
-	if(!(L && L.client && L.get_preference_value(/datum/client_preference/play_ambiance) == GLOB.PREF_YES))    return
-
-	var/client/CL = L.client
-
-	if(CL.ambience_playing) // If any ambience already playing
-		if(forced_ambience && forced_ambience.len)
-			if(CL.ambience_playing in forced_ambience)
-				return 1
-			else
-				var/new_ambience = pick(pick(forced_ambience))
-				CL.ambience_playing = new_ambience
-				sound_to(L, sound(new_ambience, repeat = 1, wait = 0, volume = 30, channel = GLOB.ambience_sound_channel))
-				return 1
-		if(CL.ambience_playing in ambience)
-			return 1
-
-	if(ambience.len && prob(35))
-		if(world.time >= L.client.played + 600)
-			var/sound = pick(ambience)
-			CL.ambience_playing = sound
-			sound_to(L, sound(sound, repeat = 0, wait = 0, volume = 10, channel = GLOB.ambience_sound_channel))
-			L.client.played = world.time
-			return 1
-	else
-		var/sound = 'sound/ambience/shipambience.ogg'
-		CL.ambience_playing = sound
-		sound_to(L, sound(sound, repeat = 1, wait = 0, volume = 30, channel = GLOB.ambience_sound_channel))
-
-
-//Figures out what gravity should be and sets it appropriately
-/area/proc/update_gravity()
-	var/grav_before = has_gravity
-	if(gravity_blocker)
-		if(get_area(gravity_blocker) == src)
-			has_gravity = FALSE
-			if (grav_before != has_gravity)
-				gravity_changed()
-			return
-		else
-			gravity_blocker = null
-
-	if (GLOB.active_gravity_generator)
-		has_gravity = gravity_is_on
-
-	if (grav_before != has_gravity)
-		gravity_changed()
-
-
-
-//Called when the gravity state changes
-/area/proc/gravity_changed()
-	for(var/mob/M in src)
-		if(has_gravity)
-			thunk(M)
-		M.update_floating()
-
-//This thunk should probably not be an area proc.
-//TODO: Make it a mob proc
-/area/proc/thunk(mob)
-	if(istype(get_turf(mob), /turf/space)) // Can't fall onto nothing.
-		return
-
-	if(istype(get_turf(mob), /turf/open))
-		var/turf/open/O = get_turf(mob)
-		O.fallThrough(mob)
-		return
-
-	if(istype(mob,/mob/living/carbon/human/))
-		var/mob/living/carbon/human/H = mob
-		if(istype(H.shoes, /obj/item/clothing/shoes/magboots) && (H.shoes.item_flags & NOSLIP))
-			return
-		if(H.stats.getPerk(PERK_ASS_OF_CONCRETE))
-			return
-		if(MOVING_QUICKLY(H))
-			H.AdjustStunned(2)
-			H.AdjustWeakened(2)
-		else
-			H.AdjustStunned(1)
-			H.AdjustWeakened(1)
-		to_chat(mob, SPAN_NOTICE("The sudden appearance of gravity makes you fall to the floor!"))
-
-/area/proc/prison_break()
-	var/obj/machinery/power/apc/theAPC = get_apc()
-	if(theAPC.operating)
-		for(var/obj/machinery/power/apc/temp_apc in src)
-			temp_apc.overload_lighting(70)
-		for(var/obj/machinery/door/airlock/temp_airlock in src)
-			temp_airlock.prison_open()
-		for(var/obj/machinery/door/window/temp_windoor in src)
-			temp_windoor.open()
-
-/area/proc/has_gravity()
-	return has_gravity
-
-/area/space/has_gravity()
-	return 0
-
-/area/proc/are_living_present()
-	for(var/mob/living/L in src)
-		if(L.stat != DEAD)
-			return TRUE
 	return FALSE
 
-/proc/has_gravity(atom/AT, turf/T)
-	if(!T)
-		T = get_turf(AT)
-	var/area/A = get_area(T)
-	if(A && A.has_gravity())
-		return 1
-	return 0
+/**
+ * Space is not powered ever, so this returns false
+ */
+/area/space/powered(chan) //Nope.avi
+	return FALSE
+
+/**
+ * Called when the area power status changes
+ *
+ * Updates the area icon, calls power change on all machinees in the area, and sends the `COMSIG_AREA_POWER_CHANGE` signal.
+ */
+/area/proc/power_change()
+	SEND_SIGNAL(src, COMSIG_AREA_POWER_CHANGE)
+	update_appearance()
 
 
-/area/proc/set_ship_area()
-	if (!ship_area)
-		ship_area = TRUE
-		ship_areas[src] = TRUE
+/**
+ * Add a static amount of power load to an area. The value is assumed as the watt.
+ *
+ * Possible channels
+ * *AREA_USAGE_STATIC_EQUIP
+ * *AREA_USAGE_STATIC_LIGHT
+ * *AREA_USAGE_STATIC_ENVIRON
+ */
+/area/proc/addStaticPower(value, powerchannel)
+	value = power_to_energy(value)
+	switch(powerchannel)
+		if(AREA_USAGE_STATIC_START to AREA_USAGE_STATIC_END)
+			energy_usage[powerchannel] += value
 
+/**
+ * Remove a static amount of power load to an area. The value is assumed as the watt.
+ *
+ * Possible channels
+ * *AREA_USAGE_STATIC_EQUIP
+ * *AREA_USAGE_STATIC_LIGHT
+ * *AREA_USAGE_STATIC_ENVIRON
+ */
+/area/proc/removeStaticPower(value, powerchannel)
+	value = power_to_energy(value)
+	switch(powerchannel)
+		if(AREA_USAGE_STATIC_START to AREA_USAGE_STATIC_END)
+			energy_usage[powerchannel] -= value
+
+/**
+ * Clear all non-static power usage in area
+ *
+ * Clears all power used for the dynamic equipment, light and environment channels
+ */
+/area/proc/clear_usage()
+	energy_usage[AREA_USAGE_EQUIP] = 0
+	energy_usage[AREA_USAGE_LIGHT] = 0
+	energy_usage[AREA_USAGE_ENVIRON] = 0
+	energy_usage[AREA_USAGE_APC_CHARGE] = 0
+
+
+/**
+ * Add a power value amount to the stored used_x variables
+ */
+/area/proc/use_energy(amount, chan)
+	switch(chan)
+		if(AREA_USAGE_STATIC_START to AREA_USAGE_STATIC_END)
+			return
+		else
+			energy_usage[chan] += amount
+
+/**
+ * Call back when an atom enters an area
+ *
+ * Sends signals COMSIG_AREA_ENTERED and COMSIG_ENTER_AREA (to a list of atoms)
+ *
+ * If the area has ambience, then it plays some ambience music to the ambience channel
+ */
+/area/Entered(atom/movable/arrived, area/old_area)
+	set waitfor = FALSE
+	SEND_SIGNAL(src, COMSIG_AREA_ENTERED, arrived, old_area)
+
+	if(!arrived.important_recursive_contents?[RECURSIVE_CONTENTS_AREA_SENSITIVE])
+		return
+	for(var/atom/movable/recipient as anything in arrived.important_recursive_contents[RECURSIVE_CONTENTS_AREA_SENSITIVE])
+		SEND_SIGNAL(recipient, COMSIG_ENTER_AREA, src)
+
+	if(ismob(arrived))
+		var/mob/mob = arrived
+		mob.update_ambience_area(src)
+
+/**
+ * Called when an atom exits an area
+ *
+ * Sends signals COMSIG_AREA_EXITED and COMSIG_EXIT_AREA (to a list of atoms)
+ */
+/area/Exited(atom/movable/gone, direction)
+	SEND_SIGNAL(src, COMSIG_AREA_EXITED, gone, direction)
+	SEND_SIGNAL(gone, COMSIG_MOVABLE_EXITED_AREA, src, direction)
+
+	if(!gone.important_recursive_contents?[RECURSIVE_CONTENTS_AREA_SENSITIVE])
+		return
+	for(var/atom/movable/recipient as anything in gone.important_recursive_contents[RECURSIVE_CONTENTS_AREA_SENSITIVE])
+		SEND_SIGNAL(recipient, COMSIG_EXIT_AREA, src)
+
+///Divides total beauty in the room by roomsize to allow us to get an average beauty per tile.
+/area/proc/update_beauty()
+	if(!areasize)
+		beauty = 0
+		return FALSE
+	if(areasize >= beauty_threshold)
+		beauty = 0
+		return FALSE //Too big
+	beauty = totalbeauty / areasize
+	SEND_SIGNAL(src, COMSIG_AREA_BEAUTY_UPDATED)
+
+/**
+ * Setup an area (with the given name)
+ *
+ * Sets the area name, sets all status var's to false and adds the area to the sorted area list
+ */
+/area/proc/setup(a_name)
+	name = a_name
+	power_equip = FALSE
+	power_light = FALSE
+	power_environ = FALSE
+	always_unpowered = FALSE
+	area_flags &= ~(VALID_TERRITORY|BLOBS_ALLOWED|CULT_PERMITTED)
+	require_area_resort()
+/**
+ * Set the area size of the area
+ *
+ * This is the number of open turfs in the area contents, or FALSE if the outdoors var is set
+ *
+ */
+/area/proc/update_areasize()
+	if(outdoors)
+		return FALSE
+	areasize = 0
+	for(var/list/zlevel_turfs as anything in get_zlevel_turf_lists())
+		for(var/turf/open/thisvarisunused in zlevel_turfs)
+			areasize++
+
+/**
+ * Causes a runtime error
+ */
 /area/AllowDrop()
 	CRASH("Bad op: area/AllowDrop() called")
 
+/**
+ * Causes a runtime error
+ */
 /area/drop_location()
 	CRASH("Bad op: area/drop_location() called")
 
+/// A hook so areas can modify the incoming args of ChangeTurf
+/area/proc/place_on_top_react(list/new_baseturfs, turf/added_layer, flags)
+	return flags
 
-// Changes the area of T to A. Do not do this manually.
-// Area is expected to be a non-null instance.
-/proc/ChangeArea(var/turf/T, var/area/A)
-	if(!istype(A))
-		CRASH("Area change attempt failed: invalid area supplied.")
-	var/area/old_area = get_area(T)
-	if(old_area == A)
-		return
-	A.contents.Add(T)
-	if(old_area)
-		old_area.Exited(T, A)
-		for(var/atom/movable/AM in T)
-			old_area.Exited(AM, A)  // Note: this _will_ raise exited events.
-	A.Entered(T, old_area)
-	for(var/atom/movable/AM in T)
-		A.Entered(AM, old_area) // Note: this will _not_ raise moved or entered events. If you change this, you must also change everything which uses them.
+
+/// Called when a living mob that spawned here, joining the round, receives the player client.
+/area/proc/on_joining_game(mob/living/boarder)
+	return
+
+/**
+ * Returns the name of an area, with the original name if the area name has been changed.
+ *
+ * If an area has not been renamed, returns the area name. If it has been modified (by blueprints or other means)
+ * returns the current name, as well as the initial value, in the format of [Current Location Name (Original Name)]
+ */
+
+/area/proc/get_original_area_name()
+	if(name == initial(name))
+		return name
+	return "[name] ([initial(name)])"
+
+/**
+ * A blank area subtype solely used by the golem area editor for the purpose of
+ * allowing golems to create new areas without suffering from the hazard_area debuffs.
+ */
+/area/golem
+	name = "Golem Territory"

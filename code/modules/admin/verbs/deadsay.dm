@@ -1,29 +1,30 @@
-//talk in deadchat using our ckey/fakekey
-/client/proc/dsay(msg as text)
-	set category = "Special Verbs"
-	set name = "Dsay" //Gave this shit a shorter name so you only have to time out "dsay" rather than "dead say" to use it --NeoFite
-	set hidden = 1
-	if(!holder)
-		to_chat(src, "Only administrators may use this command.")
-		return
-	if(!mob)
-		return
-	if(prefs.muted & MUTE_DEADCHAT)
-		to_chat(src, SPAN_WARNING("You cannot send DSAY messages (muted)."))
-		return
-	if(get_preference_value(/datum/client_preference/show_dsay) == GLOB.PREF_HIDE)
-		to_chat(src, SPAN_WARNING("You have deadchat muted."))
+
+ADMIN_VERB(dsay, R_NONE, "DSay", "Speak to the dead.", ADMIN_CATEGORY_GAME, message as text)
+	if(user.prefs.muted & MUTE_DEADCHAT)
+		to_chat(user, span_danger("You cannot send DSAY messages (muted)."), confidential = TRUE)
 		return
 
-	if(handle_spam_prevention(msg,MUTE_DEADCHAT))
+	if (user.handle_spam_prevention(message,MUTE_DEADCHAT))
 		return
 
-	var/stafftype = uppertext(holder.rank)
+	message = copytext_char(sanitize(message), 1, MAX_MESSAGE_LEN)
+	user.mob.log_talk(message, LOG_DSAY)
 
-	msg = sanitize(msg)
-	log_admin("DSAY: [key_name(src)] : [msg]")
-
-	if(!msg)
+	if (!message)
 		return
+	var/rank_name = user.holder.rank_names()
+	var/admin_name = user.key
+	if(user.holder.fakekey)
+		rank_name = pick(strings("admin_nicknames.json", "ranks", "config"))
+		admin_name = pick(strings("admin_nicknames.json", "names", "config"))
+	var/name_and_rank = "[span_tooltip(rank_name, "STAFF")] ([admin_name])"
 
-	say_dead_direct("<span class='name'>[stafftype]([holder.fakekey ? holder.fakekey : key])</span> says, <span class='message linkify'>\"[msg]\"</span>")
+	deadchat_broadcast("[span_prefix("DEAD:")] [name_and_rank] says, <span class='message'>\"[emoji_parse(message)]\"</span>")
+
+	BLACKBOX_LOG_ADMIN_VERB("Dsay")
+
+/client/proc/get_dead_say()
+	var/msg = input(src, null, "dsay \"text\"") as text|null
+	if (isnull(msg))
+		return
+	SSadmin_verbs.dynamic_invoke_verb(src, /datum/admin_verb/dsay, msg)

@@ -1,611 +1,870 @@
-//Defines for echo list index positions.
-//ECHO_DIRECT and ECHO_ROOM are the only two that actually appear to do anything, and represent the dry and wet channels of the environment effects, respectively.
-//The rest of the defines are there primarily for the sake of completeness. It might be worth testing on EAX-enabled hardware, and on future BYOND versions (I've tested with 511, 512, and 513)
-#define ECHO_DIRECT 1
-#define ECHO_DIRECTHF 2
-#define ECHO_ROOM 3
-#define ECHO_ROOMHF 4
-#define ECHO_OBSTRUCTION 5
-#define ECHO_OBSTRUCTIONLFRATIO 6
-#define ECHO_OCCLUSION 7
-#define ECHO_OCCLUSIONLFRATIO 8
-#define ECHO_OCCLUSIONROOMRATIO 9
-#define ECHO_OCCLUSIONDIRECTRATIO 10
-#define ECHO_EXCLUSION 11
-#define ECHO_EXCLUSIONLFRATIO 12
-#define ECHO_OUTSIDEVOLUMEHF 13
-#define ECHO_DOPPLERFACTOR 14
-#define ECHO_ROLLOFFFACTOR 15
-#define ECHO_ROOMROLLOFFFACTOR 16
-#define ECHO_AIRABSORPTIONFACTOR 17
-#define ECHO_FLAGS 18
-
-//Defines for controlling how zsound sounds.
-#define ZSOUND_DRYLOSS_PER_Z -2000 //Affects what happens to the dry channel as the sound travels through z-levels
-#define ZSOUND_DISTANCE_PER_Z 2 //Affects the distance added to the sound per z-level travelled
-
-//Sound environment defines. Reverb preset for sounds played in an area, see sound datum reference for more.
-#define GENERIC 0
-#define PADDED_CELL 1
-#define ROOM 2
-#define BATHROOM 3
-#define LIVINGROOM 4
-#define STONEROOM 5
-#define AUDITORIUM 6
-#define CONCERT_HALL 7
-#define CAVE 8
-#define ARENA 9
-#define HANGAR 10
-#define CARPETED_HALLWAY 11
-#define HALLWAY 12
-#define STONE_CORRIDOR 13
-#define ALLEY 14
-#define FOREST 15
-#define CITY 16
-#define MOUNTAINS 17
-#define QUARRY 18
-#define PLAIN 19
-#define PARKING_LOT 20
-#define SEWER_PIPE 21
-#define UNDERWATER 22
-#define DRUGGED 23
-#define DIZZY 24
-#define PSYCHOTIC 25
-
-#define STANDARD_STATION STONEROOM
-#define LARGE_ENCLOSED HANGAR
-#define SMALL_ENCLOSED BATHROOM
-#define TUNNEL_ENCLOSED CAVE
-#define LARGE_SOFTFLOOR CARPETED_HALLWAY
-#define MEDIUM_SOFTFLOOR LIVINGROOM
-#define SMALL_SOFTFLOOR ROOM
-#define ASTEROID CAVE
-#define SPACE UNDERWATER
-
-var/list/shatter_sound = list(
-	'sound/effects/Glassbr1.ogg','sound/effects/Glassbr2.ogg','sound/effects/Glassbr3.ogg'
-)
-var/list/explosion_sound = list('sound/effects/Explosion1.ogg','sound/effects/Explosion2.ogg')
-var/list/spark_sound = list(
-	'sound/effects/sparks1.ogg','sound/effects/sparks2.ogg','sound/effects/sparks3.ogg',
-	'sound/effects/sparks4.ogg'
-)
-var/list/rustle_sound = list(
-	'sound/effects/rustle1.ogg','sound/effects/rustle2.ogg','sound/effects/rustle3.ogg',
-	'sound/effects/rustle4.ogg','sound/effects/rustle5.ogg'
-)
-var/list/punch_sound = list(
-	'sound/weapons/punch1.ogg','sound/weapons/punch2.ogg','sound/weapons/punch3.ogg','sound/weapons/punch4.ogg'
-)
-
-var/list/bullet_hit_wall = list(
-	'sound/weapons/guns/misc/ric1.ogg', 'sound/weapons/guns/misc/ric2.ogg', 'sound/weapons/guns/misc/ric3.ogg', 'sound/weapons/guns/misc/ric4.ogg', 'sound/weapons/guns/misc/ric5.ogg'
-)
-
-var/list/clown_sound = list('sound/effects/clownstep1.ogg','sound/effects/clownstep2.ogg')
-var/list/swing_hit_sound = list(
-	'sound/weapons/genhit1.ogg', 'sound/weapons/genhit2.ogg', 'sound/weapons/genhit3.ogg'
-)
-var/list/hiss_sound = list(
-	'sound/voice/hiss1.ogg','sound/voice/hiss2.ogg','sound/voice/hiss3.ogg','sound/voice/hiss4.ogg'
-)
-var/list/page_sound = list(
-	'sound/effects/pageturn1.ogg', 'sound/effects/pageturn2.ogg','sound/effects/pageturn3.ogg'
-)
-var/list/keyboard_sound = list (
-	'sound/effects/keyboard/keyboard1.ogg','sound/effects/keyboard/keyboard2.ogg',
-	'sound/effects/keyboard/keyboard3.ogg', 'sound/effects/keyboard/keyboard4.ogg'
-)
-var/list/robot_talk_heavy_sound = list (
-	'sound/machines/robots/robot_talk_heavy1.ogg','sound/machines/robots/robot_talk_heavy2.ogg',
-	'sound/machines/robots/robot_talk_heavy3.ogg','sound/machines/robots/robot_talk_heavy4.ogg'
-)
-var/list/robot_talk_light_sound = list (
-	'sound/machines/robots/robot_talk_light1.ogg','sound/machines/robots/robot_talk_light2.ogg',
-	'sound/machines/robots/robot_talk_light3.ogg','sound/machines/robots/robot_talk_light4.ogg',
-	'sound/machines/robots/robot_talk_light5.ogg'
-)
-var/list/miss_sound = list (
-	'sound/weapons/guns/misc/miss.ogg','sound/weapons/guns/misc/miss2.ogg',
-	'sound/weapons/guns/misc/miss3.ogg','sound/weapons/guns/misc/miss4.ogg'
-)
-var/list/ric_sound = list (
-	'sound/weapons/guns/misc/ric1.ogg','sound/weapons/guns/misc/ric2.ogg','sound/weapons/guns/misc/ric3.ogg',
-	'sound/weapons/guns/misc/ric4.ogg','sound/weapons/guns/misc/ric5.ogg'
-)
-var/list/casing_sound = list (
-	'sound/weapons/guns/misc/casingfall1.ogg','sound/weapons/guns/misc/casingfall2.ogg',
-	'sound/weapons/guns/misc/casingfall3.ogg'
-)
-var/list/bullet_hit_object_sound = list('sound/weapons/guns/misc/bullethit.ogg')
-
-var/list/climb_sound = list(
-	'sound/effects/ladder.ogg',
-	'sound/effects/ladder2.ogg',
-	'sound/effects/ladder3.ogg',
-	'sound/effects/ladder4.ogg'
-)
-
-var/list/weld_sound = list(
-	'sound/items/Welder.ogg',
-	'sound/items/welding1.ogg',
-	'sound/items/welding2.ogg',
-	'sound/items/welding3.ogg',
-	'sound/items/welding4.ogg'
-)
-
-var/list/gunshot_sound = list('sound/weapons/Gunshot.ogg',
-	'sound/weapons/guns/fire/ltrifle_fire.ogg',
-	'sound/weapons/guns/fire/m41_shoot.ogg',
-	'sound/weapons/guns/fire/revolver_fire.ogg',
-	'sound/weapons/guns/fire/sfrifle_fire.ogg',
-	'sound/weapons/guns/fire/shotgunp_fire.ogg',
-	'sound/weapons/guns/fire/smg_fire.ogg',
-	'sound/weapons/guns/fire/sniper_fire.ogg'
-)
-/*var/list/gun_sound = list(
-	'sound/weapons/Gunshot.ogg', 'sound/weapons/Gunshot2.ogg','sound/weapons/Gunshot3.ogg',
-	'sound/weapons/Gunshot4.ogg'
-)*/
-
-var/list/gun_interact_sound = list(
-	'sound/weapons/guns/interact/batrifle_cock.ogg',
-	'sound/weapons/guns/interact/batrifle_magin.ogg',
-	'sound/weapons/guns/interact/batrifle_magout.ogg',
-	'sound/weapons/guns/interact/bullet_insert2.ogg',
-	'sound/weapons/guns/interact/bullet_insert.ogg',
-	'sound/weapons/guns/interact/hpistol_cock.ogg',
-	'sound/weapons/guns/interact/hpistol_magin.ogg',
-	'sound/weapons/guns/interact/hpistol_magout.ogg',
-	'sound/weapons/guns/interact/lmg_close.ogg',
-	'sound/weapons/guns/interact/lmg_cock.ogg',
-	'sound/weapons/guns/interact/lmg_magin.ogg',
-	'sound/weapons/guns/interact/lmg_magout.ogg',
-	'sound/weapons/guns/interact/lmg_open.ogg',
-	'sound/weapons/guns/interact/ltrifle_cock.ogg',
-	'sound/weapons/guns/interact/ltrifle_magin.ogg',
-	'sound/weapons/guns/interact/ltrifle_magout.ogg',
-	'sound/weapons/guns/interact/m41_cocked.ogg',
-	'sound/weapons/guns/interact/m41_reload.ogg',
-	'sound/weapons/guns/interact/pistol_cock.ogg',
-	'sound/weapons/guns/interact/pistol_magin.ogg',
-	'sound/weapons/guns/interact/pistol_magout.ogg',
-	'sound/weapons/guns/interact/rev_cock.ogg',
-	'sound/weapons/guns/interact/rev_magin.ogg',
-	'sound/weapons/guns/interact/rev_magout.ogg',
-	'sound/weapons/guns/interact/rifle_boltback.ogg',
-	'sound/weapons/guns/interact/rifle_boltforward.ogg',
-	'sound/weapons/guns/interact/rifle_load.ogg',
-	'sound/weapons/guns/interact/selector.ogg',
-	'sound/weapons/guns/interact/sfrifle_cock.ogg',
-	'sound/weapons/guns/interact/sfrifle_magin.ogg',
-	'sound/weapons/guns/interact/sfrifle_magout.ogg',
-	'sound/weapons/guns/interact/shotgun_insert.ogg',
-	'sound/weapons/guns/interact/smg_cock.ogg',
-	'sound/weapons/guns/interact/smg_magin.ogg',
-	'sound/weapons/guns/interact/smg_magout.ogg'
-)
-
-var/list/short_equipement_sound = list(
-	'sound/misc/inventory/short_1.ogg',
-	'sound/misc/inventory/short_2.ogg',
-	'sound/misc/inventory/short_3.ogg'
-)
-
-var/list/long_equipement_sound = list(
-	'sound/misc/inventory/long_1.ogg',
-	'sound/misc/inventory/long_2.ogg',
-	'sound/misc/inventory/long_3.ogg'
-)
-
-//Sounds of earth, rock and stone
-var/list/crumble_sound = list('sound/effects/crumble1.ogg',\
-'sound/effects/crumble2.ogg',\
-'sound/effects/crumble3.ogg',\
-'sound/effects/crumble4.ogg',\
-'sound/effects/crumble5.ogg')
-
-//Heavy impact sounds, like a hammer or hard strike
-var/list/thud_sound = list('sound/effects/impacts/thud1.ogg',\
-'sound/effects/impacts/thud2.ogg',\
-'sound/effects/impacts/thud3.ogg')
-
-var/list/footstep_asteroid = list(\
-		'sound/effects/footstep/asteroid1.ogg',\
-		'sound/effects/footstep/asteroid2.ogg',\
-		'sound/effects/footstep/asteroid3.ogg',\
-		'sound/effects/footstep/asteroid4.ogg',\
-		'sound/effects/footstep/asteroid5.ogg')
-
-var/list/footstep_carpet = list(\
-		'sound/effects/footstep/carpet1.ogg',\
-		'sound/effects/footstep/carpet2.ogg',\
-		'sound/effects/footstep/carpet3.ogg',\
-		'sound/effects/footstep/carpet4.ogg',\
-		'sound/effects/footstep/carpet5.ogg')
-
-var/list/footstep_catwalk = list(\
-		'sound/effects/footstep/catwalk1.ogg',\
-		'sound/effects/footstep/catwalk2.ogg',\
-		'sound/effects/footstep/catwalk3.ogg',\
-		'sound/effects/footstep/catwalk4.ogg',\
-		'sound/effects/footstep/catwalk5.ogg')
-
-var/list/footstep_floor = list(\
-		'sound/effects/footstep/floor1.ogg',\
-		'sound/effects/footstep/floor2.ogg',\
-		'sound/effects/footstep/floor3.ogg',\
-		'sound/effects/footstep/floor4.ogg',\
-		'sound/effects/footstep/floor5.ogg')
-
-var/list/footstep_grass = list(\
-		'sound/effects/footstep/grass1.wav',\
-		'sound/effects/footstep/grass2.wav',\
-		'sound/effects/footstep/grass3.wav',\
-		'sound/effects/footstep/grass4.wav')
-
-var/list/footstep_gravel = list(\
-		'sound/effects/footstep/gravel1.wav',\
-		'sound/effects/footstep/gravel2.wav',\
-		'sound/effects/footstep/gravel3.wav',\
-		'sound/effects/footstep/gravel4.wav')
-
-var/list/footstep_hull = list(\
-		'sound/effects/footstep/hull1.ogg',\
-		'sound/effects/footstep/hull2.ogg',\
-		'sound/effects/footstep/hull3.ogg',\
-		'sound/effects/footstep/hull4.ogg',\
-		'sound/effects/footstep/hull5.ogg')
-
-var/list/footstep_plating =list(\
-		'sound/effects/footstep/plating1.ogg',\
-		'sound/effects/footstep/plating2.ogg',\
-		'sound/effects/footstep/plating3.ogg',\
-		'sound/effects/footstep/plating4.ogg',\
-		'sound/effects/footstep/plating5.ogg')
-
-var/list/footstep_tile = list(\
-		'sound/effects/footstep/tile1.wav',\
-		'sound/effects/footstep/tile2.wav',\
-		'sound/effects/footstep/tile3.wav',\
-		'sound/effects/footstep/tile4.wav')
-
-var/list/footstep_wood = list(\
-		'sound/effects/footstep/wood1.ogg',\
-		'sound/effects/footstep/wood2.ogg',\
-		'sound/effects/footstep/wood3.ogg',\
-		'sound/effects/footstep/wood4.ogg',\
-		'sound/effects/footstep/wood5.ogg')
-
-
-var/list/rummage_sound = list(\
-		'sound/effects/interaction/rummage1.ogg',\
-		'sound/effects/interaction/rummage2.ogg',\
-		'sound/effects/interaction/rummage3.ogg',\
-		'sound/effects/interaction/rummage4.ogg',\
-		'sound/effects/interaction/rummage5.ogg',\
-		'sound/effects/interaction/rummage6.ogg')
-
-
-/proc/footstep_sound(var/sound)
-	var/toplay
-	switch (sound)
-		if ("asteroid")
-			toplay = pick(footstep_asteroid)
-		if ("carpet")
-			toplay = pick(footstep_carpet)
-		if ("catwalk")
-			toplay = pick(footstep_catwalk)
-		if ("floor")
-			toplay = pick(footstep_floor)
-		if ("grass")
-			toplay = pick(footstep_grass)
-		if ("gravel")
-			toplay = pick(footstep_gravel)
-		if ("hull")
-			toplay = pick(footstep_hull)
-		if ("plating")
-			toplay = pick(footstep_plating)
-		if ("tile")
-			toplay = pick(footstep_tile)
-		if ("wood")
-			toplay = pick(footstep_wood)
-
-	return toplay
-
-
-/proc/playsound_tts(mob/source, list/target_mobs, voice, voice_scrambled, datum/language/language, is_local = TRUE)
-	var/speaker_key = "npc"
-
-	if(source)
-		if(!LAZYLEN(target_mobs))
-			target_mobs = hearers(7, get_turf(source)) // world.view
-
-		if(istype(source) && source.ckey)
-			speaker_key = source.ckey
-
-	if(!LAZYLEN(target_mobs))
-		return
-
-	var/speaker_channel = GLOB.sound_channels.get_by_key(speaker_key)
-	if(!speaker_channel)
-		GLOB.sound_channels.request(speaker_key)
-		speaker_channel = GLOB.sound_channels.get_by_key(speaker_key)
-		if(!speaker_channel)
-			speaker_channel = 0
-
-	for(var/mob/listener as anything in target_mobs)
-		if(listener.stat == UNCONSCIOUS || !listener.client)
-			continue
-
-		var/volume = text2num(listener.client.get_preference_value((is_local ? "TTS_VOLUME_LOCAL" : "TTS_VOLUME_RADIO")))
-		if(!volume)
-			continue
-
-		if(speaker_key in listener.client.prefs.ignored_players)
-			continue
-
-		var/sound/output = sound(voice_scrambled ? (listener.say_understands(null, language) ? voice : voice_scrambled) : voice)
-		output.channel = speaker_channel
-		output.wait = TRUE // Don't play TTS files at the same time
-		output.volume = volume
-		output.falloff = (listener.stats?.getPerk(PERK_EAR_OF_QUICKSILVER) ? 2 : 1)
-
-		sound_to(listener, output)
-
-
-/proc/playsound(atom/source, soundin, vol as num, vary, extrarange as num, falloff, is_global, frequency, is_ambiance, ignore_walls = TRUE, \
-	zrange = 2, override_env, envdry, envwet, use_pressure = TRUE)
-
+/**
+ * playsound is a proc used to play a 3D sound in a specific range. This uses SOUND_RANGE + extra_range to determine that.
+ *
+ * Arguments:
+ * * source - Origin of sound.
+ * * soundin - Either a file, or a string that can be used to get an SFX.
+ * * vol - The volume of the sound, excluding falloff and pressure affection.
+ * * vary - bool that determines if the sound changes pitch every time it plays.
+ * * extrarange - modifier for sound range. This gets added on top of SOUND_RANGE.
+ * * falloff_exponent - Rate of falloff for the audio. Higher means quicker drop to low volume. Should generally be over 1 to indicate a quick dive to 0 rather than a slow dive.
+ * * frequency - playback speed of audio.
+ * * channel - The channel the sound is played at.
+ * * pressure_affected - Whether or not difference in pressure affects the sound (E.g. if you can hear in space).
+ * * ignore_walls - Whether or not the sound can pass through walls.
+ * * falloff_distance - Distance at which falloff begins. Sound is at peak volume (in regards to falloff) aslong as it is in this range.
+ */
+/proc/playsound(atom/source, soundin, vol as num, vary, extrarange as num, falloff_exponent = SOUND_FALLOFF_EXPONENT, frequency = null, channel = 0, pressure_affected = TRUE, ignore_walls = TRUE, falloff_distance = SOUND_DEFAULT_FALLOFF_DISTANCE, use_reverb = TRUE)
 	if(isarea(source))
-		error("[source] is an area and is trying to make the sound: [soundin]")
-		return
+		CRASH("playsound(): source is an area")
 
-	soundin = get_sfx(soundin) // same sound for everyone
-	frequency = vary && isnull(frequency) ? get_rand_frequency() : frequency // Same frequency for everybody
+	if(islist(soundin))
+		CRASH("playsound(): soundin attempted to pass a list! Consider using pick()")
+
+	if(!soundin)
+		CRASH("playsound(): no soundin passed")
+
+	if(vol < SOUND_AUDIBLE_VOLUME_MIN) // never let sound go below SOUND_AUDIBLE_VOLUME_MIN or bad things will happen
+		CRASH("playsound(): volume below SOUND_AUDIBLE_VOLUME_MIN. [vol] < [SOUND_AUDIBLE_VOLUME_MIN]")
 
 	var/turf/turf_source = get_turf(source)
-	var/maxdistance = (world.view + extrarange) * 2
-
- 	// Looping through the player list has the added bonus of working for mobs inside containers
-	var/list/listeners = GLOB.player_list
-	if(!ignore_walls) //these sounds don't carry through walls
-		listeners = listeners & hearers(maxdistance, turf_source)
-
-	for(var/mob/M in listeners)
-		if(!M.client)
-			continue
-		var/dist = get_dist(M, turf_source)
-		if(dist <= maxdistance + 3)
-			if(dist > maxdistance)
-				if(!ishuman(M))
-					continue
-				else if(!M.stats.getPerk(PERK_EAR_OF_QUICKSILVER))
-					continue
-			var/turf/T = get_turf(M)
-
-			if(T && (T.z == turf_source.z || zrange && abs(T.z - turf_source.z) <= zrange))
-				M.playsound_local(turf_source, soundin, vol, vary, frequency, falloff, is_global, extrarange, override_env, envdry, envwet, use_pressure)
-
-var/const/FALLOFF_SOUNDS = 0.5
-
-/mob/proc/playsound_local(turf/turf_source, soundin, vol as num, vary, frequency, falloff, is_global, extrarange, override_env, envdry, envwet, use_pressure = TRUE)
-	if(!src.client || ear_deaf > 0)
+	if (!turf_source)
 		return
 
-	var/sound/S = soundin
-	if(!istype(S))
-		soundin = get_sfx(soundin)
-		S = sound(soundin)
-		S.wait = 0 //No queue
-		S.channel = 0 //Any channel
-		S.volume = vol
-		S.environment = -1
+	//allocate a channel if necessary now so its the same for everyone
+	channel = channel || SSsounds.random_available_channel()
+
+	var/sound/S = isdatum(soundin) ? soundin : sound(get_sfx(soundin))
+	var/maxdistance = SOUND_RANGE + extrarange
+	var/source_z = turf_source.z
+
+	if(vary && !frequency)
+		frequency = get_rand_frequency() // skips us having to do it per-sound later. should just make this a macro tbh
+
+	var/list/listeners
+
+	var/turf/above_turf = GET_TURF_ABOVE(turf_source)
+	var/turf/below_turf = GET_TURF_BELOW(turf_source)
+
+	var/audible_distance = CALCULATE_MAX_SOUND_AUDIBLE_DISTANCE(vol, maxdistance, falloff_distance, falloff_exponent)
+
+	if(ignore_walls)
+		listeners = get_hearers_in_range(audible_distance, turf_source, RECURSIVE_CONTENTS_CLIENT_MOBS)
+		if(above_turf && istransparentturf(above_turf))
+			listeners += get_hearers_in_range(audible_distance, above_turf, RECURSIVE_CONTENTS_CLIENT_MOBS)
+
+		if(below_turf && istransparentturf(turf_source))
+			listeners += get_hearers_in_range(audible_distance, below_turf, RECURSIVE_CONTENTS_CLIENT_MOBS)
+
+	else //these sounds don't carry through walls
+		listeners = get_hearers_in_view(audible_distance, turf_source, RECURSIVE_CONTENTS_CLIENT_MOBS)
+
+		if(above_turf && istransparentturf(above_turf))
+			listeners += get_hearers_in_view(audible_distance, above_turf, RECURSIVE_CONTENTS_CLIENT_MOBS)
+
+		if(below_turf && istransparentturf(turf_source))
+			listeners += get_hearers_in_view(audible_distance, below_turf, RECURSIVE_CONTENTS_CLIENT_MOBS)
+		for(var/mob/listening_ghost as anything in SSmobs.dead_players_by_zlevel[source_z])
+			if(get_dist(listening_ghost, turf_source) <= audible_distance)
+				listeners += listening_ghost
+
+	for(var/mob/listening_mob in listeners)//had nulls sneak in here, hence the typecheck
+		listening_mob.playsound_local(turf_source, soundin, vol, vary, frequency, falloff_exponent, channel, pressure_affected, S, maxdistance, falloff_distance, 1, use_reverb)
+
+	return listeners
+
+/**
+ * Plays a sound with a specific point of origin for src mob
+ * Affected by pressure, distance, terrain and environment (see arguments)
+ *
+ * Arguments:
+ * * turf_source - The turf our sound originates from, if this is not a turf, the sound is played with no spatial audio
+ * * soundin - Either a file, or a string that can be used to get an SFX.
+ * * vol - The volume of the sound, excluding falloff and pressure affection.
+ * * vary - bool that determines if the sound changes pitch every time it plays.
+ * * frequency - playback speed of audio.
+ * * falloff_exponent - Rate of falloff for the audio. Higher means quicker drop to low volume. Should generally be over 1 to indicate a quick dive to 0 rather than a slow dive.
+ * * channel - Optional: The channel the sound is played at.
+ * * pressure_affected - bool Whether or not difference in pressure affects the sound (E.g. if you can hear in space).
+ * * sound_to_use - Optional: Will default to soundin when absent
+ * * max_distance - number, determines the maximum distance of our sound
+ * * falloff_distance - Distance at which falloff begins. Sound is at peak volume (in regards to falloff) aslong as it is in this range.
+ * * distance_multiplier - Default 1, multiplies the maximum distance of our sound
+ * * use_reverb - bool default TRUE, determines if our sound has reverb
+ */
+/mob/proc/playsound_local(turf/turf_source, soundin, vol as num, vary, frequency, falloff_exponent = SOUND_FALLOFF_EXPONENT, channel = 0, pressure_affected = TRUE, sound/sound_to_use, max_distance, falloff_distance = SOUND_DEFAULT_FALLOFF_DISTANCE, distance_multiplier = 1, use_reverb = TRUE)
+	if(!client || !can_hear())
+		return
+
+	if(!sound_to_use)
+		sound_to_use = sound(get_sfx(soundin))
+
+	sound_to_use.wait = 0 //No queue
+	sound_to_use.channel = channel || SSsounds.random_available_channel()
+	sound_to_use.volume = vol
+
+	if(vary)
 		if(frequency)
-			S.frequency = frequency
-		else if (vary)
-			S.frequency = get_rand_frequency()
+			sound_to_use.frequency = frequency
+		else
+			sound_to_use.frequency = get_rand_frequency()
 
-	//sound volume falloff with pressure
-	var/pressure_factor = 1
-	
-	var/turf/T = get_turf(src)
-	// 3D sounds, the technology is here!
-	if(T && isturf(turf_source))
+	var/distance = 0
+
+	if(isturf(turf_source))
+		var/turf/turf_loc = get_turf(src)
+
 		//sound volume falloff with distance
-		var/distance = get_dist(T, turf_source)
+		distance = get_dist(turf_loc, turf_source) * distance_multiplier
 
-		S.volume -= max(distance - (world.view + extrarange), 0) * 2 //multiplicative falloff to add on top of natural audio falloff.
+		if(max_distance) //If theres no max_distance we're not a 3D sound, so no falloff.
+			sound_to_use.volume -= CALCULATE_SOUND_VOLUME(vol, distance, max_distance, falloff_distance, falloff_exponent)
 
-		var/datum/gas_mixture/hearer_env = T.return_air()
-		var/datum/gas_mixture/source_env = turf_source.return_air()
+		if(pressure_affected)
+			//Atmosphere affects sound
+			var/pressure_factor = 1
+			var/datum/gas_mixture/hearer_env = turf_loc.return_air()
+			var/datum/gas_mixture/source_env = turf_source.return_air()
 
-		if(use_pressure)
-			if (hearer_env && source_env)
+			if(hearer_env && source_env)
 				var/pressure = min(hearer_env.return_pressure(), source_env.return_pressure())
-
-				if (pressure < ONE_ATMOSPHERE)
+				if(pressure < ONE_ATMOSPHERE)
 					pressure_factor = max((pressure - SOUND_MINIMUM_PRESSURE)/(ONE_ATMOSPHERE - SOUND_MINIMUM_PRESSURE), 0)
-			else //in space
+			else //space
 				pressure_factor = 0
 
-			if (distance <= 1)
-				pressure_factor = max(pressure_factor, 0.15)	//hearing through contact
+			if(distance <= 1)
+				pressure_factor = max(pressure_factor, 0.15) //touching the source of the sound
 
-			S.volume *= pressure_factor
-		
-		if (S.volume <= 0)
-			return //no volume means no sound
+			sound_to_use.volume *= pressure_factor
+			//End Atmosphere affecting sound
 
-		var/dx = turf_source.x - T.x // Hearing from the right/left
-		S.x = dx
-		var/dz = turf_source.y - T.y // Hearing from infront/behind
-		S.z = dz
-		var/dy = (turf_source.z - T.z) * ZSOUND_DISTANCE_PER_Z // Hearing from above/below. There is ceiling in 2d spessmans.
-		S.y = (dy < 0) ? dy - 1 : dy + 1 //We want to make sure there's *always* at least one extra unit of distance. This helps normalize sound that's emitting from the turf you're on.
-		S.falloff = (falloff ? falloff : FALLOFF_SOUNDS)
+		if(sound_to_use.volume < SOUND_AUDIBLE_VOLUME_MIN)
+			return //No sound
 
-		if(!override_env)
-			envdry = abs(turf_source.z - T.z) * ZSOUND_DRYLOSS_PER_Z
+		var/dx = turf_source.x - turf_loc.x // Hearing from the right/left
+		sound_to_use.x = dx * distance_multiplier
+		var/dz = turf_source.y - turf_loc.y // Hearing from infront/behind
+		sound_to_use.z = dz * distance_multiplier
+		var/dy = (turf_source.z - turf_loc.z) * 5 * distance_multiplier // Hearing from  above / below, multiplied by 5 because we assume height is further along coords.
+		sound_to_use.y = dy
 
-	if(!is_global)
+		sound_to_use.falloff = max_distance || 1 //use max_distance, else just use 1 as we are a direct sound so falloff isnt relevant.
 
-		if(istype(src,/mob/living/))
-			var/mob/living/carbon/M = src
-			if (istype(M) && M.hallucination_power > 50 && M.chem_effects[CE_MIND] < 1)
-				S.environment = PSYCHOTIC
-			else if (M.druggy)
-				S.environment = DRUGGED
-			else if (M.drowsyness)
-				S.environment = DIZZY
-			else if (M.confused)
-				S.environment = DIZZY
-			else if (M.stat == UNCONSCIOUS)
-				S.environment = UNDERWATER
-			else if (pressure_factor < 0.5)
-				S.environment = SPACE
-			else
-				var/area/A = get_area(src)
-				if(istype(A))
-					S.environment = A.sound_env
-
-		else if (pressure_factor < 0.5)
-			S.environment = SPACE
+		// Sounds can't have their own environment. A sound's environment will be:
+		// 1. the mob's
+		// 2. the area's (defaults to SOUND_ENVRIONMENT_NONE)
+		if(sound_environment_override != SOUND_ENVIRONMENT_NONE)
+			sound_to_use.environment = sound_environment_override
 		else
 			var/area/A = get_area(src)
-			S.environment = A?.sound_env
+			sound_to_use.environment = A.sound_environment
 
-	var/list/echo_list = new(18)
-	echo_list[ECHO_DIRECT] = envdry
-	echo_list[ECHO_ROOM] = envwet
-	S.echo = echo_list
+		if(!use_reverb || sound_to_use.environment == SOUND_ENVIRONMENT_NONE)
+			sound_to_use.echo ||= new /list(18)
+			sound_to_use.echo[3] = -10000
+			sound_to_use.echo[4] = -10000
 
-	sound_to(src, S)
+	if(HAS_TRAIT(src, TRAIT_SOUND_DEBUGGED))
+		to_chat(src, span_admin("Max Range-[max_distance] Distance-[distance] Vol-[round(sound_to_use.volume, 0.01)] Sound-[sound_to_use.file]"))
 
+	SEND_SOUND(src, sound_to_use)
 
+/proc/sound_to_playing_players(soundin, volume = 100, vary = FALSE, frequency = 0, channel = 0, pressure_affected = FALSE, sound/S)
+	if(!S)
+		S = sound(get_sfx(soundin))
+	for(var/m in GLOB.player_list)
+		if(ismob(m) && !isnewplayer(m))
+			var/mob/M = m
+			M.playsound_local(M, null, volume, vary, frequency, null, channel, pressure_affected, S)
 
+/mob/proc/stop_sound_channel(chan)
+	SEND_SOUND(src, sound(null, repeat = 0, wait = 0, channel = chan))
 
+/mob/proc/set_sound_channel_volume(channel, volume)
+	var/sound/S = sound(null, FALSE, FALSE, channel, volume)
+	S.status = SOUND_UPDATE
+	SEND_SOUND(src, S)
+
+/client/proc/playtitlemusic(volume_multiplier = 1)
+	set waitfor = FALSE
+	UNTIL(SSticker.login_music) //wait for SSticker init to set the login music
+
+	var/music_volume = prefs.read_preference(/datum/preference/numeric/volume/sound_lobby_volume) * volume_multiplier
+	if((prefs && music_volume) && !CONFIG_GET(flag/disallow_title_music))
+		SEND_SOUND(src, sound(SSticker.login_music, repeat = 0, wait = 0, volume = music_volume, channel = CHANNEL_LOBBYMUSIC)) // MAD JAMS
+
+///get a random frequency.
 /proc/get_rand_frequency()
-	return rand(32000, 55000) //Frequency stuff only works with 45kbps oggs.
+	return rand(32000, 55000)
 
+///get_rand_frequency but lower range.
+/proc/get_rand_frequency_low_range()
+	return rand(38000, 45000)
+
+///Used to convert a SFX define into a .ogg so we can add some variance to sounds. If soundin is already a .ogg, we simply return it
 /proc/get_sfx(soundin)
-	if(istext(soundin))
-		switch(soundin)
-			if ("shatter") soundin = pick(shatter_sound)
-			if ("explosion") soundin = pick(explosion_sound)
-			if ("sparks") soundin = pick(spark_sound)
-			if ("rustle") soundin = pick(rustle_sound)
-			if ("punch") soundin = pick(punch_sound)
-			if ("clownstep") soundin = pick(clown_sound)
-			if ("swing_hit") soundin = pick(swing_hit_sound)
-			if ("hiss") soundin = pick(hiss_sound)
-			if ("pageturn") soundin = pick(page_sound)
-			if ("keyboard") soundin = pick(keyboard_sound)
-			if ("robot_talk_heavy") soundin = pick(robot_talk_heavy_sound)
-			if ("robot_talk_light") soundin = pick(robot_talk_light_sound)
-			if ("miss_sound") soundin = pick(miss_sound)
-			if ("ric_sound") soundin = pick(ric_sound)
-			if ("casing_sound") soundin = pick(casing_sound)
-			if ("hitobject") soundin = pick(bullet_hit_object_sound)
-			if ("climb")soundin = pick(climb_sound)
-			if ("catwalk")soundin = pick(footstep_catwalk)
-			if ("crumble") soundin = pick(crumble_sound)
-			if ("thud") soundin = pick(thud_sound)
-			if ("weld") soundin = pick(weld_sound)
-			if ("rummage") soundin = pick(rummage_sound)
-			if ("ricochet") soundin = pick(bullet_hit_wall)
-			//if ("gunshot") soundin = pick(gun_sound)
+	if(!istext(soundin))
+		return soundin
+	switch(soundin)
+		if(SFX_SHATTER)
+			soundin = pick(
+				'sound/effects/glass/glassbr1.ogg',
+				'sound/effects/glass/glassbr2.ogg',
+				'sound/effects/glass/glassbr3.ogg',
+				)
+		if(SFX_EXPLOSION)
+			soundin = pick(
+				'sound/effects/explosion/explosion1.ogg',
+				'sound/effects/explosion/explosion2.ogg',
+				)
+		if(SFX_EXPLOSION_CREAKING)
+			soundin = pick(
+				'sound/effects/explosion/explosioncreak1.ogg',
+				'sound/effects/explosion/explosioncreak2.ogg',
+				)
+		if(SFX_HULL_CREAKING)
+			soundin = pick(
+				'sound/effects/creak/creak1.ogg',
+				'sound/effects/creak/creak2.ogg',
+				'sound/effects/creak/creak3.ogg',
+				)
+		if(SFX_SPARKS)
+			soundin = pick(
+				'sound/effects/sparks/sparks1.ogg',
+				'sound/effects/sparks/sparks2.ogg',
+				'sound/effects/sparks/sparks3.ogg',
+				'sound/effects/sparks/sparks4.ogg',
+				)
+		if(SFX_RUSTLE)
+			soundin = pick(
+				'sound/effects/rustle/rustle1.ogg',
+				'sound/effects/rustle/rustle2.ogg',
+				'sound/effects/rustle/rustle3.ogg',
+				'sound/effects/rustle/rustle4.ogg',
+				'sound/effects/rustle/rustle5.ogg',
+				)
+		if(SFX_BODYFALL)
+			soundin = pick(
+				'sound/effects/bodyfall/bodyfall1.ogg',
+				'sound/effects/bodyfall/bodyfall2.ogg',
+				'sound/effects/bodyfall/bodyfall3.ogg',
+				'sound/effects/bodyfall/bodyfall4.ogg',
+				)
+		if(SFX_PUNCH)
+			soundin = pick(
+				'sound/items/weapons/punch1.ogg',
+				'sound/items/weapons/punch2.ogg',
+				'sound/items/weapons/punch3.ogg',
+				'sound/items/weapons/punch4.ogg',
+				)
+		if(SFX_CLOWN_STEP)
+			soundin = pick(
+				'sound/effects/footstep/clownstep1.ogg',
+				'sound/effects/footstep/clownstep2.ogg',
+				)
+		if(SFX_SUIT_STEP)
+			soundin = pick(
+			'sound/items/handling/armor_rustle/riot_armor/suitstep1.ogg',
+			'sound/items/handling/armor_rustle/riot_armor/suitstep2.ogg',
+			)
+		if(SFX_SWING_HIT)
+			soundin = pick(
+				'sound/items/weapons/genhit1.ogg',
+				'sound/items/weapons/genhit2.ogg',
+				'sound/items/weapons/genhit3.ogg',
+				)
+		if(SFX_HISS)
+			soundin = pick(
+				'sound/mobs/non-humanoids/hiss/hiss1.ogg',
+				'sound/mobs/non-humanoids/hiss/hiss2.ogg',
+				'sound/mobs/non-humanoids/hiss/hiss3.ogg',
+				'sound/mobs/non-humanoids/hiss/hiss4.ogg',
+				)
+		if(SFX_PAGE_TURN)
+			soundin = pick(
+				'sound/effects/page_turn/pageturn1.ogg',
+				'sound/effects/page_turn/pageturn2.ogg',
+				'sound/effects/page_turn/pageturn3.ogg',
+				)
+		if(SFX_RICOCHET)
+			soundin = pick(
+				'sound/items/weapons/effects/ric1.ogg',
+				'sound/items/weapons/effects/ric2.ogg',
+				'sound/items/weapons/effects/ric3.ogg',
+				'sound/items/weapons/effects/ric4.ogg',
+				'sound/items/weapons/effects/ric5.ogg',
+				)
+		if(SFX_TERMINAL_TYPE)
+			soundin = pick(list(
+				'sound/machines/terminal/terminal_button01.ogg',
+				'sound/machines/terminal/terminal_button02.ogg',
+				'sound/machines/terminal/terminal_button03.ogg',
+				'sound/machines/terminal/terminal_button04.ogg',
+				'sound/machines/terminal/terminal_button05.ogg',
+				'sound/machines/terminal/terminal_button06.ogg',
+				'sound/machines/terminal/terminal_button07.ogg',
+				'sound/machines/terminal/terminal_button08.ogg',
+			))
+		if(SFX_DESECRATION)
+			soundin = pick(
+				'sound/effects/desecration/desecration-01.ogg',
+				'sound/effects/desecration/desecration-02.ogg',
+				'sound/effects/desecration/desecration-03.ogg',
+				)
+		if(SFX_IM_HERE)
+			soundin = pick(
+				'sound/effects/hallucinations/im_here1.ogg',
+				'sound/effects/hallucinations/im_here2.ogg',
+				)
+		if(SFX_CAN_OPEN)
+			soundin = pick(
+				'sound/items/can/can_open1.ogg',
+				'sound/items/can/can_open2.ogg',
+				'sound/items/can/can_open3.ogg',
+				)
+		if(SFX_BULLET_MISS)
+			soundin = pick(
+				'sound/items/weapons/bulletflyby.ogg',
+				'sound/items/weapons/bulletflyby2.ogg',
+				'sound/items/weapons/bulletflyby3.ogg',
+				)
+		if(SFX_REVOLVER_SPIN)
+			soundin = pick(
+				'sound/items/weapons/gun/revolver/spin1.ogg',
+				'sound/items/weapons/gun/revolver/spin2.ogg',
+				'sound/items/weapons/gun/revolver/spin3.ogg',
+				)
+		if(SFX_LAW)
+			soundin = pick(list(
+				'sound/mobs/non-humanoids/beepsky/creep.ogg',
+				'sound/mobs/non-humanoids/beepsky/god.ogg',
+				'sound/mobs/non-humanoids/beepsky/iamthelaw.ogg',
+				'sound/mobs/non-humanoids/beepsky/insult.ogg',
+				'sound/mobs/non-humanoids/beepsky/radio.ogg',
+				'sound/mobs/non-humanoids/beepsky/secureday.ogg',
+			))
+		if(SFX_HONKBOT_E)
+			soundin = pick(list(
+				'sound/effects/pray.ogg',
+				'sound/mobs/non-humanoids/frog/reee.ogg',
+				'sound/items/airhorn/AirHorn.ogg',
+				'sound/items/airhorn/AirHorn2.ogg',
+				'sound/items/bikehorn.ogg',
+				'sound/items/WEEOO1.ogg',
+				'sound/machines/buzz/buzz-sigh.ogg',
+				'sound/machines/ping.ogg',
+				'sound/effects/magic/Fireball.ogg',
+				'sound/misc/sadtrombone.ogg',
+				'sound/mobs/non-humanoids/beepsky/creep.ogg',
+				'sound/mobs/non-humanoids/beepsky/iamthelaw.ogg',
+				'sound/mobs/non-humanoids/hiss/hiss1.ogg',
+				'sound/items/weapons/bladeslice.ogg',
+				'sound/items/weapons/flashbang.ogg',
+			))
+		if(SFX_GOOSE)
+			soundin = pick(
+				'sound/mobs/non-humanoids/goose/goose1.ogg',
+				'sound/mobs/non-humanoids/goose/goose2.ogg',
+				'sound/mobs/non-humanoids/goose/goose3.ogg',
+				'sound/mobs/non-humanoids/goose/goose4.ogg',
+				)
+		if(SFX_WARPSPEED)
+			soundin = 'sound/runtime/hyperspace/hyperspace_begin.ogg'
+		if(SFX_SM_CALM)
+			soundin = pick(list(
+				'sound/machines/sm/accent/normal/1.ogg',
+				'sound/machines/sm/accent/normal/2.ogg',
+				'sound/machines/sm/accent/normal/3.ogg',
+				'sound/machines/sm/accent/normal/4.ogg',
+				'sound/machines/sm/accent/normal/5.ogg',
+				'sound/machines/sm/accent/normal/6.ogg',
+				'sound/machines/sm/accent/normal/7.ogg',
+				'sound/machines/sm/accent/normal/8.ogg',
+				'sound/machines/sm/accent/normal/9.ogg',
+				'sound/machines/sm/accent/normal/10.ogg',
+				'sound/machines/sm/accent/normal/11.ogg',
+				'sound/machines/sm/accent/normal/12.ogg',
+				'sound/machines/sm/accent/normal/13.ogg',
+				'sound/machines/sm/accent/normal/14.ogg',
+				'sound/machines/sm/accent/normal/15.ogg',
+				'sound/machines/sm/accent/normal/16.ogg',
+				'sound/machines/sm/accent/normal/17.ogg',
+				'sound/machines/sm/accent/normal/18.ogg',
+				'sound/machines/sm/accent/normal/19.ogg',
+				'sound/machines/sm/accent/normal/20.ogg',
+				'sound/machines/sm/accent/normal/21.ogg',
+				'sound/machines/sm/accent/normal/22.ogg',
+				'sound/machines/sm/accent/normal/23.ogg',
+				'sound/machines/sm/accent/normal/24.ogg',
+				'sound/machines/sm/accent/normal/25.ogg',
+				'sound/machines/sm/accent/normal/26.ogg',
+				'sound/machines/sm/accent/normal/27.ogg',
+				'sound/machines/sm/accent/normal/28.ogg',
+				'sound/machines/sm/accent/normal/29.ogg',
+				'sound/machines/sm/accent/normal/30.ogg',
+				'sound/machines/sm/accent/normal/31.ogg',
+				'sound/machines/sm/accent/normal/32.ogg',
+				'sound/machines/sm/accent/normal/33.ogg',
+			))
+		if(SFX_SM_DELAM)
+			soundin = pick(list(
+				'sound/machines/sm/accent/delam/1.ogg',
+				'sound/machines/sm/accent/delam/2.ogg',
+				'sound/machines/sm/accent/delam/3.ogg',
+				'sound/machines/sm/accent/delam/4.ogg',
+				'sound/machines/sm/accent/delam/5.ogg',
+				'sound/machines/sm/accent/delam/6.ogg',
+				'sound/machines/sm/accent/delam/7.ogg',
+				'sound/machines/sm/accent/delam/8.ogg',
+				'sound/machines/sm/accent/delam/9.ogg',
+				'sound/machines/sm/accent/delam/10.ogg',
+				'sound/machines/sm/accent/delam/11.ogg',
+				'sound/machines/sm/accent/delam/12.ogg',
+				'sound/machines/sm/accent/delam/13.ogg',
+				'sound/machines/sm/accent/delam/14.ogg',
+				'sound/machines/sm/accent/delam/15.ogg',
+				'sound/machines/sm/accent/delam/16.ogg',
+				'sound/machines/sm/accent/delam/17.ogg',
+				'sound/machines/sm/accent/delam/18.ogg',
+				'sound/machines/sm/accent/delam/19.ogg',
+				'sound/machines/sm/accent/delam/20.ogg',
+				'sound/machines/sm/accent/delam/21.ogg',
+				'sound/machines/sm/accent/delam/22.ogg',
+				'sound/machines/sm/accent/delam/23.ogg',
+				'sound/machines/sm/accent/delam/24.ogg',
+				'sound/machines/sm/accent/delam/25.ogg',
+				'sound/machines/sm/accent/delam/26.ogg',
+				'sound/machines/sm/accent/delam/27.ogg',
+				'sound/machines/sm/accent/delam/28.ogg',
+				'sound/machines/sm/accent/delam/29.ogg',
+				'sound/machines/sm/accent/delam/30.ogg',
+				'sound/machines/sm/accent/delam/31.ogg',
+				'sound/machines/sm/accent/delam/32.ogg',
+				'sound/machines/sm/accent/delam/33.ogg',
+			))
+		if(SFX_HYPERTORUS_CALM)
+			soundin = pick(list(
+				'sound/machines/sm/accent/normal/1.ogg',
+				'sound/machines/sm/accent/normal/2.ogg',
+				'sound/machines/sm/accent/normal/3.ogg',
+				'sound/machines/sm/accent/normal/4.ogg',
+				'sound/machines/sm/accent/normal/5.ogg',
+				'sound/machines/sm/accent/normal/6.ogg',
+				'sound/machines/sm/accent/normal/7.ogg',
+				'sound/machines/sm/accent/normal/8.ogg',
+				'sound/machines/sm/accent/normal/9.ogg',
+				'sound/machines/sm/accent/normal/10.ogg',
+				'sound/machines/sm/accent/normal/11.ogg',
+				'sound/machines/sm/accent/normal/12.ogg',
+				'sound/machines/sm/accent/normal/13.ogg',
+				'sound/machines/sm/accent/normal/14.ogg',
+				'sound/machines/sm/accent/normal/15.ogg',
+				'sound/machines/sm/accent/normal/16.ogg',
+				'sound/machines/sm/accent/normal/17.ogg',
+				'sound/machines/sm/accent/normal/18.ogg',
+				'sound/machines/sm/accent/normal/19.ogg',
+				'sound/machines/sm/accent/normal/20.ogg',
+				'sound/machines/sm/accent/normal/21.ogg',
+				'sound/machines/sm/accent/normal/22.ogg',
+				'sound/machines/sm/accent/normal/23.ogg',
+				'sound/machines/sm/accent/normal/24.ogg',
+				'sound/machines/sm/accent/normal/25.ogg',
+				'sound/machines/sm/accent/normal/26.ogg',
+				'sound/machines/sm/accent/normal/27.ogg',
+				'sound/machines/sm/accent/normal/28.ogg',
+				'sound/machines/sm/accent/normal/29.ogg',
+				'sound/machines/sm/accent/normal/30.ogg',
+				'sound/machines/sm/accent/normal/31.ogg',
+				'sound/machines/sm/accent/normal/32.ogg',
+				'sound/machines/sm/accent/normal/33.ogg',
+			))
+		if(SFX_HYPERTORUS_MELTING)
+			soundin = pick(list(
+				'sound/machines/sm/accent/delam/1.ogg',
+				'sound/machines/sm/accent/delam/2.ogg',
+				'sound/machines/sm/accent/delam/3.ogg',
+				'sound/machines/sm/accent/delam/4.ogg',
+				'sound/machines/sm/accent/delam/5.ogg',
+				'sound/machines/sm/accent/delam/6.ogg',
+				'sound/machines/sm/accent/delam/7.ogg',
+				'sound/machines/sm/accent/delam/8.ogg',
+				'sound/machines/sm/accent/delam/9.ogg',
+				'sound/machines/sm/accent/delam/10.ogg',
+				'sound/machines/sm/accent/delam/11.ogg',
+				'sound/machines/sm/accent/delam/12.ogg',
+				'sound/machines/sm/accent/delam/13.ogg',
+				'sound/machines/sm/accent/delam/14.ogg',
+				'sound/machines/sm/accent/delam/15.ogg',
+				'sound/machines/sm/accent/delam/16.ogg',
+				'sound/machines/sm/accent/delam/17.ogg',
+				'sound/machines/sm/accent/delam/18.ogg',
+				'sound/machines/sm/accent/delam/19.ogg',
+				'sound/machines/sm/accent/delam/20.ogg',
+				'sound/machines/sm/accent/delam/21.ogg',
+				'sound/machines/sm/accent/delam/22.ogg',
+				'sound/machines/sm/accent/delam/23.ogg',
+				'sound/machines/sm/accent/delam/24.ogg',
+				'sound/machines/sm/accent/delam/25.ogg',
+				'sound/machines/sm/accent/delam/26.ogg',
+				'sound/machines/sm/accent/delam/27.ogg',
+				'sound/machines/sm/accent/delam/28.ogg',
+				'sound/machines/sm/accent/delam/29.ogg',
+				'sound/machines/sm/accent/delam/30.ogg',
+				'sound/machines/sm/accent/delam/31.ogg',
+				'sound/machines/sm/accent/delam/32.ogg',
+				'sound/machines/sm/accent/delam/33.ogg',
+			))
+		if(SFX_CRUNCHY_BUSH_WHACK)
+			soundin = pick(
+				'sound/effects/bush/crunchybushwhack1.ogg',
+				'sound/effects/bush/crunchybushwhack2.ogg',
+				'sound/effects/bush/crunchybushwhack3.ogg',
+				)
+		if(SFX_TREE_CHOP)
+			soundin = pick(
+				'sound/effects/treechop/treechop1.ogg',
+				'sound/effects/treechop/treechop2.ogg',
+				'sound/effects/treechop/treechop3.ogg',
+				)
+		if(SFX_ROCK_TAP)
+			soundin = pick(
+				'sound/effects/rock/rocktap1.ogg',
+				'sound/effects/rock/rocktap2.ogg',
+				'sound/effects/rock/rocktap3.ogg',
+				)
+		if(SFX_SEAR)
+			soundin = 'sound/items/weapons/sear.ogg'
+		if(SFX_REEL)
+			soundin = pick(
+				'sound/items/reel/reel1.ogg',
+				'sound/items/reel/reel2.ogg',
+				'sound/items/reel/reel3.ogg',
+				'sound/items/reel/reel4.ogg',
+				'sound/items/reel/reel5.ogg',
+			)
+		if(SFX_RATTLE)
+			soundin = pick(
+				'sound/items/rattle/rattle1.ogg',
+				'sound/items/rattle/rattle2.ogg',
+				'sound/items/rattle/rattle3.ogg',
+			)
+		if(SFX_PORTAL_CLOSE)
+			soundin = 'sound/effects/portal/portal_close.ogg'
+		if(SFX_PORTAL_ENTER)
+			soundin = 'sound/effects/portal/portal_travel.ogg'
+		if(SFX_PORTAL_CREATED)
+			soundin = pick(
+				'sound/effects/portal/portal_open_1.ogg',
+				'sound/effects/portal/portal_open_2.ogg',
+				'sound/effects/portal/portal_open_3.ogg',
+			)
+		if(SFX_SCREECH)
+			soundin = pick(
+				'sound/mobs/non-humanoids/monkey/monkey_screech_1.ogg',
+				'sound/mobs/non-humanoids/monkey/monkey_screech_2.ogg',
+				'sound/mobs/non-humanoids/monkey/monkey_screech_3.ogg',
+				'sound/mobs/non-humanoids/monkey/monkey_screech_4.ogg',
+				'sound/mobs/non-humanoids/monkey/monkey_screech_5.ogg',
+				'sound/mobs/non-humanoids/monkey/monkey_screech_6.ogg',
+				'sound/mobs/non-humanoids/monkey/monkey_screech_7.ogg',
+			)
+		if(SFX_TOOL_SWITCH)
+			soundin = 'sound/items/tools/tool_switch.ogg'
+		if(SFX_KEYBOARD_CLICKS)
+			soundin = pick(
+				'sound/machines/computer/keyboard_clicks_1.ogg',
+				'sound/machines/computer/keyboard_clicks_2.ogg',
+				'sound/machines/computer/keyboard_clicks_3.ogg',
+				'sound/machines/computer/keyboard_clicks_4.ogg',
+				'sound/machines/computer/keyboard_clicks_5.ogg',
+				'sound/machines/computer/keyboard_clicks_6.ogg',
+				'sound/machines/computer/keyboard_clicks_7.ogg',
+			)
+		if(SFX_STONE_DROP)
+			soundin = pick(
+				'sound/items/stones/stone_drop1.ogg',
+				'sound/items/stones/stone_drop2.ogg',
+				'sound/items/stones/stone_drop3.ogg',
+			)
+		if(SFX_STONE_PICKUP)
+			soundin = pick(
+				'sound/items/stones/stone_pick_up1.ogg',
+				'sound/items/stones/stone_pick_up2.ogg',
+			)
+		if(SFX_MUFFLED_SPEECH)
+			soundin = pick(
+				'sound/effects/muffspeech/muffspeech1.ogg',
+				'sound/effects/muffspeech/muffspeech2.ogg',
+				'sound/effects/muffspeech/muffspeech3.ogg',
+				'sound/effects/muffspeech/muffspeech4.ogg',
+				'sound/effects/muffspeech/muffspeech5.ogg',
+				'sound/effects/muffspeech/muffspeech6.ogg',
+				'sound/effects/muffspeech/muffspeech7.ogg',
+				'sound/effects/muffspeech/muffspeech8.ogg',
+				'sound/effects/muffspeech/muffspeech9.ogg',
+			)
+		if(SFX_DEFAULT_FISH_SLAP)
+			soundin = 'sound/mobs/non-humanoids/fish/fish_slap1.ogg'
+		if(SFX_ALT_FISH_SLAP)
+			soundin = 'sound/mobs/non-humanoids/fish/fish_slap2.ogg'
+		if(SFX_FISH_PICKUP)
+			soundin = pick(
+				'sound/mobs/non-humanoids/fish/fish_pickup1.ogg',
+				'sound/mobs/non-humanoids/fish/fish_pickup2.ogg',
+			)
+		if(SFX_LIQUID_POUR)
+			soundin = pick(
+				'sound/effects/liquid_pour/liquid_pour1.ogg',
+				'sound/effects/liquid_pour/liquid_pour2.ogg',
+				'sound/effects/liquid_pour/liquid_pour3.ogg',
+			)
+		if(SFX_SNORE_FEMALE)
+			soundin = pick_weight(list(
+				'sound/mobs/humanoids/human/snore/snore_female1.ogg' = 33,
+				'sound/mobs/humanoids/human/snore/snore_female2.ogg' = 33,
+				'sound/mobs/humanoids/human/snore/snore_female3.ogg' = 33,
+				'sound/mobs/humanoids/human/snore/snore_mimimi1.ogg' = 1,
+			))
+		if(SFX_SNORE_MALE)
+			soundin = pick_weight(list(
+				'sound/mobs/humanoids/human/snore/snore_male1.ogg' = 20,
+				'sound/mobs/humanoids/human/snore/snore_male2.ogg' = 20,
+				'sound/mobs/humanoids/human/snore/snore_male3.ogg' = 20,
+				'sound/mobs/humanoids/human/snore/snore_male4.ogg' = 20,
+				'sound/mobs/humanoids/human/snore/snore_male5.ogg' = 20,
+				'sound/mobs/humanoids/human/snore/snore_mimimi2.ogg' = 1,
+			))
+		if(SFX_CAT_MEOW)
+			soundin = pick_weight(list(
+				'sound/mobs/non-humanoids/cat/cat_meow1.ogg' = 33,
+				'sound/mobs/non-humanoids/cat/cat_meow2.ogg' = 33,
+				'sound/mobs/non-humanoids/cat/cat_meow3.ogg' = 33,
+				'sound/mobs/non-humanoids/cat/oranges_meow1.ogg' = 1,
+			))
+		if(SFX_CAT_PURR)
+			soundin = pick(
+				'sound/mobs/non-humanoids/cat/cat_purr1.ogg',
+				'sound/mobs/non-humanoids/cat/cat_purr2.ogg',
+				'sound/mobs/non-humanoids/cat/cat_purr3.ogg',
+				'sound/mobs/non-humanoids/cat/cat_purr4.ogg',
+			)
+		if(SFX_DEFAULT_LIQUID_SLOSH)
+			soundin = pick(
+				'sound/items/handling/reagent_containers/default/default_liquid_slosh1.ogg',
+				'sound/items/handling/reagent_containers/default/default_liquid_slosh2.ogg',
+				'sound/items/handling/reagent_containers/default/default_liquid_slosh3.ogg',
+				'sound/items/handling/reagent_containers/default/default_liquid_slosh4.ogg',
+				'sound/items/handling/reagent_containers/default/default_liquid_slosh5.ogg',
+			)
+		if(SFX_PLASTIC_BOTTLE_LIQUID_SLOSH)
+			soundin = pick(
+				'sound/items/handling/reagent_containers/plastic_bottle/plastic_bottle_liquid_slosh1.ogg',
+				'sound/items/handling/reagent_containers/plastic_bottle/plastic_bottle_liquid_slosh2.ogg',
+			)
+		if(SFX_PLATE_ARMOR_RUSTLE)
+			soundin = pick_weight(list(
+				'sound/items/handling/armor_rustle/plate_armor/plate_armor_rustle1.ogg' = 8, //longest sound is rarer.
+				'sound/items/handling/armor_rustle/plate_armor/plate_armor_rustle2.ogg' = 23,
+				'sound/items/handling/armor_rustle/plate_armor/plate_armor_rustle3.ogg' = 23,
+				'sound/items/handling/armor_rustle/plate_armor/plate_armor_rustle4.ogg' = 23,
+				'sound/items/handling/armor_rustle/plate_armor/plate_armor_rustle5.ogg' = 23,
+			))
+		if(SFX_PIG_OINK)
+			soundin = pick(
+				'sound/mobs/non-humanoids/pig/pig1.ogg',
+				'sound/mobs/non-humanoids/pig/pig2.ogg',
+			)
+		if(SFX_VISOR_DOWN)
+			soundin = pick(
+				'sound/items/handling/helmet/visor_down1.ogg',
+				'sound/items/handling/helmet/visor_down2.ogg',
+				'sound/items/handling/helmet/visor_down3.ogg',
+			)
+		if(SFX_VISOR_UP)
+			soundin = pick(
+				'sound/items/handling/helmet/visor_up1.ogg',
+				'sound/items/handling/helmet/visor_up2.ogg',
+			)
+		if(SFX_GROWL)
+			soundin = pick(
+				'sound/mobs/non-humanoids/dog/growl1.ogg',
+				'sound/mobs/non-humanoids/dog/growl2.ogg',
+			)
+		if(SFX_GROWL)
+			soundin = pick(
+				'sound/effects/wounds/sizzle1.ogg',
+				'sound/effects/wounds/sizzle2.ogg',
+			)
+		if(SFX_POLAROID)
+			soundin = pick(
+				'sound/items/polaroid/polaroid1.ogg',
+				'sound/items/polaroid/polaroid2.ogg',
+			)
+		if(SFX_HALLUCINATION_TURN_AROUND)
+			soundin = pick(
+				'sound/effects/hallucinations/turn_around1.ogg',
+				'sound/effects/hallucinations/turn_around2.ogg',
+			)
+		if(SFX_HALLUCINATION_I_SEE_YOU)
+			soundin = pick(
+				'sound/effects/hallucinations/i_see_you1.ogg',
+				'sound/effects/hallucinations/i_see_you2.ogg',
+			)
+		if(SFX_LOW_HISS)
+			soundin = pick(
+				'sound/mobs/non-humanoids/hiss/lowHiss2.ogg',
+				'sound/mobs/non-humanoids/hiss/lowHiss3.ogg',
+				'sound/mobs/non-humanoids/hiss/lowHiss4.ogg',
+			)
+		if(SFX_HALLUCINATION_I_M_HERE)
+			soundin = pick(
+				'sound/effects/hallucinations/im_here1.ogg',
+				'sound/effects/hallucinations/im_here2.ogg',
+			)
+		if(SFX_HALLUCINATION_OVER_HERE)
+			soundin = pick(
+				'sound/effects/hallucinations/over_here2.ogg',
+				'sound/effects/hallucinations/over_here3.ogg',
+			)
+		if(SFX_INDUSTRIAL_SCAN)
+			soundin = pick(
+				'sound/effects/industrial_scan/industrial_scan1.ogg',
+				'sound/effects/industrial_scan/industrial_scan2.ogg',
+				'sound/effects/industrial_scan/industrial_scan3.ogg',
+			)
+		if(SFX_MALE_SIGH)
+			soundin = pick(
+				'sound/mobs/humanoids/human/sigh/male_sigh1.ogg',
+				'sound/mobs/humanoids/human/sigh/male_sigh2.ogg',
+				'sound/mobs/humanoids/human/sigh/male_sigh3.ogg',
+			)
+		if(SFX_FEMALE_SIGH)
+			soundin = pick(
+				'sound/mobs/humanoids/human/sigh/female_sigh1.ogg',
+				'sound/mobs/humanoids/human/sigh/female_sigh2.ogg',
+				'sound/mobs/humanoids/human/sigh/female_sigh3.ogg',
+			)
+		if(SFX_WRITING_PEN)
+			soundin = pick(
+				'sound/effects/writing_pen/writing_pen1.ogg',
+				'sound/effects/writing_pen/writing_pen2.ogg',
+				'sound/effects/writing_pen/writing_pen3.ogg',
+				'sound/effects/writing_pen/writing_pen4.ogg',
+				'sound/effects/writing_pen/writing_pen5.ogg',
+				'sound/effects/writing_pen/writing_pen6.ogg',
+				'sound/effects/writing_pen/writing_pen7.ogg',
+			)
+		if(SFX_CLOWN_CAR_LOAD)
+			soundin = pick(
+				'sound/vehicles/clown_car/clowncar_load1.ogg',
+				'sound/vehicles/clown_car/clowncar_load2.ogg',
+			)
+		if(SFX_SEATBELT_BUCKLE)
+			soundin = pick(
+				'sound/machines/buckle/buckle1.ogg',
+				'sound/machines/buckle/buckle2.ogg',
+				'sound/machines/buckle/buckle3.ogg',
+			)
+		if(SFX_SEATBELT_UNBUCKLE)
+			soundin = pick(
+				'sound/machines/buckle/unbuckle1.ogg',
+				'sound/machines/buckle/unbuckle2.ogg',
+				'sound/machines/buckle/unbuckle3.ogg',
+			)
+		if(SFX_HEADSET_EQUIP)
+			soundin = pick(
+				'sound/items/equip/headset_equip1.ogg',
+				'sound/items/equip/headset_equip2.ogg',
+			)
+		if(SFX_HEADSET_PICKUP)
+			soundin = pick(
+				'sound/items/handling/headset/headset_pickup1.ogg',
+				'sound/items/handling/headset/headset_pickup2.ogg',
+				'sound/items/handling/headset/headset_pickup3.ogg',
+			)
+		if(SFX_BANDAGE_BEGIN)
+			soundin = pick(
+				'sound/items/gauze/bandage_begin1.ogg',
+				'sound/items/gauze/bandage_begin2.ogg',
+				'sound/items/gauze/bandage_begin3.ogg',
+				'sound/items/gauze/bandage_begin4.ogg',
+			)
+		if(SFX_BANDAGE_END)
+			soundin = pick(
+				'sound/items/gauze/bandage_end1.ogg',
+				'sound/items/gauze/bandage_end2.ogg',
+				'sound/items/gauze/bandage_end3.ogg',
+				'sound/items/gauze/bandage_end4.ogg',
+			)
+		// Old cloth sounds are named cloth_...1.ogg, I wanted to keep them so these new ones go further down the line.
+		if(SFX_CLOTH_DROP)
+			soundin = pick(
+				'sound/items/handling/cloth/cloth_drop2.ogg',
+				'sound/items/handling/cloth/cloth_drop3.ogg',
+				'sound/items/handling/cloth/cloth_drop4.ogg',
+				'sound/items/handling/cloth/cloth_drop5.ogg',
+			)
+		if(SFX_CLOTH_PICKUP)
+			soundin = pick(
+				'sound/items/handling/cloth/cloth_pickup2.ogg',
+				'sound/items/handling/cloth/cloth_pickup3.ogg',
+				'sound/items/handling/cloth/cloth_pickup4.ogg',
+				'sound/items/handling/cloth/cloth_pickup5.ogg',
+			)
+		if(SFX_SUTURE_BEGIN)
+			soundin = pick(
+				'sound/items/suture/suture_begin1.ogg',
+			)
+		if(SFX_SUTURE_CONTINUOUS)
+			soundin = pick(
+				'sound/items/suture/suture_continuous1.ogg',
+				'sound/items/suture/suture_continuous2.ogg',
+				'sound/items/suture/suture_continuous3.ogg',
+			)
+		if(SFX_SUTURE_END)
+			soundin = pick(
+				'sound/items/suture/suture_end1.ogg',
+				'sound/items/suture/suture_end2.ogg',
+				'sound/items/suture/suture_end3.ogg',
+			)
+		if(SFX_SUTURE_PICKUP)
+			soundin = pick(
+				'sound/items/handling/suture/needle_pickup1.ogg',
+				'sound/items/handling/suture/needle_pickup2.ogg',
+			)
+		if(SFX_SUTURE_DROP)
+			soundin = pick(
+				'sound/items/handling/suture/needle_drop1.ogg',
+				'sound/items/handling/suture/needle_drop2.ogg',
+				'sound/items/handling/suture/needle_drop3.ogg',
+			)
+		if(SFX_REGEN_MESH_BEGIN)
+			soundin = pick(
+				'sound/items/regenerative_mesh/regen_mesh_begin1.ogg',
+				'sound/items/regenerative_mesh/regen_mesh_begin2.ogg',
+				'sound/items/regenerative_mesh/regen_mesh_begin3.ogg',
+				'sound/items/regenerative_mesh/regen_mesh_begin4.ogg',
+			)
+		if(SFX_REGEN_MESH_CONTINUOUS)
+			soundin = pick(
+				'sound/items/regenerative_mesh/regen_mesh_continuous1.ogg',
+				'sound/items/regenerative_mesh/regen_mesh_continuous2.ogg',
+				'sound/items/regenerative_mesh/regen_mesh_continuous3.ogg',
+				'sound/items/regenerative_mesh/regen_mesh_continuous4.ogg',
+				'sound/items/regenerative_mesh/regen_mesh_continuous5.ogg',
+			)
+		if(SFX_REGEN_MESH_END)
+			soundin = pick(
+				'sound/items/regenerative_mesh/regen_mesh_end1.ogg',
+				'sound/items/regenerative_mesh/regen_mesh_end2.ogg',
+			)
+		if(SFX_REGEN_MESH_PICKUP)
+			soundin = pick(
+				'sound/items/handling/regenerative_mesh/regen_mesh_pickup1.ogg',
+				'sound/items/handling/regenerative_mesh/regen_mesh_pickup2.ogg',
+				'sound/items/handling/regenerative_mesh/regen_mesh_pickup3.ogg',
+			)
+		if(SFX_REGEN_MESH_DROP)
+			soundin = 'sound/items/regenerative_mesh/regen_mesh_drop1.ogg'
 	return soundin
-
-
-
-
-//Repeating sound support
-//This datum is intended to play a sound repeatedly at a given interval over a given duration
-//It is not intended for looping audio seamlessly
-
-/*
-	Usage:
-	To start and immediately play
-	var/datum/repeating_sound/mysound = new(30,100,0.15, src, soundfile, 80, 1)
-
-	to stop
-	mysound.stop()
-	mysound = null (It will qdel itself)
-*/
-/datum/repeating_sound
-	//The atom we play the sound from, but we'll use a weak reference instead of holding it in memory
-	//To prevent GC issues
-	var/source
-
-	//Past this time we will no longer loop and delete ourselves
-	var/end_time
-
-	//How often to play
-	var/interval
-
-	//Should be in the range 0..1. 0 disables the feature, 1 allows interval to be anywhere from 0-2x the norm
-	var/variance
-
-	var/soundin
-	var/vol
-	var/vary
-	var/extrarange
-	var/falloff
-	var/is_global
-	var/use_pressure_
-	//Used to stop it early
-	var/timer_handle
-
-	var/self_id
-
-/datum/repeating_sound/New(var/_interval, var/duration, var/interval_variance = 0, var/atom/_source, var/_soundin, var/_vol, var/_vary, var/_extrarange, var/_falloff, var/_is_global, var/_use_pressure = TRUE)
-	end_time = world.time + duration
-	source = "\ref[_source]"
-	interval = _interval
-	variance = interval_variance
-	soundin = _soundin
-	vol = _vol
-	vary = _vary
-	extrarange = _extrarange
-	falloff = _falloff
-	is_global = _is_global
-	use_pressure_ = _use_pressure
-	self_id = "\ref[src]"
-
-	//When created we do our first sound immediately
-	//If you want the first sound delayed, wrap it in a spawn call or something
-	do_sound()
-
-
-/datum/repeating_sound/proc/do_sound()
-	timer_handle = null //This has been successfully called, that handle is no use now
-
-	var/atom/playfrom = locate(source)
-	if (QDELETED(playfrom))
-		//Our source atom is gone, no more sounds
-		stop()
-		return
-
-	//We're past the end time, no more sounds
-	if (world.time > end_time)
-		stop()
-		return
-
-	//Actually play the sound
-	playsound(playfrom, soundin, vol, vary, extrarange, falloff, is_global, use_pressure = use_pressure_)
-
-	//Setup the next sound
-	var/nextinterval = interval
-	if (variance)
-		nextinterval *= RAND_DECIMAL(1-variance, 1+variance)
-
-	//Set the next timer handle
-	timer_handle = addtimer(CALLBACK(src, PROC_REF(do_sound), TRUE), nextinterval, TIMER_STOPPABLE)
-
-
-
-/datum/repeating_sound/proc/stop()
-	if (timer_handle)
-		deltimer(timer_handle)
-	qdel(src)

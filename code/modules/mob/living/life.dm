@@ -1,251 +1,152 @@
-/mob/living/Life()
-	set invisibility = 0
-	set background = BACKGROUND_ENABLED
+/// This divisor controls how fast body temperature changes to match the environment
+#define BODYTEMP_DIVISOR 16
 
-	. = FALSE
-	..()
-	if(config.enable_mob_sleep)
-		if(stat != DEAD && !mind)	// Check for mind so player-driven, nonhuman mobs don't sleep
-			if(life_cycles_before_scan > 0)
-				life_cycles_before_scan--
-			else
-				if(check_surrounding_area(7))
-					activate_ai()
-					life_cycles_before_scan = 29 //So it doesn't fall asleep just to wake up the next tick
-				else
-					life_cycles_before_scan = 240
-			if(life_cycles_before_sleep)
-				life_cycles_before_sleep--
+/**
+ * Handles the biological and general over-time processes of the mob.
+ *
+ *
+ * Arguments:
+ * - seconds_per_tick: The amount of time that has elapsed since this last fired.
+ * - times_fired: The number of times SSmobs has fired
+ */
+/mob/living/proc/Life(seconds_per_tick = SSMOBS_DT, times_fired)
+	set waitfor = FALSE
+	SHOULD_NOT_SLEEP(TRUE)
 
-			if(life_cycles_before_sleep < 1 && !AI_inactive)
-				AI_inactive = TRUE
+	var/signal_result = SEND_SIGNAL(src, COMSIG_LIVING_LIFE, seconds_per_tick, times_fired)
 
+	if(signal_result & COMPONENT_LIVING_CANCEL_LIFE_PROCESSING) // mmm less work
+		return
 
+	if (client)
+		var/turf/T = get_turf(src)
+		if(!T)
+			move_to_error_room()
+			var/msg = " was found to have no .loc with an attached client, if the cause is unknown it would be wise to ask how this was accomplished."
+			message_admins(ADMIN_LOOKUPFLW(src) + msg)
+			send2tgs_adminless_only("Mob", key_name_and_tag(src) + msg, R_ADMIN)
+			src.log_message("was found to have no .loc with an attached client.", LOG_GAME)
 
-	if((!stasis && !AI_inactive) || ishuman(src)) //god fucking forbid we do this to humanmobs somehow
-		if(Life_Check())
-			. = TRUE
-
-	else
-		if((life_cycles_before_scan % 60) == 0)
-			Life_Check_Light()
-
-
-	var/turf/T = get_turf(src)
-	if(T)
-		if(registered_z != T.z)
+		// This is a temporary error tracker to make sure we've caught everything
+		else if (registered_z != T.z)
+#ifdef TESTING
+			message_admins("[ADMIN_LOOKUPFLW(src)] has somehow ended up in Z-level [T.z] despite being registered in Z-level [registered_z]. If you could ask them how that happened and notify coderbus, it would be appreciated.")
+#endif
+			log_game("Z-TRACKING: [src] has somehow ended up in Z-level [T.z] despite being registered in Z-level [registered_z].")
 			update_z(T.z)
+	else if (registered_z)
+		log_game("Z-TRACKING: [src] of type [src.type] has a Z-registration despite not having a client.")
+		update_z(null)
 
+	if(isnull(loc) || HAS_TRAIT(src, TRAIT_NO_TRANSFORM))
+		return
 
-/mob/living/proc/Life_Check()
-	if (HasMovementHandler(/datum/movement_handler/mob/transformation/))
-		return
-	if(!loc)
-		return
-	var/datum/gas_mixture/environment = loc.return_air()
+	if(!HAS_TRAIT(src, TRAIT_STASIS))
+
+		if(stat != DEAD)
+			//Mutations and radiation
+			handle_mutations(seconds_per_tick, times_fired)
+			//Breathing, if applicable
+			handle_breathing(seconds_per_tick, times_fired)
+
+		handle_diseases(seconds_per_tick, times_fired)// DEAD check is in the proc itself; we want it to spread even if the mob is dead, but to handle its disease-y properties only if you're not.
+
+		if (QDELETED(src)) // diseases can qdel the mob via transformations
+			return
+
+		//Handle temperature/pressure differences between body and environment
+		var/datum/gas_mixture/environment = loc.return_air()
+		if(environment)
+			handle_environment(environment, seconds_per_tick, times_fired)
+
+		handle_gravity(seconds_per_tick, times_fired)
+
+	handle_wounds(seconds_per_tick, times_fired)
+
+	if(living_flags & QUEUE_NUTRITION_UPDATE)
+		mob_mood?.update_nutrition_moodlets()
+		hud_used?.hunger?.update_hunger_bar()
+		living_flags &= ~QUEUE_NUTRITION_UPDATE
 
 	if(stat != DEAD)
-		//Breathing, if applicable
-		handle_breathing()
-
-		//Mutations and radiation
-		handle_mutations_and_radiation()
-
-		//Blood
-		handle_blood()
-
-		//Random events (vomiting etc)
-		handle_random_events()
-
-		. = TRUE
-
-	//Handle temperature/pressure differences between body and environment
-	if(environment)
-		handle_environment(environment)
-
-	//Chemicals in the body
-	handle_chemicals_in_body()
-
-	//Check if we're on fire
-	handle_fire()
-
-	update_pulling()
-
-	for(var/obj/item/grab/G in src)
-		G.Process()
-
-	blinded = FALSE // Placing this here just show how out of place it is.
-	// human/handle_regular_status_updates() needs a cleanup, as blindness should be handled in handle_disabilities()
-	if(handle_regular_status_updates()) // Status & health update, are we dead or alive etc.
-		handle_disabilities() // eye, ear, brain damages
-		handle_status_effects() //all special effects, stunned, weakened, jitteryness, hallucination, sleeping, etc
-
-	update_lying_buckled_and_verb_status()
-
-	handle_regular_hud_updates()
-
-
-/mob/living/proc/Life_Check_Light()
-	if (HasMovementHandler(/datum/movement_handler/mob/transformation/))
-		return
-	if(!loc)
-		return
-	var/datum/gas_mixture/environment = loc.return_air()
-
-	//Handle temperature/pressure differences between body and environment
-	if(environment)
-		handle_environment(environment)
-
-	update_pulling()
-
-/mob/living/proc/handle_breathing()
-	return
-
-/mob/living/proc/handle_mutations_and_radiation()
-	return
-
-/mob/living/proc/handle_chemicals_in_body()
-	return
-
-/mob/living/proc/handle_blood()
-	return
-
-/mob/living/proc/handle_random_events()
-	return
-
-/mob/living/proc/handle_environment(var/datum/gas_mixture/environment)
-	return
-
-/mob/living/proc/update_pulling()
-	if(pulling)
-		if(incapacitated())
-			stop_pulling()
-
-//This updates the health and status of the mob (conscious, unconscious, dead)
-/mob/living/proc/handle_regular_status_updates()
-	updatehealth()
-	if(stat != DEAD)
-		if(paralysis)
-			stat = UNCONSCIOUS
-		else if (status_flags & FAKEDEATH)
-			stat = UNCONSCIOUS
-		else
-			stat = CONSCIOUS
 		return 1
 
-//this updates all special effects: stunned, sleeping, weakened, druggy, stuttering, etc..
-/mob/living/proc/handle_status_effects()
-	if(paralysis)
-		paralysis = max(paralysis-1,0)
-	if(stunned)
-		stunned = max(stunned-1,0)
-		if(!stunned)
-			update_icons()
+/mob/living/proc/handle_breathing(seconds_per_tick, times_fired)
+	SEND_SIGNAL(src, COMSIG_LIVING_HANDLE_BREATHING, seconds_per_tick, times_fired)
+	return
 
-	if(weakened)
-		weakened = max(weakened-1,0)
-		if(!weakened)
-			update_icons()
+/mob/living/proc/handle_mutations(seconds_per_tick, times_fired)
+	return
 
-/mob/living/proc/handle_disabilities()
-	//Eyes
-	if(sdisabilities & BLIND || stat)	//blindness from disability or unconsciousness doesn't get better on its own
-		eye_blind = max(eye_blind, 1)
-	else if(eye_blind)			//blindness, heals slowly over time
-		eye_blind = max(eye_blind-1,0)
-	else if(eye_blurry)			//blurry eyes heal slowly
-		eye_blurry = max(eye_blurry-1, 0)
+/mob/living/proc/handle_diseases(seconds_per_tick, times_fired)
+	return
 
-	//Ears
-	if(sdisabilities & DEAF) // Disabled-deaf, doesn't get better on its own
-		setEarDamage(-1, max(ear_deaf, 1))
-	else if(ear_damage < 100) // Deafness heals slowly over time, unless ear_damage is over 100
-		adjustEarDamage(-0.05,-1)
+/mob/living/proc/handle_wounds(seconds_per_tick, times_fired)
+	return
 
-//this handles hud updates. Calls update_vision() and handle_hud_icons()
-/mob/living/proc/handle_regular_hud_updates()
-	if(!client)	return FALSE
+// Base mob environment handler for body temperature
+/mob/living/proc/handle_environment(datum/gas_mixture/environment, seconds_per_tick, times_fired)
+	var/loc_temp = get_temperature(environment)
+	var/temp_delta = loc_temp - bodytemperature
 
-	handle_hud_icons()
-	handle_vision()
+	if(ismovable(loc))
+		var/atom/movable/occupied_space = loc
+		temp_delta *= (1 - occupied_space.contents_thermal_insulation)
 
-	return 1
+	if(temp_delta < 0) // it is cold here
+		if(!on_fire) // do not reduce body temp when on fire
+			adjust_bodytemperature(max(max(temp_delta / BODYTEMP_DIVISOR, BODYTEMP_COOLING_MAX) * seconds_per_tick, temp_delta))
+	else // this is a hot place
+		adjust_bodytemperature(min(min(temp_delta / BODYTEMP_DIVISOR, BODYTEMP_HEATING_MAX) * seconds_per_tick, temp_delta))
 
-/mob/living/proc/handle_vision()
-	client.screen.Remove(global_hud.blurry, global_hud.druggy, global_hud.vimpaired, global_hud.darkMask, global_hud.nvg, global_hud.thermal, global_hud.meson, global_hud.science)
-	update_sight()
+/**
+ * Get the fullness of the mob
+ *
+ * Fullness is a representation of how much nutrition the mob has,
+ * including the nutrition of stuff yet to be digested (reagents in blood / stomach)
+ *
+ * * only_consumable - if TRUE, only consumable reagents are counted.
+ * Otherwise, all reagents contribute to fullness, despite not adding nutrition as they process.
+ *
+ * Returns a number representing fullness, scaled similarly to nutrition.
+ */
+/mob/living/proc/get_fullness(only_consumable)
+	var/fullness = nutrition
+	// we add the nutrition value of what we're currently digesting
+	for(var/datum/reagent/consumable/bits in reagents.reagent_list)
+		fullness += bits.get_nutriment_factor(src) * bits.volume / bits.metabolization_rate
+	return fullness
 
-	if(stat == DEAD)
+/**
+ * Check if the mob contains this reagent.
+ *
+ * This will validate the the reagent holder for the mob and any sub holders contain the requested reagent.
+ * Vars:
+ * * reagent (typepath) takes a PATH to a reagent.
+ * * amount (int) checks for having a specific amount of that chemical.
+ * * needs_metabolizing (bool) takes into consideration if the chemical is matabolizing when it's checked.
+ */
+/mob/living/proc/has_reagent(reagent, amount = -1, needs_metabolizing = FALSE)
+	return reagents.has_reagent(reagent, amount, needs_metabolizing)
+
+/mob/living/proc/update_damage_hud()
+	return
+
+/mob/living/proc/handle_gravity(seconds_per_tick, times_fired)
+	if(gravity_state > STANDARD_GRAVITY)
+		handle_high_gravity(gravity_state, seconds_per_tick, times_fired)
+
+/mob/living/proc/gravity_animate()
+	if(!get_filter("gravity"))
+		add_filter("gravity",1,list("type"="motion_blur", "x"=0, "y"=0))
+	animate(get_filter("gravity"), y = 1, time = 10, loop = -1)
+	animate(y = 0, time = 10)
+
+/mob/living/proc/handle_high_gravity(gravity, seconds_per_tick, times_fired)
+	if(gravity < GRAVITY_DAMAGE_THRESHOLD) //Aka gravity values of 3 or more
 		return
 
-	if(sdisabilities & NEARSIGHTED)
-		client.screen |= global_hud.vimpaired
-	if(eye_blurry)
-		client.screen |= global_hud.blurry
-	if(druggy)
-		client.screen |= global_hud.druggy
-	if(machine)
-		var/viewflags = machine.check_eye(src)
-		if(viewflags < 0)
-			reset_view(null, 0)
-		else if(viewflags)
-			sight |= viewflags
-	else if(eyeobj)
-		if(eyeobj.owner != src)
-			reset_view(null)
-	else if(!client.adminobs)
-		reset_view(null)
+	var/grav_strength = gravity - GRAVITY_DAMAGE_THRESHOLD
+	adjustBruteLoss(min(GRAVITY_DAMAGE_SCALING * grav_strength, GRAVITY_DAMAGE_MAXIMUM) * seconds_per_tick)
 
-/mob/living/proc/update_sight()
-	set_sight(0)
-	set_see_in_dark(0)
-	if(stat == DEAD || eyeobj)
-		update_dead_sight()
-	else
-		if (is_ventcrawling)
-			sight |= SEE_TURFS|SEE_OBJS|BLIND
-		else
-			sight &= ~(SEE_TURFS|SEE_MOBS|SEE_OBJS)
-			see_in_dark = initial(see_in_dark)
-			see_invisible = initial(see_invisible)
-	set_sight(sight)
-	set_see_invisible(see_invisible)
-
-/mob/living/proc/update_dead_sight()
-	sight |= SEE_TURFS
-	sight |= SEE_MOBS
-	sight |= SEE_OBJS
-	see_in_dark = 8
-	see_invisible = SEE_INVISIBLE_LEVEL_TWO
-
-/mob/living/proc/handle_hud_icons()
-	handle_hud_glasses()
-
-/*/mob/living/proc/HUD_create()
-	if (!usr.client)
-		return
-	usr.client.screen.Cut()
-	if(ishuman(usr) && (usr.client.prefs.UI_style != null))
-		if (!GLOB.HUDdatums.Find(usr.client.prefs.UI_style))
-			log_debug("[usr] try update a HUD, but HUDdatums not have [usr.client.prefs.UI_style]!")
-		else
-			var/mob/living/carbon/human/H = usr
-			var/datum/hud/human/HUDdatum = GLOB.HUDdatums[usr.client.prefs.UI_style]
-			if (!H.HUDneed.len)
-				if (H.HUDprocess.len)
-					log_debug("[usr] have object in HUDprocess list, but HUDneed is empty.")
-					for(var/obj/screen/health/HUDobj in H.HUDprocess)
-						H.HUDprocess -= HUDobj
-						qdel(HUDobj)
-				for(var/HUDname in HUDdatum.HUDneed)
-					if(!H.species.hud.ProcessHUD.Find(HUDname))
-						continue
-					var/HUDtype = HUDdatum.HUDneed[HUDname]
-					var/obj/screen/HUD = new HUDtype()
-					to_chat(world, "[HUD] added")
-					H.HUDneed += HUD
-					if (HUD.type in HUDdatum.HUDprocess)
-						to_chat(world, "[HUD] added in process")
-						H.HUDprocess += HUD
-					to_chat(world, "[HUD] added in screen")
-*/
+#undef BODYTEMP_DIVISOR

@@ -29,7 +29,7 @@
 
 	if(isobserver(user))
 		// If they turn on ghost AI control, admins can always interact.
-		if(is_admin(user) && isghost(user))
+		if(isAdminGhostAI(user))
 			return UI_INTERACTIVE
 
 		// Regular ghosts can always at least view if in range.
@@ -50,14 +50,15 @@
 
 /// Returns a UI status such that those without blocked hands will be able to interact,
 /// but everyone else can only watch.
-/proc/ui_status_user_has_free_hands(mob/user, atom/source)
-// HAS_TRAIT(user, TRAIT_HANDS_BLOCKED)
-	return user.can_use_hands() ? UI_UPDATE : UI_INTERACTIVE
+/proc/ui_status_user_has_free_hands(mob/user, atom/source, allowed_source)
+	if(allowed_source)
+		return HAS_TRAIT_NOT_FROM(user, TRAIT_HANDS_BLOCKED, allowed_source) ? UI_UPDATE : UI_INTERACTIVE
+	return HAS_TRAIT(user, TRAIT_HANDS_BLOCKED) ? UI_UPDATE : UI_INTERACTIVE
 
 /// Returns a UI status such that advanced tool users will be able to interact,
 /// but everyone else can only watch.
 /proc/ui_status_user_is_advanced_tool_user(mob/user)
-	return user.IsAdvancedToolUser() ? UI_INTERACTIVE : UI_UPDATE
+	return ISADVANCEDTOOLUSER(user) ? UI_INTERACTIVE : UI_UPDATE
 
 /// Returns a UI status such that silicons will be able to interact with whatever
 /// they would have access to if this was a machine. For example, AIs can
@@ -100,7 +101,7 @@
 		return UI_UPDATE
 
 	var/mob/living/living_user = user
-	return (living_user.lying && living_user.stat == CONSCIOUS) \
+	return (living_user.body_position == LYING_DOWN && living_user.stat == CONSCIOUS) \
 		? UI_INTERACTIVE \
 		: UI_UPDATE
 
@@ -111,3 +112,11 @@
 		return UI_CLOSE
 
 	return UI_INTERACTIVE
+
+/// Return UI_INTERACTIVE if the user is inside the target atom, whether they can see it or not.
+/// Return UI_CLOSE otherwise.
+/proc/ui_status_user_inside(mob/user, atom/target)
+	if(target.contains(user))
+		return UI_INTERACTIVE
+
+	return UI_CLOSE

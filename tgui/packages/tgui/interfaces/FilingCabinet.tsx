@@ -1,5 +1,6 @@
+import { Box, Button, Section, Stack } from 'tgui-core/components';
+
 import { useBackend } from '../backend';
-import { Box, Button, Section, Stack } from '../components';
 import { Window } from '../layouts';
 
 type Data = {
@@ -8,8 +9,8 @@ type Data = {
   contents_ref: string;
 };
 
-export const FilingCabinet = (props, context) => {
-  const { act, data } = useBackend<Data>(context);
+export const FilingCabinet = (props) => {
+  const { act, data } = useBackend<Data>();
   const { cabinet_name, contents, contents_ref } = data;
 
   return (

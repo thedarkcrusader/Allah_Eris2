@@ -1,221 +1,262 @@
+///The area is a "Station" area, showing no special text.
+#define AREA_STATION 1
+///The area is in outdoors (lavaland/icemoon/jungle/space), therefore unclaimed territories.
+#define AREA_OUTDOORS 2
+///The area is special (shuttles/centcom), therefore can't be claimed.
+#define AREA_SPECIAL 3
+
+///The blueprints are currently reading the list of all wire datums.
+#define LEGEND_VIEWING_LIST "watching_list"
+///The blueprints are on the main page.
+#define LEGEND_OFF "off"
+
+/**
+ * Blueprints
+ * Used to see the wires of machines on the station, the roundstart layout of pipes/cables/tubes,
+ * as well as allowing you to rename existing areas and create new ones.
+ * Used by the station, cyborgs, and golems.
+ */
 /obj/item/blueprints
-	name = "ship blueprints"
-	desc = "Blueprints of the CEV Eris. There is a \"Classified\" stamp and several coffee stains on it."
-	icon = 'icons/obj/items.dmi'
+	name = "station blueprints"
+	desc = "Blueprints of the station. There is a \"Classified\" stamp and several coffee stains on it."
+	icon = 'icons/obj/scrolls.dmi'
 	icon_state = "blueprints"
-	attack_verb = list("attacked", "bapped", "hit")
-	spawn_blacklisted = TRUE//antag_item_targets
-	var/const/AREA_ERRNONE = 0
-	var/const/AREA_STATION = 1
-	var/const/AREA_SPACE =   2
-	var/const/AREA_SPECIAL = 3
+	inhand_icon_state = "blueprints"
+	attack_verb_continuous = list("attacks", "baps", "hits")
+	attack_verb_simple = list("attack", "bap", "hit")
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | ACID_PROOF
+	interaction_flags_atom = parent_type::interaction_flags_atom | INTERACT_ATOM_ALLOW_USER_LOCATION | INTERACT_ATOM_IGNORE_MOBILITY
 
-	var/const/BORDER_ERROR = 0
-	var/const/BORDER_NONE = 1
-	var/const/BORDER_BETWEEN =   2
-	var/const/BORDER_2NDTILE = 3
-	var/const/BORDER_SPACE = 4
+	///A string of flavortext to be displayed at the top of the UI, related to the type of blueprints we are.
+	var/fluffnotice = "Property of Nanotrasen. For heads of staff only. Store in high-secure storage."
+	///Boolean on whether the blueprints are currently being used, which prevents double-using them to rename/create areas.
+	var/in_use = FALSE
+	///The type of area we'll create when we make a new area. This is a typepath.
+	var/area/new_area_type = /area
+	///The legend type the blueprints are currently looking at, which is either modularly
+	///set by wires datums, the main page, or an overview of them all.
+	var/legend_viewing = LEGEND_OFF
 
-	var/const/ROOM_ERR_LOLWAT = 0
-	var/const/ROOM_ERR_SPACE = -1
-	var/const/ROOM_ERR_TOOLARGE = -2
+	///List of images that we're showing to a client, used for showing blueprint data.
+	var/list/image/showing = list()
+	///The client that is being shown the list of 'showing' images of blueprint data.
+	var/client/viewing
 
-/obj/item/blueprints/attack_self(mob/M as mob)
-	if (!ishuman(M))
-		to_chat(M, "This stack of blue paper means nothing to you." ) //monkeys cannot into projecting
-		return
-	interact()
-	return
+/obj/item/blueprints/Destroy()
+	clear_viewer()
+	return ..()
 
-/obj/item/blueprints/Topic(href, href_list)
-	..()
-	if ((usr.restrained() || usr.stat || usr.get_active_hand() != src))
-		return
-	if (!href_list["action"])
-		return
-	switch(href_list["action"])
-		if ("create_area")
-			if (get_area_type()!=AREA_SPACE)
-				interact()
-				return
-			create_area()
-		if ("edit_area")
-			if (get_area_type()!=AREA_STATION)
-				interact()
-				return
-			edit_area()
+/obj/item/blueprints/dropped(mob/user)
+	. = ..()
+	clear_viewer()
+	legend_viewing = LEGEND_OFF
 
-/obj/item/blueprints/interact()
-	var/area/A = get_area(usr)
-	var/text = {"<HTML><head><title>[src]</title></head><BODY>
-<h2>[station_name] blueprints</h2>
-<small>Property of [company_name]. For heads of staff only. Store in high-secure storage.</small><hr>
-"}
-	switch (get_area_type())
-		if (AREA_SPACE)
-			text += {"
-<p>According the blueprints, you are now in <b>outer space</b>.  Hold your breath.</p>
-<p><a href='?src=\ref[src];action=create_area'>Mark this place as new area.</a></p>
-"}
-		if (AREA_STATION)
-			text += {"
-<p>According the blueprints, you are now in <b>\"[A.name]\"</b>.</p>
-<p>You may <a href='?src=\ref[src];action=edit_area'>
-move an amendment</a> to the drawing.</p>
-"}
-		if (AREA_SPECIAL)
-			text += {"
-<p>This place isn't noted on the blueprint.</p>
-"}
+/obj/item/blueprints/ui_interact(mob/user, datum/tgui/ui)
+	ui = SStgui.try_update_ui(user, src, ui)
+	if(!ui)
+		ui = new(user, src, "Blueprints", name)
+		ui.open()
+
+/obj/item/blueprints/ui_state(mob/user)
+	return GLOB.inventory_state
+
+/obj/item/blueprints/ui_data(mob/user)
+	var/list/data = list()
+	switch(get_area_type(user))
+		if(AREA_OUTDOORS)
+			data["area_notice"] = "You are in unclaimed territory."
+		if(AREA_SPECIAL)
+			data["area_notice"] = "This area has no notes."
 		else
-			return
-	text += "</BODY></HTML>"
-	usr << browse(text, "window=blueprints")
-	onclose(usr, "blueprints")
+			var/area/current_area = get_area(user)
+			data["area_notice"] = "You are now in \the [current_area.name]"
+	var/area/area_inside_of = get_area(user)
+	data["area_name"] = html_encode(area_inside_of.name)
+	data["area_allows_shuttle_docking"] = area_inside_of.allow_shuttle_docking
+	data["legend"] = legend_viewing
+	data["viewing"] = !!viewing
+	data["wire_data"] = list()
+	if(legend_viewing != LEGEND_VIEWING_LIST && legend_viewing != LEGEND_OFF)
+		for(var/device in GLOB.wire_color_directory)
+			if("[device]" != legend_viewing)
+				continue
+			data["wires_name"] = GLOB.wire_name_directory[device]
+			for(var/individual_color in GLOB.wire_color_directory[device])
+				var/wire_name = GLOB.wire_color_directory[device][individual_color]
+				if(findtext(wire_name, WIRE_DUD_PREFIX)) //don't show duds
+					continue
+				data["wire_data"] += list(list(
+					"color" = individual_color,
+					"message" = wire_name,
+				))
+	return data
 
-/obj/item/blueprints/proc/get_area_type(var/area/A = get_area(usr))
-	if(istype(A, /area/space))
-		return AREA_SPACE
-	var/list/SPECIALS = list(
+/obj/item/blueprints/ui_static_data(mob/user)
+	var/list/data = list()
+	data["legend_viewing_list"] = LEGEND_VIEWING_LIST
+	data["legend_off"] = LEGEND_OFF
+	data["fluff_notice"] = fluffnotice
+	data["station_name"] = station_name()
+	data["wire_devices"] = list()
+	for(var/wireset in GLOB.wire_color_directory)
+		data["wire_devices"] += list(list(
+			"name" = GLOB.wire_name_directory[wireset],
+			"ref" = wireset,
+		))
+	return data
+
+/obj/item/blueprints/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
+	. = ..()
+	if(.)
+		return
+
+	var/mob/user = ui.user
+	if(!user.can_perform_action(src, NEED_LITERACY|NEED_DEXTERITY|NEED_HANDS|ALLOW_RESTING))
+		return TRUE
+
+	switch(action)
+		if("create_area")
+			if(in_use)
+				return
+			in_use = TRUE
+			create_area(user, new_area_type)
+			in_use = FALSE
+		if("edit_area")
+			if(get_area_type(user) != AREA_STATION)
+				return
+			if(in_use)
+				return
+			in_use = TRUE
+			edit_area(user)
+			in_use = FALSE
+		if("toggle_allow_shuttle_docking")
+			if(get_area_type(user) != AREA_STATION)
+				return
+			var/area/area = get_area(src)
+			area.allow_shuttle_docking = !area.allow_shuttle_docking
+		if("exit_legend")
+			legend_viewing = LEGEND_OFF
+		if("view_legend")
+			legend_viewing = LEGEND_VIEWING_LIST
+		if("view_wireset")
+			var/setting_wireset = params["view_wireset"]
+			for(var/device in GLOB.wire_color_directory)
+				if("[device]" == setting_wireset) //I know... don't change it...
+					legend_viewing = setting_wireset
+					return TRUE
+		if("view_blueprints")
+			playsound(src, 'sound/items/paper_flip.ogg', 40, TRUE)
+			user.balloon_alert_to_viewers("flips blueprints over")
+			set_viewer(user)
+		if("hide_blueprints")
+			playsound(src, 'sound/items/paper_flip.ogg', 40, TRUE)
+			user.balloon_alert_to_viewers("flips blueprints over")
+			clear_viewer()
+		if("refresh")
+			playsound(src, 'sound/items/paper_flip.ogg', 40, TRUE)
+			clear_viewer()
+			set_viewer(user)
+	return TRUE
+
+/**
+ * Sets the user's client as the person viewing blueprint data, and builds blueprint data
+ * around the user.
+ * Args:
+ * - user: The person who's client we're giving images to.
+ */
+/obj/item/blueprints/proc/set_viewer(mob/user)
+	if(!user || !user.client)
+		return
+	if(viewing)
+		clear_viewer()
+	viewing = user.client
+	showing = get_blueprint_data(get_turf(viewing.eye || user), viewing.view)
+	viewing.images |= showing
+
+/**
+ * Clears the client we're showig images to and deletes the images of blueprint data
+ * we made to show them.
+ */
+/obj/item/blueprints/proc/clear_viewer()
+	if(viewing)
+		viewing.images -= showing
+		viewing = null
+	showing.Cut()
+
+/**
+ * Gets the area type the user is currently standing in.
+ * Returns: AREA_STATION, AREA_OUTDOORS, or AREA_SPECIAL
+ * Args:
+ * - user: The person we're getting the area of to check if it's a special area.
+ */
+/obj/item/blueprints/proc/get_area_type(mob/user)
+	var/area/area_checking = get_area(user)
+	if(area_checking.outdoors)
+		return AREA_OUTDOORS
+	var/static/list/special_areas = typecacheof(list(
 		/area/shuttle,
-		/area/admin,
-		/area/arrival,
 		/area/centcom,
-		/area/asteroid,
-		/area/wizard_station,
-		// /area/derelict //commented out, all hail derelict-rebuilders!
-	)
-	for (var/type in SPECIALS)
-		if ( istype(A,type) )
-			return AREA_SPECIAL
+		/area/centcom/asteroid,
+		/area/centcom/tdome,
+		/area/centcom/wizard_station,
+		/area/misc/hilbertshotel,
+		/area/misc/hilbertshotelstorage,
+	))
+	if(area_checking.type in special_areas)
+		return AREA_SPECIAL
 	return AREA_STATION
 
-/obj/item/blueprints/proc/create_area()
-	//world << "DEBUG: create_area"
-	var/res = detect_room(get_turf(usr))
-	if(!istype(res,/list))
-		switch(res)
-			if(ROOM_ERR_SPACE)
-				to_chat(usr, SPAN_WARNING("The new area must be completely airtight!"))
-				return
-			if(ROOM_ERR_TOOLARGE)
-				to_chat(usr, SPAN_WARNING("The new area too large!"))
-				return
-			else
-				to_chat(usr, SPAN_WARNING("Error! Please notify administration!"))
-				return
-	var/list/turf/turfs = res
-	var/str = sanitizeSafe(input("New area name:","Blueprint Editing", ""), MAX_NAME_LEN)
-	if(!str || !length(str)) //cancel
-		return
-	if(length(str) > 50)
-		to_chat(usr, SPAN_WARNING("Name too long."))
-		return
-	var/area/A = new
-	A.name = str
-	A.power_equip = FALSE
-	A.power_light = FALSE
-	A.power_environ = FALSE
-	move_turfs_to_area(turfs, A)
-	interact()
-
-
-/obj/item/blueprints/proc/move_turfs_to_area(var/list/turf/turfs, var/area/A)
-	A.contents.Add(turfs)
-		//oldarea.contents.Remove(usr.loc) // not needed
-		//T.loc = A //error: cannot change constant value
-
-
-/obj/item/blueprints/proc/edit_area()
-	var/area/A = get_area(usr)
-	//world << "DEBUG: edit_area"
-	var/prevname = "[A.name]"
-	var/str = sanitizeSafe(input("New area name:","Blueprint Editing", prevname), MAX_NAME_LEN)
-	if(!str || !length(str) || str==prevname) //cancel
-		return
-	if(length(str) > 50)
-		to_chat(usr, SPAN_WARNING("Text too long."))
-		return
-	set_area_machinery_title(A,str,prevname)
-	A.name = str
-	to_chat(usr, SPAN_NOTICE("You set the area '[prevname]' title to '[str]'."))
-	interact()
-	return
-
-
-
-/obj/item/blueprints/proc/set_area_machinery_title(var/area/A,var/title,var/oldtitle)
-	if (!oldtitle) // or replacetext goes to infinite loop
+/**
+ * edit_area
+ * Takes input from the player and renames the area the blueprints are currently in.
+ */
+/obj/item/blueprints/proc/edit_area(mob/user)
+	var/area/area_editing = get_area(src)
+	var/prevname = "[area_editing.name]"
+	var/new_name = tgui_input_text(user, "New area name", "Area Creation", max_length = MAX_NAME_LEN)
+	if(isnull(new_name) || !length(new_name) || new_name == prevname)
 		return
 
-	for(var/obj/machinery/alarm/M in A)
-		M.name = replacetext(M.name,oldtitle,title)
-	for(var/obj/machinery/power/apc/M in A)
-		M.name = replacetext(M.name,oldtitle,title)
-	for(var/obj/machinery/atmospherics/unary/vent_scrubber/M in A)
-		M.name = replacetext(M.name,oldtitle,title)
-	for(var/obj/machinery/atmospherics/unary/vent_pump/M in A)
-		M.name = replacetext(M.name,oldtitle,title)
-	for(var/obj/machinery/door/M in A)
-		M.name = replacetext(M.name,oldtitle,title)
-	//TODO: much much more. Unnamed airlocks, cameras, etc.
+	rename_area(area_editing, new_name)
+	user.balloon_alert(user, "area renamed to [new_name]")
+	user.log_message("has renamed [prevname] to [new_name]", LOG_GAME)
+	return TRUE
 
-/obj/item/blueprints/proc/check_tile_is_border(var/turf/T2,var/dir)
-	if (istype(T2, /turf/space))
-		return BORDER_SPACE //omg hull breach we all going to die here
-	if (istype(T2, /turf/shuttle))
-		return BORDER_SPACE
-	if (get_area_type(T2.loc)!=AREA_SPACE)
-		return BORDER_BETWEEN
-	if (istype(T2, /turf/wall))
-		return BORDER_2NDTILE
-	if (!istype(T2, /turf))
-		return BORDER_BETWEEN
+///Cyborg blueprints - The same as regular but with a different fluff text.
+/obj/item/blueprints/cyborg
+	name = "station schematics"
+	desc = "A digital copy of the station blueprints stored in your memory."
+	fluffnotice = "Intellectual Property of Nanotrasen. For use in engineering cyborgs only. Wipe from memory upon departure from the station."
 
-	for (var/obj/structure/window/W in T2)
-		if(turn(dir,180) == W.dir)
-			return BORDER_BETWEEN
-		if (W.dir in list(NORTHEAST,SOUTHEAST,NORTHWEST,SOUTHWEST))
-			return BORDER_2NDTILE
-	for(var/obj/machinery/door/window/D in T2)
-		if(turn(dir,180) == D.dir)
-			return BORDER_BETWEEN
-	if (locate(/obj/machinery/door) in T2)
-		return BORDER_2NDTILE
+///Golem blueprints - Used to make golem areas that won't give the hazardous area debuffs.
+/obj/item/blueprints/golem
+	name = "land claim"
+	desc = "Use it to build new structures in the wastes."
+	fluffnotice = "In memory of the Liberator's brother, Delaminator, and his Scarlet Macaw-iathan, from which this artifact was stolen."
+	new_area_type = /area/golem
 
-	return BORDER_NONE
+///Slime blueprints - Makes areas colored and compatible with xenobiology camera consoles, one time use.
+/obj/item/blueprints/slime
+	name = "cerulean prints"
+	desc = "A one use yet of blueprints made of jelly like organic material. Extends the reach of the management console."
+	fluffnotice = "Copyright by Science Inc. Renaming areas will allow for management consoles to traverse them."
+	color = "#2956B2"
 
-/obj/item/blueprints/proc/detect_room(var/turf/first)
-	var/list/turf/found = new
-	var/list/turf/pending = list(first)
-	while(pending.len)
-		if (found.len+pending.len > 300)
-			return ROOM_ERR_TOOLARGE
-		var/turf/T = pending[1] //why byond havent list::pop()?
-		pending -= T
-		for (var/dir in cardinal)
-			var/skip = 0
-			for (var/obj/structure/window/W in T)
-				if(dir == W.dir || (W.dir in list(NORTHEAST,SOUTHEAST,NORTHWEST,SOUTHWEST)))
-					skip = 1; break
-			if (skip) continue
-			for(var/obj/machinery/door/window/D in T)
-				if(dir == D.dir)
-					skip = 1; break
-			if (skip) continue
+/obj/item/blueprints/slime/edit_area(mob/user)
+	. = ..()
+	var/area/area = get_area(src)
+	var/list/turf_matrix = color_transition_filter("#2956B2")
+	for(var/list/zlevel_turfs as anything in area.get_zlevel_turf_lists())
+		for(var/turf/area_turf as anything in zlevel_turfs)
+			area_turf.remove_atom_colour(WASHABLE_COLOUR_PRIORITY)
+			area_turf.add_atom_colour(turf_matrix, FIXED_COLOUR_PRIORITY)
+	area.area_flags |= XENOBIOLOGY_COMPATIBLE
+	qdel(src)
 
-			var/turf/NT = get_step(T,dir)
-			if (!isturf(NT) || (NT in found) || (NT in pending))
-				continue
+#undef LEGEND_VIEWING_LIST
+#undef LEGEND_OFF
 
-			switch(check_tile_is_border(NT,dir))
-				if(BORDER_NONE)
-					pending+=NT
-				if(BORDER_BETWEEN)
-					//do nothing, may be later i'll add 'rejected' list as optimization
-				if(BORDER_2NDTILE)
-					found+=NT //tile included to new area, but we dont seek more
-				if(BORDER_SPACE)
-					return ROOM_ERR_SPACE
-		found+=T
-	return found
+#undef AREA_STATION
+#undef AREA_OUTDOORS
+#undef AREA_SPECIAL
+

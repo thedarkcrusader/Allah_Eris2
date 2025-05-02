@@ -1,272 +1,250 @@
 // /program/ files are executable programs that do things.
 /datum/computer_file/program
 	filetype = "PRG"
-	filename = "UnknownProgram"						// File name. FILE NAME MUST BE UNIQUE IF YOU WANT THE PROGRAM TO BE DOWNLOADABLE FROM NTNET!
-	var/required_access = null						// Access level required to run/download the program.
-	var/requires_access_to_run = 1					// Whether the program checks for required_access when run.
-	var/requires_access_to_download = 1				// Whether the program checks for required_access when downloading.
-	var/datum/nano_module/NM = null					// If the program uses NanoModule, put it here and it will be automagically opened. Otherwise implement nano_ui_interact.
-	var/nanomodule_path = null						// Path to nanomodule, make sure to set this if implementing new program.
-	var/program_state = PROGRAM_STATE_KILLED		// PROGRAM_STATE_KILLED or PROGRAM_STATE_BACKGROUND or PROGRAM_STATE_ACTIVE - specifies whether this program is running.
-	var/obj/item/modular_computer/computer			// Device that runs this program.
-	var/filedesc = "Unknown Program"				// User-friendly name of this program.
-	var/extended_desc = "N/A"						// Short description of this program's function.
-	var/program_icon_state = null					// Program-specific screen icon state
-	var/program_key_state = "standby_key"			// Program-specific keyboard icon state
-	var/program_menu_icon = "newwin"				// Icon to use for program's link in main menu
-	var/requires_ntnet = 0							// Set to 1 for program to require nonstop NTNet connection to run. If NTNet connection is lost program crashes.
-	var/requires_ntnet_feature = 0					// Optional, if above is set to 1 checks for specific function of NTNet (currently NTNET_SOFTWAREDOWNLOAD, NTNET_PEERTOPEER, NTNET_SYSTEMCONTROL and NTNET_COMMUNICATION)
-	var/ntnet_status = 1							// NTNet status, updated every tick by computer running this program. Don't use this for checks if NTNet works, computers do that. Use this for calculations, etc.
-	var/usage_flags = PROGRAM_ALL & ~PROGRAM_PDA	// Bitflags (PROGRAM_CONSOLE, PROGRAM_LAPTOP, PROGRAM_TABLET, PROGRAM_PDA combination) or PROGRAM_ALL
-	var/network_destination = null					// Optional string that describes what NTNet server/system this program connects to. Used in default logging.
-	var/available_on_ntnet = 1						// Whether the program can be downloaded from NTNet. Set to 0 to disable.
-	var/available_on_syndinet = 0					// Whether the program can be downloaded from SyndiNet (accessible via emagging the computer). Set to 1 to enable.
-	var/computer_emagged = 0						// Set to 1 if computer that's running us was emagged. Computer updates this every Process() tick
-	var/ui_header = null							// Example: "something.gif" - a header image that will be rendered in computer's UI when this program is running at background. Images are taken from /nano/images/status_icons. Be careful not to use too large images!
-	var/ntnet_speed = 0								// GQ/s - current network connectivity transfer rate
-	var/operator_skill = STAT_LEVEL_MIN				// Holder for skill value of current/recent operator for programs that tick.
+	/// File name. FILE NAME MUST BE UNIQUE IF YOU WANT THE PROGRAM TO BE DOWNLOADABLE FROM NTNET!
+	filename = "UnknownProgram"
 
-/datum/computer_file/program/New(var/obj/item/modular_computer/comp = null)
+	/// Program-specific bitflags that tell the app what it runs on.
+	/// (PROGRAM_ALL | PROGRAM_CONSOLE | PROGRAM_LAPTOP | PROGRAM_PDA)
+	var/can_run_on_flags = PROGRAM_ALL
+	/// Program-specific bitflags that tells the ModPC what the app is able to do special.
+	/// (PROGRAM_REQUIRES_NTNET|PROGRAM_ON_NTNET_STORE|PROGRAM_ON_SYNDINET_STORE|PROGRAM_UNIQUE_COPY|PROGRAM_HEADER|PROGRAM_RUNS_WITHOUT_POWER)
+	var/program_flags = PROGRAM_ON_NTNET_STORE
+	///How much power running this program costs.
+	var/power_cell_use = PROGRAM_BASIC_CELL_USE
+	///List of required accesses to *run* the program. Any match will do.
+	///This also acts as download_access if that is not set, making this more draconic and restrictive.
+	var/list/run_access = list()
+	///List of required access to download or file host the program. Any match will do.
+	var/list/download_access = list()
+	/// User-friendly name of this program.
+	var/filedesc = "Unknown Program"
+	/// Short description of this program's function.
+	var/extended_desc = "N/A"
+	///What category this program can be found in within NTNetDownloader.
+	///This is required if PROGRAM_ON_NTNET_STORE or PROGRAM_ON_SYNDINET_STORE is on.
+	var/downloader_category = PROGRAM_CATEGORY_DEVICE
+	///The overlay to add ontop of the ModPC running the app while it's open.
+	///This is taken from the same file as the ModPC, so you can use can_run_on_flags to prevent
+	///the program from being used on devices that don't have sprites for it.
+	var/program_open_overlay = null
+	/// NTNet status, updated every tick by computer running this program. Don't use this for checks if NTNet works, computers do that. Use this for calculations, etc.
+	var/ntnet_status = 1
+	/// Name of the tgui interface. If this is not defined, this will not be available in NTNet.
+	var/tgui_id
+	/// Example: "something.gif" - a header image that will be rendered in computer's UI when this program is running at background. Images must also be inserted into /datum/asset/simple/headers.
+	var/ui_header = null
+	/// Font Awesome icon to use as this program's icon in the modular computer main menu. Defaults to a basic program maximize window icon if not overridden.
+	var/program_icon = "window-maximize-o"
+	/// Whether this program can send alerts while minimized or closed. Used to show a mute button per program in the file manager
+	var/alert_able = FALSE
+	/// Whether the user has muted this program's ability to send alerts.
+	var/alert_silenced = FALSE
+	/// Whether to highlight our program in the main screen. Intended for alerts, but loosely available for any need to notify of changed conditions. Think Windows task bar highlighting. Available even if alerts are muted.
+	var/alert_pending = FALSE
+	/// Whether the UI should *always* be updated while active.
+	var/always_update_ui = FALSE
+	/// How well this program will help combat detomatix viruses.
+	var/detomatix_resistance = NONE
+	/// Unremovable circuit componentn added to the physical computer while the program is installed
+	var/obj/item/circuit_component/mod_program/circuit_comp_type
+
+/datum/computer_file/program/New()
 	..()
-	if(comp && istype(comp))
-		computer = comp
+	///We need to ensure that different programs (subtypes mostly) won't try to load in the same circuit comps into the shell or usb port of the modpc.
+	if(circuit_comp_type && initial(circuit_comp_type.associated_program) != type)
+		stack_trace("circuit comp type mismatch: [type] has circuit comp type \[[circuit_comp_type]\], while \[[circuit_comp_type]\] has associated program \[[initial(circuit_comp_type.associated_program)]\].")
 
-/datum/computer_file/program/Destroy()
-	computer = null
+/**
+ * Here we deal with peculiarity of adding unremovable components to the computer shell.
+ * It probably doesn't look badass, but it's a decent way of doing it without taining the component with
+ * oddities like this.
+ */
+/datum/computer_file/program/on_install(datum/computer_file/source, obj/item/modular_computer/computer_installing)
 	. = ..()
+	if(isnull(circuit_comp_type) || isnull(computer.shell))
+		return
+	if(!(locate(circuit_comp_type) in computer.shell.unremovable_circuit_components))
+		var/obj/item/circuit_component/mod_program/comp = new circuit_comp_type()
+		computer.shell.add_unremovable_circuit_component(comp)
+		if(computer.shell.attached_circuit)
+			comp.forceMove(computer.shell.attached_circuit)
+			computer.shell.attached_circuit.add_component(comp)
+
+///Here we deal with killing the associated components instead.
+/datum/computer_file/program/Destroy()
+	if(isnull(circuit_comp_type) || isnull(computer?.shell))
+		return ..()
+	for(var/obj/item/circuit_component/mod_program/comp in computer.shell.unremovable_circuit_components)
+		if(comp.associated_program == src)
+			computer.shell.unremovable_circuit_components -= comp
+			qdel(comp)
+	return ..()
 
 /datum/computer_file/program/clone()
 	var/datum/computer_file/program/temp = ..()
-	temp.required_access = required_access
-	temp.nanomodule_path = nanomodule_path
+	temp.run_access = run_access
 	temp.filedesc = filedesc
-	temp.program_icon_state = program_icon_state
-	temp.requires_ntnet = requires_ntnet
-	temp.requires_ntnet_feature = requires_ntnet_feature
-	temp.usage_flags = usage_flags
+	temp.program_open_overlay = program_open_overlay
+	temp.program_flags = program_flags
+	temp.can_run_on_flags = can_run_on_flags
+	if(program_flags & PROGRAM_UNIQUE_COPY)
+		if(computer)
+			computer.remove_file(src)
+		if(disk_host)
+			disk_host.remove_file(src)
 	return temp
 
-// Used by programs that manipulate files.
-/datum/computer_file/program/proc/get_file(var/filename)
-	var/obj/item/computer_hardware/hard_drive/HDD = computer.hard_drive
-	var/obj/item/computer_hardware/hard_drive/portable/RHDD = computer.portable_drive
-	if(!HDD && !RHDD)
-		return
-	var/datum/computer_file/data/F = HDD.find_file_by_name(filename)
-	if(!istype(F))
-		if(RHDD)
-			F = RHDD.find_file_by_name(filename)
-		if(!istype(F))
-			return
-	return F
-
-/datum/computer_file/program/proc/create_file(var/newname, var/data = "", var/file_type = /datum/computer_file/data)
-	if(!newname)
-		return
-	var/obj/item/computer_hardware/hard_drive/HDD = computer.hard_drive
-	if(!HDD)
-		return
-	if(get_file(newname))
-		return
-	var/datum/computer_file/data/F = new file_type
-	F.filename = newname
-	F.stored_data = data
-	F.calculate_size()
-	if(HDD.store_file(F))
-		return F
+/**
+ * WARNING: this proc does not work the same as normal `ui_interact`, as the
+ * computer takes care of opening the UI. The `datum/tgui/ui` parameter will always exist.
+ * This proc only serves as a callback.
+ */
+/datum/computer_file/program/ui_interact(mob/user, datum/tgui/ui)
+	SHOULD_CALL_PARENT(FALSE)
 
 // Relays icon update to the computer.
 /datum/computer_file/program/proc/update_computer_icon()
 	if(computer)
-		computer.update_icon()
+		computer.update_appearance()
 
-/datum/computer_file/program/proc/set_icon(string)
-	if(string && istext(string))
-		program_icon_state = string
-	update_computer_icon()
+///Attempts to generate an Ntnet log, returns the log on success, FALSE otherwise.
+/datum/computer_file/program/proc/generate_network_log(text)
+	if(!computer || computer.obj_flags & EMAGGED)
+		return FALSE
+	return computer.add_log(text)
 
-// Attempts to create a log in global ntnet datum. Returns 1 on success, 0 on fail.
-/datum/computer_file/program/proc/generate_network_log(var/text)
-	if(computer)
-		return computer.add_log(text)
-	return 0
+/**
+ *Runs when the device is used to attack an atom in non-combat mode using right click (secondary).
+ *
+ *Simulates using the device to read or scan something. Tap is called by the computer during pre_attack
+ *and sends us all of the related info. If we return TRUE, the computer will stop the attack process
+ *there. What we do with the info is up to us, but we should only return TRUE if we actually perform
+ *an action of some sort.
+ *Arguments:
+ *A is the atom being tapped
+ *user is the person making the attack action
+ *modifiers is anything the pre_attack() proc had in the same-named variable.
+*/
+/datum/computer_file/program/proc/tap(atom/tapped_atom, mob/living/user, list/modifiers)
+	return FALSE
 
-/datum/computer_file/program/proc/is_supported_by_hardware(obj/item/modular_computer/hardware, mob/user, loud)
-	if(!(hardware.hardware_flag & usage_flags))
+///Makes sure a program can run on this hardware (for apps limited to tablets/computers/laptops)
+/datum/computer_file/program/proc/is_supported_by_hardware(hardware_flag = NONE, loud = FALSE, mob/user)
+	if(!(hardware_flag & can_run_on_flags))
 		if(loud && computer && user)
-			to_chat(user, SPAN_WARNING("Hardware Error - Incompatible software"))
+			to_chat(user, span_danger("\The [computer] flashes a \"Hardware Error - Incompatible software\" warning."))
 		return FALSE
 	return TRUE
 
-/datum/computer_file/program/proc/get_signal(var/specific_action = 0)
-	if(computer)
-		return computer.get_ntnet_status(specific_action)
-	return 0
-
 // Called by Process() on device that runs us, once every tick.
-/datum/computer_file/program/proc/process_tick()
-	update_netspeed()
-	return 1
+/datum/computer_file/program/proc/process_tick(seconds_per_tick)
+	return TRUE
 
-/datum/computer_file/program/proc/update_netspeed(speed_variance=0)
-	ntnet_speed = 0
-	switch(ntnet_status)
-		if(1)
-			ntnet_speed = NTNETSPEED_LOWSIGNAL
-		if(2)
-			ntnet_speed = NTNETSPEED_HIGHSIGNAL
-		if(3)
-			ntnet_speed = NTNETSPEED_ETHERNET
+/**
+ * Checks if the user can run program. Only humans and silicons can operate computer. Automatically called in on_start()
+ * ID must be inserted into a card slot to be read. If the program is not currently installed (as is the case when
+ * NT Software Hub is checking available software), a list can be given to be used instead.
+ * Args:
+ * user is a ref of the mob using the device.
+ * loud is a bool deciding if this proc should use to_chats
+ * access_to_check is an access level that will be checked against the ID
+ * downloading: Boolean on whether it's downloading the app or not. If it is, it will check download_access instead of run_access.
+ * access can contain a list of access numbers to check against. If access is not empty, it will be used istead of checking any inserted ID.
+ */
+/datum/computer_file/program/proc/can_run(mob/user, loud = FALSE, access_to_check, downloading = FALSE, list/access)
+	if(user)
+		if(issilicon(user) && !ispAI(user))
+			return TRUE
+		if(isAdminGhostAI(user))
+			return TRUE
 
-	if(speed_variance)
-		ntnet_speed *= rand(100+speed_variance, 100-speed_variance) / 100
-		ntnet_speed = round(ntnet_speed, 0.01)
+	if(computer && (computer.obj_flags & EMAGGED) && (program_flags & PROGRAM_ON_SYNDINET_STORE || !downloading)) //emagged can run anything on syndinet, and can bypass execution locks, but not download.
+		return TRUE
 
-// Check if the user can run program. Only humans can operate computer. Automatically called in run_program()
-// User has to wear their ID or have it inhand for ID Scan to work.
-// Can also be called manually, with optional parameter being access_to_check to scan the user's ID
-/datum/computer_file/program/proc/can_run(var/mob/living/user, var/loud = 0, var/access_to_check)
-	// Defaults to required_access
 	if(!access_to_check)
-		access_to_check = required_access
-	if(!access_to_check) // No required_access, allow it.
-		return 1
+		if(downloading && length(download_access))
+			access_to_check = download_access
+		else
+			access_to_check = run_access
+	if(!length(access_to_check)) // No access requirements, allow it.
+		return TRUE
 
-	// Admin override - allows operation of any computer as aghosted admin, as if you had any required access.
-	if(isghost(user) && check_rights(R_ADMIN, 0, user))
-		return 1
+	if(!length(access))
+		var/obj/item/card/id/accesscard
+		if(computer)
+			accesscard = computer.computer_id_slot?.GetID()
 
-	if(!istype(user))
-		return 0
+		if(!accesscard)
+			if(loud && user)
+				to_chat(user, span_danger("\The [computer] flashes an \"RFID Error - Unable to scan ID\" warning."))
+			return FALSE
+		access = accesscard.GetAccess()
 
-	var/obj/item/card/id/I = user.GetIdCard()
-	if(!I)
-		if(loud)
-			to_chat(user, SPAN_WARNING("RFID Error - Unable to scan ID"))
-		return 0
+	for(var/singular_access in access_to_check)
+		if(singular_access in access) //For loop checks every individual access entry in the access list. If the user's ID has access to any entry, then we're good.
+			return TRUE
 
-	if(access_to_check in I.access)
-		return 1
-	else if(loud)
-		to_chat(user, SPAN_WARNING("Access Denied"))
+	if(loud && user)
+		to_chat(user, span_danger("\The [computer] flashes an \"Access Denied\" warning."))
+	return FALSE
 
-// This attempts to retrieve header data for NanoUIs. If implementing completely new device of different type than existing ones
-// always include the device here in this proc. This proc basically relays the request to whatever is running the program.
-/datum/computer_file/program/proc/get_header_data()
-	if(computer)
-		return computer.get_header_data()
-	return list()
-
-// This is performed on program startup. May be overriden to add extra logic. Remember to include ..() call. Return 1 on success, 0 on failure.
-// When implementing new program based device, use this to run the program.
-/datum/computer_file/program/proc/run_program(var/mob/living/user)
-	if(can_run(user, 1) || !requires_access_to_run)
-		if(nanomodule_path)
-			NM = new nanomodule_path(src, new /datum/topic_manager/program(src), src)
-			if(user)
-				NM.using_access = user.GetAccess()
-		if(requires_ntnet && network_destination)
-			generate_network_log("Connection opened to [network_destination].")
-		program_state = PROGRAM_STATE_ACTIVE
-		return 1
-	return 0
-
-// Use this proc to kill the program. Designed to be implemented by each program if it requires on-quit logic, such as the NTNRC client.
-/datum/computer_file/program/proc/kill_program(forced = FALSE)
-	program_state = PROGRAM_STATE_KILLED
-	if(network_destination)
-		generate_network_log("Connection to [network_destination] closed.")
-	QDEL_NULL(NM)
-	return 1
-
-// Checks a skill of a given mob, if mob can have one.
-// Needed because ghosts can access MPC UIs, and admin ghosts can interact with them even.
-/datum/computer_file/program/proc/get_operator_skill(mob/user, stat_type)
-	if(user && user.stats)
-		return user.stats.getStat(stat_type)
-
-	return STAT_LEVEL_MIN
-
-
-// This is called every tick when the program is enabled. Ensure you do parent call if you override it. If parent returns 1 continue with UI initialisation.
-// It returns 0 if it can't run or if NanoModule was used instead. I suggest using NanoModules where applicable.
-/datum/computer_file/program/nano_ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = NANOUI_FOCUS)
-	if(program_state != PROGRAM_STATE_ACTIVE) // Our program was closed. Close the ui if it exists.
-		if(ui)
-			ui.close()
-		return computer.nano_ui_interact(user)
-	if(istype(NM))
-		NM.nano_ui_interact(user, ui_key, null, force_open)
-		return 0
-	return 1
-
-// This prevents program UI from opening when the program itself is closed.
-/datum/computer_file/program/CanUseTopic(mob/user, datum/nano_topic_state/state = GLOB.default_state)
-	if(!computer || program_state != PROGRAM_STATE_ACTIVE)
-		return STATUS_CLOSE
-	return computer.CanUseTopic(user, state)
-
-// A lot of MPC apps use nano_host() as a way to get the MPC object
-// We return the MPC for most calls, but
-/datum/computer_file/program/nano_host(ui_status_check=FALSE)
-	if(ui_status_check)
-		return src
-	return computer.nano_host()
-
-// CONVENTIONS, READ THIS WHEN CREATING NEW PROGRAM AND OVERRIDING THIS PROC:
-// Topic calls are automagically forwarded from NanoModule this program contains.
-// Calls beginning with "PRG_" are reserved for programs handling.
-// Calls beginning with "PC_" are reserved for computer handling (by whatever runs the program)
-// ALWAYS INCLUDE PARENT CALL ..() OR DIE IN FIRE.
-/datum/computer_file/program/Topic(href, href_list)
-	if(..())
-		return 1
-	if(computer)
-		return computer.Topic(href, href_list)
-
-// Relays the call to nano module, if we have one
-/datum/computer_file/program/proc/check_eye(var/mob/user)
-	if(NM)
-		return NM.check_eye(user)
-	else
-		return -1
-
-/datum/computer_file/program/initial_data()
-	return computer.get_header_data()
-
-/datum/computer_file/program/update_layout()
+/**
+ * Called on program startup.
+ *
+ * May be overridden to add extra logic. Remember to include ..() call. Return 1 on success, 0 on failure.
+ * When implementing new program based device, use this to run the program.
+ * Arguments:
+ * * user - The mob that started the program
+ **/
+/datum/computer_file/program/proc/on_start(mob/living/user)
+	SHOULD_CALL_PARENT(TRUE)
+	if(!can_run(user, loud = TRUE))
+		return FALSE
+	if(program_flags & PROGRAM_REQUIRES_NTNET)
+		var/obj/item/card/id/ID = computer.computer_id_slot?.GetID()
+		generate_network_log("Connection opened -- Program ID:[filename] User:[ID?"[ID.registered_name]":"None"]")
+	SEND_SIGNAL(src, COMSIG_COMPUTER_PROGRAM_START, user)
 	return TRUE
 
-/obj/item/modular_computer/initial_data()
-	return get_header_data()
+/**
+ * Kills the running program
+ *
+ * Use this proc to kill the program.
+ * Designed to be implemented by each program if it requires on-quit logic, such as the NTNRC client.
+ * Args:
+ * - user - If there's a user, this is the person killing the program.
+ **/
+/datum/computer_file/program/proc/kill_program(mob/user)
+	SHOULD_CALL_PARENT(TRUE)
 
-/obj/item/modular_computer/update_layout()
+	if(src == computer.active_program)
+		computer.active_program = null
+		if(!QDELETED(computer) && computer.enabled)
+			INVOKE_ASYNC(computer, TYPE_PROC_REF(/obj/item/modular_computer, update_tablet_open_uis), user)
+	else if(src in computer.idle_threads)
+		computer.idle_threads.Remove(src)
+	else //The program wasn't running to begin with.
+		return FALSE
+
+	if(program_flags & PROGRAM_REQUIRES_NTNET)
+		var/obj/item/card/id/ID = computer.computer_id_slot?.GetID()
+		generate_network_log("Connection closed -- Program ID: [filename] User:[ID ? "[ID.registered_name]" : "None"]")
+
+	computer.update_appearance(UPDATE_ICON)
+	SEND_SIGNAL(src, COMSIG_COMPUTER_PROGRAM_KILL, user)
 	return TRUE
 
-/datum/nano_module/program
-	available_to_ai = FALSE
-	var/datum/computer_file/program/program = null	// Program-Based computer program that runs this nano module. Defaults to null.
+///Sends the running program to the background/idle threads. Header programs can't be minimized and will kill instead.
+/datum/computer_file/program/proc/background_program(mob/user)
+	SHOULD_CALL_PARENT(TRUE)
+	if(program_flags & PROGRAM_HEADER || length(computer.idle_threads) > computer.max_idle_programs)
+		return kill_program()
 
-/datum/nano_module/program/New(var/host, var/topic_manager, var/program)
-	..()
-	src.program = program
+	computer.idle_threads.Add(src)
+	computer.active_program = null
 
-/datum/topic_manager/program
-	var/datum/program
-
-/datum/topic_manager/program/New(var/datum/program)
-	..()
-	src.program = program
-
-// Calls forwarded to PROGRAM itself should begin with "PRG_"
-// Calls forwarded to COMPUTER running the program should begin with "PC_"
-/datum/topic_manager/program/Topic(href, href_list)
-	return program && program.Topic(href, href_list)
-
-/datum/computer_file/program/apply_visual(mob/M)
-	if(NM)
-		NM.apply_visual(M)
-
-/datum/computer_file/program/remove_visual(mob/M)
-	if(NM)
-		NM.remove_visual(M)
+	if(user)
+		INVOKE_ASYNC(computer, TYPE_PROC_REF(/obj/item/modular_computer, update_tablet_open_uis), user)
+	computer.update_appearance(UPDATE_ICON)
+	return TRUE

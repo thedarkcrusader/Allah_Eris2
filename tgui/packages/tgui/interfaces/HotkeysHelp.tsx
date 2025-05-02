@@ -1,5 +1,6 @@
+import { Box, Section, Table, Tooltip } from 'tgui-core/components';
+
 import { useBackend } from '../backend';
-import { Box, Section, Table, Tooltip } from '../components';
 import { Window } from '../layouts';
 
 type BindingInfo = {
@@ -33,7 +34,7 @@ const addColorModifier = (
   content: string,
   regex: RegExp,
   color: string,
-): JSX.Element | null => {
+): React.JSX.Element | null => {
   const match = content.match(regex);
 
   if (match) {
@@ -51,7 +52,7 @@ const addColorModifier = (
   return null;
 };
 
-const processColorModifiers = (content: string): string | JSX.Element => {
+const processColorModifiers = (content: string): string | React.JSX.Element => {
   const shifted = addColorModifier(content, shiftRegex, '#88f');
 
   if (shifted) {
@@ -88,8 +89,8 @@ const KeyBinding = (props: KeyBindingBoxProps) => (
   <>{processColorModifiers(props.keycode)}</>
 );
 
-export const HotkeysHelp = (props, context) => {
-  const { data } = useBackend<HotkeysHelpData>(context);
+export const HotkeysHelp = (props) => {
+  const { data } = useBackend<HotkeysHelpData>();
 
   return (
     <Window title="Hotkeys Help" width={500} height={800}>
@@ -122,7 +123,13 @@ export const HotkeysHelp = (props, context) => {
                         </Box>
                       </Tooltip>
                     ) : (
-                      <Box p={1} m={1} inline className="HotkeysHelp__pill">
+                      <Box
+                        key={binding.name}
+                        p={1}
+                        m={1}
+                        inline
+                        className="HotkeysHelp__pill"
+                      >
                         {binding.name}
                       </Box>
                     ),

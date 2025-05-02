@@ -1,231 +1,183 @@
-/obj/item/device/assembly_holder
+/obj/item/assembly_holder
 	name = "Assembly"
-	icon = 'icons/obj/assemblies/new_assemblies.dmi'
-	icon_state = "holder"
-	item_state = "assembly"
-	flags = CONDUCT | PROXMOVE
+	icon = 'icons/obj/devices/new_assemblies.dmi'
+	icon_state = "assembly_holder"
+	inhand_icon_state = "assembly"
+	lefthand_file = 'icons/mob/inhands/items/devices_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/items/devices_righthand.dmi'
+	obj_flags = CONDUCTS_ELECTRICITY
 	throwforce = 5
-	w_class = ITEM_SIZE_SMALL
-	throw_speed = 3
-	throw_range = 10
+	w_class = WEIGHT_CLASS_SMALL
+	throw_speed = 2
+	throw_range = 7
+	/// used to store the list of assemblies making up our assembly holder
+	var/list/obj/item/assembly/assemblies
 
-	var/secured = FALSE
-	var/obj/item/device/assembly/left_assembly
-	var/obj/item/device/assembly/right_assembly
-
-/obj/item/device/assembly_holder/LateInitialize()
+/obj/item/assembly_holder/Initialize(mapload)
 	. = ..()
-	add_hearing()
+	AddComponent(/datum/component/simple_rotation)
 
-/obj/item/device/assembly_holder/Destroy()
-	remove_hearing()
+/obj/item/assembly_holder/Destroy()
+	QDEL_LAZYLIST(assemblies)
+	return ..()
+
+/obj/item/assembly_holder/Exited(atom/movable/gone, direction)
 	. = ..()
+	LAZYREMOVE(assemblies, gone)
 
-/obj/item/device/assembly_holder/proc/attach(var/obj/item/device/D, var/obj/item/device/D2, var/mob/user)
-	return
-
-/obj/item/device/assembly_holder/proc/process_activation(var/obj/item/device/D)
-	return
-
-/obj/item/device/assembly_holder/proc/detached()
-	return
-
-/obj/item/device/assembly_holder/attach(var/obj/item/device/assembly/D, var/obj/item/device/assembly/D2, var/mob/user)
-	if(!(D.is_attachable() || D.is_attachable()))
-		return FALSE
-	user.remove_from_mob(D)
-	user.remove_from_mob(D2)
-	D.holder = src
-	D2.holder = src
-	D.loc = src
-	D2.loc = src
-	left_assembly = D
-	right_assembly = D2
-	name = "[D.name]-[D2.name] assembly"
-	update_icon()
-	user.put_in_hands(src)
+/obj/item/assembly_holder/IsAssemblyHolder()
 	return TRUE
 
+/obj/item/assembly_holder/proc/assemble(obj/item/assembly/A, obj/item/assembly/A2, mob/user)
+	attach(A,user)
+	attach(A2,user)
+	name = "[A.name]-[A2.name] assembly"
+	update_appearance()
+	SSblackbox.record_feedback("tally", "assembly_made", 1, "[initial(A.name)]-[initial(A2.name)]")
 
-/obj/item/device/assembly_holder/update_icon()
-	overlays.Cut()
-	if(left_assembly)
-		overlays += "[left_assembly.icon_state]_left"
-		for(var/O in left_assembly.attached_overlays)
-			overlays += "[O]_l"
-	if(right_assembly)
-		src.overlays += "[right_assembly.icon_state]_right"
-		for(var/O in right_assembly.attached_overlays)
-			overlays += "[O]_r"
-	if(master)
-		master.update_icon()
+/**
+ * on_attach: Pass on_attach message to child assemblies
+ *
+ */
+/obj/item/assembly_holder/proc/on_attach()
+	var/obj/item/newloc = loc
+	if(!newloc.IsSpecialAssembly() && !newloc.IsAssemblyHolder())
+		return
+	for(var/obj/item/assembly/assembly in assemblies)
+		assembly.on_attach()
 
+/obj/item/assembly_holder/proc/try_add_assembly(obj/item/assembly/attached_assembly, mob/user)
+	if(attached_assembly.secured)
+		balloon_alert(user, "not attachable!")
+		return FALSE
 
-/obj/item/device/assembly_holder/examine(mob/user, extra_description = "")
-	if(get_dist(user, src) < 2)
-		if(secured)
-			extra_description += SPAN_NOTICE("\The [src] is ready!")
+	if(LAZYLEN(assemblies) >= HOLDER_MAX_ASSEMBLIES)
+		balloon_alert(user, "too many assemblies!")
+		return FALSE
+
+	if(attached_assembly.assembly_flags & ASSEMBLY_NO_DUPLICATES)
+		if(locate(attached_assembly.type) in assemblies)
+			balloon_alert(user, "can't attach another of that!")
+			return FALSE
+
+	add_assembly(attached_assembly, user)
+	balloon_alert(user, "part attached")
+	return TRUE
+
+/**
+ * Adds an assembly to the assembly holder
+ *
+ * This proc is used to add an assembly to the assembly holder, update the appearance, and the name of it.
+ * Arguments:
+ * * attached_assembly - assembly we are adding to the assembly holder
+ * * user - user we pass into attach()
+ */
+/obj/item/assembly_holder/proc/add_assembly(obj/item/assembly/attached_assembly, mob/user)
+	attach(attached_assembly, user)
+	name = ""
+	for(var/obj/item/assembly/assembly as anything in assemblies)
+		name += "[assembly.name]-"
+	name = splicetext(name, length(name), length(name) + 1, "")
+	name += " assembly"
+	update_appearance()
+
+/obj/item/assembly_holder/proc/attach(obj/item/assembly/A, mob/user)
+	if(!A.remove_item_from_storage(src, user))
+		if(user)
+			user.transferItemToLoc(A, src)
 		else
-			extra_description += SPAN_NOTICE("\The [src] can be attached!")
-	..(user, extra_description)
+			A.forceMove(src)
+	A.holder = src
+	A.toggle_secure()
+	LAZYADD(assemblies, A)
+	A.holder_movement()
+	A.on_attach()
 
-
-/obj/item/device/assembly_holder/HasProximity(atom/movable/AM as mob|obj)
-	if(left_assembly)
-		left_assembly.HasProximity(AM)
-	if(right_assembly)
-		right_assembly.HasProximity(AM)
-
-
-/obj/item/device/assembly_holder/Crossed(atom/movable/AM as mob|obj)
-	if(left_assembly)
-		left_assembly.Crossed(AM)
-	if(right_assembly)
-		right_assembly.Crossed(AM)
-
-
-/obj/item/device/assembly_holder/on_found(mob/finder as mob)
-	if(left_assembly)
-		left_assembly.on_found(finder)
-	if(right_assembly)
-		right_assembly.on_found(finder)
-
-
-/obj/item/device/assembly_holder/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
+/obj/item/assembly_holder/update_appearance(updates=ALL)
 	. = ..()
-	if(left_assembly && right_assembly)
-		left_assembly.holder_movement()
-		right_assembly.holder_movement()
+	master?.update_appearance(updates)
 
-/obj/item/device/assembly_holder/attack_hand()//Perhapse this should be a holder_pickup proc instead, can add if needbe I guess
-	if(left_assembly && right_assembly)
-		left_assembly.holder_movement()
-		right_assembly.holder_movement()
-	..()
+/obj/item/assembly_holder/update_overlays()
+	. = ..()
+	for(var/i in 1 to LAZYLEN(assemblies))
+		if(IS_LEFT_INDEX(i))
+			var/obj/item/assembly/assembly = assemblies[i]
+			. += "[assembly.icon_state]_left"
+			for(var/left_overlay in assembly.attached_overlays)
+				. += "[left_overlay]_l"
+		if(IS_RIGHT_INDEX(i))
+			var/obj/item/assembly/assembly = assemblies[i]
+			var/mutable_appearance/right = mutable_appearance(icon, "[assembly.icon_state]_left")
+			right.transform = matrix(-1, 0, 0, 0, 1, 0)
+			for(var/right_overlay in assembly.attached_overlays)
+				right.add_overlay("[right_overlay]_l")
+			. += right
+
+/obj/item/assembly_holder/on_found(mob/finder)
+	for(var/obj/item/assembly/assembly as anything in assemblies)
+		assembly.on_found(finder)
+
+/obj/item/assembly_holder/setDir()
+	. = ..()
+	for(var/obj/item/assembly/assembly as anything in assemblies)
+		assembly.holder_movement()
+
+/obj/item/assembly_holder/dropped(mob/user)
+	. = ..()
+	for(var/obj/item/assembly/assembly as anything in assemblies)
+		assembly.dropped()
+
+/obj/item/assembly_holder/attack_hand(mob/living/user, list/modifiers)//Perhapse this should be a holder_pickup proc instead, can add if needbe I guess
+	. = ..()
+	if(.)
+		return
+	for(var/obj/item/assembly/assembly as anything in assemblies)
+		assembly.attack_hand(user, modifiers) // Note override in assembly.dm to prevent side effects here
+
+/obj/item/assembly_holder/attackby(obj/item/weapon, mob/user, list/modifiers)
+	if(isassembly(weapon))
+		try_add_assembly(weapon, user)
+		return
+
+	return ..()
 
 
-/obj/item/device/assembly_holder/attackby(obj/item/I, mob/user)
-	if(QUALITY_SCREW_DRIVING in I.tool_qualities)
-		if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, QUALITY_SCREW_DRIVING, FAILCHANCE_EASY, required_stat = STAT_COG))
-			if(!left_assembly || !right_assembly)
-				to_chat(user, SPAN_WARNING("Assembly part missing!"))
-				return
-			left_assembly.toggle_secure()
-			right_assembly.toggle_secure()
-			secured = !secured
-			if(secured)
-				to_chat(user, SPAN_NOTICE("\The [src] is ready!"))
-			else
-				to_chat(user, SPAN_NOTICE("\The [src] can now be taken apart!"))
-			update_icon()
-			return
-	..()
+/obj/item/assembly_holder/screwdriver_act(mob/user, obj/item/tool)
+	loc.balloon_alert(user, "disassembled")
 
+	deconstruct(TRUE)
 
-/obj/item/device/assembly_holder/attack_self(mob/user as mob)
+	return ITEM_INTERACT_SUCCESS
+
+/obj/item/assembly_holder/atom_deconstruct(disassembled)
+	for(var/obj/item/assembly/assembly as anything in assemblies)
+		assembly.on_detach()
+		LAZYREMOVE(assemblies, assembly)
+
+/obj/item/assembly_holder/attack_self(mob/user)
 	src.add_fingerprint(user)
-	if(src.secured)
-		if(!left_assembly || !right_assembly)
-			to_chat(user, SPAN_WARNING("Assembly part missing!"))
-			return
-		if(istype(left_assembly,right_assembly.type))//If they are the same type it causes issues due to window code
-			switch(alert("Which side would you like to use?",,"Left","Right"))
-				if("Left")	left_assembly.attack_self(user)
-				if("Right")	right_assembly.attack_self(user)
-			return
-		else
-			if(!istype(left_assembly,/obj/item/device/assembly/igniter))
-				left_assembly.attack_self(user)
-			if(!istype(right_assembly,/obj/item/device/assembly/igniter))
-				right_assembly.attack_self(user)
-	else
-		var/turf/T = get_turf(src)
-		if(!T)	return 0
-		if(left_assembly)
-			left_assembly:holder = null
-			left_assembly.loc = T
-		if(right_assembly)
-			right_assembly:holder = null
-			right_assembly.loc = T
-		spawn(0)
-			qdel(src)
-	return
+	if(LAZYLEN(assemblies) == 1)
+		balloon_alert(user, "part missing!")
+		return
 
+	for(var/obj/item/assembly/assembly as anything in assemblies)
+		assembly.attack_self(user)
 
-/obj/item/device/assembly_holder/process_activation(var/obj/D, var/normal = 1, var/special = 1)
-	if(!D)	return 0
-	if(!secured)
-		visible_message("\icon[src] *beep* *beep*", "*beep* *beep*")
-	if(normal && right_assembly && left_assembly)
-		if(right_assembly != D)
-			right_assembly.pulsed(0)
-		if(left_assembly != D)
-			left_assembly.pulsed(0)
+/**
+ * this proc is used to process the activation of the assembly holder
+ *
+ * This proc is usually called by signalers, timers, or anything that can trigger and
+ * send a pulse to the assembly holder, which then calls this proc that actually activates the assemblies
+ * Arguments:
+ * * /obj/device - the device we sent the pulse from which called this proc
+ */
+/obj/item/assembly_holder/proc/process_activation(obj/device)
+	if(!device)
+		return FALSE
+	if(LAZYLEN(assemblies) >= 2)
+		for(var/obj/item/assembly/assembly as anything in assemblies)
+			if(assembly != device)
+				assembly.pulsed()
 	if(master)
 		master.receive_signal()
-
-
-/obj/item/device/assembly_holder/hear_talk(mob/living/M as mob, msg, verb, datum/language/speaking, speech_volume)
-	if(right_assembly)
-		right_assembly.hear_talk(M, msg, verb, speaking, speech_volume)
-	if(left_assembly)
-		left_assembly.hear_talk(M, msg, verb, speaking, speech_volume)
-
-
-
-
-/obj/item/device/assembly_holder/timer_igniter
-	name = "timer-igniter assembly"
-
-/obj/item/device/assembly_holder/timer_igniter/New()
-	..()
-
-	var/obj/item/device/assembly/igniter/ign = new(src)
-	ign.secured = 1
-	ign.holder = src
-	var/obj/item/device/assembly/timer/tmr = new(src)
-	tmr.time=5
-	tmr.secured = 1
-	tmr.holder = src
-	START_PROCESSING(SSobj, tmr)
-	left_assembly = tmr
-	right_assembly = ign
-	secured = 1
-	update_icon()
-	name = initial(name) + " ([tmr.time] secs)"
-
-	loc.verbs += /obj/item/device/assembly_holder/timer_igniter/verb/configure
-
-/obj/item/device/assembly_holder/timer_igniter/detached()
-	loc.verbs -= /obj/item/device/assembly_holder/timer_igniter/verb/configure
-	..()
-
-/obj/item/device/assembly_holder/timer_igniter/verb/configure()
-	set name = "Set Timer"
-	set category = "Object"
-	set src in usr
-
-	if ( !(usr.stat || usr.restrained()) )
-		var/obj/item/device/assembly_holder/holder
-		if(istype(src,/obj/item/grenade/chem_grenade))
-			var/obj/item/grenade/chem_grenade/gren = src
-			holder=gren.detonator
-		var/obj/item/device/assembly/timer/tmr = holder.left_assembly
-		if(!istype(tmr,/obj/item/device/assembly/timer))
-			tmr = holder.right_assembly
-		if(!istype(tmr,/obj/item/device/assembly/timer))
-			to_chat(usr, SPAN_NOTICE("This detonator has no timer."))
-			return
-
-		if(tmr.timing)
-			to_chat(usr, SPAN_NOTICE("Clock is ticking already."))
-		else
-			var/ntime = input("Enter desired time in seconds", "Time", "5") as num
-			if (ntime>0 && ntime<1000)
-				tmr.time = ntime
-				name = initial(name) + "([tmr.time] secs)"
-				to_chat(usr, SPAN_NOTICE("Timer set to [tmr.time] seconds."))
-			else
-				to_chat(usr, "<span class='notice'>Timer can't be [ntime<=0?"negative":"more than 1000 seconds"].</span>")
-	else
-		to_chat(usr, "<span class='notice'>You cannot do this while [usr.stat?"unconscious/dead":"restrained"].</span>")
+	return TRUE

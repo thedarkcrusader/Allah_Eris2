@@ -1,12 +1,13 @@
-import { BooleanLike } from 'common/react';
-import { useBackend } from '../backend';
 import {
+  AnimatedNumber,
   Box,
   Button,
   ProgressBar,
   Section,
-  AnimatedNumber,
-} from '../components';
+} from 'tgui-core/components';
+import { BooleanLike } from 'tgui-core/react';
+
+import { useBackend } from '../backend';
 import { Window } from '../layouts';
 
 type Data = {
@@ -23,8 +24,8 @@ error may indicate insufficient hardware capacity of your
 network. Please contact your network planning department for
 instructions on how to resolve this issue.`;
 
-export const NtnetRelay = (props, context) => {
-  const { act, data } = useBackend<Data>(context);
+export const NtnetRelay = (props) => {
+  const { act, data } = useBackend<Data>();
   const { enabled, dos_capacity, dos_overload, dos_crashed } = data;
 
   return (

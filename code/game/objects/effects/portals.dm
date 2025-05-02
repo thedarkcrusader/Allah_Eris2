@@ -1,249 +1,245 @@
+/proc/create_portal_pair(turf/source, turf/destination, _lifespan = 300, accuracy = 0, newtype = /obj/effect/portal)
+	if(!istype(source) || !istype(destination))
+		return
+	var/turf/actual_destination = get_teleport_turf(destination, accuracy)
+	var/obj/effect/portal/P1 = new newtype(source, _lifespan, null, FALSE, null)
+	var/obj/effect/portal/P2 = new newtype(actual_destination, _lifespan, P1, TRUE, null)
+	if(!istype(P1) || !istype(P2))
+		return
+	playsound(P1, SFX_PORTAL_CREATED, 50, TRUE, SHORT_RANGE_SOUND_EXTRARANGE)
+	playsound(P2, SFX_PORTAL_CREATED, 50, TRUE, SHORT_RANGE_SOUND_EXTRARANGE)
+	P1.link_portal(P2)
+	P1.hardlinked = TRUE
+	return list(P1, P2)
+
 /obj/effect/portal
 	name = "portal"
 	desc = "Looks unstable. Best to test it with the clown."
-	icon = 'icons/obj/stationobjs.dmi'
+	icon = 'icons/obj/anomaly.dmi'
 	icon_state = "portal"
-	var/mask = "portal_mask"
-	density = TRUE
-	unacidable = 1//Can't destroy energy portals.
-	var/failchance = 5
-	var/atom/target
 	anchored = TRUE
-	var/lifetime = 0
-	var/birthtime = 0
-	var/next_teleport
-	var/origin_turf //The last mob thing that attempted to enter this portal came from thus turf
-	var/entropy_value = 4
-	var/no_checks = FALSE //Bypasses all teleportation checks, used for admin portals and pulsar portals
+	density = TRUE // dense for receiving bumbs
+	layer = HIGH_OBJ_LAYER
+	light_system = COMPLEX_LIGHT
+	light_range = 3
+	light_power = 1
+	light_on = TRUE
+	light_color = COLOR_BLUE_LIGHT
+	/// Are mechs able to enter this portal?
+	var/mech_sized = FALSE
+	/// A reference to another "linked" destination portal
+	var/obj/effect/portal/linked
+	/// Requires a linked portal at all times. Destroy if there's no linked portal, if there is destroy it when this one is deleted.
+	var/hardlinked = TRUE
+	/// What teleport channel does this portal use?
+	var/teleport_channel = TELEPORT_CHANNEL_BLUESPACE
+	/// For when a portal needs a hard target and isn't to be linked.
+	var/turf/hard_target
+	/// Do we teleport anchored objects?
+	var/allow_anchored = FALSE
+	/// What precision value do we pass to do_teleport (how far from the target destination we will pop out at).
+	var/innate_accuracy_penalty = 0
+	/// Used to track how often sparks should be output. Might want to turn this into a cooldown.
+	var/last_effect = 0
+	/// Does this portal bypass teleport restrictions? like TRAIT_NO_TELEPORT and NOTELEPORT flags.
+	var/force_teleport = FALSE
+	/// Does this portal create spark effect when teleporting?
+	var/sparkless = TRUE
+	/// If FALSE, the wibble filter will not be applied to this portal (only a visual effect).
+	var/wibbles = TRUE
 
-/obj/effect/portal/CanPass(atom/movable/mover, turf/target, height=0, air_group=0)
-	if(istype(mover)) // if mover is not null, e.g. mob
-		return FALSE
-	return TRUE // if mover is null (air movement)
+/obj/effect/portal/anom
+	name = "wormhole"
+	icon = 'icons/obj/anomaly.dmi'
+	icon_state = "anom"
+	layer = RIPPLE_LAYER
+	plane = ABOVE_GAME_PLANE
+	mech_sized = TRUE
+	teleport_channel = TELEPORT_CHANNEL_WORMHOLE
+	light_on = FALSE
+	wibbles = FALSE
 
-/obj/effect/portal/Bumped(atom/movable/M)
-	origin_turf = get_turf(M)
-	src.teleport(M)
+/obj/effect/portal/Move(newloc)
+	for(var/T in newloc)
+		if(istype(T, /obj/effect/portal))
+			return FALSE
+	return ..()
 
-/obj/effect/portal/Crossed(atom/movable/AM)
-	origin_turf = get_turf(AM)
-	src.teleport(AM)
+// Prevents portals spawned by jaunter/handtele from floating into space when relocated to an adjacent tile.
+/obj/effect/portal/newtonian_move(inertia_angle, instant = FALSE, start_delay = 0, drift_force = 0, controlled_cap = null)
+	return TRUE
 
-/obj/effect/portal/attack_hand(mob/user as mob)
-	origin_turf = get_turf(user)
-	src.teleport(user)
+/obj/effect/portal/attackby(obj/item/W, mob/user, list/modifiers)
+	if(user && Adjacent(user))
+		teleport(user)
+		return TRUE
 
-/obj/effect/portal/proc/set_target(atom/A)
-	target = A
-	if(mask)
-		blend_icon(get_turf(target))
+/obj/effect/portal/CanAllowThrough(atom/movable/mover, border_dir)
+	. = ..()
+	if(HAS_TRAIT(mover, TRAIT_NO_TELEPORT) && !force_teleport)
+		return TRUE
 
-/obj/effect/portal/New(loc, _lifetime = 300)
-	..(loc)
-	birthtime = world.time
-	lifetime = _lifetime
-	addtimer(CALLBACK(src, PROC_REF(close)), lifetime)
+/obj/effect/portal/Bumped(atom/movable/bumper)
+	teleport(bumper)
 
-var/list/portal_cache = list()
-
-/obj/effect/portal/proc/blend_icon(turf/T)
-	if(!("icon[initial(T.icon)]_iconstate[T.icon_state]_[type]" in portal_cache))//If the icon has not been added yet
-		var/icon/I1 = icon(icon,mask)//Generate it.
-		var/icon/I2 = icon(initial(T.icon),T.icon_state)
-		I1.Blend(I2,ICON_MULTIPLY)
-		portal_cache["icon[initial(T.icon)]_iconstate[T.icon_state]_[type]"] = I1 //And cache it!
-
-	overlays += portal_cache["icon[initial(T.icon)]_iconstate[T.icon_state]_[type]"]
+/obj/effect/portal/attack_hand(mob/user, list/modifiers)
+	. = ..()
+	if(.)
+		return
+	if(Adjacent(user))
+		teleport(user)
 
 
+/obj/effect/portal/attack_robot(mob/living/user)
+	if(Adjacent(user))
+		teleport(user)
 
-//Given an adjacent origin tile, finds a destination which is the opposite side of the target
-/obj/effect/portal/proc/get_destination(turf/origin)
-	if (!target)
-		return null
-		//Major error!
-	var/turf/T = get_turf(target)
-	. = T
+/obj/effect/portal/Initialize(mapload, _lifespan = 0, obj/effect/portal/_linked, automatic_link = FALSE, turf/hard_target_override)
+	. = ..()
+	GLOB.portals += src
+	if(!istype(_linked) && automatic_link)
+		. = INITIALIZE_HINT_QDEL
+		CRASH("Somebody fucked up.")
+	if(_lifespan > 0)
+		addtimer(CALLBACK(src, PROC_REF(expire)), _lifespan, TIMER_DELETE_ME)
+	link_portal(_linked)
+	hardlinked = automatic_link
+	if(isturf(hard_target_override))
+		hard_target = hard_target_override
+	if(wibbles)
+		apply_wibbly_filters(src)
 
-	if (origin && Adjacent(origin))
-		var/dir = get_dir(origin, loc)
-		return get_step(T, dir)
-
-/obj/effect/portal/proc/close()
+/obj/effect/portal/proc/expire()
+	playsound(loc, SFX_PORTAL_CLOSE, 50, FALSE, SHORT_RANGE_SOUND_EXTRARANGE)
 	qdel(src)
 
-/obj/effect/portal/proc/teleport(atom/movable/M as mob|obj)
-	if (world.time < next_teleport)
-		return
-	if (M == src)
-		return
-	if (istype(M, /obj/effect/sparks)) //sparks don't teleport
-		return
-	if (istype(M, /obj/effect/effect/light)) //lights from flashlights too.
-		return
-	if (M.anchored && !istype(M, /mob/living/exosuit))
-		return
-	if (!( target ))
-		qdel(src)
-		return
-	if (istype(M, /atom/movable))
-		if(prob(failchance)) //oh dear a problem, put em in deep space
-			on_fail(M)
-		else
-			go_to_bluespace(origin_turf, entropy_value, FALSE, M, get_destination(origin_turf), 0, 1, null, null, null, null, no_checks) ///You will appear adjacent to the beacon
-			next_teleport = world.time + 3 //Tiny cooldown to prevent doubleporting
-			return TRUE
+/obj/effect/portal/singularity_pull(atom/singularity, current_size)
+	return
 
-/obj/effect/portal/proc/on_fail(atom/movable/M as mob|obj)
-	src.icon_state = "portal1"
-	go_to_bluespace(origin_turf, entropy_value, FALSE, M, locate(rand(5, world.maxx - 5), rand(5, world.maxy -5), 3), 0)
-/*
-	Wormholes come in linked pairs and can be traversed freely from either end.
-	They gain some instability after being used, and should be left to settle or risk mishaps
-*/
-/obj/effect/portal/wormhole
-	icon = 'icons/obj/objects.dmi'
-	icon_state = "wormhole"
-	name = "wormhole"
-	mask = null
-	failchance = 0
-	var/obj/effect/portal/wormhole/partner
-	var/processing = FALSE
-	var/admin_announce_new = TRUE
+/obj/effect/portal/singularity_act()
+	return
 
-/obj/effect/portal/wormhole/New(loc, lifetime, exit)
-	if(admin_announce_new)
-		message_admins("Wormhole with lifetime [time2text(lifetime, "hh hours, mm minutes and ss seconds")] created at ([jumplink(src)])", 0, 1)
-	..(loc, lifetime)
-	set_target(exit)
-	pair()
+/obj/effect/portal/proc/link_portal(obj/effect/portal/newlink)
+	linked = newlink
 
-/obj/effect/portal/wormhole/teleport(atom/movable/M as mob|obj)
-	.=..(M)
-
-	//Parent returns true if someone was successfully teleported
-	if (.)
-		//In that case, we'll gain some instability
-		failchance += 3.5
-		if (!processing)
-			START_PROCESSING(SSobj, src)
-			processing = TRUE
-		update_icon()
-
-/obj/effect/portal/wormhole/Process()
-	//We will gradually stabilize
-	failchance -= 0.1
-	update_icon()
-
-	//If we become fully stable, we stop processing
-	if (failchance <= 0)
-		failchance = 0
-		STOP_PROCESSING(SSobj, src)
-		processing = FALSE
-
-/obj/effect/portal/wormhole/update_icon()
-	if (failchance > 0)
-		icon_state = "wormhole_unstable"
-		desc = "It is whirling violently. Going into this thing might be a bad idea."
+/obj/effect/portal/Destroy()
+	GLOB.portals -= src
+	if(hardlinked && !QDELETED(linked))
+		QDEL_NULL(linked)
 	else
-		icon_state = "wormhole"
-		desc = "It spins gently and calmly. It's probably safe, right?"
+		linked = null
+	return ..()
 
-//Links this wormhole up with its target destination, creating another if necessary
-/obj/effect/portal/wormhole/proc/pair()
-	partner = null
-	if (!target)
+/obj/effect/portal/attack_ghost(mob/dead/observer/ghost)
+	if(!teleport(ghost, force = TRUE))
+		return ..()
+	return BULLET_ACT_FORCE_PIERCE
+
+/obj/effect/portal/bullet_act(obj/projectile/hitting_projectile, def_zone, piercing_hit)
+	if (!teleport(hitting_projectile, force = TRUE))
+		return ..()
+	return BULLET_ACT_FORCE_PIERCE
+
+/obj/effect/portal/proc/teleport(atom/movable/moving, force = FALSE)
+	if(!force && (!istype(moving) || iseffect(moving) || (ismecha(moving) && !mech_sized) || (!isobj(moving) && !ismob(moving)))) //Things that shouldn't teleport.
+		return
+	var/turf/real_target = get_link_target_turf()
+	if(!istype(real_target))
+		return FALSE
+
+	if(!force && (!ismecha(moving) && !isprojectile(moving) && moving.anchored && !allow_anchored))
+		return
+	var/no_effect = FALSE
+	if(last_effect == world.time || sparkless)
+		no_effect = TRUE
+	else
+		last_effect = world.time
+	var/turf/start_turf = get_turf(moving)
+	if(do_teleport(moving, real_target, innate_accuracy_penalty, no_effects = no_effect, channel = teleport_channel, forced = force_teleport))
+		if(isprojectile(moving))
+			var/obj/projectile/proj = moving
+			proj.ignore_source_check = TRUE
+		new /obj/effect/temp_visual/portal_animation(start_turf, src, moving)
+		playsound(start_turf, SFX_PORTAL_ENTER, 50, TRUE, SHORT_RANGE_SOUND_EXTRARANGE)
+		playsound(real_target, SFX_PORTAL_ENTER, 50, TRUE, SHORT_RANGE_SOUND_EXTRARANGE)
+		return TRUE
+	return FALSE
+
+/obj/effect/portal/proc/get_link_target_turf()
+	var/turf/real_target
+	if(!istype(linked) || QDELETED(linked))
+		if(hardlinked)
+			qdel(src)
+		if(!istype(hard_target) || QDELETED(hard_target))
+			hard_target = null
+			return
+		else
+			real_target = hard_target
+			linked = null
+	else
+		real_target = get_turf(linked)
+	return real_target
+
+/obj/effect/portal/permanent
+	name = "permanent portal"
+	desc = "An unwavering portal that will never fade."
+	hardlinked = FALSE // dont qdel my portal nerd
+	force_teleport = TRUE // force teleports because they're a mapmaker tool
+	var/id // var edit or set id in map editor
+
+/obj/effect/portal/permanent/proc/set_linked()
+	if(!id)
+		return
+	for(var/obj/effect/portal/permanent/P in GLOB.portals - src)
+		if(P.id == id)
+			P.linked = src
+			linked = P
+			break
+
+/obj/effect/portal/permanent/teleport(atom/movable/moving, force = FALSE)
+	set_linked() // update portal links
+	. = ..()
+
+/obj/effect/portal/permanent/one_way // doesn't have a return portal, can have multiple exits, /obj/effect/landmark/portal_exit to mark them
+	name = "one-way portal"
+	desc = "You get the feeling that this might not be the safest thing you've ever done."
+
+/obj/effect/portal/permanent/one_way/set_linked()
+	if(!id)
+		return
+	var/list/possible_turfs = list()
+	for(var/obj/effect/landmark/portal_exit/PE in GLOB.landmarks_list)
+		if(PE.id == id)
+			var/turf/T = get_turf(PE)
+			if(T)
+				possible_turfs |= T
+	if(possible_turfs.len)
+		hard_target = pick(possible_turfs)
+
+/obj/effect/portal/permanent/one_way/one_use
+	name = "one-use portal"
+	desc = "This is probably the worst decision you'll ever make in your life."
+
+/obj/effect/portal/permanent/one_way/one_use/teleport(atom/movable/moving, force = FALSE)
+	. = ..()
+	if (. && !isdead(moving))
+		expire()
+
+/**
+ * Animation used for transitioning atoms which are teleporting somewhere via a portal
+ *
+ * To use, pass it the atom doing the teleporting and the atom that is being teleported in init.
+ */
+/obj/effect/temp_visual/portal_animation
+	duration = 0.25 SECONDS
+
+/obj/effect/temp_visual/portal_animation/Initialize(mapload, atom/portal, atom/movable/teleporting)
+	. = ..()
+	if(isnull(portal) || isnull(teleporting))
 		return
 
-	var/turf/T = get_turf(target)
-	partner = (locate(/obj/effect/portal/wormhole) in T)
-
-	//There's no wormhole in the target tile yet. We shall make one
-	if (!partner)
-		partner = new /obj/effect/portal/wormhole(T, lifetime, loc)
-
-
-
-/obj/effect/portal/unstable
-
-/obj/effect/portal/unstable/on_fail(atom/movable/M as mob|obj)
-	src.icon_state = "portal1"
-	if(istype(M, /mob/living))
-		var/mob/living/victim = M
-		//Portals ignore armor when messing you up, it's logical
-		victim.apply_damage(20+rand(60), BRUTE, pick(BP_L_ARM, BP_R_ARM, BP_L_LEG, BP_R_LEG))
-	go_to_bluespace(origin_turf, entropy_value, FALSE, M, get_destination(get_turf(M)), 1)
-
-
-/obj/effect/portal/wormhole/rift
-	name = "rift"
-	desc = "It's blue and round. Probably a portal."
-	icon = 'icons/obj/stationobjs.dmi'
-	icon_state = "portal"
-	mask = "portal_mask"
-	failchance = 0
-	admin_announce_new = FALSE
-	entropy_value = 50
-	var/teleportations_left
-
-/obj/effect/portal/wormhole/rift/New(loc, exit, msg_admins=TRUE)
-	teleportations_left = rand(3, 10)
-	entropy_value = round(entropy_value/teleportations_left)
-	..(loc, 0, exit)
-	deltimer(lifetime)
-	if(msg_admins)
-		message_admins("Bluespace rift created between [jumplink(src)] and [jumplink(src.target)] with [teleportations_left] teleportations left")
-
-/obj/effect/portal/wormhole/rift/pair()
-	partner = null
-	if (!target)
-		return
-
-	var/turf/T = get_turf(target)
-	partner = (locate(/obj/effect/portal/wormhole/rift) in T)
-
-	if (!partner)
-		partner = new /obj/effect/portal/wormhole/rift(T, loc, FALSE)
-	var/obj/effect/portal/wormhole/rift/P = partner
-	P.teleportations_left = teleportations_left
-
-/obj/effect/portal/wormhole/rift/close()
-	if(teleportations_left <= 0)
-		qdel(src.target)
-		qdel(src)
-
-/obj/effect/portal/wormhole/rift/teleport(atom/movable/M)
-	. = ..(M)
-	failchance = 0
-	if(.)
-		var/obj/effect/portal/wormhole/rift/P = partner
-		teleportations_left -= 1
-		P.teleportations_left -= 1
-		close()
-
-/obj/effect/portal/wormhole/update_icon()
-
-/*
-Portal used to move from the ship to the junk field generated by junk tractor beam
-Basically a portal without time limit and failchance
-*/
-/obj/effect/portal/jtb
-	name = "junk field portal"
-	desc = "A portal stabilized by heavy-duty machinery. It is safe to cross."
-	failchance = 0
-	entropy_value = 1
-
-/obj/effect/portal/jtb/close() // Will be called by the callback of /obj/effect/portal but will do nothing
-	return
-
-/*
-Perfect portal with zero fail chance and no entropy
-*/
-/obj/effect/portal/perfect
-	desc = "A perfectly stabilized portal. It is safe to cross."
-	failchance = 0
-	entropy_value = 0
-	no_checks = TRUE
-
-/obj/effect/portal/perfect/close() // Will be called by the callback of /obj/effect/portal but will do nothing
-	return
+	appearance = teleporting.appearance
+	dir = teleporting.dir
+	layer = portal.layer + 0.01
+	alpha = teleporting.alpha
+	animate(src, pixel_x = (portal.x * 32) - (x * 32), pixel_y = (portal.y * 32) - (y * 32), alpha = 0, time = duration)

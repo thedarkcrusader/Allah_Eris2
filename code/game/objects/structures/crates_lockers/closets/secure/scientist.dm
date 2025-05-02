@@ -1,56 +1,42 @@
-/obj/structure/closet/secure_closet/personal/scientist
-	name = "moebius scientist's locker"
-	req_access = list(access_rd)
-	access_occupy = list(access_tox_storage)
-	icon_state = "science"
-
-/obj/structure/closet/secure_closet/personal/scientist/populate_contents()
-	if(prob(50))
-		new /obj/item/storage/backpack/purple/scientist(src)
-	else
-		new /obj/item/storage/backpack/satchel/purple/scientist(src)
-	new /obj/item/clothing/under/rank/scientist(src)
-	new /obj/item/clothing/suit/storage/toggle/labcoat/science(src)
-	new /obj/item/clothing/suit/storage/toggle/labcoat(src)
-	new /obj/item/clothing/shoes/jackboots(src)
-	new /obj/item/clothing/gloves/thick(src)
-	new /obj/item/device/radio/headset/headset_sci(src)
-	new /obj/item/tank/air(src)
-	new /obj/item/clothing/mask/gas(src)
-	new /obj/item/clothing/glasses/regular/goggles/clear(src)
-
-/obj/structure/closet/secure_closet/personal/psychiartist
-	name = "moebius psychiartist's locker"
-	req_access = list(access_rd)
-	access_occupy = list(access_psychiatrist)
-	icon_state = "science"
-
-/obj/structure/closet/secure_closet/personal/psychiartist/populate_contents()
-	if(prob(50))
-		new /obj/item/storage/backpack/purple/scientist(src)
-	else
-		new /obj/item/storage/backpack/satchel/purple/scientist(src)
-	new /obj/item/clothing/under/rank/psych(src)
-	new /obj/item/device/radio/headset/headset_sci(src)
-	new /obj/item/storage/belt/medical(src)
-	new /obj/item/clothing/glasses/regular/hipster(src)
-
-/obj/structure/closet/secure_closet/reinforced/RD
-	name = "Moebius Expedition Overseer locker"
-	req_access = list(access_rd)
+/obj/structure/closet/secure_closet/research_director
+	name = "research director's locker"
+	req_access = list(ACCESS_RD)
 	icon_state = "rd"
 
-/obj/structure/closet/secure_closet/reinforced/RD/populate_contents()
-	new /obj/item/storage/backpack/satchel/leather/withwallet(src)
-	new /obj/item/clothing/suit/bio_suit(src)
-	new /obj/item/clothing/head/bio_hood(src)
-	new /obj/item/clothing/under/rank/expedition_overseer(src)
-	new /obj/item/clothing/suit/storage/toggle/labcoat(src)
-	new /obj/item/clothing/shoes/color/white(src)
-	new /obj/item/clothing/shoes/leather(src)
-	new /obj/item/clothing/gloves/latex(src)
-	new /obj/item/device/radio/headset/heads/rd(src)
-	new /obj/item/tank/air(src)
-	new /obj/item/clothing/mask/gas(src)
-	new /obj/item/device/flash(src)
-	new /obj/item/clothing/glasses/regular/goggles/clear(src)
+/obj/structure/closet/secure_closet/research_director/PopulateContents()
+	..()
+
+	new /obj/item/clothing/suit/bio_suit/scientist(src)
+	new /obj/item/clothing/head/bio_hood/scientist(src)
+	new /obj/item/storage/bag/garment/research_director(src)
+	new /obj/item/computer_disk/command/rd(src)
+	new /obj/item/radio/headset/heads/rd(src)
+	new /obj/item/megaphone/command(src)
+	new /obj/item/storage/lockbox/medal/sci(src)
+	new /obj/item/assembly/flash/handheld(src)
+	new /obj/item/door_remote/research_director(src)
+	new /obj/item/circuitboard/machine/techfab/department/science(src)
+	new /obj/item/storage/photo_album/rd(src)
+	new /obj/item/storage/box/skillchips/science(src)
+
+/obj/structure/closet/secure_closet/research_director/populate_contents_immediate()
+	. = ..()
+
+	// Traitor steal objectives
+	new /obj/item/clothing/suit/armor/reactive/teleport(src)
+	new /obj/item/laser_pointer(src)
+
+/obj/structure/closet/secure_closet/cytology
+	name = "cytology equipment locker"
+	icon_state = "science"
+	req_access = list(ACCESS_RESEARCH)
+
+/obj/structure/closet/secure_closet/cytology/PopulateContents()
+	. = ..()
+	new /obj/item/pushbroom(src)
+	new /obj/item/storage/bag/xeno(src)
+	new /obj/item/storage/box/petridish(src)
+	for(var/i in 1 to 2)
+		new /obj/item/biopsy_tool(src)
+		new /obj/item/storage/box/swab(src)
+	new /obj/item/reagent_containers/condiment/protein(src)

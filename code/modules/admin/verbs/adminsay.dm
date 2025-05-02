@@ -1,40 +1,33 @@
-//admin-only ooc chat
-/client/proc/cmd_admin_say(msg as text)
-	set category = "Special Verbs"
-	set name = "Asay" //Gave this shit a shorter name so you only have to time out "asay" rather than "admin say" to use it --NeoFite
-	set hidden = 1
-	if(!check_rights(R_ADMIN))
+ADMIN_VERB(cmd_admin_say, R_NONE, "ASay", "Send a message to other admins", ADMIN_CATEGORY_MAIN, message as text)
+	message = emoji_parse(copytext_char(sanitize(message), 1, MAX_MESSAGE_LEN))
+	if(!message)
 		return
 
-	msg = sanitize(msg)
-	if(!msg)
-		return
+	if(findtext(message, "@") || findtext(message, "#"))
+		var/list/link_results = check_asay_links(message)
+		if(length(link_results))
+			message = link_results[ASAY_LINK_NEW_MESSAGE_INDEX]
+			link_results[ASAY_LINK_NEW_MESSAGE_INDEX] = null
+			var/list/pinged_admin_clients = link_results[ASAY_LINK_PINGED_ADMINS_INDEX]
+			for(var/iter_ckey in pinged_admin_clients)
+				var/client/iter_admin_client = pinged_admin_clients[iter_ckey]
+				if(!iter_admin_client?.holder)
+					continue
+				window_flash(iter_admin_client)
+				SEND_SOUND(iter_admin_client.mob, sound('sound/misc/asay_ping.ogg'))
 
-	log_admin("ADMIN: [key_name(src)] : [msg]")
+	user.mob.log_talk(message, LOG_ASAY)
+	message = keywords_lookup(message)
+	var/asay_color = user.prefs.read_preference(/datum/preference/color/asay_color)
+	var/custom_asay_color = (CONFIG_GET(flag/allow_admin_asaycolor) && asay_color) ? "<font color=[asay_color]>" : "<font color='[DEFAULT_ASAY_COLOR]'>"
+	message = "[span_adminsay("[span_prefix("ADMIN:")] <EM>[key_name_admin(user)]</EM> [ADMIN_FLW(user.mob)]: [custom_asay_color]<span class='message linkify'>[message]")]</span>[custom_asay_color ? "</font>":null]"
+	to_chat(GLOB.admins,
+		type = MESSAGE_TYPE_ADMINCHAT,
+		html = message,
+		confidential = TRUE)
 
-	msg = emoji_parse(msg)
+	BLACKBOX_LOG_ADMIN_VERB("Asay")
 
-	if(check_rights(R_ADMIN,0))
-		for(var/client/C in admins)
-			if(R_ADMIN & C.holder.rights)
-				to_chat(C, "<span class='admin_channel'>" + create_text_tag("admin", "ADMIN:", C) + " <span class='name'>[key_name(usr, 1)]</span>([admin_jump_link(mob, src)]): <span class='message linkify'>[msg]</span></span>")
-
-/client/proc/cmd_mod_say(msg as text)
-	set category = "Special Verbs"
-	set name = "Msay"
-	set hidden = 1
-
-	if(!check_rights(R_ADMIN|R_MOD|R_MENTOR))
-		return
-
-	msg = sanitize(msg)
-	log_admin("MOD: [key_name(src)] : [msg]")
-
-	if (!msg)
-		return
-
-	var/sender_name = key_name(usr, 1)
-	if(check_rights(R_ADMIN, 0))
-		sender_name = "<span class='admin'>[sender_name]</span>"
-	for(var/client/C in admins)
-		to_chat(C, "<span class='mod_channel'>" + create_text_tag("mod", "MOD:", C) + " <span class='name'>[sender_name]</span>([admin_jump_link(mob, C.holder)]): <span class='message linkify'>[msg]</span></span>")
+/client/proc/get_admin_say()
+	var/msg = input(src, null, "asay \"text\"") as text|null
+	SSadmin_verbs.dynamic_invoke_verb(src, /datum/admin_verb/cmd_admin_say, msg)

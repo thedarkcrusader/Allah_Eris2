@@ -1,112 +1,137 @@
 /obj/item/folder
 	name = "folder"
 	desc = "A folder."
-	icon = 'icons/obj/bureaucracy.dmi'
+	icon = 'icons/obj/service/bureaucracy.dmi'
 	icon_state = "folder"
-	w_class = ITEM_SIZE_SMALL
-	matter = list(MATERIAL_BIOMATTER = 2)
-	rarity_value = 5
-	spawn_tags = SPAWN_TAG_JUNK
+	w_class = WEIGHT_CLASS_SMALL
+	pressure_resistance = 2
+	resistance_flags = FLAMMABLE
+	/// The background color for tgui in hex (with a `#`)
+	var/bg_color = "#7f7f7f"
+	/// A typecache of the objects that can be inserted into a folder
+	var/static/list/folder_insertables = typecacheof(list(
+		/obj/item/paper,
+		/obj/item/photo,
+		/obj/item/documents,
+		/obj/item/paperwork,
+	))
+	/// Do we hide the contents on examine?
+	var/contents_hidden = FALSE
+	/// icon_state of overlay for papers inside of this folder
+	var/paper_overlay_state = "folder_paper"
 
-/obj/item/folder/blue
-	desc = "A blue folder."
-	icon_state = "folder_blue"
+/obj/item/folder/suicide_act(mob/living/user)
+	user.visible_message(span_suicide("[user] begins filing an imaginary death warrant! It looks like [user.p_theyre()] trying to commit suicide!"))
+	return OXYLOSS
 
-/obj/item/folder/red
-	desc = "A red folder."
-	icon_state = "folder_red"
+/obj/item/folder/Initialize(mapload)
+	update_icon()
+	. = ..()
+	AddElement(/datum/element/burn_on_item_ignition)
 
-/obj/item/folder/yellow
-	desc = "A yellow folder."
-	icon_state = "folder_yellow"
+/obj/item/folder/Destroy()
+	for(var/obj/important_thing in contents)
+		if(!(important_thing.resistance_flags & INDESTRUCTIBLE))
+			continue
+		important_thing.forceMove(drop_location()) //don't destroy round critical content such as objective documents.
+	return ..()
 
-/obj/item/folder/cyan
-	desc = "A cyan folder."
-	icon_state = "folder_cyan"
+/obj/item/folder/examine()
+	. = ..()
+	if(length(contents) && !contents_hidden)
+		. += span_notice("<b>Right-click</b> to remove [contents[1]].")
 
-/obj/item/folder/update_icon()
-	cut_overlays()
-	if(contents.len)
-		overlays += "folder_paper"
-	return
-
-/obj/item/folder/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W, /obj/item/paper) || istype(W, /obj/item/photo) || istype(W, /obj/item/paper_bundle))
-		user.drop_item()
-		W.forceMove(src)
-		playsound(src,'sound/effects/Paper_Shake.ogg',40,1)
-		to_chat(user, SPAN_NOTICE("You put the [W] into \the [src]."))
-		update_icon()
-	else if(istype(W, /obj/item/pen))
-		var/n_name = sanitizeSafe(input(usr, "What would you like to label the folder?", "Folder Labelling", null)  as text, MAX_NAME_LEN)
-		if((loc == usr && usr.stat == 0))
-			name = "folder[(n_name ? text("- '[n_name]'") : null)]"
-	return
-
-/obj/item/folder/attack_self(mob/user as mob)
-	var/dat = "<title>[name]</title>"
-
-	for(var/obj/item/paper/P in src)
-		dat += "<A href='?src=\ref[src];remove=\ref[P]'>Remove</A> <A href='?src=\ref[src];rename=\ref[P]'>Rename</A> - <A href='?src=\ref[src];read=\ref[P]'>[P.name]</A><BR>"
-	for(var/obj/item/photo/Ph in src)
-		dat += "<A href='?src=\ref[src];remove=\ref[Ph]'>Remove</A> <A href='?src=\ref[src];rename=\ref[Ph]'>Rename</A> - <A href='?src=\ref[src];look=\ref[Ph]'>[Ph.name]</A><BR>"
-	for(var/obj/item/paper_bundle/Pb in src)
-		dat += "<A href='?src=\ref[src];remove=\ref[Pb]'>Remove</A> <A href='?src=\ref[src];rename=\ref[Pb]'>Rename</A> - <A href='?src=\ref[src];browse=\ref[Pb]'>[Pb.name]</A><BR>"
-	user << browse(dat, "window=folder")
-	onclose(user, "folder")
-	add_fingerprint(usr)
-	return
-
-/obj/item/folder/Topic(href, href_list)
-	..()
-	if((usr.stat || usr.restrained()))
+/obj/item/folder/proc/rename(mob/user, obj/item/writing_instrument)
+	if(!user.can_write(writing_instrument))
 		return
 
-	if(src.loc == usr)
+	var/inputvalue = tgui_input_text(user, "What would you like to label the folder?", "Folder Labelling", max_length = MAX_NAME_LEN)
 
-		if(href_list["remove"])
-			var/obj/item/P = locate(href_list["remove"])
-			if(P && (P.loc == src) && istype(P))
-				P.loc = usr.loc
-				playsound(src,'sound/effects/Paper_Remove.ogg',40,1)
-				usr.put_in_hands(P)
+	if(!inputvalue)
+		return
 
-		else if(href_list["read"])
-			var/obj/item/paper/P = locate(href_list["read"])
-			playsound(src,'sound/effects/Paper_Shake.ogg',40,1)
-			if(P && (P.loc == src) && istype(P))
-				if(!(ishuman(usr) || isghost(usr) || issilicon(usr)))
-					usr << browse("<HTML><HEAD><TITLE>[P.name]</TITLE></HEAD><BODY>[stars(P.info)][P.stamps]</BODY></HTML>", "window=[P.name]")
-					onclose(usr, "[P.name]")
-				else
-					usr << browse("<HTML><HEAD><TITLE>[P.name]</TITLE></HEAD><BODY>[P.info][P.stamps]</BODY></HTML>", "window=[P.name]")
-					onclose(usr, "[P.name]")
-		else if(href_list["look"])
-			var/obj/item/photo/P = locate(href_list["look"])
-			if(P && (P.loc == src) && istype(P))
-				P.show(usr)
-		else if(href_list["browse"])
-			var/obj/item/paper_bundle/P = locate(href_list["browse"])
-			if(P && (P.loc == src) && istype(P))
-				P.attack_self(usr)
-				onclose(usr, "[P.name]")
-		else if(href_list["rename"])
-			var/obj/item/O = locate(href_list["rename"])
+	if(user.can_perform_action(src))
+		name = "folder[(inputvalue ? " - '[inputvalue]'" : null)]"
+		playsound(src, SFX_WRITING_PEN, 50, TRUE, SHORT_RANGE_SOUND_EXTRARANGE, SOUND_FALLOFF_EXPONENT + 3, ignore_walls = FALSE)
 
-			if(O && (O.loc == src))
-				if(istype(O, /obj/item/paper))
-					var/obj/item/paper/to_rename = O
-					to_rename.rename()
-
-				else if(istype(O, /obj/item/photo))
-					var/obj/item/photo/to_rename = O
-					to_rename.rename()
-
-				else if(istype(O, /obj/item/paper_bundle))
-					var/obj/item/paper_bundle/to_rename = O
-					to_rename.rename()
-
-		//Update everything
-		attack_self(usr)
+/obj/item/folder/proc/remove_item(obj/item/Item, mob/user)
+	if(istype(Item))
+		Item.forceMove(user.loc)
+		user.put_in_hands(Item)
+		to_chat(user, span_notice("You remove [Item] from [src]."))
 		update_icon()
+
+/obj/item/folder/attack_hand(mob/user, list/modifiers)
+	if(length(contents) && LAZYACCESS(modifiers, RIGHT_CLICK))
+		remove_item(contents[1], user)
+		return TRUE
+	. = ..()
+
+/obj/item/folder/update_overlays()
+	. = ..()
+	if(contents.len)
+		var/to_add = get_paper_overlay()
+		if (to_add)
+			. += to_add
+
+/obj/item/folder/proc/get_paper_overlay()
+	var/mutable_appearance/paper_overlay = mutable_appearance(icon, paper_overlay_state, offset_spokesman = src, appearance_flags = KEEP_APART)
+	paper_overlay = contents[1].color_atom_overlay(paper_overlay)
+	return paper_overlay
+
+/obj/item/folder/attackby(obj/item/weapon, mob/user, list/modifiers)
+	if(is_type_in_typecache(weapon, folder_insertables))
+		//Add paper, photo or documents into the folder
+		if(!user.transferItemToLoc(weapon, src))
+			return
+		to_chat(user, span_notice("You put [weapon] into [src]."))
+		update_appearance()
+	else if(IS_WRITING_UTENSIL(weapon))
+		rename(user, weapon)
+
+/obj/item/folder/attack_self(mob/user)
+	add_fingerprint(usr)
+	ui_interact(user)
 	return
+
+/obj/item/folder/ui_interact(mob/user, datum/tgui/ui)
+	ui = SStgui.try_update_ui(user, src, ui)
+	if(!ui)
+		ui = new(user, src, "Folder")
+		ui.open()
+
+/obj/item/folder/ui_data(mob/user)
+	var/list/data = list()
+	if(istype(src, /obj/item/folder/syndicate))
+		data["theme"] = "syndicate"
+	data["bg_color"] = "[bg_color]"
+	data["folder_name"] = "[name]"
+
+	data["contents"] = list()
+	data["contents_ref"] = list()
+	for(var/Content in src)
+		data["contents"] += "[Content]"
+		data["contents_ref"] += "[REF(Content)]"
+
+	return data
+
+/obj/item/folder/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
+	. = ..()
+	if(.)
+		return
+
+	if(usr.stat != CONSCIOUS || HAS_TRAIT(usr, TRAIT_HANDS_BLOCKED))
+		return
+
+	switch(action)
+		// Take item out
+		if("remove")
+			var/obj/item/Item = locate(params["ref"]) in src
+			remove_item(Item, usr)
+			. = TRUE
+		// Inspect the item
+		if("examine")
+			var/obj/item/Item = locate(params["ref"]) in src
+			if(istype(Item))
+				usr.examinate(Item)
+				. = TRUE

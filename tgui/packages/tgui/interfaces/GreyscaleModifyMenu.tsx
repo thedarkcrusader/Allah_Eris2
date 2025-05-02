@@ -1,17 +1,19 @@
-import { useBackend } from '../backend';
 import {
   Box,
   Button,
   ColorBox,
+  Divider,
   Flex,
-  Stack,
   Icon,
+  Image,
   Input,
   LabeledList,
   Section,
+  Stack,
   Table,
-  Divider,
-} from '../components';
+} from 'tgui-core/components';
+
+import { useBackend } from '../backend';
 import { Window } from '../layouts';
 
 type ColorEntry = {
@@ -66,8 +68,8 @@ const DirectionAbbreviation: Record<Direction, string> = {
   [Direction.NorthWest]: 'NW',
 };
 
-const ConfigDisplay = (props, context) => {
-  const { act, data } = useBackend<GreyscaleMenuData>(context);
+const ConfigDisplay = (props) => {
+  const { act, data } = useBackend<GreyscaleMenuData>();
   return (
     <Section title="Designs">
       <LabeledList>
@@ -75,7 +77,8 @@ const ConfigDisplay = (props, context) => {
           <Button icon="cogs" onClick={() => act('select_config')} />
           <Input
             value={data.greyscale_config}
-            onChange={(_, value) =>
+            expensive
+            onChange={(value) =>
               act('load_config_from_string', { config_string: value })
             }
           />
@@ -85,8 +88,8 @@ const ConfigDisplay = (props, context) => {
   );
 };
 
-const ColorDisplay = (props, context) => {
-  const { act, data } = useBackend<GreyscaleMenuData>(context);
+const ColorDisplay = (props) => {
+  const { act, data } = useBackend<GreyscaleMenuData>();
   const colors = data.colors || [];
   return (
     <Section title="Colors">
@@ -99,7 +102,8 @@ const ColorDisplay = (props, context) => {
           />
           <Input
             value={colors.map((item) => item.value).join('')}
-            onChange={(_, value) =>
+            expensive
+            onChange={(value) =>
               act('recolor_from_string', { color_string: value })
             }
           />
@@ -124,7 +128,8 @@ const ColorDisplay = (props, context) => {
             <Input
               value={item.value}
               width={7}
-              onChange={(_, value) =>
+              expensive
+              onChange={(value) =>
                 act('recolor', { color_index: item.index, new_color: value })
               }
             />
@@ -135,8 +140,8 @@ const ColorDisplay = (props, context) => {
   );
 };
 
-const PreviewCompassSelect = (props, context) => {
-  const { act, data } = useBackend<GreyscaleMenuData>(context);
+const PreviewCompassSelect = (props) => {
+  const { act, data } = useBackend<GreyscaleMenuData>();
   return (
     <Box>
       <Stack vertical>
@@ -164,9 +169,9 @@ const PreviewCompassSelect = (props, context) => {
   );
 };
 
-const SingleDirection = (props, context) => {
+const SingleDirection = (props) => {
   const { dir } = props;
-  const { data, act } = useBackend<GreyscaleMenuData>(context);
+  const { data, act } = useBackend<GreyscaleMenuData>();
   return (
     <Flex.Item grow={1} basis={0}>
       <Button
@@ -183,8 +188,8 @@ const SingleDirection = (props, context) => {
   );
 };
 
-const IconStatesDisplay = (props, context) => {
-  const { data, act } = useBackend<GreyscaleMenuData>(context);
+const IconStatesDisplay = (props) => {
+  const { data, act } = useBackend<GreyscaleMenuData>();
   return (
     <Section title="Icon States">
       <Flex>
@@ -203,8 +208,8 @@ const IconStatesDisplay = (props, context) => {
   );
 };
 
-const PreviewDisplay = (props, context) => {
-  const { data } = useBackend<GreyscaleMenuData>(context);
+const PreviewDisplay = (props) => {
+  const { data } = useBackend<GreyscaleMenuData>();
   return (
     <Section title={`Preview (${data.sprites_dir})`}>
       <Table>
@@ -214,24 +219,12 @@ const PreviewDisplay = (props, context) => {
           </Table.Cell>
           {data.sprites?.finished ? (
             <Table.Cell>
-              <Box
-                as="img"
-                src={data.sprites.finished}
-                m={0}
-                width="75%"
-                mx="10%"
-                style={{ '-ms-interpolation-mode': 'nearest-neighbor' }}
-              />
+              <Image m={0} mx="10%" src={data.sprites.finished} width="75%" />
             </Table.Cell>
           ) : (
             <Table.Cell>
-              <Box grow>
-                <Icon
-                  name="image"
-                  ml="25%"
-                  size={5}
-                  style={{ '-ms-interpolation-mode': 'nearest-neighbor' }}
-                />
+              <Box>
+                <Icon name="image" ml="25%" size={5} />
               </Box>
             </Table.Cell>
           )}
@@ -277,14 +270,7 @@ const PreviewDisplay = (props, context) => {
 
 const SingleSprite = (props) => {
   const { source } = props;
-  return (
-    <Box
-      as="img"
-      src={source}
-      width="100%"
-      style={{ '-ms-interpolation-mode': 'nearest-neighbor' }}
-    />
-  );
+  return <Image src={source} />;
 };
 
 const LoadingAnimation = () => {
@@ -295,8 +281,8 @@ const LoadingAnimation = () => {
   );
 };
 
-export const GreyscaleModifyMenu = (props, context) => {
-  const { act, data } = useBackend<GreyscaleMenuData>(context);
+export const GreyscaleModifyMenu = (props) => {
+  const { act, data } = useBackend<GreyscaleMenuData>();
   return (
     <Window title="Color Configuration" width={325} height={800}>
       <Window.Content scrollable>

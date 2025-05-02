@@ -1,43 +1,50 @@
-/mob/living/silicon/robot/examine(mob/user, extra_description = "")
-	extra_description += "<span class='warning'>"
-	if(getBruteLoss())
-		if(getBruteLoss() < 75)
-			extra_description += "It looks slightly dented.\n"
+/mob/living/silicon/robot/examine(mob/user)
+	. = list()
+	if(desc)
+		. += "[desc]"
+
+	var/model_name = model ? "\improper [model.name]" : "\improper Default"
+	. += "It is currently <b>\a [model_name]-type</b> cyborg."
+
+	var/obj/act_module = get_active_held_item()
+	if(act_module)
+		. += "It is holding [icon2html(act_module, user)] \a [act_module]."
+	. += get_status_effect_examinations()
+	if (getBruteLoss())
+		if (getBruteLoss() < maxHealth*0.5)
+			. += span_warning("It looks slightly dented.")
 		else
-			extra_description += "<B>It looks severely dented!</B>\n"
-	if(getFireLoss())
-		if(getFireLoss() < 75)
-			extra_description += "It looks slightly charred.\n"
+			. += span_boldwarning("It looks severely dented!")
+	if (getFireLoss() || getToxLoss())
+		var/overall_fireloss = getFireLoss() + getToxLoss()
+		if (overall_fireloss < maxHealth * 0.5)
+			. += span_warning("It looks slightly charred.")
 		else
-			extra_description += "<B>It looks severely burnt and heat-warped!</B>\n"
-	extra_description += "</span>"
+			. += span_boldwarning("It looks severely burnt and heat-warped!")
+	if (health < -maxHealth*0.5)
+		. += span_warning("It looks barely operational.")
+	if (fire_stacks < 0)
+		. += span_warning("It's covered in water.")
+	else if (fire_stacks > 0)
+		. += span_warning("It's coated in something flammable.")
 
 	if(opened)
-		extra_description += "<span class='warning'>Its cover is open and the power cell is [cell ? "installed" : "missing"].</span>\n"
+		. += span_warning("Its cover is open and the power cell is [cell ? "installed" : "missing"].")
 	else
-		extra_description += "Its cover is closed.\n"
+		. += "Its cover is closed[locked ? "" : ", and looks unlocked"]."
 
-	if(!has_power)
-		extra_description += "<span class='warning'>It appears to be running on backup power.</span>\n"
+	if(cell && cell.charge <= 0)
+		. += span_warning("Its battery indicator is blinking red!")
 
 	switch(stat)
 		if(CONSCIOUS)
-			if(!client)
-				extra_description += "It appears to be in stand-by mode.\n" //afk
-		if(UNCONSCIOUS)
-			extra_description += "<span class='warning'>It doesn't seem to be responding.</span>\n"
+			if(shell)
+				. += "It appears to be an [deployed ? "active" : "empty"] AI shell."
+			else if(!client)
+				. += "It appears to be in stand-by mode." //afk
+		if(SOFT_CRIT, UNCONSCIOUS, HARD_CRIT)
+			. += span_warning("It doesn't seem to be responding.")
 		if(DEAD)
-			extra_description += "<span class='deadsay'>It's completely broken, but looks repairable.</span>\n" //TODO: add no_soul status or flag
-	if(module_active)
-		extra_description += "It is wielding \icon[module_active] [module_active].\n"
-	extra_description += "*---------*"
+			. += span_deadsay("It looks like its system is corrupted and requires a reset.")
 
-	if(print_flavor_text()) extra_description += "\n[print_flavor_text()]\n"
-
-	if(pose)
-		if( findtext(pose,".",length(pose)) == 0 && findtext(pose,"!",length(pose)) == 0 && findtext(pose,"?",length(pose)) == 0 )
-			pose = addtext(pose,".") //Makes sure all emotes end with a period.
-		extra_description += "\nIt is [pose]"
-
-	..(user, extra_description)
-	user.showLaws(src)
+	. += ..()

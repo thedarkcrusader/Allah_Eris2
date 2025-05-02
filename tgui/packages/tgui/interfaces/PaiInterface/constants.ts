@@ -23,20 +23,6 @@ export enum HOST_SCAN {
   Master,
 }
 
-export const ICON_MAP = {
-  angry: 'angry',
-  cat: 'cat',
-  'extremely-happy': 'grin-beam',
-  face: 'grin-alt',
-  happy: 'smile',
-  laugh: 'grin-tears',
-  null: 'meh',
-  off: 'meh-blank',
-  sad: 'sad-cry',
-  sunglasses: 'sun',
-  what: 'frown-open',
-} as const;
-
 export enum PHOTO_MODE {
   Camera,
   Printer,
@@ -70,7 +56,7 @@ export const SOFTWARE_DESC = {
   'Universal Translator': `Translation module for non-common languages.`,
 } as const;
 
-export enum TAB {
+export enum PAI_TAB {
   System,
   Directive,
   Installed,

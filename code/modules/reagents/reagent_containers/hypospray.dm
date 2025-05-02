@@ -1,234 +1,361 @@
-////////////////////////////////////////////////////////////////////////////////
-/// HYPOSPRAY
-////////////////////////////////////////////////////////////////////////////////
-
 /obj/item/reagent_containers/hypospray
 	name = "hypospray"
-	desc = "The Moebius Medical department hypospray is a sterile, air-needle autoinjector for rapid administration of drugs to patients."
-	icon = 'icons/obj/syringe.dmi'
-	item_state = "hypo"
+	desc = "The DeForest Medical Corporation hypospray is a sterile, air-needle autoinjector for rapid administration of drugs to patients."
+	icon = 'icons/obj/medical/syringe.dmi'
+	inhand_icon_state = "hypo"
+	worn_icon_state = "hypo"
+	lefthand_file = 'icons/mob/inhands/equipment/medical_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/equipment/medical_righthand.dmi'
 	icon_state = "hypo"
 	amount_per_transfer_from_this = 5
-	unacidable = 1
-	volume = 40
-	possible_transfer_amounts = null
+	volume = 30
+	possible_transfer_amounts = list(5)
+	resistance_flags = ACID_PROOF
 	reagent_flags = OPENCONTAINER
-	slot_flags = SLOT_BELT
-	preloaded_reagents = list("bicaridine" = 40)
-	//spawn_blacklisted = TRUE//antag_item_targets?
+	slot_flags = ITEM_SLOT_BELT
+	var/ignore_flags = NONE
+	var/infinite = FALSE
+	/// If TRUE, won't play a noise when injecting.
+	var/stealthy = FALSE
+	/// If TRUE, the hypospray will be permanently unusable.
+	var/used_up = FALSE
 
-/obj/item/reagent_containers/hypospray/attack(mob/living/M as mob, mob/user as mob)
-	if(!reagents.total_volume)
-		to_chat(user, SPAN_WARNING("[src] is empty."))
-		return
-	if (!istype(M))
-		return
-	var/injtime //Injecting through a hardsuit takes long time due to needing to find a port.
-	// Handling errors and injection duration
-	var/mob/living/carbon/human/H = M
-	if(istype(H))
-		var/obj/item/clothing/suit/space/SS = H.get_equipped_item(slot_wear_suit)
-		var/obj/item/rig/RIG = H.get_equipped_item(slot_back)
-		if((istype(RIG) && RIG.suit_is_deployed()) || istype(SS))
-			injtime = 30
-			var/obj/item/organ/external/affected = H.get_organ(BP_CHEST)
-			if(BP_IS_ROBOTIC(affected))
-				to_chat(user, SPAN_WARNING("Injection port on [M]'s suit is refusing your [src]."))
-				// I think rig is advanced enough for this, and people will learn what causes this error
-				if(RIG)
-					playsound(src.loc, 'sound/machines/buzz-two.ogg', 50, 1, -3)
-					RIG.visible_message("\icon[RIG]\The [RIG] states \"Attention: User of this suit appears to be synthetic origin\".")
-				return
-		// check without message
-		else if(!H.can_inject(user, FALSE))
-			// lets check if user is easily fooled
-			var/obj/item/organ/external/affected = H.get_organ(user.targeted_organ)
-			if(BP_IS_LIFELIKE(affected) && user && user.stats.getStat(STAT_BIO) < STAT_LEVEL_BASIC)
-				if(M.reagents)
-					var/trans = reagents.remove_any(amount_per_transfer_from_this)
-					user.visible_message(SPAN_WARNING("[user] injects [M] with [src]!"), SPAN_WARNING("You inject [M] with [src]."))
-					to_chat(user, SPAN_NOTICE("[trans] units injected. [reagents.total_volume] units remaining in \the [src]."))
-				return
+/obj/item/reagent_containers/hypospray/attack_paw(mob/user, list/modifiers)
+	return attack_hand(user, modifiers)
+
+/obj/item/reagent_containers/hypospray/attack(mob/living/affected_mob, mob/user)
+	inject(affected_mob, user)
+
+///Handles all injection checks, injection and logging.
+/obj/item/reagent_containers/hypospray/proc/inject(mob/living/affected_mob, mob/user)
+	if(used_up)
+		to_chat(user, span_warning("[src] tip is broken and is now unusable!"))
+		return FALSE
+	if(!iscarbon(affected_mob))
+		return FALSE
+
+	//Always log attemped injects for admins
+	var/list/injected = list()
+	for(var/datum/reagent/injected_reagent in reagents.reagent_list)
+		injected += injected_reagent.name
+	var/contained = english_list(injected)
+	log_combat(user, affected_mob, "attempted to inject", src, "([contained])")
+
+	if(!used_up && (ignore_flags || affected_mob.try_inject(user, injection_flags = INJECT_TRY_SHOW_ERROR_MESSAGE))) // Ignore flag should be checked first or there will be an error message.
+		to_chat(affected_mob, span_warning("You feel a tiny prick!"))
+		to_chat(user, span_notice("You inject [affected_mob] with [src]."))
+		if(!stealthy)
+			playsound(affected_mob, 'sound/items/hypospray.ogg', 50, TRUE)
+		var/fraction = min(amount_per_transfer_from_this/reagents.total_volume, 1)
+
+
+		if(affected_mob.reagents)
+			var/trans = 0
+			if(!infinite)
+				trans = reagents.trans_to(affected_mob, amount_per_transfer_from_this, transferred_by = user, methods = INJECT)
 			else
-				// if he is not lets show him what actually happened
-				H.can_inject(user, TRUE)
-				return
-	else if(!M.can_inject(user, TRUE))
-		return
-	// handling injection duration on others
-	if(M != user)
-		user.setClickCooldown(DEFAULT_QUICK_COOLDOWN)
-		user.do_attack_animation(M)
-		if(injtime)
-			user.visible_message(SPAN_WARNING("[user] begins hunting for an injection port on [M]'s suit!"), SPAN_WARNING("You begins hunting for an injection port on [M]'s suit!"))
-			if(do_mob(user, M, injtime))
-				user.visible_message(SPAN_WARNING("[user] injects [M] with [src]!"), SPAN_WARNING("You inject [M] with [src]."))
-			else
-				return
-	// handling actual injection
-	// on this stage we are sure that everything is alright
-	var/contained = reagents.log_list()
-	var/trans = reagents.trans_to_mob(M, amount_per_transfer_from_this, CHEM_BLOOD)
-	admin_inject_log(user, M, src, contained, trans)
-	to_chat(user, SPAN_NOTICE("[trans] units injected. [reagents.total_volume] units remaining in \the [src]."))
-	return
+				reagents.expose(affected_mob, INJECT, fraction)
+				trans = reagents.copy_to(affected_mob, amount_per_transfer_from_this, copy_methods = INJECT)
+			to_chat(user, span_notice("[trans] unit\s injected. [reagents.total_volume] unit\s remaining in [src]."))
+			log_combat(user, affected_mob, "injected", src, "([contained])")
+		return TRUE
+	return FALSE
 
-/obj/item/reagent_containers/hypospray/verb/empty()
-	set name = "Empty Hypospray"
-	set category = "Object"
-	set src in usr
 
-	if (alert(usr, "Are you sure you want to empty that?", "Empty Bottle:", "Yes", "No") != "Yes")
-		return
-	if(isturf(usr.loc))
-		to_chat(usr, SPAN_NOTICE("You empty \the [src] onto the floor."))
-		reagents.splash(usr.loc, reagents.total_volume)
+/obj/item/reagent_containers/hypospray/cmo
+	volume = 60
+	possible_transfer_amounts = list(1,3,5)
+	list_reagents = list(/datum/reagent/medicine/omnizine = 30)
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | ACID_PROOF
 
-/obj/item/reagent_containers/hypospray/autoinjector
-	name = "autoinjector (inaprovaline)"
-	desc = "A rapid and safe way to administer small amounts of drugs by untrained or trained personnel."
-	w_class = ITEM_SIZE_TINY
-	slot_flags = SLOT_EARS
-	icon_state = "autoinjector"
-	item_state = "autoinjector"
-	amount_per_transfer_from_this = 5
-	matter = list(MATERIAL_STEEL = 1, MATERIAL_PLASTIC = 1)
-	reagent_flags = REFILLABLE | DRAINABLE | AMOUNT_VISIBLE
-	volume = 5
-	preloaded_reagents = list("inaprovaline" = 5)
-	spawn_blacklisted = TRUE
-	var/image/filling_overlay
+//combat
 
-/obj/item/reagent_containers/hypospray/autoinjector/on_reagent_change()
-	..()
-	if(reagents.total_volume <= 0) //Prevents autoinjectors from being refilled.
-		reagent_flags &= ~REFILLABLE
+/obj/item/reagent_containers/hypospray/combat
+	name = "combat stimulant injector"
+	desc = "A modified air-needle autoinjector, used by support operatives to quickly heal injuries in combat."
+	amount_per_transfer_from_this = 10
+	inhand_icon_state = "combat_hypo"
+	icon_state = "combat_hypo"
+	volume = 90
+	possible_transfer_amounts = list(5,10)
+	ignore_flags = 1 // So they can heal their comrades.
+	list_reagents = list(/datum/reagent/medicine/epinephrine = 30, /datum/reagent/medicine/omnizine = 30, /datum/reagent/medicine/leporazine = 15, /datum/reagent/medicine/atropine = 15)
 
-/obj/item/reagent_containers/hypospray/autoinjector/update_icon()
-	cut_overlays()
-	if(reagents && reagents.total_volume > 0)
-		icon_state = initial(icon_state)
-		filling_overlay = mutable_appearance('icons/obj/reagentfillings.dmi', "autoinjector")
-		filling_overlay.color = reagents.get_color()
-		add_overlay(filling_overlay)
+/obj/item/reagent_containers/hypospray/combat/empty
+	list_reagents = null
+
+/obj/item/reagent_containers/hypospray/combat/nanites
+	name = "experimental combat stimulant injector"
+	desc = "A modified air-needle autoinjector for use in combat situations. Prefilled with experimental medical nanites and a stimulant for rapid healing and a combat boost."
+	inhand_icon_state = "nanite_hypo"
+	icon_state = "nanite_hypo"
+	base_icon_state = "nanite_hypo"
+	volume = 100
+	list_reagents = list(/datum/reagent/medicine/adminordrazine/quantum_heal = 80, /datum/reagent/medicine/synaptizine = 20)
+
+/obj/item/reagent_containers/hypospray/combat/nanites/update_icon_state()
+	icon_state = "[base_icon_state][(reagents.total_volume > 0) ? null : 0]"
+	return ..()
+
+/obj/item/reagent_containers/hypospray/combat/heresypurge
+	name = "holy water piercing injector"
+	desc = "A modified air-needle autoinjector for use in combat situations. Prefilled with 5 doses of a holy water and pacifier mixture. Not for use on your teammates."
+	inhand_icon_state = "holy_hypo"
+	icon_state = "holy_hypo"
+	volume = 250
+	possible_transfer_amounts = list(25,50)
+	list_reagents = list(/datum/reagent/water/holywater = 150, /datum/reagent/peaceborg/tire = 50, /datum/reagent/peaceborg/confuse = 50)
+	amount_per_transfer_from_this = 50
+
+//MediPens
+
+/obj/item/reagent_containers/hypospray/medipen
+	name = "epinephrine medipen"
+	desc = "A rapid and safe way to stabilize patients in critical condition for personnel without advanced medical knowledge. Contains a powerful preservative that can delay decomposition when applied to a dead body, and stop the production of histamine during an allergic reaction."
+	icon_state = "medipen"
+	inhand_icon_state = "medipen"
+	worn_icon_state = "medipen"
+	base_icon_state = "medipen"
+	lefthand_file = 'icons/mob/inhands/equipment/medical_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/equipment/medical_righthand.dmi'
+	amount_per_transfer_from_this = 15
+	has_variable_transfer_amount = FALSE
+	volume = 15
+	ignore_flags = 1 //so you can medipen through spacesuits
+	reagent_flags = NONE
+	flags_1 = null
+	list_reagents = list(/datum/reagent/medicine/epinephrine = 10, /datum/reagent/toxin/formaldehyde = 3, /datum/reagent/medicine/coagulant = 2)
+	custom_price = PAYCHECK_CREW
+	custom_premium_price = PAYCHECK_COMMAND
+	var/label_examine = TRUE
+	var/label_text
+
+/obj/item/reagent_containers/hypospray/medipen/suicide_act(mob/living/carbon/user)
+	user.visible_message(span_suicide("[user] begins to choke on \the [src]! It looks like [user.p_theyre()] trying to commit suicide!"))
+	return OXYLOSS//ironic. he could save others from oxyloss, but not himself.
+
+/obj/item/reagent_containers/hypospray/medipen/inject(mob/living/affected_mob, mob/user)
+	. = ..()
+	if(. && !reagents.total_volume)
+		used_up = TRUE //Makes them useless afterwards
+		reagents.flags = NONE
+		update_appearance()
+
+/obj/item/reagent_containers/hypospray/medipen/attack_self(mob/user)
+	if(user.can_perform_action(src, FORBID_TELEKINESIS_REACH|ALLOW_RESTING))
+		inject(user, user)
+
+/obj/item/reagent_containers/hypospray/medipen/update_icon_state()
+	icon_state = "[base_icon_state][(reagents.total_volume > 0) ? null : 0]"
+	return ..()
+
+/obj/item/reagent_containers/hypospray/medipen/Initialize(mapload)
+	. = ..()
+	label_text = span_notice("There is a sticker pasted onto the side which reads, 'WARNING: This medipen contains [pretty_string_from_reagent_list(reagents.reagent_list, names_only = TRUE, join_text = ", ", final_and = TRUE, capitalize_names = TRUE)], do not use if allergic to any listed chemicals.")
+
+/obj/item/reagent_containers/hypospray/medipen/examine()
+	. = ..()
+	if (label_examine)
+		. += label_text
+	if(length(reagents?.reagent_list))
+		. += span_notice("It is loaded.")
 	else
-		if(reagents && reagents.total_volume <= 0)
-			filling_overlay = mutable_appearance('icons/obj/reagentfillings.dmi', "autoinjector0")
-			filling_overlay.color = reagents.get_color()
-			add_overlay(filling_overlay)
-			icon_state = "[initial(icon_state)]0"
+		. += span_notice("It is spent.")
 
-// TRADE
-/obj/item/reagent_containers/hypospray/autoinjector/antitoxin
-	name = "autoinjector (anti-toxin)"
-	preloaded_reagents = list("anti_toxin" = 5)
+/obj/item/reagent_containers/hypospray/medipen/stimpack //goliath kiting
+	name = "stimpack medipen"
+	desc = "A rapid way to stimulate your body's adrenaline, allowing for freer movement in restrictive armor."
+	icon_state = "stimpen"
+	inhand_icon_state = "stimpen"
+	base_icon_state = "stimpen"
+	volume = 20
+	amount_per_transfer_from_this = 20
+	list_reagents = list(/datum/reagent/medicine/ephedrine = 10, /datum/reagent/consumable/coffee = 10)
 
-/obj/item/reagent_containers/hypospray/autoinjector/tricordrazine
-	name = "autoinjector (tricordrazine)"
-	preloaded_reagents = list("tricordrazine" = 5)
+/obj/item/reagent_containers/hypospray/medipen/stimpack/traitor
+	desc = "A modified stimulants autoinjector for use in combat situations. Has a mild healing effect."
+	list_reagents = list(/datum/reagent/medicine/stimulants = 10, /datum/reagent/medicine/omnizine = 10)
 
-/obj/item/reagent_containers/hypospray/autoinjector/kelotane
-	name = "autoinjector (kelotane)"
-	preloaded_reagents = list("kelotane" = 5)
+/obj/item/reagent_containers/hypospray/medipen/stimulants
+	name = "stimulant medipen"
+	desc = "Contains a very large amount of an incredibly powerful stimulant, vastly increasing your movement speed and reducing stuns by a very large amount for around five minutes. Do not take if pregnant."
+	icon_state = "syndipen"
+	inhand_icon_state = "tbpen"
+	base_icon_state = "syndipen"
+	volume = 50
+	amount_per_transfer_from_this = 50
+	list_reagents = list(/datum/reagent/medicine/stimulants = 50)
 
-/obj/item/reagent_containers/hypospray/autoinjector/bicaridine
-	name = "autoinjector (bicaridine)"
-	preloaded_reagents = list("bicaridine" = 5)
+/obj/item/reagent_containers/hypospray/medipen/methamphetamine
+	name = "methamphetamine medipen"
+	volume = 24
+	amount_per_transfer_from_this = 24
+	desc = "Contains a relatively safe quantity of methamphetamine, along with mannitol to ensure that brain damage is kept at a minimum."
+	list_reagents = list(/datum/reagent/drug/methamphetamine = 10, /datum/reagent/medicine/mannitol = 14)
 
-/obj/item/reagent_containers/hypospray/autoinjector/antirad
-	name = "autoinjector (anti-rad)"
-	preloaded_reagents = list("hyronalin" = 5)
+/obj/item/reagent_containers/hypospray/medipen/morphine
+	name = "morphine medipen"
+	desc = "A rapid way to get you out of a tight situation and fast! You'll feel rather drowsy, though."
+	icon_state = "morphen"
+	inhand_icon_state = "morphen"
+	base_icon_state = "morphen"
+	list_reagents = list(/datum/reagent/medicine/morphine = 10)
 
-/obj/item/reagent_containers/hypospray/autoinjector/dexalin
-	name = "autoinjector (dexalin)"
-	preloaded_reagents = list("dexalin" = 5)
+/obj/item/reagent_containers/hypospray/medipen/oxandrolone
+	name = "oxandrolone medipen"
+	desc = "An autoinjector containing oxandrolone, used to treat severe burns."
+	icon_state = "oxapen"
+	inhand_icon_state = "oxapen"
+	base_icon_state = "oxapen"
+	list_reagents = list(/datum/reagent/medicine/oxandrolone = 10)
 
-/obj/item/reagent_containers/hypospray/autoinjector/spaceacillin
-	name = "autoinjector (spaceacillin)"
-	preloaded_reagents = list("spaceacillin" = 5)
+/obj/item/reagent_containers/hypospray/medipen/penacid
+	name = "pentetic acid medipen"
+	desc = "An autoinjector containing pentetic acid, used to reduce high levels of radiations and moderate toxins."
+	icon_state = "penacid"
+	inhand_icon_state = "penacid"
+	base_icon_state = "penacid"
+	list_reagents = list(/datum/reagent/medicine/pen_acid = 10)
 
-/obj/item/reagent_containers/hypospray/autoinjector/tramadol
-	name = "autoinjector (tramadol)"
-	preloaded_reagents = list("tramadol" = 5)
+/obj/item/reagent_containers/hypospray/medipen/salacid
+	name = "salicylic acid medipen"
+	desc = "An autoinjector containing salicylic acid, used to treat severe brute damage."
+	icon_state = "salacid"
+	inhand_icon_state = "salacid"
+	base_icon_state = "salacid"
+	list_reagents = list(/datum/reagent/medicine/sal_acid = 10)
 
-/obj/item/reagent_containers/hypospray/autoinjector/polystem
-	name = "autoinjector (polystem)"
-	preloaded_reagents = list("polystem" = 5)
+/obj/item/reagent_containers/hypospray/medipen/salbutamol
+	name = "salbutamol medipen"
+	desc = "An autoinjector containing salbutamol, used to heal oxygen damage quickly."
+	icon_state = "salpen"
+	inhand_icon_state = "salpen"
+	base_icon_state = "salpen"
+	list_reagents = list(/datum/reagent/medicine/salbutamol = 10)
 
-/obj/item/reagent_containers/hypospray/autoinjector/meralyne
-	name = "autoinjector (meralyne)"
-	preloaded_reagents = list("meralyne" = 5)
+/obj/item/reagent_containers/hypospray/medipen/tuberculosiscure
+	name = "BVAK autoinjector"
+	desc = "Bio Virus Antidote Kit autoinjector. Has a two use system for yourself, and someone else. Inject when infected."
+	icon_state = "tbpen"
+	inhand_icon_state = "tbpen"
+	base_icon_state = "tbpen"
+	volume = 20
+	amount_per_transfer_from_this = 10
+	list_reagents = list(/datum/reagent/vaccine/fungal_tb = 20)
 
-/obj/item/reagent_containers/hypospray/autoinjector/dermaline
-	name = "autoinjector (dermaline)"
-	preloaded_reagents = list("dermaline" = 5)
+/obj/item/reagent_containers/hypospray/medipen/tuberculosiscure/update_icon_state()
+	. = ..()
+	if(reagents.total_volume >= volume)
+		icon_state = base_icon_state
+		return
+	icon_state = "[base_icon_state][(reagents.total_volume > 0) ? 1 : 0]"
 
-/obj/item/reagent_containers/hypospray/autoinjector/dexalinplus
-	name = "autoinjector (dexalin plus)"
-	preloaded_reagents = list("dexalinp" = 5)
+/obj/item/reagent_containers/hypospray/medipen/survival
+	name = "survival emergency medipen"
+	desc = "A medipen for surviving in the harsh environments, heals most common damage sources. WARNING: May cause organ damage."
+	icon_state = "stimpen"
+	inhand_icon_state = "stimpen"
+	base_icon_state = "stimpen"
+	volume = 30
+	amount_per_transfer_from_this = 30
+	list_reagents = list( /datum/reagent/medicine/epinephrine = 8, /datum/reagent/medicine/c2/aiuri = 8, /datum/reagent/medicine/c2/libital = 8, /datum/reagent/medicine/leporazine = 6)
 
-/obj/item/reagent_containers/hypospray/autoinjector/oxycodone
-	name = "autoinjector (oxycodone)"
-	preloaded_reagents = list("oxycodone" = 5)
+/obj/item/reagent_containers/hypospray/medipen/survival/inject(mob/living/affected_mob, mob/user)
+	if(lavaland_equipment_pressure_check(get_turf(user)))
+		amount_per_transfer_from_this = initial(amount_per_transfer_from_this)
+		return ..()
 
-/obj/item/reagent_containers/hypospray/autoinjector/ryetalyn
-	name = "autoinjector (ryetalyn)"
-	preloaded_reagents = list("ryetalyn" = 5)
+	if(DOING_INTERACTION(user, DOAFTER_SOURCE_SURVIVALPEN))
+		to_chat(user,span_notice("You are too busy to use \the [src]!"))
+		return
 
-/obj/item/reagent_containers/hypospray/autoinjector/hyperzine
-	name = "autoinjector (hyperzine)"
-	preloaded_reagents = list("hyperzine" = 5)
+	to_chat(user,span_notice("You start manually releasing the low-pressure gauge..."))
+	if(!do_after(user, 10 SECONDS, affected_mob, interaction_key = DOAFTER_SOURCE_SURVIVALPEN))
+		return
 
-/obj/item/reagent_containers/hypospray/autoinjector/drugs
-	name = "autoinjector (drugs)"
-	preloaded_reagents = list("space_drugs" = 5)
+	amount_per_transfer_from_this = initial(amount_per_transfer_from_this) * 0.5
+	return ..()
 
-/obj/item/reagent_containers/hypospray/autoinjector/quickhealbrute
-	name = "autoinjector (brute-aid)"
-	preloaded_reagents = list("bicaridine" = 1, "meralyne" = 1, "seligitillin" = 1, "tricordrazine" = 1, "polystem" = 1)
-	price_tag = 100
 
-/obj/item/reagent_containers/hypospray/autoinjector/quickhealburn
-	name = "autoinjector (burn-aid)"
-	preloaded_reagents = list("kelotane" = 1.25, "dermaline" = 1.25, "tricordrazine" = 1.25, "polystem" = 1.25)
-	price_tag = 100
+/obj/item/reagent_containers/hypospray/medipen/survival/luxury
+	name = "luxury medipen"
+	desc = "Cutting edge bluespace technology allowed Nanotrasen to compact 60u of volume into a single medipen. Contains rare and powerful chemicals used to aid in exploration of very hard environments. WARNING: DO NOT MIX WITH EPINEPHRINE OR ATROPINE."
+	icon_state = "luxpen"
+	inhand_icon_state = "atropen"
+	base_icon_state = "luxpen"
+	volume = 60
+	amount_per_transfer_from_this = 60
+	list_reagents = list(/datum/reagent/medicine/salbutamol = 10, /datum/reagent/medicine/c2/penthrite = 10, /datum/reagent/medicine/oxandrolone = 10, /datum/reagent/medicine/sal_acid = 10 ,/datum/reagent/medicine/omnizine = 10 ,/datum/reagent/medicine/leporazine = 10)
 
-/obj/item/reagent_containers/hypospray/autoinjector/bloodclot
-	name = "autoinjector (blood clotting, type 1)"
-	preloaded_reagents = list("thrombopoietin" = 5)
+/obj/item/reagent_containers/hypospray/medipen/atropine
+	name = "atropine autoinjector"
+	desc = "A rapid way to save a person from a critical injury state!"
+	icon_state = "atropen"
+	inhand_icon_state = "atropen"
+	base_icon_state = "atropen"
+	list_reagents = list(/datum/reagent/medicine/atropine = 10)
 
-/obj/item/reagent_containers/hypospray/autoinjector/bloodclot_alt
-	name = "autoinjector (blood clotting, type 2)"
-	preloaded_reagents = list("thromboxane" = 5)
+/obj/item/reagent_containers/hypospray/medipen/snail
+	name = "snail shot"
+	desc = "All-purpose snail medicine! Do not use on non-snails!"
+	icon_state = "snail"
+	inhand_icon_state = "snail"
+	base_icon_state = "snail"
+	list_reagents = list(/datum/reagent/snail = 10)
+	label_examine = FALSE
 
-/obj/item/reagent_containers/hypospray/autoinjector/bloodrestore
-	name = "autoinjector (blood restoration, type 1)"
-	preloaded_reagents = list("aldosterone" = 5)
+/obj/item/reagent_containers/hypospray/medipen/magillitis
+	name = "experimental autoinjector"
+	desc = "A custom-frame needle injector with a small single-use reservoir, containing an experimental serum. Unlike the more common medipen frame, it cannot pierce through protective armor or space suits, nor can the chemical inside be extracted."
+	icon_state = "gorillapen"
+	inhand_icon_state = "gorillapen"
+	base_icon_state = "gorillapen"
+	volume = 5
+	ignore_flags = 0
+	list_reagents = list(/datum/reagent/magillitis = 5)
 
-/obj/item/reagent_containers/hypospray/autoinjector/bloodrestore_alt
-	name = "autoinjector (blood restoration, type 2)"
-	preloaded_reagents = list("erythropoietin" = 5)
+/obj/item/reagent_containers/hypospray/medipen/pumpup
+	name = "maintenance pump-up"
+	desc = "A ghetto looking autoinjector filled with a cheap adrenaline shot... Great for shrugging off the effects of stunbatons."
+	volume = 15
+	amount_per_transfer_from_this = 15
+	list_reagents = list(/datum/reagent/drug/pumpup = 15)
+	icon_state = "maintenance"
+	base_icon_state = "maintenance"
+	label_examine = FALSE
 
-/obj/item/reagent_containers/hypospray/autoinjector/painkiller
-	name = "autoinjector (painkiller, type 1)"
-	preloaded_reagents = list("enkephalin" = 5)
+/obj/item/reagent_containers/hypospray/medipen/ekit
+	name = "emergency first-aid autoinjector"
+	desc = "An epinephrine medipen with extra coagulant and antibiotics to help stabilize bad cuts and burns."
+	icon_state = "firstaid"
+	base_icon_state = "firstaid"
+	volume = 15
+	amount_per_transfer_from_this = 15
+	list_reagents = list(/datum/reagent/medicine/epinephrine = 12, /datum/reagent/medicine/coagulant = 2.5, /datum/reagent/medicine/spaceacillin = 0.5)
 
-/obj/item/reagent_containers/hypospray/autoinjector/painkiller_alt
-	name = "autoinjector (painkiller, type 2)"
-	preloaded_reagents = list("endomorphin" = 5)
+/obj/item/reagent_containers/hypospray/medipen/blood_loss
+	name = "hypovolemic-response autoinjector"
+	desc = "A medipen designed to stabilize and rapidly reverse severe bloodloss."
+	icon_state = "hypovolemic"
+	base_icon_state = "hypovolemic"
+	volume = 15
+	amount_per_transfer_from_this = 15
+	list_reagents = list(/datum/reagent/medicine/epinephrine = 5, /datum/reagent/medicine/coagulant = 2.5, /datum/reagent/iron = 3.5, /datum/reagent/medicine/salglu_solution = 4)
 
-/obj/item/reagent_containers/hypospray/autoinjector/speedboost
-	name = "autoinjector (agility, type 1)"
-	preloaded_reagents = list("osteocalcin" = 5)
+/obj/item/reagent_containers/hypospray/medipen/mutadone
+	name = "mutadone autoinjector"
+	desc = "A mutadone medipen to assist in curing genetic errors in one single injector."
+	icon_state = "penacid"
+	inhand_icon_state = "penacid"
+	base_icon_state = "penacid"
+	volume = 15
+	amount_per_transfer_from_this = 15
+	list_reagents = list(/datum/reagent/medicine/mutadone = 15)
 
-/obj/item/reagent_containers/hypospray/autoinjector/speedboost_alt
-	name = "autoinjector (agility, type 2)"
-	preloaded_reagents = list("noradrenaline" = 5)
-
-/obj/item/reagent_containers/hypospray/autoinjector/oxygenation
-	name = "autoinjector (oxygenation, type 1)"
-	preloaded_reagents = list("dexterone" = 5)
-
-/obj/item/reagent_containers/hypospray/autoinjector/oxygenation_alt
-	name = "autoinjector (oxygenation, type 2)"
-	preloaded_reagents = list("vasotriene" = 5)
+/obj/item/reagent_containers/hypospray/medipen/penthrite
+	name = "penthrite autoinjector"
+	desc = "Experimental heart medication."
+	icon_state = "atropen"
+	inhand_icon_state = "atropen"
+	base_icon_state = "atropen"
+	list_reagents = list(/datum/reagent/medicine/c2/penthrite = 10)

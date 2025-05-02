@@ -1,713 +1,580 @@
-/proc/issmall(A)
-	if(A && isliving(A))
-		var/mob/living/L = A
-		return L.mob_size <= MOB_SMALL
-	return 0
+// see _DEFINES/is_helpers.dm for mob type checks
 
-/mob/living/proc/isSynthetic()
-	return 0
+///Find the mob at the bottom of a buckle chain
+/mob/proc/lowest_buckled_mob()
+	. = src
+	if(buckled && ismob(buckled))
+		var/mob/Buckled = buckled
+		. = Buckled.lowest_buckled_mob()
 
-/mob/living/carbon/human/isSynthetic()
-	// If they are 100% robotic, they count as synthetic.
-	for(var/obj/item/organ/external/E in organs)
-		if(!BP_IS_ROBOTIC(E))
-			return FALSE
-	return TRUE
-
-/mob/living/silicon/isSynthetic()
-	return 1
-
-/mob/proc/isMonkey()
-	return 0
-
-/mob/living/carbon/human/isMonkey()
-	return istype(species, /datum/species/monkey)
-
-proc/isdeaf(A)
-//	if(isliving(A))
-//		var/mob/living/M = A
-//		return (M.sdisabilities & DEAF) || M.ear_deaf
-	return 0
-
-/proc/hasorgans(A) // Fucking really??
-	return ishuman(A)
-
-/proc/iscuffed(A)
-	if(iscarbon(A))
-		var/mob/living/carbon/C = A
-		if(C.handcuffed)
-			return 1
-	return 0
-
-/proc/hassensorlevel(A, var/level)
-	var/mob/living/carbon/human/H = A
-	if(istype(H) && istype(H.w_uniform, /obj/item/clothing/under))
-		var/obj/item/clothing/under/U = H.w_uniform
-		return U.sensor_mode >= level
-	return 0
-
-/proc/getsensorlevel(A)
-	var/mob/living/carbon/human/H = A
-	if(istype(H) && istype(H.w_uniform, /obj/item/clothing/under))
-		var/obj/item/clothing/under/U = H.w_uniform
-		return U.sensor_mode
-	return SUIT_SENSOR_OFF
-
-
-/proc/is_admin(var/mob/user)
-	return check_rights(R_ADMIN, 0, user) != 0
-
-
-/proc/hsl2rgb(h, s, l)
-	return //TODO: Implement
-
-/*
-	Miss Chance
-*/
-
-//TODO: Integrate defence zones and targeting body parts with the actual organ system, move these into organ definitions.
-
-//The base miss chance for the different defence zones
-var/list/global/base_miss_chance = list(
-	BP_HEAD = 5,
-	BP_CHEST = 2,
-	BP_GROIN = 2,
-	BP_L_LEG  = 3,
-	BP_R_LEG = 3,
-	BP_L_ARM = 3,
-	BP_R_ARM = 3
-	)
-
-//Used to weight organs when an organ is hit randomly (i.e. not a directed, aimed attack).
-//Also used to weight the protection value that armour provides for covering that body part when calculating protection from full-body effects.
-var/list/global/organ_rel_size = list(
-	BP_HEAD = 20,
-	BP_CHEST = 70,
-	BP_GROIN = 30,
-	BP_L_LEG  = 25,
-	BP_R_LEG = 25,
-	BP_L_ARM = 25,
-	BP_R_ARM = 25
-)
-
+///Convert a PRECISE ZONE into the BODY_ZONE
 /proc/check_zone(zone)
-	if(!zone)	return BP_CHEST
+	if(!zone)
+		return BODY_ZONE_CHEST
 	switch(zone)
-		if(BP_EYES)
-			zone = BP_HEAD
-		if(BP_MOUTH)
-			zone = BP_HEAD
+		if(BODY_ZONE_PRECISE_EYES)
+			zone = BODY_ZONE_HEAD
+		if(BODY_ZONE_PRECISE_MOUTH)
+			zone = BODY_ZONE_HEAD
+		if(BODY_ZONE_PRECISE_L_HAND)
+			zone = BODY_ZONE_L_ARM
+		if(BODY_ZONE_PRECISE_R_HAND)
+			zone = BODY_ZONE_R_ARM
+		if(BODY_ZONE_PRECISE_L_FOOT)
+			zone = BODY_ZONE_L_LEG
+		if(BODY_ZONE_PRECISE_R_FOOT)
+			zone = BODY_ZONE_R_LEG
+		if(BODY_ZONE_PRECISE_GROIN)
+			zone = BODY_ZONE_CHEST
 	return zone
 
-// Returns zone with a certain probability. If the probability fails, or no zone is specified, then a random body part is chosen.
-// Do not use this if someone is intentionally trying to hit a specific body part.
-/proc/ran_zone(zone, probability)
-	if (zone)
+/**
+ * Return the zone or randomly, another valid zone
+ *
+ * probability controls the chance it chooses the passed in zone, or another random zone
+ * defaults to 80
+ */
+/proc/ran_zone(zone, probability = 80, list/weighted_list)
+	if(prob(probability))
 		zone = check_zone(zone)
-		if (prob(probability))
-			return zone
-
-	var/ran_zone = zone
-	while (ran_zone == zone)
-		ran_zone = pick (
-			organ_rel_size[BP_HEAD]; BP_HEAD,
-			organ_rel_size[BP_CHEST]; BP_CHEST,
-			organ_rel_size[BP_GROIN]; BP_GROIN,
-			organ_rel_size[BP_L_ARM]; BP_L_ARM,
-			organ_rel_size[BP_R_ARM]; BP_R_ARM,
-			organ_rel_size[BP_L_LEG ]; BP_L_LEG ,
-			organ_rel_size[BP_R_LEG]; BP_R_LEG,
-		)
-
-	return ran_zone
-
-//Replaces some of the characters with *, used in whispers. pr = probability of no star.
-//Will try to preserve HTML formatting. re_encode controls whether the returned text is HTML encoded outside tags.
-/proc/stars(n, pr = 25, re_encode = 1)
-	if (pr < 0)
-		return null
-	else if (pr >= 100)
-		return n
-
-	var/intag = 0
-	var/block = list()
-	. = list()
-	for(var/i = 1, i <= length(n), i++)
-		var/char = copytext_char(n, i, i+1)
-		if(!intag && (char == "<"))
-			intag = 1
-			. += stars_no_html(JOINTEXT(block), pr, re_encode) //stars added here
-			block = list()
-		block += char
-		if(intag && (char == ">"))
-			intag = 0
-			. += block //We don't mess up html tags with stars
-			block = list()
-	. += (intag ? block : stars_no_html(JOINTEXT(block), pr, re_encode))
-	. = JOINTEXT(.)
+	else
+		zone = pick_weight(weighted_list ? weighted_list : list(BODY_ZONE_HEAD = 1, BODY_ZONE_CHEST = 1, BODY_ZONE_L_ARM = 4, BODY_ZONE_R_ARM = 4, BODY_ZONE_L_LEG = 4, BODY_ZONE_R_LEG = 4))
+	return zone
 
 
-//Ingnores the possibility of breaking tags.
-/proc/stars_no_html(text, pr, re_encode)
-	text = html_decode(text) //We don't want to screw up escaped characters
-	. = list()
-	for(var/i = 1, i <= length(text), i++)
-		var/char = copytext_char(text, i, i+1)
-		if(char == " " || prob(pr))
+/**
+ * More or less ran_zone, but only returns bodyzones that the mob /actually/ has.
+ *
+ * * blacklisted_parts - allows you to specify zones that will not be chosen. eg: list(BODY_ZONE_CHEST, BODY_ZONE_R_LEG)
+ * * * !!!! blacklisting BODY_ZONE_CHEST is really risky since it's the only bodypart guarunteed to ALWAYS exists  !!!!
+ * * * !!!! Only do that if you're REALLY CERTAIN they have limbs, otherwise we'll CRASH() !!!!
+ *
+ * * ran_zone has a base prob(80) to return the base_zone (or if null, BODY_ZONE_CHEST) vs something in our generated list of limbs.
+ * * this probability is overriden when either blacklisted_parts contains BODY_ZONE_CHEST and we aren't passed a base_zone (since the default fallback for ran_zone would be the chest in that scenario), or if even_weights is enabled.
+ * * you can also manually adjust this probability by altering base_probability
+ *
+ * * even_weights - ran_zone has a 40% chance (after the prob(80) mentioned above) of picking a limb, vs the torso & head which have an additional 10% chance.
+ * * Setting even_weight to TRUE will make it just a straight up pick() between all possible bodyparts.
+ *
+ */
+/mob/proc/get_random_valid_zone(base_zone, base_probability = 80, list/blacklisted_parts, even_weights, bypass_warning)
+	return BODY_ZONE_CHEST //even though they don't really have a chest, let's just pass the default of check_zone to be safe.
+
+/mob/living/carbon/get_random_valid_zone(base_zone, base_probability = 80, list/blacklisted_parts, even_weights, bypass_warning)
+	var/list/limbs = list()
+	for(var/obj/item/bodypart/part as anything in bodyparts)
+		var/limb_zone = part.body_zone //cache the zone since we're gonna check it a ton.
+		if(limb_zone in blacklisted_parts)
+			continue
+		if(even_weights)
+			limbs[limb_zone] = 1
+			continue
+		if(limb_zone == BODY_ZONE_CHEST || limb_zone == BODY_ZONE_HEAD)
+			limbs[limb_zone] = 1
+		else
+			limbs[limb_zone] = 4
+
+	if(base_zone && !(check_zone(base_zone) in limbs))
+		base_zone = null //check if the passed zone is infact valid
+
+	var/chest_blacklisted
+	if((BODY_ZONE_CHEST in blacklisted_parts))
+		chest_blacklisted = TRUE
+		if(bypass_warning && !limbs.len)
+			CRASH("limbs is empty and the chest is blacklisted. this may not be intended!")
+	return (((chest_blacklisted && !base_zone) || even_weights) ? pick_weight(limbs) : ran_zone(base_zone, base_probability, limbs))
+
+///Would this zone be above the neck
+/proc/above_neck(zone)
+	var/list/zones = list(BODY_ZONE_HEAD, BODY_ZONE_PRECISE_MOUTH, BODY_ZONE_PRECISE_EYES)
+	if(zones.Find(zone))
+		return TRUE
+	else
+		return FALSE
+
+/**
+ * Convert random parts of a passed in message to stars
+ *
+ * * phrase - the string to convert
+ * * probability - probability any character gets changed
+ *
+ * This proc is dangerously laggy, avoid it or die
+ */
+/proc/stars(phrase, probability = 25)
+	if(probability <= 0)
+		return phrase
+	phrase = html_decode(phrase)
+	var/leng = length(phrase)
+	. = ""
+	var/char = ""
+	for(var/i = 1, i <= leng, i += length(char))
+		char = phrase[i]
+		if(char == " " || !prob(probability))
 			. += char
 		else
 			. += "*"
-	. = JOINTEXT(.)
-	if(re_encode)
-		. = html_encode(.)
+	return sanitize(.)
 
-/proc/slur(phrase)
-	phrase = html_decode(phrase)
-	var/leng=length(phrase)
-	var/counter=length(phrase)
-	var/newphrase=""
-	var/newletter=""
-	while(counter>=1)
-		newletter=copytext_char(phrase,(leng-counter)+1,(leng-counter)+2)
-		if(rand(1,3)==3)
-			if(lowertext(newletter)=="o")	newletter="u"
-			if(lowertext(newletter)=="s")	newletter="ch"
-			if(lowertext(newletter)=="a")	newletter="ah"
-			if(lowertext(newletter)=="c")	newletter="k"
-		switch(rand(1,9))
-			if(1,3,5,8)	newletter="[lowertext(newletter)]"
-			if(2,4,6,9)	newletter="[uppertext(newletter)]"
-			if(7)	newletter+="'"
-			//if(9,10)	newletter="<b>[newletter]</b>"
-			//if(11,12)	newletter="<big>[newletter]</big>"
-			//if(13)	newletter="<small>[newletter]</small>"
-		newphrase+="[newletter]";counter-=1
-	return html_encode(newphrase)
-
-/proc/stutter(n)
-	var/te = html_decode(n)
-	n = length(n)//length of the entire word
-	var/list/t = list()
-	var/p = 1//1 is the start of any word
-	while(p <= n)//while P, which starts at 1 is less or equal to N which is the length.
-		var/n_letter = copytext_char(te, p, p + 1)//copies text from a certain distance. In this case, only one letter at a time.
-		if (prob(80) && (lowertext(n_letter) in LIST_OF_CONSONANT|LIST_OF_CONSONANT_RU))
-			if (prob(10))
-				n_letter = text("[n_letter]-[n_letter]-[n_letter]-[n_letter]")//replaces the current letter with this instead.
-			else
-				if (prob(20))
-					n_letter = text("[n_letter]-[n_letter]-[n_letter]")
-				else
-					if (prob(5))
-						n_letter = null
-					else
-						n_letter = text("[n_letter]-[n_letter]")
-		t += n_letter //since the above is ran through for each letter, the text just adds up back to the original word.
-		p++//for each letter p is increased to find where the next letter will be.
-	return sanitize(jointext(t, null))
-
-/proc/Gibberish(t, p)//t is the inputted message, and any value higher than 70 for p will cause letters to be replaced instead of added
-	/* Turn text into complete gibberish! */
-	var/returntext = ""
-	for(var/i = 1, i <= length(t), i++)
-
-		var/letter = copytext_char(t, i, i+1)
-		if(prob(50))
-			if(p >= 70)
-				letter = ""
-
-			for(var/j = 1, j <= rand(0, 2), j++)
-				letter += pick("#","@","*","&","%","$","/", "<", ">", ";","*","*","*","*","*","*","*")
-
-		returntext += letter
-
-	return returntext
-
-
-/proc/ninjaspeak(n)
-/*
-The difference with stutter is that this proc can stutter more than 1 letter
-The issue here is that anything that does not have a space is treated as one word (in many instances). For instance, "LOOKING," is a word, including the comma.
-It's fairly easy to fix if dealing with single letters but not so much with compounds of letters./N
+/**
+ * For when you're only able to speak a limited amount of words
+ * phrase - the string to convert
+ * definitive_limit - the amount of words to limit the phrase to, optional
 */
-	var/te = html_decode(n)
-	var/t = ""
-	n = length(n)
-	var/p = 1
-	while(p <= n)
-		var/n_letter
-		var/n_mod = rand(1,4)
-		if(p+n_mod>n+1)
-			n_letter = copytext_char(te, p, n+1)
-		else
-			n_letter = copytext_char(te, p, p+n_mod)
-		if (prob(50))
-			if (prob(30))
-				n_letter = text("[n_letter]-[n_letter]-[n_letter]")
-			else
-				n_letter = text("[n_letter]-[n_letter]")
-		else
-			n_letter = text("[n_letter]")
-		t = text("[t][n_letter]")
-		p=p+n_mod
-	return sanitize(t)
-
-
-
-
-
-/proc/findname(msg)
-	for(var/mob/M in SSmobs.mob_list | SShumans.mob_list)
-		if (M.real_name == text("[msg]"))
-			return 1
-	return 0
-
-
-/mob/proc/abiotic(var/full_body = 0)
-	if(full_body && ((src.l_hand && !( src.l_hand.abstract )) || (src.r_hand && !( src.r_hand.abstract )) || (src.back || src.wear_mask)))
-		return 1
-
-	if((src.l_hand && !( src.l_hand.abstract )) || (src.r_hand && !( src.r_hand.abstract )))
-		return 1
-
-	return 0
-
-//converts intent-strings into numbers and back
-var/list/intents = list(I_HELP,I_DISARM,I_GRAB,I_HURT)
-/proc/intent_numeric(argument)
-	if(istext(argument))
-		switch(argument)
-			if(I_HELP)		return 0
-			if(I_DISARM)	return 1
-			if(I_GRAB)		return 2
-			else			return 3
+/proc/stifled(phrase, definitive_limit = null)
+	phrase = html_decode(phrase)
+	var/num_words = 0
+	var/words = splittext(phrase, " ")
+	if(definitive_limit > 0) // in case someone passes a negative
+		num_words = min(definitive_limit, length(words))
 	else
-		switch(argument)
-			if(0)			return I_HELP
-			if(1)			return I_DISARM
-			if(2)			return I_GRAB
-			else			return I_HURT
-
-//change a mob's act-intent. Input the intent as a string such as "help" or use "right"/"left
-/mob/verb/a_intent_change(input as text)
-	set name = "a-intent"
-	set hidden = 1
-
-	if(ishuman(src) || isbrain(src) || isslime(src))
-		switch(input)
-			if(I_HELP,I_DISARM,I_GRAB,I_HURT)
-				a_intent = input
-			if("right")
-				a_intent = intent_numeric((intent_numeric(a_intent)+1) % 4)
-			if("left")
-				a_intent = intent_numeric((intent_numeric(a_intent)+3) % 4)
-
-	else if(isrobot(src))
-		if(a_intent == I_HELP)
-			a_intent = I_HURT
+		num_words = min(rand(3, 5), length(words))
+	. = ""
+	for(var/i = 1, i <= num_words, i++)
+		if(num_words == i)
+			. += words[i] + "..."
 		else
-			a_intent = I_HELP
+			. += words[i] + " ... "
+	return sanitize(.)
 
-	if (HUDneed.Find("intent"))
-		var/obj/screen/intent/I = HUDneed["intent"]
-		I.update_icon()
+/**
+ * Turn text into complete gibberish!
+ *
+ * text is the inputted message, replace_characters will cause original letters to be replaced and chance are the odds that a character gets modified.
+ */
+/proc/Gibberish(text, replace_characters = FALSE, chance = 50)
+	text = html_decode(text)
+	. = ""
+	var/rawchar = ""
+	var/letter = ""
+	var/lentext = length(text)
+	for(var/i = 1, i <= lentext, i += length(rawchar))
+		rawchar = letter = text[i]
+		if(prob(chance))
+			if(replace_characters)
+				letter = ""
+			for(var/j in 1 to rand(0, 2))
+				letter += pick("#", "@", "*", "&", "%", "$", "/", "<", ">", ";", "*", "*", "*", "*", "*", "*", "*")
+		. += letter
+	return sanitize(.)
 
+#define TILES_PER_SECOND 0.7
+///Shake the camera of the person viewing the mob SO REAL!
+///Takes the mob to shake, the time span to shake for, and the amount of tiles we're allowed to shake by in tiles
+///Duration isn't taken as a strict limit, since we don't trust our coders to not make things feel shitty. So it's more like a soft cap.
+/proc/shake_camera(mob/M, duration, strength=1)
+	if(!M || !M.client || duration < 1)
+		return
+	var/client/C = M.client
+	var/oldx = C.pixel_x
+	var/oldy = C.pixel_y
+	var/max_x = strength*ICON_SIZE_X
+	var/max_y = strength*ICON_SIZE_Y
+	var/min_x = -(strength*ICON_SIZE_X)
+	var/min_y = -(strength*ICON_SIZE_Y)
 
-proc/is_blind(A)
-	if(iscarbon(A))
-		var/mob/living/carbon/C = A
-		if(C.sdisabilities & BLIND || C.blinded)
-			return 1
+	if(C.prefs?.read_preference(/datum/preference/toggle/screen_shake_darken))
+		var/type = /atom/movable/screen/fullscreen/flash/black
+
+		M.overlay_fullscreen("flash", type)
+		addtimer(CALLBACK(M, TYPE_PROC_REF(/mob, clear_fullscreen), "flash", 3 SECONDS), 3 SECONDS)
+
+	//How much time to allot for each pixel moved
+	var/time_scalar = (1 / ICON_SIZE_ALL) * TILES_PER_SECOND
+	var/last_x = oldx
+	var/last_y = oldy
+
+	var/time_spent = 0
+	while(time_spent < duration)
+		//Get a random pos in our box
+		var/x_pos = rand(min_x, max_x) + oldx
+		var/y_pos = rand(min_y, max_y) + oldy
+
+		//We take the smaller of our two distances so things still have the propencity to feel somewhat jerky
+		var/time = round(max(min(abs(last_x - x_pos), abs(last_y - y_pos)) * time_scalar, 1))
+
+		if (time_spent == 0)
+			animate(C, pixel_x=x_pos, pixel_y=y_pos, time=time)
+		else
+			animate(pixel_x=x_pos, pixel_y=y_pos, time=time)
+
+		last_x = x_pos
+		last_y = y_pos
+		//We go based on time spent, so there is a chance we'll overshoot our duration. Don't care
+		time_spent += time
+
+	animate(pixel_x=oldx, pixel_y=oldy, time=3)
+
+#undef TILES_PER_SECOND
+
+///Find if the message has the real name of any user mob in the mob_list
+/proc/findname(msg)
+	if(!istext(msg))
+		msg = "[msg]"
+	for(var/i in GLOB.mob_list)
+		var/mob/M = i
+		if(M.real_name == msg)
+			return M
 	return 0
 
-/proc/broadcast_security_hud_message(var/message, var/broadcast_source)
-	broadcast_hud_message(message, broadcast_source, sec_hud_users, /obj/item/clothing/glasses/hud/security)
+///Returns a mob's real name between brackets. Useful when you want to display a mob's name alongside their real name
+/mob/proc/get_realname_string()
+	if(real_name && real_name != name)
+		return " \[[real_name]\]"
+	return ""
 
-/proc/broadcast_medical_hud_message(var/message, var/broadcast_source)
-	broadcast_hud_message(message, broadcast_source, med_hud_users, /obj/item/clothing/glasses/hud/health)
-
-/proc/broadcast_hud_message(var/message, var/broadcast_source, var/list/targets, var/icon)
-	var/turf/sourceturf = get_turf(broadcast_source)
-	for(var/mob/M in targets)
-		var/turf/targetturf = get_turf(M)
-		if((targetturf.z == sourceturf.z))
-			M.show_message("<span class='info'>\icon[icon] [message]</span>", 1)
-
-/proc/mobs_in_area(var/area/A)
-	var/list/mobs = new
-	for(var/mob/living/M in SSmobs.mob_list | SShumans.mob_list)
-		if(get_area(M) == A)
-			mobs += M
-	return mobs
-
-//Direct dead say used both by emote and say
-//It is somewhat messy. I don't know what to do.
-//I know you can't see the change, but I rewrote the name code. It is significantly less messy now
-/proc/say_dead_direct(var/message, var/mob/subject = null)
-	var/name
-	var/keyname
-	if(subject && subject.client)
-		var/client/C = subject.client
-		keyname = (C.holder && C.holder.fakekey) ? C.holder.fakekey : C.key
-		if(C.mob) //Most of the time this is the dead/observer mob; we can totally use him if there is no better name
-			var/mindname
-			var/realname = C.mob.real_name
-			if(C.mob.mind)
-				mindname = C.mob.mind.name
-				if(C.mob.mind.original && C.mob.mind.original.real_name)
-					realname = C.mob.mind.original.real_name
-			if(mindname && mindname != realname)
-				name = "[realname] died as [mindname]"
-			else
-				name = realname
-
-	for(var/mob/M in GLOB.player_list)
-		if(M.client && (isghost(M) || (M.client.holder && !is_mentor(M.client))) && M.get_preference_value(/datum/client_preference/show_dsay) == GLOB.PREF_SHOW)
-			var/follow
-			var/lname
-			if(subject)
-				if(subject != M)
-					follow = "([ghost_follow_link(subject, M)]) "
-				if(M.stat != DEAD && M.client.holder)
-					follow = "([admin_jump_link(subject, M.client.holder)]) "
-				var/mob/observer/ghost/DM
-				if(isghost(subject))
-					DM = subject
-				if(M.client.holder) 							// What admins see
-					lname = "[keyname][(DM && DM.anonsay) ? "*" : (DM ? "" : "^")] ([name])"
-				else
-					if(DM && DM.anonsay)						// If the person is actually observer they have the option to be anonymous
-						lname = "Ghost of [name]"
-					else if(DM)									// Non-anons
-						lname = "[keyname] ([name])"
-					else										// Everyone else (dead people who didn't ghost yet, etc.)
-						lname = name
-				lname = "<span class='name'>[lname]</span> "
-			to_chat(M, "<span class='deadsay'>" + create_text_tag("dead", "DEAD:", M.client) + " [lname][follow][message]</span>")
-
-//Announces that a ghost has joined/left, mainly for use with wizards
-/proc/announce_ghost_joinleave(O, var/joined_ghosts = 1, var/message = "")
-	var/client/C
-	//Accept any type, sort what we want here
-	if(ismob(O))
-		var/mob/M = O
-		if(M.client)
-			C = M.client
-	else if(istype(O, /client))
-		C = O
-	else if(istype(O, /datum/mind))
-		var/datum/mind/M = O
-		if(M.current && M.current.client)
-			C = M.current.client
-		else if(M.original && M.original.client)
-			C = M.original.client
-
-	if(C)
-		var/name
-		if(C.mob)
-			var/mob/M = C.mob
-			if(M.mind && M.mind.name)
-				name = M.mind.name
-			if(M.real_name && M.real_name != name)
-				if(name)
-					name += " ([M.real_name])"
-				else
-					name = M.real_name
-		if(!name)
-			name = (C.holder && C.holder.fakekey) ? C.holder.fakekey : C.key
-		if(joined_ghosts)
-			say_dead_direct("The ghost of <span class='name'>[name]</span> now [pick("skulks","lurks","prowls","creeps","stalks")] among the dead. [message]")
-		else
-			say_dead_direct("<span class='name'>[name]</span> no longer [pick("skulks","lurks","prowls","creeps","stalks")] in the realm of the dead. [message]")
-
-/mob/proc/switch_to_camera(var/obj/machinery/camera/C)
-	if (!C.can_use() || stat || (get_dist(C, src) > 1 || machine != src || blinded || !canmove))
-		return 0
-	check_eye(src)
-	return 1
-
-/mob/living/silicon/ai/switch_to_camera(var/obj/machinery/camera/C)
-	if(!C.can_use() || !is_in_chassis())
-		return 0
-
-	eyeobj.setLoc(C)
-	return 1
-
-// Returns true if the mob has a client which has been active in the last given X minutes.
-/mob/proc/is_client_active(var/active = 1)
-	return client && client.inactivity < active MINUTES
-
-/mob/proc/can_eat()
-	return 1
-
-/mob/proc/can_force_feed()
-	return 1
-
-#define SAFE_PERP -50
-/mob/living/proc/assess_perp(var/obj/access_obj, var/check_access, var/auth_weapons, var/check_records, var/check_arrest)
-	if(stat == DEAD)
-		return SAFE_PERP
-
-	return 0
-
-/mob/living/carbon/assess_perp(var/obj/access_obj, var/check_access, var/auth_weapons, var/check_records, var/check_arrest)
-	if(handcuffed)
-		return SAFE_PERP
-
-	return ..()
-
-/mob/living/carbon/human/assess_perp(var/obj/access_obj, var/check_access, var/auth_weapons, var/check_records, var/check_arrest)
-	var/threatcount = ..()
-	if(. == SAFE_PERP)
-		return SAFE_PERP
-
-	//Agent cards lower threatlevel.
-	var/obj/item/card/id/id = GetIdCard()
-	if(id && istype(id, /obj/item/card/id/syndicate))
-		threatcount -= 2
-	// A proper	CentCom id is hard currency.
-	else if(id && istype(id, /obj/item/card/id/centcom))
-		return SAFE_PERP
-
-	if(check_access && !access_obj.allowed(src))
-		threatcount += 4
-
-	if(auth_weapons && !access_obj.allowed(src))
-		if(isgun(l_hand) || istype(l_hand, /obj/item/melee))
-			threatcount += 4
-
-		if(isgun(r_hand) || istype(r_hand, /obj/item/melee))
-			threatcount += 4
-
-		if(isgun(belt) || istype(belt, /obj/item/melee))
-			threatcount += 2
-
-		if(species.name != SPECIES_HUMAN)
-			threatcount += 2
-
-	if(check_records || check_arrest)
-		var/perpname = name
-		if(id)
-			perpname = id.registered_name
-
-		var/datum/data/record/R = find_security_record("name", perpname)
-		if(check_records && !R)
-			threatcount += 4
-
-		if(check_arrest && R && (R.fields["criminal"] == "*Arrest*"))
-			threatcount += 4
-
-	return threatcount
-
-/mob/living/simple_animal/hostile/assess_perp(var/obj/access_obj, var/check_access, var/auth_weapons, var/check_records, var/check_arrest)
-	var/threatcount = ..()
-	if(. == SAFE_PERP)
-		return SAFE_PERP
-
-	if(!istype(src, /mob/living/simple_animal/hostile/retaliate/goat))
-		threatcount += 4
-	return threatcount
-
-
-
-
-#undef SAFE_PERP
-
-/mob/proc/get_multitool(var/obj/item/tool/multitool/P)
-	if(istype(P))
-		return P
-
-/mob/observer/ghost/get_multitool()
-	return can_admin_interact() && ..(ghost_multitool)
-
-/mob/living/carbon/human/get_multitool()
-	return ..(get_active_hand())
-
-/mob/living/silicon/robot/get_multitool()
-	return ..(get_active_hand())
-
-/mob/living/silicon/ai/get_multitool()
-	return ..(aiMulti)
-
-
-//This proc returns true if the mob has no health problems. EG, no damaged organs, alive, not poisoned, etc
-//It is used by cryopods to allow people to quickly respawn during peaceful times
-/mob/proc/in_perfect_health()
-	return
-
-/mob/living/in_perfect_health()
-	if (stat == DEAD)
+// moved out of admins.dm because things other than admin procs were calling this.
+/**
+ * Returns TRUE if the game has started and we're either an AI with a 0th law, or we're someone with a special role/antag datum
+ * If allow_fake_antags is set to FALSE, Valentines, ERTs, and any such roles with FLAG_FAKE_ANTAG won't pass.
+*/
+/proc/is_special_character(mob/M, allow_fake_antags = FALSE)
+	if(!SSticker.HasRoundStarted())
 		return FALSE
-
-	if (brainloss || bruteloss || cloneloss || fireloss || halloss || oxyloss || toxloss)
+	if(!istype(M))
+		return FALSE
+	if(iscyborg(M)) //as a borg you're now beholden to your laws rather than greentext
 		return FALSE
 
 
+	// Returns TRUE if AI has a zeroth law *and* either has a special role *or* an antag datum.
+	if(isAI(M))
+		var/mob/living/silicon/ai/A = M
+		return (A.laws?.zeroth && (A.mind?.special_role || !isnull(M.mind?.antag_datums)))
+
+	if(M.mind?.special_role)
+		return TRUE
+
+	// Turns 'faker' to TRUE if the antag datum is fake. If it's not fake, returns TRUE directly.
+	var/faker = FALSE
+	for(var/datum/antagonist/antag_datum as anything in M.mind?.antag_datums)
+		if((antag_datum.antag_flags & FLAG_FAKE_ANTAG))
+			faker = TRUE
+		else
+			return TRUE
+
+	// If 'faker' was assigned TRUE in the above loop and the argument 'allow_fake_antags' is set to TRUE, this passes.
+	// Else, return FALSE.
+	return (faker && allow_fake_antags)
+
+/**
+ * Fancy notifications for ghosts
+ *
+ * The kitchen sink of notification procs
+ *
+ * Arguments:
+ * * message: The message displayed in chat.
+ * * source: The source of the notification. This is required for an icon
+ * * header: The title text to display on the icon tooltip.
+ * * alert_overlay: Optional. Create a custom overlay if you want, otherwise it will use the source
+ * * click_interact: If true, adds a link + clicking the icon will attack_ghost the source
+ * * custom_link: Optional. If you want to add a custom link to the chat notification
+ * * ghost_sound: sound to play
+ * * ignore_key: Ignore keys if they're in the GLOB.poll_ignore list
+ * * notify_volume: How loud the sound should be to spook the user
+ */
+/proc/notify_ghosts(
+	message,
+	atom/source,
+	header = "Something Interesting!",
+	mutable_appearance/alert_overlay,
+	click_interact = FALSE,
+	custom_link = "",
+	ghost_sound,
+	ignore_key,
+	notify_flags = NOTIFY_CATEGORY_DEFAULT,
+	notify_volume = 100,
+)
+
+	if(notify_flags & GHOST_NOTIFY_IGNORE_MAPLOAD && SSatoms.initialized != INITIALIZATION_INNEW_REGULAR) //don't notify for objects created during a map load
+		return
+
+	if(source)
+		if(isnull(alert_overlay))
+			alert_overlay = get_small_overlay(source)
+
+		alert_overlay.appearance_flags |= TILE_BOUND
+		alert_overlay.layer = FLOAT_LAYER
+		alert_overlay.plane = FLOAT_PLANE
+
+	for(var/mob/dead/observer/ghost in GLOB.player_list)
+		if(!(notify_flags & GHOST_NOTIFY_NOTIFY_SUICIDERS) && HAS_TRAIT(ghost, TRAIT_SUICIDED))
+			continue
+		if(ignore_key && (ghost.ckey in GLOB.poll_ignore[ignore_key]))
+			continue
+
+		if(notify_flags & GHOST_NOTIFY_FLASH_WINDOW)
+			window_flash(ghost.client)
+
+		if(ghost_sound)
+			SEND_SOUND(ghost, sound(ghost_sound, volume = notify_volume))
+
+		if(isnull(source))
+			to_chat(ghost, span_ghostalert(message))
+			continue
+
+		var/interact_link = click_interact ? " <a href='byond://?src=[REF(ghost)];play=[REF(source)]'>(Play)</a>" : ""
+		var/view_link = " <a href='byond://?src=[REF(ghost)];view=[REF(source)]'>(View)</a>"
+
+		to_chat(ghost, span_ghostalert("[message][custom_link][interact_link][view_link]"))
+
+		var/atom/movable/screen/alert/notify_action/toast = ghost.throw_alert(
+			category = "[REF(source)]_notify_action",
+			type = /atom/movable/screen/alert/notify_action,
+		)
+		toast.add_overlay(alert_overlay)
+		toast.click_interact = click_interact
+		toast.desc = "Click to [click_interact ? "play" : "view"]."
+		toast.name = header
+		toast.target_ref = WEAKREF(source)
+
+
+
+///Is the passed in mob a ghost with admin powers, doesn't check for AI interact like isAdminGhost() used to
+/proc/isAdminObserver(mob/user)
+	if(!user) //Are they a mob? Auto interface updates call this with a null src
+		return
+	if(!user.client) // Do they have a client?
+		return
+	if(!isobserver(user)) // Are they a ghost?
+		return
+	if(!check_rights_for(user.client, R_ADMIN)) // Are they allowed?
+		return
 	return TRUE
 
-/mob/living/carbon/human/in_perfect_health()
-	for (var/a in bad_external_organs)
+///Returns TRUE/FALSE on whether the mob is an Admin Ghost AI.
+///This requires this snowflake check because AI interact gives the access to the mob's client, rather
+///than the mob like everyone else, and we keep it that way so they can't accidentally give someone Admin AI access.
+/proc/isAdminGhostAI(mob/user)
+	if(!isAdminObserver(user))
+		return FALSE
+	if(!HAS_TRAIT_FROM(user.client, TRAIT_AI_ACCESS, ADMIN_TRAIT)) // Do they have it enabled?
+		return FALSE
+	return TRUE
+
+/**
+ * Offer control of the passed in mob to dead player
+ *
+ * Automatic logging and uses poll_candidates_for_mob, how convenient
+ */
+/proc/offer_control(mob/M)
+	to_chat(M, "Control of your mob has been offered to dead players.")
+	if(usr)
+		log_admin("[key_name(usr)] has offered control of ([key_name(M)]) to ghosts.")
+		message_admins("[key_name_admin(usr)] has offered control of ([ADMIN_LOOKUPFLW(M)]) to ghosts")
+	var/poll_message = "Do you want to play as [span_danger(M.real_name)]?"
+	if(M.mind)
+		poll_message = "[poll_message] Job: [span_notice(M.mind.assigned_role.title)]."
+		if(M.mind.special_role)
+			poll_message = "[poll_message] Status: [span_boldnotice(M.mind.special_role)]."
+		else
+			var/datum/antagonist/A = M.mind.has_antag_datum(/datum/antagonist/)
+			if(A)
+				poll_message = "[poll_message] Status: [span_boldnotice(A.name)]."
+	var/mob/chosen_one = SSpolling.poll_ghosts_for_target(poll_message, check_jobban = ROLE_PAI, poll_time = 10 SECONDS, checked_target = M, alert_pic = M, role_name_text = "ghost control")
+
+	if(chosen_one)
+		to_chat(M, "Your mob has been taken over by a ghost!")
+		message_admins("[key_name_admin(chosen_one)] has taken control of ([ADMIN_LOOKUPFLW(M)])")
+		M.ghostize(FALSE)
+		M.PossessByPlayer(chosen_one.key)
+		M.client?.init_verbs()
+		return TRUE
+	else
+		to_chat(M, "There were no ghosts willing to take control.")
+		message_admins("No ghosts were willing to take control of [ADMIN_LOOKUPFLW(M)])")
 		return FALSE
 
-	for (var/obj/item/organ/o in internal_organs)
-		if (o.damage)
-			return FALSE
+///Clicks a random nearby mob with the source from this mob
+/mob/proc/click_random_mob()
+	var/list/nearby_mobs = list()
+	for(var/mob/living/L in range(1, src))
+		if(L != src)
+			nearby_mobs |= L
+	if(nearby_mobs.len)
+		var/mob/living/T = pick(nearby_mobs)
+		ClickOn(T)
 
-	return ..()
+///Can the mob hear
+/mob/proc/can_hear()
+	return !HAS_TRAIT(src, TRAIT_DEAF)
 
-/mob/proc/get_sex()
-	return gender
+/**
+ * Get the list of keywords for policy config
+ *
+ * This gets the type, mind assigned roles and antag datums as a list, these are later used
+ * to send the user relevant headadmin policy config
+ */
+/mob/proc/get_policy_keywords()
+	. = list()
+	. += "[type]"
+	if(mind)
+		if(mind.assigned_role.policy_index)
+			. += mind.assigned_role.policy_index
+		. += mind.assigned_role.title //A bit redunant, but both title and policy index are used
+		. += mind.special_role //In case there's something special leftover, try to avoid
+		for(var/datum/antagonist/antag_datum as anything in mind.antag_datums)
+			. += "[antag_datum.type]"
 
-//Tries to find the mob's email.
-/proc/find_email(real_name)
-	for(var/mob/mob in GLOB.living_mob_list)
-		if(mob.real_name == real_name)
-			if(!mob.mind)
-				return
-			return mob.mind.initial_email_login["login"]
+///Can the mob see reagents inside of containers?
+/mob/proc/can_see_reagents()
+	return stat == DEAD || HAS_TRAIT(src, TRAIT_REAGENT_SCANNER) //Dead guys and silicons can always see reagents
 
-/proc/get_both_hands(mob/living/carbon/M)
-	if(!istype(M))
+///Can this mob hold items
+/mob/proc/can_hold_items(obj/item/I)
+	return length(held_items)
+
+/// Returns this mob's default lighting alpha
+/mob/proc/default_lighting_cutoff()
+	if(client?.combo_hud_enabled && client?.prefs?.toggles & COMBOHUD_LIGHTING)
+		return LIGHTING_CUTOFF_FULLBRIGHT
+	return initial(lighting_cutoff)
+
+/// Returns a generic path of the object based on the slot
+/proc/get_path_by_slot(slot_id)
+	switch(slot_id)
+		if(ITEM_SLOT_BACK)
+			return /obj/item/storage/backpack
+		if(ITEM_SLOT_MASK)
+			return /obj/item/clothing/mask
+		if(ITEM_SLOT_NECK)
+			return /obj/item/clothing/neck
+		if(ITEM_SLOT_HANDCUFFED)
+			return /obj/item/restraints/handcuffs
+		if(ITEM_SLOT_LEGCUFFED)
+			return /obj/item/restraints/legcuffs
+		if(ITEM_SLOT_BELT)
+			return /obj/item/storage/belt
+		if(ITEM_SLOT_ID)
+			return /obj/item/card/id/advanced
+		if(ITEM_SLOT_EARS)
+			return /obj/item/clothing/ears
+		if(ITEM_SLOT_EYES)
+			return /obj/item/clothing/glasses
+		if(ITEM_SLOT_GLOVES)
+			return /obj/item/clothing/gloves
+		if(ITEM_SLOT_HEAD)
+			return /obj/item/clothing/head
+		if(ITEM_SLOT_FEET)
+			return /obj/item/clothing/shoes
+		if(ITEM_SLOT_OCLOTHING)
+			return /obj/item/clothing/suit
+		if(ITEM_SLOT_ICLOTHING)
+			return /obj/item/clothing/under
+		if(ITEM_SLOT_LPOCKET)
+			return /obj/item
+		if(ITEM_SLOT_RPOCKET)
+			return /obj/item
+		if(ITEM_SLOT_SUITSTORE)
+			return /obj/item
+	return null
+
+/// Returns a client from a mob, mind or client
+/proc/get_player_client(player)
+	if(ismob(player))
+		var/mob/player_mob = player
+		player = player_mob.client
+	else if(istype(player, /datum/mind))
+		var/datum/mind/player_mind = player
+		player = player_mind.current.client
+	if(!istype(player, /client))
 		return
-	var/list/hands = list(M.l_hand, M.r_hand)
-	return hands
+	return player
 
-/mob/proc/drop_embedded()
-	//Embedded list is defined at mob level so we can have this here too
-	for(var/obj/A in embedded)
-		if (A.loc == src)
-			A.forceMove(loc)
-			if(isitem(A))
-				var/obj/item/I = A
-				I.on_embed_removal(src)
-			A.tumble()
-	embedded = list()
+/proc/health_percentage(mob/living/mob)
+	var/divided_health = mob.health / mob.maxHealth
+	if(iscyborg(mob) || islarva(mob))
+		divided_health = (mob.health + mob.maxHealth) / (mob.maxHealth * 2)
+	else if(iscarbon(mob) || isAI(mob) || isbrain(mob))
+		divided_health = abs(HEALTH_THRESHOLD_DEAD - mob.health) / abs(HEALTH_THRESHOLD_DEAD - mob.maxHealth)
+	return divided_health * 100
 
-/mob/proc/skill_to_evade_traps()
-	var/prob_evade = 0
-	var/base_prob_evade = 30
-	if(MOVING_DELIBERATELY(src))
-		prob_evade += base_prob_evade
-	if(!stats)
-		return prob_evade
-	prob_evade += base_prob_evade * (stats.getStat(STAT_VIG)/STAT_LEVEL_GODLIKE - weight_coeff())
-	if(stats.getPerk(PERK_SURE_STEP))
-		prob_evade += base_prob_evade*30/STAT_LEVEL_GODLIKE
-	if(stats.getPerk(PERK_RAT))
-		prob_evade += base_prob_evade/1.5
-	return prob_evade
+/**
+ * Generates a log message when a user manually changes their targeted zone.
+ * Only need to one of new_target or old_target, and the other will be auto populated with the current selected zone.
+ */
+/mob/proc/log_manual_zone_selected_update(source, new_target, old_target)
+	if(!new_target && !old_target)
+		CRASH("Called log_manual_zone_selected_update without specifying a new or old target")
 
-/mob/proc/mob_playsound(atom/source, soundin, vol as num, vary, extrarange as num, falloff, is_global, frequency, is_ambiance = 0,  ignore_walls = TRUE, zrange = 2, override_env, envdry, envwet, use_pressure = TRUE)
-	if(isliving(src))
-		var/mob/living/L = src
-		vol *= L.noise_coeff + weight_coeff()
-		extrarange *= L.noise_coeff + weight_coeff()
-	playsound(source, soundin, vol, vary, extrarange, falloff, is_global, frequency, is_ambiance,  ignore_walls, zrange, override_env, envdry, envwet, use_pressure)
+	old_target ||= zone_selected
+	new_target ||= zone_selected
+	if(old_target == new_target)
+		return
 
-/mob/proc/weight_coeff()
-	. = 0
-	var/max_w_class = get_max_w_class()
-	if(max_w_class > ITEM_SIZE_TINY)
-		return max_w_class/(ITEM_SIZE_TITANIC)
+	var/list/data = list(
+		"new_target" = new_target,
+		"old_target" = old_target,
+	)
 
-/*
-/mob/proc/get_accumulated_vision_handlers()
-	var/result[2]
-	var/asight = 0
-	var/ainvis = 0
-	for(var/atom/vision_handler in additional_vision_handlers)
-		//Grab their flags
-		asight |= vision_handler.additional_sight_flags()
-		ainvis = min(ainvis, vision_handler.additional_see_invisible())
-	result[1] = asight
-	result[2] = ainvis
+	if(mind?.assigned_role)
+		data["assigned_role"] = mind.assigned_role.title
+	if(job)
+		data["assigned_job"] = job
 
-	return result
-*/
+	var/atom/handitem = get_active_held_item()
+	if(handitem)
+		data["active_item"] = list(
+			"type" = handitem.type,
+			"name" = handitem.name,
+		)
 
-/mob/proc/set_faction(target_faction)
-	faction = target_faction ? target_faction : initial(faction)
+	var/atom/offhand = get_inactive_held_item()
+	if(offhand)
+		data["offhand_item"] = list(
+			"type" = offhand.type,
+			"name" = offhand.name,
+		)
 
+	logger.Log(
+		LOG_CATEGORY_TARGET_ZONE_SWITCH,
+		"[key_name(src)] manually changed selected zone",
+		data,
+	)
 
-// Steps used to modify wounding multiplier. Should be used alongside edge/sharp when determining final damage of BRUTE-type attacks.
-/proc/step_wounding(var/wounding, var/is_increase = FALSE) // Usually mobs are the ones attacking (no), so this should be okay here? If it gets lucky a macro would be slightly faster
-	if(is_increase)
-		switch(wounding)
-			if(WOUNDING_TRIVIAL)
-				return WOUNDING_TINY
-			if(WOUNDING_TINY)
-				return WOUNDING_SMALL
-			if(WOUNDING_SMALL)
-				return WOUNDING_INTERMEDIATE
-			if(WOUNDING_INTERMEDIATE)
-				return WOUNDING_NORMAL
-			if(WOUNDING_NORMAL)
-				return WOUNDING_WIDE
-			if(WOUNDING_WIDE)
-				return WOUNDING_EXTREME
-			if(WOUNDING_EXTREME)
-				return WOUNDING_EXTREME
-	else
-		switch(wounding)
-			if(WOUNDING_TRIVIAL)
-				return WOUNDING_TRIVIAL
-			if(WOUNDING_TINY)
-				return WOUNDING_TRIVIAL
-			if(WOUNDING_SMALL)
-				return WOUNDING_TINY
-			if(WOUNDING_INTERMEDIATE)
-				return WOUNDING_SMALL
-			if(WOUNDING_NORMAL)
-				return WOUNDING_INTERMEDIATE
-			if(WOUNDING_WIDE)
-				return WOUNDING_NORMAL
-			if(WOUNDING_EXTREME)
-				return WOUNDING_WIDE
+/**
+ * Returns an associative list of the logs of a certain amount of lines spoken recently by this mob
+ * copy_amount - number of lines to return
+ * line_chance - chance to return a line, if you don't want just the most recent x lines
+ */
+/mob/proc/copy_recent_speech(copy_amount = LING_ABSORB_RECENT_SPEECH, line_chance = 100)
+	var/list/recent_speech = list()
+	var/list/say_log = list()
+	var/log_source = logging
+	for(var/log_type in log_source)
+		var/nlog_type = text2num(log_type)
+		if(nlog_type & LOG_SAY)
+			var/list/reversed = log_source[log_type]
+			if(islist(reversed))
+				say_log = reverse_range(reversed.Copy())
+				break
 
-/proc/step_wounding_double(var/wounding, var/is_increase = FALSE)
-	if(is_increase)
-		switch(wounding)
-			if(WOUNDING_TRIVIAL)
-				return WOUNDING_SMALL
-			if(WOUNDING_TINY)
-				return WOUNDING_INTERMEDIATE
-			if(WOUNDING_SMALL)
-				return WOUNDING_NORMAL
-			if(WOUNDING_INTERMEDIATE)
-				return WOUNDING_WIDE
-			if(WOUNDING_NORMAL)
-				return WOUNDING_EXTREME
-			if(WOUNDING_WIDE)
-				return WOUNDING_EXTREME
-			if(WOUNDING_EXTREME)
-				return WOUNDING_EXTREME
-	else
-		switch(wounding)
-			if(WOUNDING_TRIVIAL)
-				return WOUNDING_TRIVIAL
-			if(WOUNDING_TINY)
-				return WOUNDING_TRIVIAL
-			if(WOUNDING_SMALL)
-				return WOUNDING_TRIVIAL
-			if(WOUNDING_INTERMEDIATE)
-				return WOUNDING_TINY
-			if(WOUNDING_NORMAL)
-				return WOUNDING_SMALL
-			if(WOUNDING_WIDE)
-				return WOUNDING_INTERMEDIATE
-			if(WOUNDING_EXTREME)
-				return WOUNDING_NORMAL
+	for(var/spoken_memory in say_log)
+		if(recent_speech.len >= copy_amount)
+			break
+		if(!prob(line_chance))
+			continue
+		recent_speech[spoken_memory] = splittext(say_log[spoken_memory], "\"", 1, 0, TRUE)[3]
 
-// Determine wounding level. If var/wounding is provided, the attack should come from a projectile. This isn't the case yet, as we default to var/wounding = 1 until melee rework.
-/proc/wound_check(var/injurytype, var/wounding, var/edge, var/sharp)
-	if(sharp && (!edge)) // impaling/piercing, 2x damage, affected by injurytype
-		switch(injurytype)
-			if(INJURY_TYPE_HOMOGENOUS)
-				return wounding ? step_wounding_double(wounding) : 1
-			if(INJURY_TYPE_UNLIVING)
-				return wounding ? step_wounding(wounding) : 1.5
-			else
-				return wounding ? wounding : 2
-	if(sharp && edge) // cutting, 1.5x damage
-		return wounding ? wounding : 1.5
-	return wounding ? wounding : 1 // crushing, 1x damage
+	var/list/raw_lines = list()
+	for (var/key as anything in recent_speech)
+		raw_lines += recent_speech[key]
+
+	return raw_lines
+
+/// Takes in an associated list (key `/datum/action` typepaths, value is the AI blackboard key) and handles granting the action and adding it to the mob's AI controller blackboard.
+/// This is only useful in instances where you don't want to store the reference to the action on a variable on the mob.
+/// You can set the value to null if you don't want to add it to the blackboard (like in player controlled instances). Is also safe with null AI controllers.
+/// Assumes that the action will be initialized and held in the mob itself, which is typically standard.
+/mob/proc/grant_actions_by_list(list/input)
+	if(length(input) <= 0)
+		return
+
+	for(var/action in input)
+		var/datum/action/ability = new action(src)
+		ability.Grant(src)
+
+		var/blackboard_key = input[action]
+		if(isnull(blackboard_key))
+			continue
+
+		ai_controller?.set_blackboard_key(blackboard_key, ability)

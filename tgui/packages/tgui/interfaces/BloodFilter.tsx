@@ -1,5 +1,6 @@
-import { useBackend, useLocalState } from '../backend';
-import { Stack } from '../components';
+import { Stack } from 'tgui-core/components';
+
+import { useBackend } from '../backend';
 import { Window } from '../layouts';
 import { ChemFilterPane } from './ChemFilter';
 
@@ -7,10 +8,9 @@ type Data = {
   whitelist: string[];
 };
 
-export const BloodFilter = (props, context) => {
-  const { data } = useBackend<Data>(context);
+export const BloodFilter = (props) => {
+  const { data } = useBackend<Data>();
   const { whitelist = [] } = data;
-  const [chemName, setChemName] = useLocalState(context, 'chemName', '');
 
   return (
     <Window width={500} height={300}>
@@ -20,8 +20,7 @@ export const BloodFilter = (props, context) => {
             <ChemFilterPane
               title="Whitelist"
               list={whitelist}
-              reagentName={chemName}
-              onReagentInput={(value) => setChemName(value)}
+              buttonColor="green"
             />
           </Stack.Item>
         </Stack>

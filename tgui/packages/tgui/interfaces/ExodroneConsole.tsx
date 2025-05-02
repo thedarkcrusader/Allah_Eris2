@@ -1,22 +1,30 @@
-import { useBackend, useLocalState } from '../backend';
+import {
+  createContext,
+  Fragment,
+  SetStateAction,
+  useContext,
+  useState,
+} from 'react';
 import {
   BlockQuote,
   Box,
   Button,
   Dimmer,
   Icon,
+  Image,
   LabeledList,
   Modal,
   ProgressBar,
   Section,
   Stack,
-} from '../components';
-import { Window } from '../layouts';
+} from 'tgui-core/components';
+import { formatTime } from 'tgui-core/format';
+import { capitalize } from 'tgui-core/string';
+
 import { resolveAsset } from '../assets';
-import { formatTime } from '../format';
-import { capitalize } from 'common/string';
 import nt_logo from '../assets/bg-nanotrasen.svg';
-import { Fragment } from 'inferno';
+import { useBackend } from '../backend';
+import { Window } from '../layouts';
 
 type ExplorationEventData = {
   name: string;
@@ -158,29 +166,31 @@ type ToolData = {
   icon: string;
 };
 
-export const ExodroneConsole = (props, context) => {
-  const { data } = useBackend<ExodroneConsoleData>(context);
+const ToolContext = createContext<
+  [boolean, React.Dispatch<SetStateAction<boolean>>]
+>([false, (_) => {}]);
+
+export const ExodroneConsole = (props) => {
+  const { data } = useBackend<ExodroneConsoleData>();
   const { signal_lost } = data;
 
-  const [choosingTools, setChoosingTools] = useLocalState(
-    context,
-    'choosingTools',
-    false,
-  );
+  const [choosingTools, setChoosingTools] = useState(false);
 
   return (
     <Window width={750} height={600}>
-      {!!signal_lost && <SignalLostModal />}
-      {!!choosingTools && <ToolSelectionModal />}
-      <Window.Content>
-        <ExodroneConsoleContent />
-      </Window.Content>
+      <ToolContext.Provider value={[choosingTools, setChoosingTools]}>
+        {!!signal_lost && <SignalLostModal />}
+        {!!choosingTools && <ToolSelectionModal />}
+        <Window.Content>
+          <ExodroneConsoleContent />
+        </Window.Content>
+      </ToolContext.Provider>
     </Window>
   );
 };
 
-const SignalLostModal = (props, context) => {
-  const { act } = useBackend(context);
+const SignalLostModal = (props) => {
+  const { act } = useBackend();
   return (
     <Modal
       backgroundColor="red"
@@ -188,14 +198,14 @@ const SignalLostModal = (props, context) => {
       width={30}
       height={22}
       p={0}
-      style={{ 'border-radius': '5%' }}
+      style={{ borderRadius: '5%' }}
     >
       <img src={nt_logo} width={64} height={64} />
       <Box
         backgroundColor="black"
         textColor="red"
         fontSize={2}
-        style={{ 'border-radius': '-10%' }}
+        style={{ borderRadius: '-10%' }}
       >
         CONNECTION LOST
       </Box>
@@ -206,23 +216,21 @@ const SignalLostModal = (props, context) => {
       <Icon name="exclamation-triangle" textColor="black" size={5} />
       <Box>
         <Button
-          content="Confirm"
           color="danger"
           style={{ border: '1px solid black' }}
           onClick={() => act('confirm_signal_lost')}
-        />
+        >
+          Confirm
+        </Button>
       </Box>
     </Modal>
   );
 };
 
-const DroneSelectionSection = (
-  props: {
-    all_drones: Array<DroneBasicData>;
-  },
-  context,
-) => {
-  const { act } = useBackend<ExodroneConsoleData>(context);
+const DroneSelectionSection = (props: {
+  all_drones: Array<DroneBasicData>;
+}) => {
+  const { act } = useBackend<ExodroneConsoleData>();
   const { all_drones } = props;
 
   return (
@@ -263,15 +271,11 @@ const DroneSelectionSection = (
   );
 };
 
-const ToolSelectionModal = (props, context) => {
-  const { act, data } = useBackend<ExodroneConsoleData>(context);
+const ToolSelectionModal = (props) => {
+  const { act, data } = useBackend<ExodroneConsoleData>();
   const { all_tools = {} } = data;
 
-  const [choosingTools, setChoosingTools] = useLocalState(
-    context,
-    'choosingTools',
-    false,
-  );
+  const [choosingTools, setChoosingTools] = useContext(ToolContext);
 
   const toolData = Object.keys(all_tools);
   return (
@@ -302,7 +306,7 @@ const ToolSelectionModal = (props, context) => {
                 </Stack.Item>
               ))) || (
               <Stack.Item>
-                <Button content="Back" />
+                <Button onClick={() => setChoosingTools(false)}>Back</Button>
               </Stack.Item>
             )}
           </Stack>
@@ -312,14 +316,8 @@ const ToolSelectionModal = (props, context) => {
   );
 };
 
-const EquipmentBox = (
-  props: {
-    cargo: CargoData;
-    drone: DroneData;
-  },
-  context,
-) => {
-  const { act, data } = useBackend<ExodroneConsoleData>(context);
+const EquipmentBox = (props: { cargo: CargoData; drone: DroneData }) => {
+  const { act, data } = useBackend<ExodroneConsoleData>();
   const { all_tools = {} } = data;
   const { configurable } = props.drone;
   const cargo = props.cargo;
@@ -400,41 +398,32 @@ const EquipmentBox = (
   );
 };
 
-const EquipmentGrid = (
-  props: {
-    drone: ActiveDrone & DroneData;
-  },
-  context,
-) => {
-  const { act } = useBackend<ExodroneConsoleData>(context);
+const EquipmentGrid = (props: { drone: ActiveDrone & DroneData }) => {
+  const { act } = useBackend<ExodroneConsoleData>();
   const { cargo, configurable } = props.drone;
-  const [choosingTools, setChoosingTools] = useLocalState(
-    context,
-    'choosingTools',
-    false,
-  );
+
+  const [_, setChoosingTools] = useContext(ToolContext);
+
   return (
     <Stack vertical fill>
       <Stack.Item grow>
         <Section fill title="Controls">
           <Stack vertical textAlign="center">
             <Stack.Item>
-              <Button
-                fluid
-                icon="plug"
-                content="Disconnect"
-                onClick={() => act('end_control')}
-              />
+              <Button fluid icon="plug" onClick={() => act('end_control')}>
+                Disconnect
+              </Button>
             </Stack.Item>
             <Stack.Divider />
             <Stack.Item>
               <Button.Confirm
                 fluid
                 icon="bomb"
-                content="Self-Destruct"
                 color="bad"
                 onClick={() => act('self_destruct')}
-              />
+              >
+                Self-Destruct
+              </Button.Confirm>
             </Stack.Item>
           </Stack>
         </Section>
@@ -448,17 +437,18 @@ const EquipmentGrid = (
                   fluid
                   color="average"
                   icon="wrench"
-                  content="Install Tool"
                   onClick={() => setChoosingTools(true)}
-                />
+                >
+                  Install Tool
+                </Button>
               )}
             </Stack.Item>
             <Stack.Item>
               <Stack wrap="wrap" width={10}>
-                {cargo.map((cargo_element) => (
+                {cargo.map((cargo_element, index) => (
                   <EquipmentBox
                     drone={props.drone}
-                    key={cargo_element.name}
+                    key={`cargo-${index}`}
                     cargo={cargo_element}
                   />
                 ))}
@@ -471,13 +461,10 @@ const EquipmentGrid = (
   );
 };
 
-const DroneStatus = (
-  props: {
-    drone_integrity: number;
-    drone_max_integrity: number;
-  },
-  context,
-) => {
+const DroneStatus = (props: {
+  drone_integrity: number;
+  drone_max_integrity: number;
+}) => {
   const { drone_integrity, drone_max_integrity } = props;
 
   return (
@@ -519,15 +506,13 @@ const NoSiteDimmer = () => {
   );
 };
 
-const TravelTargetSelectionScreen = (
-  props: {
-    drone: (DroneExploration | DroneIdle | DroneTravel) & DroneData;
-    showCancelButton?: boolean;
-  },
-  context,
-) => {
+const TravelTargetSelectionScreen = (props: {
+  drone: (DroneExploration | DroneIdle | DroneTravel) & DroneData;
+  showCancelButton?: boolean;
+  onSelectionDone: () => void;
+}) => {
   // List of sites and eta travel times to each
-  const { act, data } = useBackend<ExodroneConsoleData>(context);
+  const { act, data } = useBackend<ExodroneConsoleData>();
   const { drone } = props;
   const { all_bands } = data;
   const { can_travel, travel_error, drone_travel_coefficent } = drone;
@@ -545,19 +530,10 @@ const TravelTargetSelectionScreen = (
       return target_site.distance * drone_travel_coefficent;
     }
   };
-  const [choosingTools, setChoosingTools] = useLocalState(
-    context,
-    'choosingTools',
-    false,
-  );
-  const [TravelDimmerShown, setTravelDimmerShown] = useLocalState(
-    context,
-    'TravelDimmerShown',
-    false,
-  );
+  const [choosingTools, _] = useContext(ToolContext);
 
   const travel_to = (ref) => {
-    setTravelDimmerShown(false);
+    props.onSelectionDone();
     act('start_travel', { target_site: ref });
   };
 
@@ -580,12 +556,9 @@ const TravelTargetSelectionScreen = (
         buttons={
           <>
             {props.showCancelButton && (
-              <Button
-                ml={5}
-                mr={0}
-                content="Cancel"
-                onClick={() => setTravelDimmerShown(false)}
-              />
+              <Button ml={5} mr={0} onClick={() => props.onSelectionDone()}>
+                Cancel
+              </Button>
             )}
             <Box mt={props.showCancelButton && -3.5}>
               <DroneStatus
@@ -607,10 +580,11 @@ const TravelTargetSelectionScreen = (
                 {formatTime(site.distance * drone_travel_coefficent, 'short')}
                 <Button
                   ml={1}
-                  content={can_travel ? 'Launch!' : travel_error}
                   onClick={() => travel_to(null)}
                   disabled={!can_travel}
-                />
+                >
+                  {can_travel ? 'Launch!' : travel_error}
+                </Button>
               </Box>
             }
           />
@@ -624,10 +598,11 @@ const TravelTargetSelectionScreen = (
                 ETA: {formatTime(travel_cost(destination), 'short')}
                 <Button
                   ml={1}
-                  content={can_travel ? 'Launch!' : travel_error}
                   onClick={() => travel_to(destination.ref)}
                   disabled={!can_travel}
-                />
+                >
+                  {can_travel ? 'Launch!' : travel_error}
+                </Button>
               </>
             }
           >
@@ -652,12 +627,7 @@ const TravelTargetSelectionScreen = (
   );
 };
 
-const TravelDimmer = (
-  props: {
-    drone: DroneTravel;
-  },
-  context,
-) => {
+const TravelDimmer = (props: { drone: DroneTravel }) => {
   const { travel_time_left } = props.drone;
   return (
     <Section fill>
@@ -694,24 +664,21 @@ const TimeoutScreen = (props: { drone: DroneBusy }) => {
   );
 };
 
-const ExplorationScreen = (
-  props: {
-    drone: DroneExploration & DroneData;
-  },
-  context,
-) => {
-  const { act } = useBackend(context);
+const ExplorationScreen = (props: { drone: DroneExploration & DroneData }) => {
+  const { act } = useBackend();
   const { drone } = props;
   const { site } = drone;
 
-  const [TravelDimmerShown, setTravelDimmerShown] = useLocalState(
-    context,
-    'TravelDimmerShown',
-    false,
-  );
+  const [TravelDimmerShown, setTravelDimmerShown] = useState(false);
 
   if (TravelDimmerShown) {
-    return <TravelTargetSelectionScreen drone={drone} showCancelButton />;
+    return (
+      <TravelTargetSelectionScreen
+        onSelectionDone={() => setTravelDimmerShown(false)}
+        drone={drone}
+        showCancelButton
+      />
+    );
   }
   return (
     <Section
@@ -736,33 +703,28 @@ const ExplorationScreen = (
             </LabeledList.Item>
           </LabeledList>
         </Stack.Item>
-        <Stack.Item align="center" grow>
-          <Button content="Explore!" onClick={() => act('explore')} />
+        <Stack.Item align="center">
+          <Button onClick={() => act('explore')}>Explore!</Button>
         </Stack.Item>
         {site.events.map((e) => (
           <Stack.Item align="center" key={site.ref} grow>
             <Button
-              content={capitalize(e.name)}
               onClick={() => act('explore_event', { target_event: e.ref })}
-            />
+            >
+              {capitalize(e.name)}
+            </Button>
           </Stack.Item>
         ))}
         <Stack.Item align="center" grow>
-          <Button content="Travel" onClick={() => setTravelDimmerShown(true)} />
+          <Button onClick={() => setTravelDimmerShown(true)}>Travel</Button>
         </Stack.Item>
       </Stack>
     </Section>
   );
 };
 
-const EventScreen = (
-  props: {
-    drone: DroneData;
-    event: FullEventData;
-  },
-  context,
-) => {
-  const { act } = useBackend(context);
+const EventScreen = (props: { drone: DroneData; event: FullEventData }) => {
+  const { act } = useBackend();
   const { drone, event } = props;
 
   return (
@@ -780,13 +742,10 @@ const EventScreen = (
         <Stack.Item>
           <Stack fill>
             <Stack.Item>
-              <img
+              <Image
                 src={resolveAsset(event.image)}
                 height="125px"
                 width="250px"
-                style={{
-                  '-ms-interpolation-mode': 'nearest-neighbor',
-                }}
               />
             </Stack.Item>
             <Stack.Item>
@@ -800,17 +759,17 @@ const EventScreen = (
             <Stack.Item grow />
             <Stack.Item grow>
               <Button
-                content={event.action_text}
                 disabled={!event.action_enabled}
                 onClick={() => act('start_event')}
-              />
+              >
+                {event.action_text}
+              </Button>
             </Stack.Item>
             {!!event.skippable && (
               <Stack.Item mt={2}>
-                <Button
-                  content={event.ignore_text}
-                  onClick={() => act('skip_event')}
-                />
+                <Button onClick={() => act('skip_event')}>
+                  {event.ignore_text}
+                </Button>
               </Stack.Item>
             )}
             <Stack.Item grow />
@@ -821,16 +780,13 @@ const EventScreen = (
   );
 };
 
-export const AdventureScreen = (
-  props: {
-    adventure_data: AdventureData;
-    drone_integrity: number;
-    drone_max_integrity: number;
-    hide_status?: boolean;
-  },
-  context,
-) => {
-  const { act } = useBackend(context);
+export const AdventureScreen = (props: {
+  adventure_data: AdventureData;
+  drone_integrity: number;
+  drone_max_integrity: number;
+  hide_status?: boolean;
+}) => {
+  const { act } = useBackend();
   const { adventure_data, drone_integrity, drone_max_integrity } = props;
   const rawData = adventure_data.raw_image;
   const imgSource = rawData ? rawData : resolveAsset(adventure_data.image);
@@ -855,14 +811,7 @@ export const AdventureScreen = (
         </Stack.Item>
         <Stack.Divider />
         <Stack.Item>
-          <img
-            src={imgSource}
-            height="100px"
-            width="200px"
-            style={{
-              '-ms-interpolation-mode': 'nearest-neighbor',
-            }}
-          />
+          <Image src={imgSource} height="100px" width="200px" />
           <Stack vertical>
             <Stack.Divider />
             <Stack.Item grow />
@@ -871,12 +820,13 @@ export const AdventureScreen = (
                 <Stack.Item key={choice.key}>
                   <Button
                     fluid
-                    content={choice.text}
                     textAlign="center"
                     onClick={() =>
                       act('adventure_choice', { choice: choice.key })
                     }
-                  />
+                  >
+                    {choice.text}
+                  </Button>
                 </Stack.Item>
               ))}
             <Stack.Item grow />
@@ -895,7 +845,9 @@ const DroneScreen = (props: { drone: ActiveDrone & DroneData }) => {
       return <TimeoutScreen drone={drone} />;
     case DroneStatusEnum.Idle:
     case DroneStatusEnum.Travel:
-      return <TravelTargetSelectionScreen drone={drone} />;
+      return (
+        <TravelTargetSelectionScreen drone={drone} onSelectionDone={() => {}} />
+      );
     case DroneStatusEnum.Adventure:
       return (
         <AdventureScreen
@@ -913,8 +865,8 @@ const DroneScreen = (props: { drone: ActiveDrone & DroneData }) => {
   }
 };
 
-const ExodroneConsoleContent = (props, context) => {
-  const { data } = useBackend<ExodroneConsoleData>(context);
+const ExodroneConsoleContent = (props) => {
+  const { data } = useBackend<ExodroneConsoleData>();
 
   if (!data.drone) {
     return <DroneSelectionSection all_drones={data.all_drones} />;
@@ -925,16 +877,12 @@ const ExodroneConsoleContent = (props, context) => {
   return (
     <Stack fill vertical>
       <Stack.Item grow>
-        <Stack vertical fill grow={2}>
-          <Stack.Item grow>
-            <Stack fill>
-              <Stack.Item>
-                <EquipmentGrid drone={data} />
-              </Stack.Item>
-              <Stack.Item grow basis={0}>
-                <DroneScreen drone={data} />
-              </Stack.Item>
-            </Stack>
+        <Stack fill>
+          <Stack.Item>
+            <EquipmentGrid drone={data} />
+          </Stack.Item>
+          <Stack.Item grow basis={0}>
+            <DroneScreen drone={data} />
           </Stack.Item>
         </Stack>
       </Stack.Item>
@@ -942,7 +890,7 @@ const ExodroneConsoleContent = (props, context) => {
         <Section title="Drone Log" fill scrollable>
           <LabeledList>
             {drone_log.map((log_line, ix) => (
-              <LabeledList.Item key={log_line} label={`Entry ${ix + 1}`}>
+              <LabeledList.Item key={`log-${ix}`} label={`Entry ${ix + 1}`}>
                 {log_line}
               </LabeledList.Item>
             ))}

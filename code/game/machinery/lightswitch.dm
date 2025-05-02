@@ -1,159 +1,158 @@
-// the light switch
-// can have multiple per area
-// can also operate on non-loc area through "otherarea" var
+/// The light switch. Can have multiple per area.
 /obj/machinery/light_switch
 	name = "light switch"
-	desc = "A light switch. It turns lights on and off."
-	icon = 'icons/obj/machines/buttons.dmi'
-	icon_state = "light1"
-	anchored = TRUE
-	use_power = IDLE_POWER_USE
-	idle_power_usage = 20
-	power_channel = STATIC_LIGHT
-	var/slow_turning_on = FALSE
-	var/forceful_toggle = FALSE
-	var/on = TRUE
+	icon = 'icons/obj/machines/wallmounts.dmi'
+	icon_state = "light-nopower"
+	base_icon_state = "light"
+	desc = "Make dark."
+	power_channel = AREA_USAGE_LIGHT
+	idle_power_usage = BASE_MACHINE_IDLE_CONSUMPTION * 0.02
+	mouse_over_pointer = MOUSE_HAND_POINTER
+	/// Set this to a string, path, or area instance to control that area
+	/// instead of the switch's location.
 	var/area/area = null
-	var/otherarea = null
-	var/next_check = 0 // A time at which another mob check will occure.
+	///Range of the light emitted when powered, but off
+	var/light_on_range = 1
+	/// Should this lightswitch automatically rename itself to match the area it's in?
+	var/autoname = TRUE
 
-/obj/machinery/light_switch/New()
-	..()
-	spawn(5)
-		src.area = get_area(src)
+MAPPING_DIRECTIONAL_HELPERS(/obj/machinery/light_switch, 26)
 
-		if(otherarea)
-			src.area = locate(text2path("/area/[otherarea]"))
+/obj/machinery/light_switch/Initialize(mapload)
+	. = ..()
 
-		if(!name)
-			name = "light switch ([area.name])"
+	AddComponent(/datum/component/redirect_attack_hand_from_turf)
 
-		src.on = src.area.lightswitch
-		updateicon()
+	AddComponent(/datum/component/usb_port, list(
+		/obj/item/circuit_component/light_switch,
+	))
+	if(istext(area))
+		area = text2path(area)
+	if(ispath(area))
+		area = GLOB.areas_by_type[area]
+	if(!area)
+		area = get_area(src)
+	if(autoname)
+		name = "light switch ([area.name])"
+	find_and_hang_on_wall(custom_drop_callback = CALLBACK(src, PROC_REF(deconstruct), TRUE))
+	register_context()
+	update_appearance()
 
-		if(area.are_living_present())
-			set_on(TRUE)
+/obj/machinery/light_switch/add_context(atom/source, list/context, obj/item/held_item, mob/user)
+	. = ..()
+	if(isnull(held_item))
+		context[SCREENTIP_CONTEXT_LMB] = area.lightswitch ? "Flick off" : "Flick on"
+		return CONTEXTUAL_SCREENTIP_SET
+	if(held_item.tool_behaviour == TOOL_SCREWDRIVER)
+		context[SCREENTIP_CONTEXT_LMB] = "Deconstruct"
+		return CONTEXTUAL_SCREENTIP_SET
+	return .
 
-/obj/machinery/light_switch/Process()
-	if(next_check <= world.time)
-		next_check = world.time + 10 SECONDS // Each 10 seconds it checks if anyone is in the area, but also whether the light wasn't switched on recently.
-		if(area.are_living_present())
-			if(!on)
-				spawn(0)
-					if(!on)
-						dramatic_turning()
-			else
-				next_check = world.time + 10 MINUTES
-		else
-			set_on(FALSE, FALSE)
+/obj/machinery/light_switch/update_appearance(updates=ALL)
+	. = ..()
+	luminosity = (machine_stat & NOPOWER) ? 0 : 1
 
-/obj/machinery/light_switch/proc/updateicon()
-	if(stat & NOPOWER)
-		icon_state = "light-p"
-		set_light(0)
-		layer = initial(layer)
-		set_plane(initial(plane))
-	else
-		icon_state = "light[on]"
-		set_light(2, 1.5, on ? COLOR_LIGHTING_GREEN_BRIGHT : COLOR_LIGHTING_RED_BRIGHT)
-		set_plane(ABOVE_LIGHTING_PLANE)
-		layer = ABOVE_LIGHTING_LAYER
+/obj/machinery/light_switch/update_icon_state()
+	set_light(area.lightswitch ? 0 : light_on_range)
+	icon_state = "[base_icon_state]"
+	if(machine_stat & NOPOWER)
+		icon_state += "-nopower"
+		return ..()
+	icon_state += "[area.lightswitch ? "-on" : "-off"]"
+	return ..()
 
-/obj/machinery/light_switch/examine(mob/user, extra_description = "")
-	..(user, "It is [on ? "on" : "off"].")
+/obj/machinery/light_switch/update_overlays()
+	. = ..()
+	if(machine_stat & NOPOWER)
+		return ..()
+	. += emissive_appearance(icon, "[base_icon_state]-emissive[area.lightswitch ? "-on" : "-off"]", src, alpha = src.alpha)
 
-/obj/machinery/light_switch/proc/dramatic_turning()
-	if(slow_turning_on) // Sanity check. So nothing can force this thing to run twice simultaneously.
+/obj/machinery/light_switch/examine(mob/user)
+	. = ..()
+	. += "It is [(machine_stat & NOPOWER) ? "unpowered" : (area.lightswitch ? "on" : "off")]."
+	. += span_notice("It's <b>screwed</b> and secured to the wall.")
+
+/obj/machinery/light_switch/interact(mob/user)
+	. = ..()
+	set_lights(!area.lightswitch)
+
+/obj/machinery/light_switch/screwdriver_act(mob/living/user, obj/item/tool)
+	user.visible_message(span_notice("[user] starts unscrewing [src]..."), span_notice("You start unscrewing [src]..."))
+	if(!tool.use_tool(src, user, 40, volume = 50))
+		return ITEM_INTERACT_BLOCKING
+	user.visible_message(span_notice("[user] unscrews [src]!"), span_notice("You detach [src] from the wall."))
+	playsound(src, 'sound/items/deconstruct.ogg', 50, TRUE)
+	deconstruct(TRUE)
+	return ITEM_INTERACT_SUCCESS
+
+/obj/machinery/light_switch/proc/set_lights(status)
+	if(area.lightswitch == status)
 		return
+	area.lightswitch = status
+	area.update_appearance()
 
-	set_on(TRUE, TRUE)
-
-	slow_turning_on = TRUE
-
-	for(var/obj/machinery/light/L in area)
-		L.seton(L.has_power())
-		if(prob(50))
-			L.flick_light(rand(1, 3))
-		sleep(10)
-
-		if(forceful_toggle)
-			forceful_toggle = FALSE
-			return
-
-	slow_turning_on = FALSE
-
-/obj/machinery/light_switch/proc/set_on(on_ = TRUE, play_sound = TRUE)
-	on = on_
-
-	area.lightswitch = on_
-	area.updateicon()
-	if(play_sound)
-		playsound(src, 'sound/machines/button.ogg', 100, 1, 0)
-
-	for(var/obj/machinery/light_switch/L in area)
-		L.on = on_
-		L.update_icon()
-
-	if(on_)
-		next_check = world.time + 10 MINUTES
+	for(var/obj/machinery/light_switch/light_switch as anything in SSmachines.get_machines_by_type_and_subtypes(/obj/machinery/light_switch))
+		if(light_switch.area != area)
+			continue
+		light_switch.update_appearance()
+		SEND_SIGNAL(light_switch, COMSIG_LIGHT_SWITCH_SET, status)
 
 	area.power_change()
 
-/obj/machinery/light_switch/attack_hand(mob/user)
-	forceful_toggle = TRUE
-	set_on(!on)
-
 /obj/machinery/light_switch/power_change()
-
-	if(!otherarea)
-		if(powered(STATIC_LIGHT))
-			stat &= ~NOPOWER
-		else
-			stat |= NOPOWER
-
-		updateicon()
+	SHOULD_CALL_PARENT(FALSE)
+	if(area == get_area(src))
+		return ..()
 
 /obj/machinery/light_switch/emp_act(severity)
-	if(stat & (BROKEN|NOPOWER))
-		..(severity)
+	. = ..()
+	if (. & EMP_PROTECT_SELF)
 		return
-	power_change()
-	..(severity)
+	if(!(machine_stat & (BROKEN|NOPOWER)))
+		power_change()
 
-// Dimmer switch
-/obj/machinery/light_switch/dimmer_switch
-	name = "dimmer switch"
-	var/input_color = COLOR_LIGHTING_DEFAULT_BRIGHT
+/obj/machinery/light_switch/on_deconstruction(disassembled)
+	new /obj/item/wallframe/light_switch(loc)
 
-/obj/machinery/light_switch/dimmer_switch/attack_hand(mob/user)
-	return nano_ui_interact(user)
+/obj/item/wallframe/light_switch
+	name = "light switch"
+	desc = "An unmounted light switch. Attach it to a wall to use."
+	icon = 'icons/obj/machines/wallmounts.dmi'
+	icon_state = "light-nopower"
+	result_path = /obj/machinery/light_switch
+	custom_materials = list(/datum/material/iron = SHEET_MATERIAL_AMOUNT)
+	pixel_shift = 26
 
-/obj/machinery/light_switch/dimmer_switch/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
-	var/data = list()
-	data["on"] = on
-	data["input_color"] = input_color
+/obj/item/circuit_component/light_switch
+	display_name = "Light Switch"
+	desc = "Allows to control the lights of an area."
+	circuit_flags = CIRCUIT_FLAG_INPUT_SIGNAL
 
-	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
-	if(!ui)
-		ui = new(user, src, ui_key, "dimmer_switch.tmpl", "[name]", 200, 120)
-		ui.set_initial_data(data)
-		ui.open()
+	///If the lights should be turned on or off when the trigger is triggered.
+	var/datum/port/input/on_setting
+	///Whether the lights are turned on
+	var/datum/port/output/is_on
 
-/obj/machinery/light_switch/dimmer_switch/Topic(href, href_list)
-	if(..())
-		return TRUE
+	var/obj/machinery/light_switch/attached_switch
 
-	usr.set_machine(src)
-	if (href_list["on"])
-		forceful_toggle = TRUE
-		set_on(!on)
-		. = TRUE
-	if(href_list["input_color"])
-		input_color = input("Choose a color.", name, input_color) as color|null
-		area.area_light_color = input_color
-		for(var/obj/machinery/light/L in area)
-			L.reset_color()
-		. = TRUE
-	if(.)
-		SSnano.update_uis(src)
-	playsound(loc, 'sound/machines/machine_switch.ogg', 100, 1)
+/obj/item/circuit_component/light_switch/populate_ports()
+	on_setting = add_input_port("On", PORT_TYPE_NUMBER)
+	is_on = add_output_port("Is On", PORT_TYPE_NUMBER)
+
+/obj/item/circuit_component/light_switch/register_usb_parent(atom/movable/parent)
+	. = ..()
+	if(istype(parent, /obj/machinery/light_switch))
+		attached_switch = parent
+		RegisterSignal(parent, COMSIG_LIGHT_SWITCH_SET, PROC_REF(on_light_switch_set))
+
+/obj/item/circuit_component/light_switch/unregister_usb_parent(atom/movable/parent)
+	attached_switch = null
+	UnregisterSignal(parent, COMSIG_LIGHT_SWITCH_SET)
+	return ..()
+
+/obj/item/circuit_component/light_switch/proc/on_light_switch_set(datum/source, status)
+	SIGNAL_HANDLER
+	is_on.set_output(status)
+
+/obj/item/circuit_component/light_switch/input_received(datum/port/input/port)
+	attached_switch?.set_lights(on_setting.value ? TRUE : FALSE)

@@ -1,182 +1,217 @@
 /obj/machinery/recharger
 	name = "recharger"
-	desc = "A charging dock for power cells, power tools, computer devices and energy based weaponry."
-	icon = 'icons/obj/machines/recharger.dmi'
+	icon = 'icons/obj/machines/sec.dmi'
 	icon_state = "recharger"
-	anchored = TRUE
-	use_power = IDLE_POWER_USE
-	idle_power_usage = 4
-	circuit = /obj/item/electronics/circuitboard/recharger
-	var/max_power_usage = 40000	//40 kW. This is the highest power the charger can draw and use,
-	//though it may draw less when charging weak cells due to their charging rate limits
-	active_power_usage = 40000//The actual power the charger uses right now. This is recalculated based on the cell when it's inserted
-	var/efficiency = 0.90
+	base_icon_state = "recharger"
+	desc = "A charging dock for energy based weaponry, PDAs, and other devices."
+	circuit = /obj/item/circuitboard/machine/recharger
+	pass_flags = PASSTABLE
 	var/obj/item/charging = null
-	var/list/allowed_devices = list(
-		/obj/item/cell,
-		/obj/item/tool, /obj/item/device/scanner,
-		/obj/item/gun/energy, /obj/item/melee/baton, /obj/item/modular_computer,
-	)
-	var/portable = TRUE
+	var/recharge_coeff = 1
+	var/using_power = FALSE //Did we put power into "charging" last process()?
+	///Did we finish recharging the currently inserted item?
+	var/finished_recharging = FALSE
 
-/obj/machinery/recharger/examine(mob/user, extra_description = "")
+	var/static/list/allowed_devices = typecacheof(list(
+		/obj/item/gun/energy,
+		/obj/item/melee/baton/security,
+		/obj/item/ammo_box/magazine/recharge,
+		/obj/item/modular_computer,
+		/obj/item/gun/ballistic/automatic/battle_rifle,
+	))
+
+/obj/machinery/recharger/RefreshParts()
+	. = ..()
+	for(var/datum/stock_part/capacitor/capacitor in component_parts)
+		recharge_coeff = capacitor.tier
+
+/obj/machinery/recharger/examine(mob/user)
+	. = ..()
+	if(!in_range(user, src) && !issilicon(user) && !isobserver(user))
+		. += span_warning("You're too far away to examine [src]'s contents and display!")
+		return
+
 	if(charging)
-		var/obj/item/cell/cell = charging.get_cell()
-		if(cell)
-			extra_description += "The charge meter reads [round(cell.percent())]%."
-	..(user, extra_description)
+		. += {"[span_notice("\The [src] contains:")]
+		[span_notice("- \A [charging].")]"}
 
-/obj/machinery/recharger/attackby(obj/item/I, mob/user)
-	if(default_deconstruction(I, user))
+	if(machine_stat & (NOPOWER|BROKEN))
 		return
+	var/status_display_message_shown = FALSE
+	if(using_power)
+		status_display_message_shown = TRUE
+		. += span_notice("The status display reads:")
+		. += span_notice("- Recharging efficiency: <b>[recharge_coeff*100]%</b>.")
 
-	if(default_part_replacement(I, user))
+	if(isnull(charging))
 		return
+	if(!status_display_message_shown)
+		. += span_notice("The status display reads:")
 
-	if(portable && I.has_quality(QUALITY_BOLT_TURNING))
-		if(charging)
-			to_chat(user, SPAN_WARNING("Remove [charging] first!"))
-			return
-		anchored = !anchored
-		to_chat(user, "You [anchored ? "attached" : "detached"] [src].")
-		playsound(loc, 'sound/items/Ratchet.ogg', 75, 1)
+	var/obj/item/stock_parts/power_store/charging_cell = charging.get_cell()
+	if(charging_cell)
+		. += span_notice("- \The [charging]'s cell is at <b>[charging_cell.percent()]%</b>.")
 		return
+	if(istype(charging, /obj/item/ammo_box/magazine/recharge))
+		var/obj/item/ammo_box/magazine/recharge/power_pack = charging
+		. += span_notice("- \The [charging]'s cell is at <b>[PERCENT(power_pack.stored_ammo.len/power_pack.max_ammo)]%</b>.")
+		return
+	if(istype(charging, /obj/item/gun/ballistic/automatic/battle_rifle))
+		var/obj/item/gun/ballistic/automatic/battle_rifle/recalibrating_gun = charging
+		. += span_notice("- \The [charging]'s system degradation is at stage [recalibrating_gun.degradation_stage] of [recalibrating_gun.degradation_stage_max]</b>.")
+		. += span_notice("- \The [charging]'s degradation buffer is at <b>[PERCENT(recalibrating_gun.shots_before_degradation/recalibrating_gun.max_shots_before_degradation)]%</b>.")
+		return
+	. += span_notice("- \The [charging] is not reporting a power level.")
 
-	else if (istype(I, /obj/item/gripper))//Code for allowing cyborgs to use rechargers
-		var/obj/item/gripper/Gri = I
-		if (charging)//If there's something in the charger
-			if (Gri.grip_item(charging, user))//we attempt to grab it
-				charging = null
-				update_icon()
-			else
-				to_chat(user, "<span class='danger'>Your gripper cannot hold \the [charging].</span>")
+/obj/machinery/recharger/Entered(atom/movable/arrived, atom/old_loc, list/atom/old_locs)
+	if(is_type_in_typecache(arrived, allowed_devices))
+		charging = arrived
+		START_PROCESSING(SSmachines, src)
+		update_use_power(ACTIVE_POWER_USE)
+		finished_recharging = FALSE
+		using_power = TRUE
+		update_appearance()
+	return ..()
+
+/obj/machinery/recharger/Exited(atom/movable/gone, direction)
+	if(gone == charging)
+		if(!QDELING(charging))
+			charging.update_appearance()
+		charging = null
+		update_use_power(IDLE_POWER_USE)
+		using_power = FALSE
+		update_appearance()
+	return ..()
+
+/obj/machinery/recharger/attackby(obj/item/attacking_item, mob/user, list/modifiers)
+	if(!is_type_in_typecache(attacking_item, allowed_devices))
+		return ..()
 
 	if(!anchored)
-		to_chat(user, SPAN_WARNING("Attach [src] first!"))
-		return
+		to_chat(user, span_notice("[src] isn't connected to anything!"))
+		return TRUE
+	if(charging || panel_open)
+		return TRUE
 
-	if(!user.canUnEquip(I))
-		return
+	var/area/our_area = get_area(src) //Check to make sure user's not in space doing it, and that the area got proper power.
+	if(!isarea(our_area) || our_area.power_equip == 0)
+		to_chat(user, span_notice("[src] blinks red as you try to insert [attacking_item]."))
+		return TRUE
 
-	if(is_type_in_list(I, allowed_devices))
-		if(charging)
-			to_chat(user, SPAN_WARNING("\A [charging] is already charging here."))
-			return
-		// Checks to make sure he's not in space doing it, and that the area got proper power.
-		if(!powered())
-			to_chat(user, SPAN_WARNING("[src] blinks red as you try to insert the item!"))
-			return
+	if (istype(attacking_item, /obj/item/gun/energy))
+		var/obj/item/gun/energy/energy_gun = attacking_item
+		if(!energy_gun.can_charge)
+			to_chat(user, span_notice("Your gun has no external power connector."))
+			return TRUE
+	user.transferItemToLoc(attacking_item, src)
+	return TRUE
 
-		if (istype(I, /obj/item/gun/energy))
-			var/obj/item/gun/energy/W = I
-			if (W.disposable)
-				to_chat(user, SPAN_NOTICE("Your gun is disposable, it cannot be charged."))
-				return
-		if(istype(I, /obj/item/gun/energy/nuclear) || istype(I, /obj/item/gun/energy/crossbow))
-			to_chat(user, SPAN_NOTICE("Your gun's recharge port was removed to make room for a miniaturized reactor."))
-			return
-		var/obj/item/cell/cell = I.get_cell()
+/obj/machinery/recharger/wrench_act(mob/living/user, obj/item/tool)
+	if(charging)
+		to_chat(user, span_notice("Remove the charging item first!"))
+		return ITEM_INTERACT_BLOCKING
+	set_anchored(!anchored)
+	power_change()
+	to_chat(user, span_notice("You [anchored ? "attached" : "detached"] [src]."))
+	tool.play_tool_sound(src)
+	return ITEM_INTERACT_SUCCESS
 
-		if(!cell && istool(I))
-			var/obj/item/tool/T = I
+/obj/machinery/recharger/screwdriver_act(mob/living/user, obj/item/tool)
+	if(!anchored || charging)
+		return ITEM_INTERACT_BLOCKING
+	. = default_deconstruction_screwdriver(user, base_icon_state, base_icon_state, tool)
+	if(.)
+		update_appearance()
 
-			if(!T.suitable_cell)
-				return
+/obj/machinery/recharger/crowbar_act(mob/living/user, obj/item/tool)
+	return (!anchored || charging) ? ITEM_INTERACT_BLOCKING : default_deconstruction_crowbar(tool)
 
-			to_chat(user, SPAN_WARNING("This tool does not have a battery installed."))
-			return
-
-		if(!cell)
-			to_chat(user, SPAN_WARNING("This device does not have a battery installed."))
-			return //We don't want to go any farther if we failed to find a cell
-
-		active_power_usage = min(max_power_usage, (cell.maxcharge*cell.max_chargerate)/CELLRATE)
-		//If trying to charge a really small cell, we won't waste more power than it can intake
-
-		user.unEquip(I, src)
-		charging = I
-		update_icon()
-
-
-
-
-/obj/machinery/recharger/attack_hand(mob/user)
-	if(issilicon(user))
+/obj/machinery/recharger/attack_hand(mob/user, list/modifiers)
+	. = ..()
+	if(.)
 		return
 
 	add_fingerprint(user)
+	if(isnull(charging) || user.put_in_hands(charging))
+		return
+	charging.forceMove(drop_location())
 
-	if(charging)
-		charging.update_icon()
-		user.put_in_hands(charging)
-		charging = null
-		update_icon()
+/obj/machinery/recharger/attack_tk(mob/user)
+	if(isnull(charging))
+		return
+	charging.forceMove(drop_location())
+	return COMPONENT_CANCEL_ATTACK_CHAIN
 
-/obj/machinery/recharger/Process()
-	if((stat & (NOPOWER|BROKEN)) || !anchored)
-		update_icon()
+/obj/machinery/recharger/process(seconds_per_tick)
+	if(machine_stat & (NOPOWER|BROKEN) || !anchored)
+		return PROCESS_KILL
+
+	using_power = FALSE
+	if(isnull(charging))
+		return PROCESS_KILL
+	var/obj/item/stock_parts/power_store/charging_cell = charging.get_cell()
+	if(charging_cell)
+		if(charging_cell.charge < charging_cell.maxcharge)
+			charge_cell(charging_cell.chargerate * recharge_coeff * seconds_per_tick, charging_cell)
+			using_power = TRUE
+		update_appearance()
+
+	if(istype(charging, /obj/item/ammo_box/magazine/recharge)) //if you add any more snowflake ones, make sure to update the examine messages too.
+		var/obj/item/ammo_box/magazine/recharge/power_pack = charging
+		for(var/charge_iterations in 1 to recharge_coeff)
+			if(power_pack.stored_ammo.len >= power_pack.max_ammo)
+				break
+			power_pack.stored_ammo += new power_pack.ammo_type(power_pack)
+			use_energy(active_power_usage * seconds_per_tick)
+			using_power = TRUE
+		update_appearance()
 		return
 
-	var/obj/item/cell/cell = charging?.get_cell()
+	if(istype(charging, /obj/item/gun/ballistic/automatic/battle_rifle))
+		var/obj/item/gun/ballistic/automatic/battle_rifle/recalibrating_gun = charging
 
-	if(cell && !cell.fully_charged())
-		cell.give((active_power_usage*CELLRATE)*efficiency)
-		set_power_use(ACTIVE_POWER_USE)
-	else
-		set_power_use(IDLE_POWER_USE)
-	update_icon()
+		if(recalibrating_gun.degradation_stage)
+			recalibrating_gun.attempt_recalibration(FALSE)
+			use_energy(active_power_usage * recharge_coeff * seconds_per_tick)
+			using_power = TRUE
+
+		else if(recalibrating_gun.shots_before_degradation < recalibrating_gun.max_shots_before_degradation)
+			recalibrating_gun.attempt_recalibration(TRUE, 1 * recharge_coeff)
+			use_energy(active_power_usage * recharge_coeff * seconds_per_tick)
+			using_power = TRUE
+
+		update_appearance()
+		return
+
+	if(!using_power && !finished_recharging) //Inserted thing is at max charge/ammo, notify those around us
+		finished_recharging = TRUE
+		playsound(src, 'sound/machines/ping.ogg', 30, TRUE)
+		say("[charging] has finished recharging!")
 
 /obj/machinery/recharger/emp_act(severity)
-	if(stat & (NOPOWER|BROKEN) || !anchored)
-		..(severity)
+	. = ..()
+	if (. & EMP_PROTECT_CONTENTS)
+		return
+	if((machine_stat & (NOPOWER|BROKEN)) || !anchored)
+		return
+	if(istype(charging, /obj/item/gun/energy))
+		var/obj/item/gun/energy/energy_gun = charging
+		if(energy_gun.cell)
+			energy_gun.cell.emp_act(severity)
+
+	else if(istype(charging, /obj/item/melee/baton/security))
+		var/obj/item/melee/baton/security/batong = charging
+		if(batong.cell)
+			batong.cell.charge = 0
+
+/obj/machinery/recharger/update_overlays()
+	. = ..()
+	if(machine_stat & (NOPOWER|BROKEN) || !anchored)
+		return
+	if(panel_open)
+		. += mutable_appearance(icon, "[base_icon_state]-open", alpha = src.alpha)
 		return
 
-	var/obj/item/cell/cell = charging?.get_cell()
-	if(cell)
-		cell.emp_act(severity)
-
-	..(severity)
-
-/obj/machinery/recharger/handle_atom_del(atom/A)
-	..()
-	if(A == charging)
-		charging = null
-		update_icon()
-
-/obj/machinery/recharger/update_icon()
-	icon_state = initial(icon_state)
-
-	if(panel_open)
-		icon_state = "[icon_state]_open"
-
-	else if((stat & (NOPOWER|BROKEN)) || !anchored)
-		icon_state = "[icon_state]_off"
-	else
-		var/obj/item/cell/cell = charging?.get_cell()
-
-		if(cell)
-			if(cell.fully_charged())
-				icon_state = "[icon_state]_done"
-			else
-				icon_state = "[icon_state]_work"
-		else if(charging)
-			icon_state = "[icon_state]_done"
-
-/obj/machinery/recharger/RefreshParts()
-	..()
-	var/rating = 1
-	for(var/obj/item/stock_parts/capacitor/C in component_parts)
-		rating += C.rating - 1
-
-	max_power_usage = initial(max_power_usage) * rating
-	efficiency = min(initial(efficiency) + (0.05 * (rating - 1)), 0.99)
-
-
-
-/obj/machinery/recharger/wallcharger
-	name = "wall recharger"
-	desc = "A wall-mounted weapon charging dock."
-	icon_state = "wrecharger"
-	allowed_devices = list(/obj/item/gun/energy, /obj/item/melee/baton)
-	portable = FALSE
-	circuit = null
+	var/icon_to_use = "[base_icon_state]-[isnull(charging) ? "empty" : (using_power ? "charging" : "full")]"
+	. += mutable_appearance(icon, icon_to_use, alpha = src.alpha)
+	. += emissive_appearance(icon, icon_to_use, src, alpha = src.alpha)

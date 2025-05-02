@@ -1,123 +1,122 @@
 /obj/item/electronics/airlock
 	name = "airlock electronics"
-	icon = 'icons/obj/doors/door_assembly.dmi'
-	icon_state = "door_electronics"
-	w_class = ITEM_SIZE_SMALL //It should be tiny! -Agouri
+	req_access = list(ACCESS_MAINT_TUNNELS)
+	/// A list of all granted accesses
+	var/list/accesses = list()
+	/// If the airlock should require ALL or only ONE of the listed accesses
+	var/one_access = 0
+	/// Checks to see if this airlock has an unrestricted helper (will set to TRUE if present).
+	var/unres_sensor = FALSE
+	/// Unrestricted sides, or sides of the airlock that will open regardless of access
+	var/unres_sides = NONE
+	///what name are we passing to the finished airlock
+	var/passed_name
+	///what string are we passing to the finished airlock as the cycle ID
+	var/passed_cycle_id
+	/// A holder of the electronics, in case of them working as an integrated part
+	var/holder
+	/// Whether this airlock can have an integrated circuit inside of it or not
+	var/shell = FALSE
 
-	matter = list(MATERIAL_PLASTIC = 2, MATERIAL_GLASS = 3)
+/obj/item/electronics/airlock/examine(mob/user)
+	. = ..()
+	. += span_notice("Has a neat <i>selection menu</i> for modifying airlock access levels.")
 
-	req_access = list(access_engine)
+/**
+ * Create a copy of the electronics
+ * Arguments
+ * * [location][atom]- the location to create the new copy in
+ */
+/obj/item/electronics/airlock/proc/create_copy(atom/location)
+	//create a copy
+	var/obj/item/electronics/airlock/new_electronics = new(location)
+	//copy all params
+	new_electronics.accesses = accesses.Copy()
+	new_electronics.one_access = one_access
+	new_electronics.unres_sides = unres_sides
+	new_electronics.passed_name = passed_name
+	new_electronics.passed_cycle_id = passed_cycle_id
+	new_electronics.shell = shell
+	//return copy
+	return new_electronics
 
-	var/secure = FALSE //if set, then wires will be randomized and bolts will drop if the door is broken
-	var/list/conf_access = list()
-	var/one_access = FALSE //if set to 1, door would receive req_one_access instead of req_access
-	var/last_configurator = null
-	var/locked = TRUE
-	var/lockable = TRUE
-	/// Used for blast doors and shutters
-	var/wifi_id = null
 
-/obj/item/electronics/airlock/attack_self(mob/user)
-	if (!ishuman(user) && !istype(user,/mob/living/silicon/robot))
-		return ..(user)
+/obj/item/electronics/airlock/ui_state(mob/user)
+	return GLOB.hands_state
 
-	nano_ui_interact(user)
-
-
-/obj/item/electronics/airlock/nano_ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1, datum/nano_topic_state/state = GLOB.hands_state)
-	var/list/data = nano_ui_data()
-
-	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
+/obj/item/electronics/airlock/ui_interact(mob/user, datum/tgui/ui)
+	ui = SStgui.try_update_ui(user, src, ui)
 	if(!ui)
-		ui = new(user, src, ui_key, "airlock_electronics.tmpl", src.name, 1000, 500, null, null, state)
-		ui.set_initial_data(data)
+		ui = new(user, src, "AirlockElectronics", name)
 		ui.open()
 
-/obj/item/electronics/airlock/nano_ui_data()
+/obj/item/electronics/airlock/ui_static_data(mob/user)
 	var/list/data = list()
+
 	var/list/regions = list()
+	var/list/tgui_region_data = SSid_access.all_region_access_tgui
+	for(var/region in SSid_access.station_regions)
+		regions += tgui_region_data[region]
 
-	for(var/i in ACCESS_REGION_MIN to ACCESS_REGION_MAX) //code/game/jobs/_access_defs.dm
-		var/list/region = list()
-		var/list/accesses = list()
-		for(var/j in get_region_accesses(i))
-			var/list/access = list()
-			access["name"] = get_access_desc(j)
-			access["id"] = j
-			access["req"] = (j in src.conf_access)
-			accesses[++accesses.len] = access
-		region["name"] = get_region_accesses_name(i)
-		region["accesses"] = accesses
-		regions[++regions.len] = region
 	data["regions"] = regions
-	data["oneAccess"] = one_access
-	data["locked"] = locked
-	data["lockable"] = lockable
-	//data["autoset"] = autoset
-
 	return data
 
-/obj/item/electronics/airlock/OnTopic(mob/user, list/href_list, state)
-	if(lockable)
-		if(href_list["unlock"])
-			if(!req_access || istype(user, /mob/living/silicon))
-				locked = FALSE
-				last_configurator = user.name
+/obj/item/electronics/airlock/ui_data()
+	var/list/data = list()
+	data["accesses"] = accesses
+	data["oneAccess"] = one_access
+	data["unres_direction"] = unres_sides
+	data["passedName"] = passed_name
+	data["passedCycleId"] = passed_cycle_id
+	data["shell"] = shell
+	return data
+
+///shared by rcd & airlock electronics
+/obj/item/electronics/airlock/proc/do_action(action, params)
+	switch(action)
+		if("clear_all")
+			accesses = list()
+			one_access = 0
+		if("grant_all")
+			accesses = SSid_access.get_region_access_list(list(REGION_ALL_STATION))
+		if("one_access")
+			one_access = !one_access
+		if("set")
+			var/access = params["access"]
+			if (!(access in accesses))
+				accesses += access
 			else
-				var/obj/item/card/id/I = user.get_active_hand()
-				I = I ? I.GetIdCard() : null
-				if(!istype(I, /obj/item/card/id))
-					to_chat(user, SPAN_WARNING("[\src] flashes a yellow LED near the ID scanner. Did you remember to scan your ID or PDA?"))
-					return TOPIC_HANDLED
-				if (check_access(I))
-					locked = FALSE
-					last_configurator = I.registered_name
-				else
-					to_chat(user, SPAN_WARNING("[\src] flashes a red LED near the ID scanner, indicating your access has been denied."))
-					return TOPIC_HANDLED
-			return TOPIC_REFRESH
-		else if(href_list["lock"])
-			locked = TRUE
-			return TOPIC_REFRESH
+				accesses -= access
+		if("set_shell")
+			shell = !!params["on"]
+		if("direc_set")
+			var/unres_direction = text2num(params["unres_direction"])
+			unres_sides ^= unres_direction //XOR, toggles only the bit that was clicked
+		if("grant_region")
+			var/region = params["region"]
+			if(isnull(region))
+				return
+			accesses |= SSid_access.get_region_access_list(list(region))
+		if("deny_region")
+			var/region = params["region"]
+			if(isnull(region))
+				return
+			accesses -= SSid_access.get_region_access_list(list(region))
+		if("passedName")
+			var/new_name = trim("[params["passedName"]]", 30)
+			passed_name = new_name
+		if("passedCycleId")
+			var/new_cycle_id = trim(params["passedCycleId"], 30)
+			passed_cycle_id = new_cycle_id
 
-	if(href_list["clear"])
-		conf_access = list()
-		one_access = FALSE
-		return TOPIC_REFRESH
-	if(href_list["one_access"])
-		one_access = !one_access
-		return TOPIC_REFRESH
-	/* Baystation's "autoset" feature: draws access levels from area
-	if(href_list["autoset"])
-		autoset = !autoset
-		return TOPIC_REFRESH
-	*/
-	if(href_list["access"])
-		toggle_access(text2num(href_list["access"]))
-		return TOPIC_REFRESH
+/obj/item/electronics/airlock/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
+	. = ..()
+	if(.)
+		return
+	do_action(action, params)
+	return TRUE
 
-
-/obj/item/electronics/airlock/proc/toggle_access(var/acc)
-	if (acc == "all")
-		conf_access = null
-	else
-		var/req = text2num(acc)
-
-		if (conf_access == null)
-			conf_access = list()
-
-		if (!(req in conf_access))
-			conf_access += req
-		else
-			conf_access -= req
-			if (!conf_access.len)
-				conf_access = null
-
-
-
-
-/obj/item/electronics/airlock/secure
-	name = "secure airlock electronics"
-	desc = "designed to be somewhat more resistant to hacking than standard electronics."
-	origin_tech = list(TECH_DATA = 2)
-	secure = 1
+/obj/item/electronics/airlock/ui_host()
+	if(holder)
+		return holder
+	return src

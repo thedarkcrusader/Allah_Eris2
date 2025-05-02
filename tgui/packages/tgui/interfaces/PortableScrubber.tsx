@@ -1,6 +1,7 @@
-import { BooleanLike } from 'common/react';
+import { Button, Section } from 'tgui-core/components';
+import { BooleanLike } from 'tgui-core/react';
+
 import { useBackend } from '../backend';
-import { Button, Section } from '../components';
 import { getGasLabel } from '../constants';
 import { Window } from '../layouts';
 import { PortableBasicInfo } from './common/PortableAtmos';
@@ -16,8 +17,8 @@ type Filter = {
   gasName: string;
 };
 
-export const PortableScrubber = (props, context) => {
-  const { act, data } = useBackend<Data>(context);
+export const PortableScrubber = (props) => {
+  const { act, data } = useBackend<Data>();
   const { filterTypes = [] } = data;
 
   return (

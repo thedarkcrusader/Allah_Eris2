@@ -1,26 +1,48 @@
-/mob/living/silicon/ai/death(gibbed)
-
+/mob/living/silicon/ai/death(gibbed, drop_mmi = TRUE)
 	if(stat == DEAD)
 		return
 
-	pull_to_core()  // Pull back mind to core if it is controlling a drone
+	if(!gibbed)
+		// Will update all AI status displays with a blue screen of death
+		INVOKE_ASYNC(src, PROC_REF(emote), "bsod")
+
+	if(!isnull(deployed_shell))
+		disconnect_shell()
+
+	. = ..()
+
+	cut_overlays() //remove portraits
+	var/base_icon = icon_state
+	if(icon_exists(icon, "[base_icon]_dead"))
+		icon_state = "[base_icon]_dead"
+	else
+		icon_state = "ai_dead"
+
+	if(icon_exists(icon, "[base_icon]_death_transition"))
+		flick("[base_icon]_death_transition", src)
+
+	if(is_anchored)
+		flip_anchored()
 
 	if(eyeobj)
 		eyeobj.setLoc(get_turf(src))
+		set_eyeobj_visible(FALSE)
 
-	remove_ai_verbs(src)
+	GLOB.shuttle_caller_list -= src
+	SSshuttle.autoEvac()
 
-	stop_malf(0) // Remove AI's malfunction status, that will fix all hacked APCs, etc.
+	ShutOffDoomsdayDevice()
 
-	for(var/obj/machinery/ai_status_display/O in world)
-		O.mode = 2
+	if(gibbed && drop_mmi)
+		make_mmi_drop_and_transfer()
 
-	if (istype(loc, /obj/item/device/aicard))
-		var/obj/item/device/aicard/card = loc
-		card.update_icon()
+	if(explodes_on_death)
+		addtimer(CALLBACK(GLOBAL_PROC, GLOBAL_PROC_REF(explosion), loc, 3, 6, 12, null, 15), 1 SECONDS)
 
-	for (var/mob/living/silicon/robot/R in connected_robots)
-		to_chat(R, "<span class='notice'>You lost signal from your master [src.name].</span>")
-		
-	. = ..(gibbed,"gives one shrill beep before falling lifeless.")
-	density = TRUE
+	SSblackbox.ReportDeath(src)
+
+/mob/living/silicon/ai/proc/ShutOffDoomsdayDevice()
+	if(nuking)
+		nuking = FALSE
+	if(doomsday_device)
+		qdel(doomsday_device)

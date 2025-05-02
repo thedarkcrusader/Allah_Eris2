@@ -1,11 +1,15 @@
-import { BooleanLike } from 'common/react';
-import { multiline } from 'common/string';
-import { useBackend, useLocalState } from '../backend';
-import { BlockQuote, Button, Dropdown, Section, Stack } from '../components';
-import { Window } from '../layouts';
+import { useState } from 'react';
+import {
+  BlockQuote,
+  Button,
+  Dropdown,
+  Section,
+  Stack,
+} from 'tgui-core/components';
+import { BooleanLike } from 'tgui-core/react';
 
-// defined this so the code is more readable
-const STAKES_HOLY_MATCH = 1;
+import { useBackend } from '../backend';
+import { Window } from '../layouts';
 
 const weaponlist = [
   'Fist Fight',
@@ -38,11 +42,12 @@ type Info = {
   right_sign: string;
   in_area: BooleanLike;
   no_chaplains: BooleanLike;
+  stakes_holy_match: number;
   possible_areas: Array<string>;
 };
 
-export const SparringContract = (props, context) => {
-  const { data, act } = useBackend<Info>(context);
+export const SparringContract = (props) => {
+  const { data, act } = useBackend<Info>();
   const {
     set_weapon,
     set_area,
@@ -52,10 +57,12 @@ export const SparringContract = (props, context) => {
     right_sign,
     in_area,
     no_chaplains,
+    stakes_holy_match,
   } = data;
-  const [weapon, setWeapon] = useLocalState(context, 'weapon', set_weapon);
-  const [area, setArea] = useLocalState(context, 'area', set_area);
-  const [stakes, setStakes] = useLocalState(context, 'stakes', set_stakes);
+  const [weapon, setWeapon] = useState(set_weapon);
+  const [area, setArea] = useState(set_area);
+  const [stakes, setStakes] = useState(set_stakes);
+
   return (
     <Window width={420} height={380}>
       <Window.Content>
@@ -70,7 +77,7 @@ export const SparringContract = (props, context) => {
                     </Stack.Item>
                     <Stack.Item>
                       <Button
-                        tooltip={multiline`
+                        tooltip={`
                         The Chaplain's Deity wishes for honorable fighting.
                         As such, it uses contracts. Signing your name will
                         set the terms for the battle. Then, the person you
@@ -143,7 +150,7 @@ export const SparringContract = (props, context) => {
               </Stack>
             </Stack.Item>
             <Stack.Item grow>
-              <Stack grow textAlign="center">
+              <Stack textAlign="center">
                 <Stack.Item fontSize={left_sign !== 'none' && '14px'} grow>
                   {(left_sign === 'none' && (
                     <Button
@@ -188,7 +195,7 @@ export const SparringContract = (props, context) => {
                   <Button
                     disabled={
                       !in_area ||
-                      (no_chaplains && set_stakes === STAKES_HOLY_MATCH)
+                      (no_chaplains && set_stakes === stakes_holy_match)
                     }
                     icon="fist-raised"
                     onClick={() => act('fight')}
@@ -196,7 +203,7 @@ export const SparringContract = (props, context) => {
                     FIGHT!
                   </Button>
                   <Button
-                    tooltip={multiline`
+                    tooltip={`
                       If you've already signed but you want to renegotiate
                       the terms, you can clear out the signatures with
                       this button.
