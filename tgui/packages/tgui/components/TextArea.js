@@ -186,7 +186,7 @@ export class TextArea extends Component {
       ...boxProps
     } = this.props;
     // Box props
-    const { className, fluid, ...rest } = boxProps;
+    const { className, fluid, nowrap, ...rest } = boxProps;
     const { scrolledAmount } = this.state;
     return (
       <Box
@@ -196,8 +196,7 @@ export class TextArea extends Component {
           noborder && 'TextArea--noborder',
           className,
         ])}
-        {...rest}
-      >
+        {...rest}>
         {!!displayedValue && (
           <Box position="absolute" width="100%" height="100%" overflow="hidden">
             <div
@@ -206,9 +205,8 @@ export class TextArea extends Component {
                 'TextArea__textarea_custom',
               ])}
               style={{
-                transform: `translateY(-${scrolledAmount}px)`,
-              }}
-            >
+                'transform': `translateY(-${scrolledAmount}px)`,
+              }}>
               {displayedValue}
             </div>
           </Box>
@@ -218,6 +216,7 @@ export class TextArea extends Component {
           className={classes([
             'TextArea__textarea',
             scrollbar && 'TextArea__textarea--scrollable',
+            nowrap && 'TextArea__nowrap',
           ])}
           placeholder={placeholder}
           onChange={this.handleOnChange}
@@ -229,7 +228,7 @@ export class TextArea extends Component {
           onScroll={this.handleScroll}
           maxLength={maxLength}
           style={{
-            color: displayedValue ? 'rgba(0, 0, 0, 0)' : 'inherit',
+            'color': displayedValue ? 'rgba(0, 0, 0, 0)' : 'inherit',
           }}
         />
       </Box>

@@ -1,6 +1,9 @@
 //include unit test files in this module in this ifdef
 //Keep this sorted alphabetically
 
+//include unit test files in this module in this ifdef
+//Keep this sorted alphabetically
+
 #if defined(UNIT_TESTS) || defined(SPACEMAN_DMM)
 
 /// For advanced cases, fail unconditionally but don't return (so a test can return multiple results)
@@ -41,6 +44,11 @@
 /// Intended to be used in the manner of `TEST_FOCUS(/datum/unit_test/math)`
 #define TEST_FOCUS(test_path) ##test_path { focus = TRUE; }
 
+/// Logs a noticable message on GitHub, but will not mark as an error.
+/// Use this when something shouldn't happen and is of note, but shouldn't block CI.
+/// Does not mark the test as failed.
+#define TEST_NOTICE(source, message) source.log_for_test((##message), "notice", __FILE__, __LINE__)
+
 /// Constants indicating unit test completion status
 #define UNIT_TEST_PASSED 0
 #define UNIT_TEST_FAILED 1
@@ -48,91 +56,38 @@
 
 #define TEST_PRE 0
 #define TEST_DEFAULT 1
-#define TEST_DEL_WORLD INFINITY
-
-/// Change color to red on ANSI terminal output, if enabled with -DANSICOLORS.
-#ifdef ANSICOLORS
-#define TEST_OUTPUT_RED(text) "\x1B\x5B1;31m[text]\x1B\x5B0m"
-#else
-#define TEST_OUTPUT_RED(text) (text)
-#endif
-/// Change color to green on ANSI terminal output, if enabled with -DANSICOLORS.
-#ifdef ANSICOLORS
-#define TEST_OUTPUT_GREEN(text) "\x1B\x5B1;32m[text]\x1B\x5B0m"
-#else
-#define TEST_OUTPUT_GREEN(text) (text)
-#endif
+/// After most test steps, used for tests that run long so shorter issues can be noticed faster
+#define TEST_LONGER 10
+/// This must be the one of last tests to run due to the inherent nature of the test iterating every single tangible atom in the game and qdeleting all of them (while taking long sleeps to make sure the garbage collector fires properly) taking a large amount of time.
+#define TEST_CREATE_AND_DESTROY 9001
+/**
+ * For tests that rely on create and destroy having iterated through every (tangible) atom so they don't have to do something similar.
+ * Keep in mind tho that create and destroy will absolutely break the test platform, anything that relies on its shape cannot come after it.
+ */
+#define TEST_AFTER_CREATE_AND_DESTROY INFINITY
 
 /// A trait source when adding traits through unit tests
 #define TRAIT_SOURCE_UNIT_TESTS "unit_tests"
 
-// #include "anchored_mobs.dm"
-// #include "bespoke_id.dm"
-#include "binary_insert.dm"
-// #include "bloody_footprints.dm"
-// #include "breath.dm"
-// #include "card_mismatch.dm"
-// #include "chain_pull_through_space.dm"
-// #include "combat.dm"
+#include "anchored_mobs.dm"
+#include "atmos_tests.dm"
+#include "baseturfs.dm"
 #include "component_tests.dm"
-// #include "connect_loc.dm"
-// #include "confusion.dm"
-// #include "crayons.dm"
-// #include "designs.dm"
-// #include "dynamic_ruleset_sanity.dm"
-// #include "emoting.dm"
-// #include "food_edibility_check.dm"
-// #include "glasses_vision.dm" // disabled due to the ci itself being broken
-// #include "heretic_knowledge.dm"
-// #include "holidays.dm"
-// #include "hydroponics_harvest.dm"
-// #include "initialize_sanity.dm"
-// #include "keybinding_init.dm"
-#include "loadout_tests.dm"
-// #include "machine_disassembly.dm"
-#include "map_tests.dm"
-// #include "medical_wounds.dm"
-// #include "merge_type.dm"
-// #include "metabolizing.dm"
-#include "movement_tests.dm"
-#include "mob_tests.dm"
-// #include "ntnetwork_tests.dm"
-// #include "outfit_sanity.dm"
-// #include "pills.dm"
-// #include "plantgrowth_tests.dm"
-// #include "projectiles.dm"
-// #include "rcd.dm"
-// #include "reagent_id_typos.dm"
-// #include "reagent_mod_expose.dm"
-// #include "reagent_mod_procs.dm"
-// #include "reagent_recipe_collisions.dm"
-// #include "resist.dm"
-#include "uniqueness.dm"
-// #include "say.dm"
-// #include "screenshot_antag_icons.dm"
-#include "screenshot_basic.dm"
-// #include "screenshot_humanoids.dm"
-// #include "screenshot_saturnx.dm"
-// #include "security_officer_distribution.dm"
-// #include "serving_tray.dm"
-// #include "siunit.dm"
-// #include "spawn_humans.dm"
-// #include "spawn_mobs.dm"
-// #include "species_whitelists.dm"
-#include "step_override.dm"
-// #include "stomach.dm"
-// #include "strippable.dm"
+#include "dcs_check_list_arguments.dm"
+#include "dragon_expiration.dm"
+#include "focus_only_tests.dm"
+#include "greyscale_config.dm"
+#include "map_landmarks.dm"
+#include "mapping.dm"
+#include "reagent_id_typos.dm"
+#include "reagent_recipe_collisions.dm"
+#include "spawn_humans.dm"
+#include "species_whitelists.dm"
+#include "station_trait_tests.dm"
 #include "subsystem_init.dm"
-// #include "surgeries.dm"
-// #include "teleporters.dm"
-#include "tgui_create_message.dm"
 #include "timer_sanity.dm"
+#include "trait_addition_and_removal.dm"
 #include "unit_test.dm"
-// #include "wizard.dm"
-
-#ifdef REFERENCE_TRACKING //Don't try and parse this file if ref tracking isn't turned on. IE: don't parse ref tracking please mr linter
-#include "find_reference_sanity.dm"
-#endif
 
 #undef TEST_ASSERT
 #undef TEST_ASSERT_EQUAL

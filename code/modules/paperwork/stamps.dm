@@ -1,79 +1,92 @@
 /obj/item/stamp
-	name = "rubber stamp"
+	name = "\improper GRANTED rubber stamp"
 	desc = "A rubber stamp for stamping important documents."
-	icon = 'icons/obj/bureaucracy.dmi'
-	icon_state = "stamp-qm"
+	icon = 'yogstation/icons/obj/bureaucracy.dmi'
+	icon_state = "stamp-ok"
 	item_state = "stamp"
 	throwforce = 0
-	w_class = ITEM_SIZE_TINY
-	throw_speed = 7
-	throw_range = 15
-	matter = list(MATERIAL_PLASTIC = 1)
+	w_class = WEIGHT_CLASS_TINY
+	throw_speed = 3
+	throw_range = 7
+	materials = list(/datum/material/iron=60)
+	pressure_resistance = 2
 	attack_verb = list("stamped")
+
+/obj/item/stamp/suicide_act(mob/user)
+	user.visible_message(span_suicide("[user] stamps 'VOID' on [user.p_their()] forehead, then promptly falls over, dead."))
+	return (OXYLOSS)
+
+/obj/item/stamp/qm
+	name = "quartermaster's rubber stamp"
+	icon_state = "stamp-qm"
+	dye_color = DYE_QM
+
+/obj/item/stamp/law
+	name = "law office's rubber stamp"
+	icon_state = "stamp-law"
+	dye_color = DYE_LAW
 
 /obj/item/stamp/captain
 	name = "captain's rubber stamp"
 	icon_state = "stamp-cap"
+	dye_color = DYE_CAPTAIN
 
 /obj/item/stamp/hop
-	name = "first officer's rubber stamp"
+	name = "head of personnel's rubber stamp"
 	icon_state = "stamp-hop"
+	dye_color = DYE_HOP
 
 /obj/item/stamp/hos
-	name = "ironhammer commander's rubber stamp"
+	name = "head of security's rubber stamp"
 	icon_state = "stamp-hos"
+	dye_color = DYE_HOS
 
 /obj/item/stamp/ce
-	name = "exultant's rubber stamp"
+	name = "chief engineer's rubber stamp"
 	icon_state = "stamp-ce"
+	dye_color = DYE_CE
 
 /obj/item/stamp/rd
-	name = "moebius expedition overseer's rubber stamp"
+	name = "research director's rubber stamp"
 	icon_state = "stamp-rd"
+	dye_color = DYE_RD
 
 /obj/item/stamp/cmo
-	name = "moebius biolab officer's rubber stamp"
+	name = "chief medical officer's rubber stamp"
 	icon_state = "stamp-cmo"
+	dye_color = DYE_CMO
 
 /obj/item/stamp/denied
 	name = "\improper DENIED rubber stamp"
 	icon_state = "stamp-deny"
+	dye_color = DYE_RED
 
 /obj/item/stamp/clown
 	name = "clown's rubber stamp"
 	icon_state = "stamp-clown"
+	dye_color = DYE_CLOWN
 
-/obj/item/stamp/qm
-	name = "guild merchant's stamp"
-	icon_state = "stamp-qm"
+/obj/item/stamp/mime
+	name = "mime's rubber stamp"
+	icon_state = "stamp-mime"
+	dye_color = DYE_MIME
 
-/obj/item/stamp/nt
-	name = "neotheology preacher's stamp"
-	icon_state = "stamp-nt"
+/obj/item/stamp/cent
+	name = "centcom rubber stamp"
+	icon_state = "stamp-cent"
+	dye_color = DYE_CENT
 
-/obj/item/stamp/lus
-	name = "luscent official's stamp"
-	icon_state = "stamp-lus"
+/obj/item/stamp/syndi
+	name = "knock-off syndicate rubber stamp"
+	desc = "Not a syndicate ripoff!"
+	icon_state = "stamp-syndi"
+	dye_color = DYE_RED
 
-// Syndicate stamp to forge documents.
-/obj/item/stamp/chameleon/attack_self(mob/user as mob)
+	
+/obj/item/stamp/syndiround
+	name = "syndicate rubber stamp"
+	icon_state = "stamp-syndiround"
+	dye_color = DYE_SYNDI
 
-	var/list/stamp_types = typesof(/obj/item/stamp) - src.type // Get all stamp types except our own
-	var/list/stamps = list()
-
-	// Generate them into a list
-	for(var/stamp_type in stamp_types)
-		var/obj/item/stamp/S = new stamp_type
-		stamps[capitalize(S.name)] = S
-
-	var/list/show_stamps = list("EXIT" = null) + sortList(stamps) // the list that will be shown to the user to pick from
-
-	var/input_stamp = input(user, "Choose a stamp to disguise as.", "Choose a stamp.") in show_stamps
-
-	if(user && (src in user.contents))
-
-		var/obj/item/stamp/chosen_stamp = stamps[capitalize(input_stamp)]
-
-		if(chosen_stamp)
-			name = chosen_stamp.name
-			icon_state = chosen_stamp.icon_state
+/obj/item/stamp/attack_paw(mob/user)
+	return attack_hand(user)

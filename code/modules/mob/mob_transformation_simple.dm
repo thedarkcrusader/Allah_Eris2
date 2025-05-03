@@ -2,10 +2,10 @@
 //This proc is the most basic of the procs. All it does is make a new mob on the same tile and transfer over a few variables.
 //Returns the new mob
 //Note that this proc does NOT do MMI related stuff!
-/mob/proc/change_mob_type(var/new_type = null, var/turf/location = null, var/new_name = null as text, var/delete_old_mob = 0 as num, var/subspecies)
+/mob/proc/change_mob_type(new_type = null, turf/location = null, new_name = null as text|null, delete_old_mob = FALSE)
 
 	if(isnewplayer(src))
-		to_chat(usr, "\red cannot convert players who have not entered yet.")
+		to_chat(usr, span_danger("Cannot convert players who have not entered yet."))
 		return
 
 	if(!new_type)
@@ -18,8 +18,8 @@
 		to_chat(usr, "Invalid type path (new_type = [new_type]) in change_mob_type(). Contact a coder.")
 		return
 
-	if( new_type == /mob/new_player )
-		to_chat(usr, "\red cannot convert into a new_player mob type.")
+	if(ispath(new_type, /mob/dead/new_player))
+		to_chat(usr, span_danger("Cannot convert into a new_player mob type."))
 		return
 
 	var/mob/M
@@ -40,16 +40,21 @@
 		M.name = src.name
 		M.real_name = src.real_name
 
-	if(mind)
-		mind.transfer_to(M)
+	if(has_dna() && M.has_dna())
+		var/mob/living/carbon/C = src
+		var/mob/living/carbon/D = M
+		C.dna.transfer_identity(D)
+		D.updateappearance(mutcolor_update=1, mutations_overlay_update=1)
+	else if(ishuman(M))
+		var/mob/living/carbon/human/H = M
+		client.prefs.apply_prefs_to(H, TRUE)
+		H.dna.update_dna_identity()
+
+	if(mind && isliving(M))
+		mind.transfer_to(M, 1) // second argument to force key move to new mob
 	else
 		M.key = key
 
-	if(subspecies && ishuman(M))
-		var/mob/living/carbon/human/H = M
-		H.set_species(subspecies)
-
 	if(delete_old_mob)
-		spawn(1)
-			qdel(src)
+		QDEL_IN(src, 1)
 	return M

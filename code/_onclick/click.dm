@@ -4,8 +4,30 @@
 */
 
 // 1 decisecond click delay (above and beyond mob/next_move)
-/mob/var/next_click = 0
+//This is mainly modified by click code, to modify click delays elsewhere, use next_move and changeNext_move()
+/mob/var/next_click	= 0
 
+// THESE DO NOT EFFECT THE BASE 1 DECISECOND DELAY OF NEXT_CLICK
+/mob/var/next_move_adjust = 0 //Amount to adjust action/click delays by, + or -
+/mob/var/next_move_modifier = 1 //Value to multiply action/click delays by
+
+
+//Delays the mob's next click/action by num deciseconds
+// eg: 10-3 = 7 deciseconds of delay
+// eg: 10*0.5 = 5 deciseconds of delay
+// DOES NOT EFFECT THE BASE 1 DECISECOND DELAY OF NEXT_CLICK
+
+/mob/proc/changeNext_move(num)
+	next_move = world.time + ((num+next_move_adjust)*next_move_modifier)
+
+/mob/living/changeNext_move(num)
+	var/mod = next_move_modifier
+	var/adj = next_move_adjust
+	for(var/i in status_effects)
+		var/datum/status_effect/S = i
+		mod *= S.nextmove_modifier()
+		adj += S.nextmove_adjust()
+	next_move = world.time + ((num + adj)*mod)
 
 /*
 	Before anything else, defer these calls to a per-mobtype handler.  This allows us to
@@ -16,44 +38,18 @@
 
 	Note that this proc can be overridden, and is in the case of screen objects.
 */
+/atom/Click(location,control,params)
+	if(flags_1 & INITIALIZED_1)
+		SEND_SIGNAL(src, COMSIG_CLICK, location, control, params, usr)
+		usr.ClickOn(src, params)
 
-/client/MouseDown(object,location,control,params)
+/atom/DblClick(location,control,params)
+	if(flags_1 & INITIALIZED_1)
+		usr.DblClickOn(src,params)
 
-	if (CH)
-		if (!CH.MouseDown(object,location,control,params))
-			return
-	.=..()
-
-/client/MouseUp(object,location,control,params)
-	if (CH)
-		if (!CH.MouseUp(object,location,control,params))
-			return
-	.=..()
-
-/client/MouseDrag(over_object,src_location,over_location,src_control,over_control,params)
-	if (CH)
-		if (!CH.MouseDrag(over_object,src_location,over_location,src_control,over_control,params))
-			return
-	.=..()
-
-
-/client/Click(atom/target, location, control, params)
-	var/list/L = params2list(params) //convert params into a list
-	var/dragged = L["drag"] //grab what mouse button they are dragging with, if any.
-	if(dragged && !L[dragged]) //check to ensure they aren't using drag clicks to aimbot
-		return //if they are dragging, and they clicked with a different mouse button, reject the click as it will always go the atom they are currently dragging, even if out of view and not under the mouse
-
-	if (CH)
-		if (!CH.Click(target, location, control, params))
-			return
-
-
-	if(!target.Click(location, control, params))
-		usr.ClickOn(target, params)
-
-/atom/DblClick(location, control, params)
-	if(src)
-		usr.DblClickOn(src, params)
+/atom/MouseWheel(delta_x,delta_y,location,control,params)
+	if(flags_1 & INITIALIZED_1)
+		usr.MouseWheelOn(src, delta_x, delta_y, params)
 
 /*
 	Standard mob ClickOn()
@@ -61,141 +57,203 @@
 
 	After that, mostly just check your state, check whether you're holding an item,
 	check whether you're adjacent to the target, then pass off the click to whoever
-	is recieving it.
+	is receiving it.
 	The most common are:
-	* mob/UnarmedAttack(atom, adjacent) - used here only when adjacent, with no item in hand; in the case of humans, checks gloves
-	* atom/attackby(item, user) - used only when adjacent
-	* item/afterattack(atom, user, adjacent, params) - used both ranged and adjacent
-	* mob/RangedAttack(atom, params) - used only ranged, only used for tk and laser eyes but could be changed
+	* mob/UnarmedAttack(atom,adjacent) - used here only when adjacent, with no item in hand; in the case of humans, checks gloves
+	* atom/attackby(item,user) - used only when adjacent
+	* item/afterattack(atom,user,adjacent,params) - used both ranged and adjacent
+	* mob/RangedAttack(atom,params) - used only ranged, only used for tk and laser eyes but could be changed
 */
-/mob/proc/ClickOn(atom/A, params)
-
-	if(!can_click())
+/mob/proc/ClickOn( atom/A, params )
+	if(HAS_TRAIT(src, TRAIT_NOINTERACT)) // INTERCEPTED
+		to_chat(src, span_danger("You can't interact with anything right now!"))
 		return
-
+	if(world.time <= next_click)
+		return
 	next_click = world.time + 1
 
-	if(client.buildmode)
-		build_click(src, client.buildmode, params, A)
+	if(check_click_intercept(params, A))
+		return
+
+	if(notransform)
+		return
+
+	if(SEND_SIGNAL(src, COMSIG_MOB_CLICKON, A, params) & COMSIG_MOB_CANCEL_CLICKON)
 		return
 
 	var/list/modifiers = params2list(params)
+	if(modifiers["shift"] && modifiers["middle"])
+		ShiftMiddleClickOn(A, params)
+		return
 	if(modifiers["shift"] && modifiers["ctrl"])
-		CtrlShiftClickOn(A, params)
-		return 1
-	if(modifiers["ctrl"] && modifiers["alt"])
-		CtrlAltClickOn(A, params)
-		return 1
+		CtrlShiftClickOn(A)
+		return
 	if(modifiers["middle"])
-		if(modifiers["shift"])
-			ShiftMiddleClickOn(A, params)
-		else
-			MiddleClickOn(A, params)
-		return 1
+		MiddleClickOn(A)
+		return
 	if(modifiers["shift"])
-		SEND_SIGNAL_OLD(src, COMSIG_SHIFTCLICK, A)
-		ShiftClickOn(A, params)
-		return 0
+		ShiftClickOn(A)
+		return
 	if(modifiers["alt"]) // alt and alt-gr (rightalt)
-		SEND_SIGNAL_OLD(src, COMSIG_ALTCLICK, A)
-		AltClickOn(A, params)
-		return 1
-	if(modifiers["ctrl"])
-		SEND_SIGNAL_OLD(src, COMSIG_CTRLCLICK, A)
-		CtrlClickOn(A, params)
-		return 1
-
-	if(stat || paralysis || stunned || weakened)
+		AltClickOn(A)
+		return
+	if(modifiers["ctrl"] && CtrlClickOn(A))
 		return
 
-	face_atom(A) // change direction to face what you clicked on
+	if(incapacitated(ignore_restraints = 1))
+		return
 
+	face_atom(A)
 
+	if(next_move > world.time) // in the year 2000...
+		return
 
-	if(istype(loc, /mob/living/exosuit))
-		if(!locate(/turf) in list(A, A.loc)) // Prevents inventory from being drilled
-			return
-		var/mob/living/exosuit/M = loc
-		return M.ClickOn(A)//, src)
+	if(!modifiers["catcher"] && A.IsObscured())
+		return
 
-	if(restrained())
-		setClickCooldown(10)
-		RestrainedClickOn(A, params)
-		return 1
+	if(ismecha(loc))
+		var/obj/mecha/M = loc
+		return M.click_action(A,src,params)
+
+	if(HAS_TRAIT(src, TRAIT_HANDS_BLOCKED))
+		changeNext_move(CLICK_CD_HANDCUFFED)   //Doing shit in cuffs shall be vey slow
+		UnarmedAttack(A, FALSE, modifiers)
+		return
+	
+	if(grab_mode && pulled(A) && !in_throw_mode)
+		return
 
 	if(in_throw_mode)
-		if(isturf(A) || isturf(A.loc) && isturf(loc))
-			throw_item(A)
-			return 1
-		throw_mode_off()
-
-	var/obj/item/W = get_active_hand()
-
-	if(W == A) // Handle attack_self
-		W.attack_self(src)
-		return 1
-
-	//Atoms on your person
-	// A is your location but is not a turf; or is on you (backpack); or is on something on you (box in backpack); sdepth is needed here because contents depth does not equate inventory storage depth.
-	var/sdepth = A.storage_depth(src)
-	if((!isturf(A) && A == loc) || (sdepth != -1 && sdepth <= 1))
-		// faster access to objects already on you
-		if(W)
-			var/resolved = (SEND_SIGNAL_OLD(W, COMSIG_IATTACK, A, src, params)) || (SEND_SIGNAL_OLD(A, COMSIG_ATTACKBY, W, src, params)) || W.resolve_attackby(A, src, params)
-			if(!resolved && A && W)
-				W.afterattack(A, src, 1, params) // 1 indicates adjacency
-		else
-			if(ismob(A)) // No instant mob attacking
-				setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-			UnarmedAttack(A, 1, params)
-		return 1
-
-	if(!isturf(loc)) // This is going to stop you from telekinesing from inside a closet, but I don't shed many tears for that
+		throw_item(A)
 		return
 
-	if(W && !W.can_use_lying && src.lying)
-		to_chat(src, SPAN_WARNING("You cannot use \the [W] while lying down!"))
-		return 1
+	var/obj/item/W = get_active_held_item()
 
-	//Atoms on turfs (not on your person)
-	// A is a turf or is on a turf, or in something on a turf (pen in a box); but not something in something on a turf (pen in a box in a backpack)
-	sdepth = A.storage_depth_turf()
-	if(isturf(A) || isturf(A.loc) || (sdepth != -1 && sdepth <= 1))
-		var/adjacent = A.Adjacent(src)
-		if(adjacent) // see adjacent.dm
-			if(W)
-				// Return 1 in attackby() to prevent afterattack() effects (when safely moving items for example)
-				var/resolved = (SEND_SIGNAL_OLD(W, COMSIG_IATTACK, A, src, params)) || (SEND_SIGNAL_OLD(A, COMSIG_ATTACKBY, W, src, params))
-				if(!resolved && A && W)
-					if(W.double_tact(src, A, adjacent))
-						resolved = W.resolve_attackby(A, src, params)
-					if(!resolved)
-						W.afterattack(A, src, 1, params) // 1: clicking something Adjacent
-			else
-				if(ismob(A)) // No instant mob attacking
-					setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-				UnarmedAttack(A, 1, params)
-			return
-		else // non-adjacent click
-			if(W)
-				if(W.double_tact(src, A))
-					W.afterattack(A, src, 0, params) // 0: not Adjacent
-			else
-				setClickCooldown(DEFAULT_ATTACK_COOLDOWN) // no ranged spam
-				RangedAttack(A, params)
-	return 1
+	if(W == A)
+		if(!(LAZYACCESS(modifiers, RIGHT_CLICK) && W.attack_self_secondary(src, modifiers) != SECONDARY_ATTACK_CALL_NORMAL))
+			W.attack_self(src, modifiers)
+		update_inv_hands()
+		return
 
-/mob/proc/setClickCooldown(timeout)
-	next_click = max(world.time + timeout, next_click)
+	//These are always reachable.
+	//User itself, current loc, and user inventory
+	if(A in DirectAccess())
+		if(W)
+			W.melee_attack_chain(src, A, params)
+		else
+			if(ismob(A))
+				changeNext_move(CLICK_CD_MELEE)
+			UnarmedAttack(A, FALSE, modifiers)
+		return
 
-/mob/proc/can_click()
-	if(next_click <= world.time)
-		return TRUE
+	//Can't reach anything else in lockers or other weirdness
+	if(!loc.AllowClick())
+		return
+
+	//Standard reach turf to turf or reaching inside storage
+	if(CanReach(A,W))
+		if(W)
+			W.melee_attack_chain(src, A, params)
+		else
+			if(ismob(A))
+				changeNext_move(CLICK_CD_MELEE)
+			UnarmedAttack(A, TRUE, modifiers)
+	else
+		if(W)
+			if(!(LAZYACCESS(modifiers, RIGHT_CLICK) && W.afterattack_secondary(A, src, FALSE, params) != SECONDARY_ATTACK_CALL_NORMAL))
+				W.afterattack(A, src, FALSE, params)
+		else
+			RangedAttack(A,params)
+
+//Is the atom obscured by a PREVENT_CLICK_UNDER_1 object above it
+/atom/proc/IsObscured()
+	SHOULD_BE_PURE(TRUE)
+	if(!isturf(loc)) //This only makes sense for things directly on turfs for now
+		return FALSE
+	var/turf/T = get_turf_pixel(src)
+	if(!T)
+		return FALSE
+	for(var/atom/movable/AM in T)
+		if(AM.flags_1 & PREVENT_CLICK_UNDER_1 && AM.density && AM.layer > layer)
+			return TRUE
 	return FALSE
 
-// Default behavior: ignore double clicks, the second click that makes the doubleclick call already calls for a normal click
+/turf/IsObscured()
+	for(var/atom/movable/AM in src)
+		if(AM.flags_1 & PREVENT_CLICK_UNDER_1 && AM.density)
+			return TRUE
+	return FALSE
+
+/atom/movable/proc/CanReach(atom/ultimate_target, obj/item/tool, view_only = FALSE)
+	// A backwards depth-limited breadth-first-search to see if the target is
+	// logically "in" anything adjacent to us.
+	var/list/direct_access = DirectAccess()
+	var/depth = 1 + (view_only ? STORAGE_VIEW_DEPTH : INVENTORY_DEPTH)
+
+	var/list/closed = list()
+	var/list/checking = list(ultimate_target)
+	while (checking.len && depth > 0)
+		var/list/next = list()
+		--depth
+
+		for(var/atom/target in checking)  // will filter out nulls
+			if(closed[target] || isarea(target))  // avoid infinity situations
+				continue
+			closed[target] = TRUE
+			if(isturf(target) || isturf(target.loc) || (target in direct_access)) //Directly accessible atoms
+				if(Adjacent(target) || (tool && CheckToolReach(src, target, tool.weapon_stats[REACH]))) //Adjacent or reaching attacks
+					return TRUE
+
+			if (!target.loc)
+				continue
+
+			if(!(SEND_SIGNAL(target.loc, COMSIG_ATOM_CANREACH, next) & COMPONENT_BLOCK_REACH))
+				next += target.loc
+
+		checking = next
+	return FALSE
+
+/atom/movable/proc/DirectAccess()
+	return list(src, loc)
+
+/mob/DirectAccess(atom/target)
+	return ..() + contents
+
+/mob/living/DirectAccess(atom/target)
+	return ..() + get_all_contents()
+
+/atom/proc/AllowClick()
+	return FALSE
+
+/turf/AllowClick()
+	return TRUE
+
+/proc/CheckToolReach(atom/movable/here, atom/movable/there, reach)
+	if(!here || !there)
+		return
+	switch(reach)
+		if(0)
+			return FALSE
+		if(1)
+			return FALSE //here.Adjacent(there)
+		if(2 to INFINITY)
+			var/obj/dummy = new(get_turf(here))
+			dummy.pass_flags |= PASSTABLE
+			dummy.invisibility = INVISIBILITY_ABSTRACT
+			for(var/i in 1 to reach) //Limit it to that many tries
+				var/turf/T = get_step(dummy, get_dir(dummy, there))
+				if(dummy.CanReach(there))
+					qdel(dummy)
+					return TRUE
+				if(!dummy.Move(T)) //we're blocked!
+					qdel(dummy)
+					return
+			qdel(dummy)
+
+// Default behavior: ignore double clicks (the second click that makes the doubleclick call already calls for a normal click)
 /mob/proc/DblClickOn(atom/A, params)
 	return
+
 
 /*
 	Translates into attack_hand, etc.
@@ -207,14 +265,10 @@
 	proximity_flag is not currently passed to attack_hand, and is instead used
 	in human click code to allow glove touches only at melee range.
 */
-/mob/proc/UnarmedAttack(atom/A, proximity_flag)
+/mob/proc/UnarmedAttack(atom/A, proximity_flag, modifiers)
+	if(ismob(A))
+		changeNext_move(CLICK_CD_MELEE)
 	return
-
-/mob/living/UnarmedAttack(atom/A, proximity_flag)
-	if(stat)
-		return 0
-
-	return 1
 
 /*
 	Ranged unarmed attack:
@@ -225,13 +279,7 @@
 	animals lunging, etc.
 */
 /mob/proc/RangedAttack(atom/A, params)
-	if(!active_mutations.len)
-		return
-//	if((LASER in mutations) && a_intent == I_HURT)
-//		LaserEyes(A) // moved into a proc below
-	if(get_active_mutation(src, MUTATION_TELEKINESIS) && get_dist(src, A) <= tk_maxrange)
-		A.attack_tk(src)
-
+	SEND_SIGNAL(src, COMSIG_MOB_ATTACK_RANGED, A, params)
 /*
 	Restrained ClickOn
 
@@ -245,12 +293,20 @@
 	Middle click
 	Only used for swapping hands
 */
-/mob/proc/MiddleClickOn(atom/A, params)
-	swap_hand()
+/mob/proc/MiddleClickOn(atom/A)
 	return
 
-/mob/proc/ShiftMiddleClickOn(atom/A, params)
-	pointed(A, params)
+/mob/living/carbon/MiddleClickOn(atom/A)
+	if(!stat && mind && iscarbon(A) && A != src)
+		var/datum/antagonist/changeling/C = mind.has_antag_datum(/datum/antagonist/changeling)
+		if(C && C.chosen_sting)
+			C.chosen_sting.try_to_sting(src,A)
+			next_click = world.time + 5
+			return
+	swap_hand()
+
+/mob/living/simple_animal/drone/MiddleClickOn(atom/A)
+	swap_hand()
 
 // In case of use break glass
 /*
@@ -263,66 +319,77 @@
 	For most mobs, examine.
 	This is overridden in ai.dm
 */
-/mob/proc/ShiftClickOn(atom/A, params)
-	A.ShiftClick(src, params)
+/mob/proc/ShiftClickOn(atom/A)
+	A.ShiftClick(src)
 	return
-
-/atom/proc/ShiftClick(mob/user, params)
-	if(user.client && user.client.eye == user)
+/atom/proc/ShiftClick(mob/user)
+	SEND_SIGNAL(src, COMSIG_CLICK_SHIFT, user)
+	if(user.client && user.client.eye == user || user.client.eye == user.loc)
 		user.examinate(src)
-	return
-
-/*
-	Control+Alt click
-*/
-/mob/proc/CtrlAltClickOn(atom/A, params)
-	A.CtrlAltClick(src, params)
-	return
-
-/atom/proc/CtrlAltClick(mob/user, params)
 	return
 
 /*
 	Ctrl click
 	For most objects, pull
 */
-/mob/proc/CtrlClickOn(atom/A, params)
-	A.CtrlClick(src, params)
-	return
-/atom/proc/CtrlClick(mob/user, params)
-	return
 
-/atom/movable/CtrlClick(mob/user, params)
-	if(Adjacent(user))
-		user.start_pulling(src)
+/mob/proc/CtrlClickOn(atom/A)
+	return A.CtrlClick(src)
+
+/atom/proc/CtrlClick(mob/user)
+	SEND_SIGNAL(src, COMSIG_CLICK_CTRL, user)
+	return FALSE
+
+/mob/living/carbon/human/pulled(atom/movable/grabbed)
+	if(!ishuman(grabbed) || !Adjacent(grabbed) || incapacitated())
+		return ..()
+	if(world.time < next_move)
+		return TRUE
+	dna.species.grab(src, grabbed, mind.martial_art)
+	changeNext_move(CLICK_CD_MELEE)
+	return TRUE
 
 /*
 	Alt click
 	Unused except for AI
 */
-/mob/proc/AltClickOn(atom/A, params)
-	A.AltClick(src, params)
-	return
+/mob/proc/AltClickOn(atom/A)
+	. = SEND_SIGNAL(src, COMSIG_MOB_ALTCLICKON, A)
+	if(. & COMSIG_MOB_CANCEL_CLICKON)
+		return
+	A.AltClick(src)
 
-/atom/proc/AltClick(mob/user, params)
+/atom/proc/AltClick(mob/user)
+	SEND_SIGNAL(src, COMSIG_CLICK_ALT, user)
 	var/turf/T = get_turf(src)
 	if(T && user.TurfAdjacent(T))
 		user.listed_turf = T
-		user.client << output("[url_encode(json_encode(T.name))];", "statbrowser:create_listedturf")
-	return TRUE
+		user.client.stat_panel.send_message("create_listedturf", T.name)
+
+// Use this instead of /mob/proc/AltClickOn(atom/A) where you only want turf content listing without additional atom alt-click interaction
+/atom/proc/AltClickNoInteract(mob/user, atom/A)
+	var/turf/T = get_turf(A)
+	if(T && user.TurfAdjacent(T))
+		user.listed_turf = T
+		user.client.stat_panel.send_message("create_listedturf", T.name)
 
 /mob/proc/TurfAdjacent(turf/T)
-	return T.AdjacentQuick(src)
+	return T.Adjacent(src)
 
 /*
 	Control+Shift click
 	Unused except for AI
 */
-/mob/proc/CtrlShiftClickOn(atom/A, params)
-	A.CtrlShiftClick(src, params)
+/mob/proc/CtrlShiftClickOn(atom/A)
+	A.CtrlShiftClick(src)
 	return
 
-/atom/proc/CtrlShiftClick(mob/user, params)
+/mob/proc/ShiftMiddleClickOn(atom/A, params)
+	src.pointed(A, params)
+	return
+
+/atom/proc/CtrlShiftClick(mob/user)
+	SEND_SIGNAL(src, COMSIG_CLICK_CTRL_SHIFT)
 	return
 
 /*
@@ -331,88 +398,107 @@
 	Laser Eyes: as the name implies, handles this since nothing else does currently
 	face_atom: turns the mob towards what you clicked on
 */
-/mob/proc/LaserEyes(atom/A)
+/mob/proc/LaserEyes(atom/A, params)
 	return
 
-/mob/living/LaserEyes(atom/A)
-	setClickCooldown(4)
-	var/turf/T = get_turf(src)
+/mob/living/LaserEyes(atom/A, params)
+	changeNext_move(CLICK_CD_RANGE)
 
-	var/obj/item/projectile/beam/LE = new (T)
+	var/obj/projectile/beam/LE = new /obj/projectile/beam( loc )
 	LE.icon = 'icons/effects/genetics.dmi'
 	LE.icon_state = "eyelasers"
-	mob_playsound(usr.loc, 'sound/weapons/taser2.ogg', 75, 1)
-	LE.launch(A)
+	playsound(usr.loc, 'sound/weapons/taser2.ogg', 75, 1)
 
-/mob/living/carbon/human/LaserEyes()
-	if(nutrition>0)
-		..()
-		nutrition = max(nutrition - rand(1, 5), 0)
-		handle_regular_hud_updates()
-	else
-		to_chat(src, SPAN_WARNING("You're out of energy!  You need food!"))
+	LE.firer = src
+	LE.def_zone = ran_zone(zone_selected)
+	LE.preparePixelProjectile(A, src, params)
+	LE.fire()
 
 // Simple helper to face what you clicked on, in case it should be needed in more than one place
-/atom/movable/proc/face_atom(atom/A)
-	if(!A || !x || !y || !A.x || !A.y) return
-	var/dx = A.x - x
-	var/dy = A.y - y
-	if(!dx && !dy) return
+/mob/face_atom(atom/A, forced = FALSE)
+	if(buckled || stat != CONSCIOUS)
+		return
+	return ..()
 
-	var/direction
-	if(abs(dx) < abs(dy))
-		if(dy > 0)	direction = NORTH
-		else		direction = SOUTH
-	else
-		if(dx > 0)	direction = EAST
-		else		direction = WEST
-	if(direction != dir)
-		facedir(direction)
+//debug
+/atom/movable/screen/proc/scale_to(x1,y1)
+	if(!y1)
+		y1 = x1
+	var/matrix/M = new
+	M.Scale(x1,y1)
+	transform = M
 
-
-/atom/movable/proc/facedir(ndir)
-	set_dir(ndir)
-	return 1
-
-
-
-GLOBAL_LIST_INIT(click_catchers, create_click_catcher())
-
-/obj/screen/click_catcher
+/atom/movable/screen/click_catcher
 	icon = 'icons/mob/screen_gen.dmi'
-	icon_state = "click_catcher"
+	icon_state = "catcher"
 	plane = CLICKCATCHER_PLANE
-	mouse_opacity = 2
-	screen_loc = "CENTER-7,CENTER-7"
+	mouse_opacity = MOUSE_OPACITY_OPAQUE
+	screen_loc = "CENTER"
 
-/obj/screen/click_catcher/Destroy()
-	return QDEL_HINT_LETMELIVE
+#define MAX_SAFE_BYOND_ICON_SCALE_TILES (MAX_SAFE_BYOND_ICON_SCALE_PX / world.icon_size)
+#define MAX_SAFE_BYOND_ICON_SCALE_PX (33 * 32)			//Not using world.icon_size on purpose.
 
-/obj/screen/click_catcher/New(_name = "", mob/living/_parentmob, _icon, _icon_state)
-	..()
+/atom/movable/screen/click_catcher/proc/UpdateGreed(view_size_x = 15, view_size_y = 15)
+	var/icon/newicon = icon('icons/mob/screen_gen.dmi', "catcher")
+	var/ox = min(MAX_SAFE_BYOND_ICON_SCALE_TILES, view_size_x)
+	var/oy = min(MAX_SAFE_BYOND_ICON_SCALE_TILES, view_size_y)
+	var/px = view_size_x * world.icon_size
+	var/py = view_size_y * world.icon_size
+	var/sx = min(MAX_SAFE_BYOND_ICON_SCALE_PX, px)
+	var/sy = min(MAX_SAFE_BYOND_ICON_SCALE_PX, py)
+	newicon.Scale(sx, sy)
+	icon = newicon
+	screen_loc = "CENTER-[(ox-1)*0.5],CENTER-[(oy-1)*0.5]"
+	var/matrix/M = new
+	M.Scale(px/sx, py/sy)
+	transform = M
 
-/proc/create_click_catcher()
-	. = list()
-	for(var/i = 0, i<15, i++)
-		for(var/j = 0, j<15, j++)
-			var/obj/screen/click_catcher/CC = new()
-			CC.screen_loc = "NORTH-[i],EAST-[j]"
-			. += CC
+/atom/movable/screen/click_catcher/Initialize(mapload, datum/hud/hud_owner)
+	. = ..()
+	RegisterSignal(SSmapping, COMSIG_PLANE_OFFSET_INCREASE, PROC_REF(offset_increased))
+	offset_increased(SSmapping, 0, SSmapping.max_plane_offset)
 
-/obj/screen/click_catcher/Click(location, control, params)
+// Draw to the lowest plane level offered
+/atom/movable/screen/click_catcher/proc/offset_increased(datum/source, old_offset, new_offset)
+	SIGNAL_HANDLER
+	SET_PLANE_W_SCALAR(src, initial(plane), new_offset)
+
+/atom/movable/screen/click_catcher/Click(location, control, params)
 	var/list/modifiers = params2list(params)
-	if(modifiers["middle"] && istype(usr, /mob/living/carbon))
+	if(modifiers["middle"] && iscarbon(usr))
 		var/mob/living/carbon/C = usr
 		C.swap_hand()
 	else
-		var/turf/T = screen_loc2turf(screen_loc, get_turf(usr))
+		var/turf/T = params2turf(modifiers["screen-loc"], get_turf(usr.client ? usr.client.eye : usr), usr.client)
+		params += "&catcher=1"
 		if(T)
-			usr.client.Click(T, location, control, params)
-			//T.Click(location, control, params)
-			//Bay system doesnt use client.click, not sure if better
-
+			T.Click(location, control, params)
 	. = 1
 
-/obj/screen/click_catcher/proc/resolve(mob/user)
-	var/turf/T = screen_loc2turf(screen_loc, get_turf(user))
-	return T
+/* MouseWheelOn */
+
+/mob/proc/MouseWheelOn(atom/A, delta_x, delta_y, params)
+	SEND_SIGNAL(src, COMSIG_MOUSE_SCROLL_ON, A, delta_x, delta_y, params)
+
+/mob/dead/observer/MouseWheelOn(atom/A, delta_x, delta_y, params)
+	var/list/modifier = params2list(params)
+	if(modifier["shift"])
+		if(delta_y > 0)
+			view -= 1
+		else
+			view += 1
+		view = clamp(view, 0, 5) // Allows you to scale up 5 times
+		add_view_range(view)
+
+/mob/proc/check_click_intercept(params,A)
+	//Client level intercept
+	if(client?.click_intercept)
+		if(call(client.click_intercept, "InterceptClickOn")(src, params, A))
+			return TRUE
+
+	//Mob level intercept
+	if(click_intercept)
+		if(call(click_intercept, "InterceptClickOn")(src, params, A))
+			return TRUE
+
+	return FALSE

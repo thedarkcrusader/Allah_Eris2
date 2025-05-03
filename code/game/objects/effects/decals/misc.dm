@@ -1,16 +1,16 @@
-/obj/effect/decal/point
-	name = "arrow"
-	desc = "An arrow hanging in mid-air. There may be a wizard about."
-	icon = 'icons/mob/screen1.dmi'
-	icon_state = "arrow"
-	plane = GAME_PLANE
-	layer = POINT_LAYER
-	anchored = TRUE
-	mouse_opacity = 0
+//Used by spraybottles.
+/obj/effect/decal/chempuff
+	name = "chemicals"
+	icon = 'icons/obj/chempuff.dmi'
+	pass_flags = PASSTABLE | PASSGRILLE
+	layer = FLY_LAYER
 
+/obj/effect/decal/chempuff/blob_act(obj/structure/blob/B)
+	return
 
-// Used for spray that you spray at walls, tables, hydrovats etc
-/obj/effect/decal/spraystill
-	density = FALSE
-	anchored = TRUE
-	layer = ABOVE_ALL_MOB_LAYER
+/obj/effect/decal/fakelattice
+	name = "lattice"
+	desc = "A lightweight support lattice."
+	icon = 'icons/obj/smooth_structures/lattice.dmi'
+	icon_state = "lattice"
+	density = TRUE

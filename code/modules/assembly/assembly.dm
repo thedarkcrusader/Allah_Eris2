@@ -1,136 +1,142 @@
-/obj/item/device/assembly
+/obj/item/assembly
 	name = "assembly"
 	desc = "A small electronic device that should never exist."
 	icon = 'icons/obj/assemblies/new_assemblies.dmi'
 	icon_state = ""
-	flags = CONDUCT
-	w_class = ITEM_SIZE_SMALL
-	matter = list(MATERIAL_PLASTIC = 1)
-	throwforce = WEAPON_FORCE_HARMLESS
+	flags_1 = CONDUCT_1
+	w_class = WEIGHT_CLASS_SMALL
+	materials = list(/datum/material/iron=100)
+	throwforce = 2
 	throw_speed = 3
-	throw_range = 10
-	origin_tech = list(TECH_MAGNET = 1)
+	throw_range = 7
 
-	bad_type = /obj/item/device/assembly
-	rarity_value = 10
-	spawn_tags = SPAWN_TAG_ASSEMBLY
-
+	var/is_position_sensitive = FALSE	//set to true if the device has different icons for each position.
+										//This will prevent things such as visible lasers from facing the incorrect direction when transformed by assembly_holder's update_appearance(UPDATE_ICON)
 	var/secured = TRUE
-	var/list/attached_overlays
-	var/obj/item/device/assembly_holder/holder
-	var/cooldown = 0 //To prevent spam
-	var/wires = WIRE_RECEIVE | WIRE_PULSE
+	var/list/attached_overlays = null
+	var/obj/item/assembly_holder/holder = null
+	var/wire_type = WIRE_RECEIVE | WIRE_PULSE
+	var/attachable = FALSE // can this be attached to wires
+	var/datum/wires/connected = null
 
-	var/const/WIRE_RECEIVE = 1			//Allows Pulsed(0) to call Activate()
-	var/const/WIRE_PULSE = 2				//Allows Pulse(0) to act on the holder
-	var/const/WIRE_PULSE_SPECIAL = 4		//Allows Pulse(0) to act on the holders special assembly
-	var/const/WIRE_RADIO_RECEIVE = 8		//Allows Pulsed(1) to call Activate()
-	var/const/WIRE_RADIO_PULSE = 16		//Allows Pulse(1) to send a radio message
+	var/next_activate = 0 //When we're next allowed to activate - for spam control
 
+/obj/item/assembly/Destroy()
+	holder = null
+	return ..()
 
-/obj/item/device/assembly/proc/activate()
-	if(!secured || (cooldown > 0))
-		return FALSE
-	cooldown = 2
-	spawn(10)
-		process_cooldown()
-	return TRUE
-
-
-/obj/item/device/assembly/proc/process_cooldown()
-	cooldown--
-	if(cooldown <= 0)
-		return FALSE
-	spawn(10)
-		process_cooldown()
-	return TRUE
-
-
-/obj/item/device/assembly/proc/pulsed(radio = 0)
-	if(holder && wires & WIRE_RECEIVE)
-		activate()
-	if(radio && wires & WIRE_RADIO_RECEIVE)
-		activate()
-
-
-/obj/item/device/assembly/proc/pulse(radio = 0)
-	if(holder && (wires & WIRE_PULSE))
-		holder.process_activation(src, 1, 0)
-	if(holder && (wires & WIRE_PULSE_SPECIAL))
-		holder.process_activation(src, 0, 1)
+/obj/item/assembly/get_part_rating()
 	return 1
 
+/obj/item/assembly/proc/on_attach()
 
-/obj/item/device/assembly/proc/toggle_secure()
+//Call this when detaching it from a device. handles any special functions that need to be updated ex post facto
+/obj/item/assembly/proc/on_detach()
+	if(!holder)
+		return FALSE
+	forceMove(holder.drop_location())
+	holder = null
+	return TRUE
+
+/obj/item/assembly/proc/holder_movement()							//Called when the holder is moved
+	if(!holder)
+		return FALSE
+	setDir(holder.dir)
+	return TRUE
+
+/obj/item/assembly/proc/is_secured(mob/user)
+	if(!secured)
+		to_chat(user, span_warning("The [name] is unsecured!"))
+		return FALSE
+	return TRUE
+
+
+//Called when another assembly acts on this one, radio will determine where it came from for wire calcs
+/obj/item/assembly/proc/pulsed(radio = FALSE)
+	if(wire_type & WIRE_RECEIVE)
+		INVOKE_ASYNC(src, PROC_REF(activate))
+	if(radio && (wire_type & WIRE_RADIO_RECEIVE))
+		INVOKE_ASYNC(src, PROC_REF(activate))
+	return TRUE
+
+
+//Called when this device attempts to act on another device, radio determines if it was sent via radio or direct
+/obj/item/assembly/proc/pulse(radio = FALSE)
+	if(connected && wire_type)
+		connected.pulse_assembly(src)
+		return TRUE
+	if(holder && (wire_type & WIRE_PULSE))
+		holder.process_activation(src, 1, 0)
+	if(holder && (wire_type & WIRE_PULSE_SPECIAL))
+		holder.process_activation(src, 0, 1)
+	return TRUE
+
+
+// What the device does when turned on
+/obj/item/assembly/proc/activate()
+	if(QDELETED(src) || !secured || (next_activate > world.time))
+		return FALSE
+	next_activate = world.time + 30
+	return TRUE
+
+
+/obj/item/assembly/proc/toggle_secure()
 	secured = !secured
-	update_icon()
+	update_appearance(UPDATE_ICON)
 	return secured
 
 
-/obj/item/device/assembly/proc/attach_assembly(obj/item/device/assembly/A, mob/user)
-	holder = new/obj/item/device/assembly_holder(get_turf(src))
-	if(holder.attach(A, src, user))
-		to_chat(user, SPAN_NOTICE("You attach \the [A] to \the [src]!"))
-
-
-/obj/item/device/assembly/attackby(obj/item/I, mob/user)
-	if(isassembly(I))
-		var/obj/item/device/assembly/A = I
+/obj/item/assembly/attackby(obj/item/W, mob/user, params)
+	if(isassembly(W))
+		var/obj/item/assembly/A = W
 		if((!A.secured) && (!secured))
-			attach_assembly(A, user)
-			return
-	if(QUALITY_SCREW_DRIVING in I.tool_qualities)
-		if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, QUALITY_SCREW_DRIVING, FAILCHANCE_EASY, required_stat = STAT_COG))
-			if(toggle_secure())
-				to_chat(user, SPAN_NOTICE("\The [src] is ready!"))
-			else
-				to_chat(user, SPAN_NOTICE("\The [src] can now be attached!"))
-			return
+			holder = new/obj/item/assembly_holder(get_turf(src))
+			holder.assemble(src,A,user)
+			to_chat(user, span_notice("You attach and secure \the [A] to \the [src]!"))
+		else
+			to_chat(user, span_warning("Both devices must be in attachable mode to be attached together."))
+		return
 	..()
 
+/obj/item/assembly/screwdriver_act(mob/living/user, obj/item/I)
+	if(..())
+		return TRUE
+	if(toggle_secure())
+		to_chat(user, span_notice("\The [src] is ready!"))
+	else
+		to_chat(user, span_notice("\The [src] can now be attached!"))
+	add_fingerprint(user)
+	return TRUE
 
-/obj/item/device/assembly/Process()
-	STOP_PROCESSING(SSobj, src)
+/obj/item/assembly/examine(mob/user)
+	. = ..()
+	. += span_notice("\The [src] [secured? "is secured and ready to be used!" : "can be attached to other things."]")
 
+/obj/item/assembly/attack_hand(mob/user, modifiers)
+	if(holder)
+		return // no don't pick it up while it's inside the holder what the fuck
+	return ..()
 
-/obj/item/device/assembly/examine(mob/user, extra_description = "")
-	if(get_dist(user, src) < 2)
-		if(secured)
-			extra_description += SPAN_NOTICE("\The [src] is ready!")
-		else
-			extra_description += SPAN_NOTICE("\The [src] can be attached!")
-	..(user, extra_description)
-
-/obj/item/device/assembly/attack_self(mob/user)
+/obj/item/assembly/attack_self(mob/user, modifiers)
+	if(HAS_TRAIT(user, TRAIT_NOINTERACT))
+		to_chat(user, span_notice("You can't use things!"))
+		return
+	if(SEND_SIGNAL(src, COMSIG_ITEM_ATTACK_SELF, user, modifiers) & COMPONENT_NO_INTERACT)
+		return
 	if(!user)
 		return FALSE
-
+	user.set_machine(src)
 	interact(user)
 	return TRUE
 
-/obj/item/device/assembly/interact(mob/user)
+/obj/item/assembly/interact(mob/user)
+	add_fingerprint(user)
 	return ui_interact(user)
 
-/obj/item/device/assembly/proc/holder_movement()
-	return
-
-/obj/item/device/assembly/proc/is_attachable()
-	if(secured)
-		return FALSE
-	return TRUE
-
-/obj/item/device/assembly/proc/is_secured(mob/user)
-	if(!secured)
-		to_chat(user, SPAN_WARNING("The [name] is unsecured!"))
-		return FALSE
-
-	return TRUE
-
-/obj/item/device/assembly/ui_host(mob/user)
+/obj/item/assembly/ui_host(mob/user)
 	if(holder)
 		return holder
+	return src
 
-	return ..()
-
-/obj/item/device/assembly/ui_state(mob/user)
+/obj/item/assembly/ui_state(mob/user)
 	return GLOB.hands_state

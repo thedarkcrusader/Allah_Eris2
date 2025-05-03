@@ -1,89 +1,119 @@
 /obj/item/hand_labeler
 	name = "hand labeler"
-	desc = "Device that could be used to label just about anything, including ammo magazines."
-	icon = 'icons/obj/bureaucracy.dmi'
+	desc = "A combined label printer and applicator in a portable device, designed to be easy to operate and use."
+	icon = 'yogstation/icons/obj/bureaucracy.dmi'
 	icon_state = "labeler0"
 	item_state = "flight"
-	matter = list(MATERIAL_PLASTIC = 2)
 	var/label = null
 	var/labels_left = 30
-	var/mode = 0	//off or on.
+	var/mode = 0
 
-/obj/item/hand_labeler/attack()
-	return
+/obj/item/hand_labeler/suicide_act(mob/user)
+	user.visible_message(span_suicide("[user] is pointing [src] at [user.p_them()]self. [user.p_theyre(TRUE)] going to label [user.p_them()]self as a suicide!"))
+	labels_left = max(labels_left - 1, 0)
 
-/obj/item/hand_labeler/afterattack(atom/A, mob/user as mob, proximity)
+	var/old_real_name = user.real_name
+	user.real_name += " (suicide)"
+	// no conflicts with their identification card
+	for(var/atom/A in user.get_all_contents())
+		if(istype(A, /obj/item/card/id))
+			var/obj/item/card/id/their_card = A
+
+			// only renames their card, as opposed to tagging everyone's
+			if(their_card.registered_name != old_real_name)
+				continue
+
+			their_card.registered_name = user.real_name
+			their_card.update_label()
+
+	// NOT EVEN DEATH WILL TAKE AWAY THE STAIN
+	user.mind.name += " (suicide)"
+
+	mode = 1
+	icon_state = "labeler[mode]"
+	label = "suicide"
+
+	return OXYLOSS
+
+/obj/item/hand_labeler/afterattack(atom/A, mob/user,proximity)
+	. = ..()
 	if(!proximity)
 		return
-
-	if(A == loc)	// if placing the labeller into something (e.g. backpack)
-		return		// don't set a label
-
-	if(istype(A, /obj/item/ammo_magazine) && !istype(A, /obj/item/ammo_magazine/ammobox))
-		var/obj/item/ammo_magazine/M = A
-		// Flip ammo_names dictionary so player see, for example, "high velocity" instead of "hv" in input() popup
-		var/list/choices[0]
-		for(var/i in M.ammo_names)
-			choices[M.ammo_names[i]] = i
-
-		choices["automatic"] = "l"
-		var/choice = input(user, "Available color schemes", "Label configuration") in choices
-
-		if(!choice || choice == "automatic")
-			M.get_label()
-		else
-			M.get_label(choices[choice])
-		M.update_icon()
-		return
-
 	if(!mode)	//if it's off, give up.
 		return
 
 	if(!labels_left)
-		to_chat(user, SPAN_NOTICE("No labels left."))
+		to_chat(user, span_warning("No labels left!"))
 		return
 	if(!label || !length(label))
-		to_chat(user, SPAN_NOTICE("No text set."))
+		to_chat(user, span_warning("No text set!"))
 		return
 	if(length(A.name) + length(label) > 64)
-		to_chat(user, SPAN_NOTICE("Label too big."))
+		to_chat(user, span_warning("Label too big!"))
 		return
-	if(ishuman(A))
-		to_chat(user, SPAN_NOTICE("The label refuses to stick to [A.name]."))
+	if(ismob(A))
+		to_chat(user, span_warning("You can't label creatures!")) // use a collar
 		return
-	if(issilicon(A))
-		to_chat(user, SPAN_NOTICE("The label refuses to stick to [A.name]."))
-		return
-	if(isobserver(A))
-		to_chat(user, SPAN_NOTICE("[src] passes through [A.name]."))
-		return
-	if(istype(A, /obj/item/reagent_containers/glass))
-		to_chat(user, SPAN_NOTICE("The label can't stick to the [A.name].  (Try using a pen)"))
-		return
-	if(istype(A, /obj/machinery/portable_atmospherics/hydroponics))
-		var/obj/machinery/portable_atmospherics/hydroponics/tray = A
-		if(!tray.mechanical)
-			to_chat(user, SPAN_NOTICE("How are you going to label that?"))
-			return
-		tray.labelled = label
-		spawn(1)
-			tray.update_icon()
-	playsound(src,'sound/effects/FOLEY_Gaffer_Tape_Tear_mono.ogg',100,1)
-	user.visible_message(SPAN_NOTICE("[user] labels [A] as [label]."), \
-						 SPAN_NOTICE("You label [A] as [label]."))
-	A.name = "[A.name] ([label])"
 
-/obj/item/hand_labeler/attack_self(mob/user as mob)
+	user.visible_message("[user] labels [A] as [label].", \
+						 span_notice("You label [A] as [label]."))
+	A.name = "[A.name] ([label])"
+	labels_left--
+
+
+/obj/item/hand_labeler/attack_self(mob/user)
+	if(!user.IsAdvancedToolUser())
+		to_chat(user, span_warning("You don't have the dexterity to use [src]!"))
+		return
 	mode = !mode
 	icon_state = "labeler[mode]"
 	if(mode)
-		to_chat(user, SPAN_NOTICE("You turn on \the [src]."))
+		to_chat(user, span_notice("You turn on [src]."))
 		//Now let them chose the text.
-		var/str = sanitizeName(input(user,"Label text?","Set label",""), MAX_NAME_LEN) //Only A-Z, 1-9 and `-`
+		var/str = reject_bad_text(tgui_input_text(user, "Label text?", "Set label","", MAX_NAME_LEN))
 		if(!str || !length(str))
-			to_chat(user, SPAN_NOTICE("Invalid text."))
+			to_chat(user, span_warning("Invalid text!"))
 			return
 		label = str
-		to_chat(user, SPAN_NOTICE("You set the text to '[str]'."))
+		to_chat(user, span_notice("You set the text to '[str]'."))
 	else
-		to_chat(user, SPAN_NOTICE("You turn off \the [src]."))
+		to_chat(user, span_notice("You turn off [src]."))
+
+/obj/item/hand_labeler/attackby(obj/item/I, mob/user, params)
+	..()
+	if(istype(I, /obj/item/hand_labeler_refill))
+		to_chat(user, span_notice("You insert [I] into [src]."))
+		qdel(I)
+		labels_left = initial(labels_left)	//Yes, it's capped at its initial value
+
+/obj/item/hand_labeler/borg
+	name = "cyborg-hand labeler"
+
+/obj/item/hand_labeler/borg/afterattack(atom/A, mob/user, proximity)
+	. = ..(A, user, proximity)
+	if(!iscyborg(user))
+		return
+
+	var/mob/living/silicon/robot/borgy = user
+
+	var/starting_labels = initial(labels_left)
+	var/diff = starting_labels - labels_left
+	if(diff)
+		labels_left = starting_labels
+		// 50 per label. Magical cyborg paper doesn't come cheap.
+		var/cost = diff * 50
+
+		// If the cyborg manages to use a module without a cell, they get the paper
+		// for free.
+		if(borgy.cell)
+			borgy.cell.use(cost)
+
+/obj/item/hand_labeler_refill
+	name = "hand labeler paper roll"
+	icon = 'yogstation/icons/obj/bureaucracy.dmi'
+	desc = "A roll of paper. Use it on a hand labeler to refill it."
+	icon_state = "labeler_refill"
+	item_state = "electropack"
+	lefthand_file = 'icons/mob/inhands/misc/devices_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/misc/devices_righthand.dmi'
+	w_class = WEIGHT_CLASS_TINY

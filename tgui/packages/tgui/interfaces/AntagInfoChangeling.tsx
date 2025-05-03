@@ -1,13 +1,5 @@
-import { multiline } from 'common/string';
-import { useBackend, useSharedState } from '../backend';
-import {
-  Button,
-  Dimmer,
-  Dropdown,
-  Section,
-  Stack,
-  NoticeBox,
-} from '../components';
+import { useBackend } from '../backend';
+import { Dimmer, Section, Stack, NoticeBox } from '../components';
 import { Window } from '../layouts';
 
 const hivestyle = {
@@ -51,16 +43,9 @@ type Objective = {
   explanation: string;
 };
 
-type Memory = {
-  name: string;
-  story: string;
-};
-
 type Info = {
   true_name: string;
-  hive_name: string;
   stolen_antag_info: string;
-  memories: Memory[];
   objectives: Objective[];
 };
 
@@ -69,9 +54,8 @@ export const AntagInfoChangeling = (props, context) => {
     <Window width={720} height={720}>
       <Window.Content
         style={{
-          backgroundImage: 'none',
-        }}
-      >
+          'backgroundImage': 'none',
+        }}>
         <Stack vertical fill>
           <Stack.Item maxHeight={13.2}>
             <IntroductionSection />
@@ -84,9 +68,6 @@ export const AntagInfoChangeling = (props, context) => {
           </Stack.Item>
           <Stack.Item grow={3}>
             <Stack fill>
-              <Stack.Item grow basis={0}>
-                <MemoriesSection />
-              </Stack.Item>
               <Stack.Item grow basis={0}>
                 <VictimPatternsSection />
               </Stack.Item>
@@ -146,17 +127,16 @@ const HivemindSection = (props, context) => {
 
 const IntroductionSection = (props, context) => {
   const { act, data } = useBackend<Info>(context);
-  const { true_name, hive_name, objectives } = data;
+  const { true_name, objectives } = data;
   return (
     <Section
       fill
       title="Intro"
-      scrollable={!!objectives && objectives.length > 4}
-    >
+      scrollable={!!objectives && objectives.length > 4}>
       <Stack vertical fill>
         <Stack.Item fontSize="25px">
-          You are {true_name} from the
-          <span style={hivestyle}> {hive_name}</span>.
+          You are {true_name}, a
+          <span style={hivestyle}> {"Changeling"}</span>.
         </Stack.Item>
         <Stack.Item>
           <ObjectivePrintout />
@@ -176,10 +156,8 @@ const AbilitiesSection = (props, context) => {
             <Stack.Item basis={0} textColor="label" grow>
               Your
               <span style={absorbstyle}>&ensp;Absorb DNA</span> ability allows
-              you to steal the DNA and memories of a victim. Your
-              <span style={absorbstyle}>&ensp;Extract DNA Sting</span> ability
-              also steals the DNA of a victim, and is undetectable, but does not
-              grant you their memories or speech patterns.
+              you to steal the DNA and memories of a victim, granting you their 
+              memories or speech patterns and possibly even greater things.
             </Stack.Item>
             <Stack.Divider />
             <Stack.Item basis={0} textColor="label" grow>
@@ -216,57 +194,6 @@ const AbilitiesSection = (props, context) => {
   );
 };
 
-const MemoriesSection = (props, context) => {
-  const { data } = useBackend<Info>(context);
-  const { memories } = data;
-  const [selectedMemory, setSelectedMemory] = useSharedState(
-    context,
-    'memory',
-    (!!memories && memories[0]) || null,
-  );
-  const memoryMap = {};
-  for (const index in memories) {
-    const memory = memories[index];
-    memoryMap[memory.name] = memory;
-  }
-  return (
-    <Section
-      fill
-      scrollable={!!memories && !!memories.length}
-      title="Stolen Memories"
-      buttons={
-        <Button
-          icon="info"
-          tooltipPosition="left"
-          tooltip={multiline`
-            Absorbing targets allows
-            you to collect their memories. They should
-            help you impersonate your target!
-          `}
-        />
-      }
-    >
-      {(!!memories && !memories.length && (
-        <Dimmer fontSize="20px">Absorb a victim first!</Dimmer>
-      )) || (
-        <Stack vertical>
-          <Stack.Item>
-            <Dropdown
-              width="100%"
-              selected={selectedMemory?.name}
-              options={memories.map((memory) => {
-                return memory.name;
-              })}
-              onSelected={(selected) => setSelectedMemory(memoryMap[selected])}
-            />
-          </Stack.Item>
-          <Stack.Item>{!!selectedMemory && selectedMemory.story}</Stack.Item>
-        </Stack>
-      )}
-    </Section>
-  );
-};
-
 const VictimPatternsSection = (props, context) => {
   const { data } = useBackend<Info>(context);
   const { stolen_antag_info } = data;
@@ -274,8 +201,7 @@ const VictimPatternsSection = (props, context) => {
     <Section
       fill
       scrollable={!!stolen_antag_info}
-      title="Additional Stolen Information"
-    >
+      title="Additional Stolen Information">
       {(!!stolen_antag_info && stolen_antag_info) || (
         <Dimmer fontSize="20px">Absorb a victim first!</Dimmer>
       )}

@@ -1,27 +1,24 @@
-import { BooleanLike } from 'common/react';
-import { sendAct } from '../../backend';
-import { Gender } from './preferences/gender';
+import { BooleanLike } from "common/react";
+import { sendAct } from "../../backend";
 
 export enum Food {
-  Alcohol = 'ALCOHOL',
-  Breakfast = 'BREAKFAST',
-  Bugs = 'BUGS',
-  Cloth = 'CLOTH',
-  Dairy = 'DAIRY',
-  Fried = 'FRIED',
-  Fruit = 'FRUIT',
-  Gore = 'GORE',
-  Grain = 'GRAIN',
-  Gross = 'GROSS',
-  Junkfood = 'JUNKFOOD',
-  Meat = 'MEAT',
-  Nuts = 'NUTS',
-  Pineapple = 'PINEAPPLE',
-  Raw = 'RAW',
-  Seafood = 'SEAFOOD',
-  Sugar = 'SUGAR',
-  Toxic = 'TOXIC',
-  Vegetables = 'VEGETABLES',
+  Alcohol = "ALCOHOL",
+  Breakfast = "BREAKFAST",
+  Cloth = "CLOTH",
+  Dairy = "DAIRY",
+  Fried = "FRIED",
+  Fruit = "FRUIT",
+  Grain = "GRAIN",
+  Gross = "GROSS",
+  Junkfood = "JUNKFOOD",
+  Meat = "MEAT",
+  Nuts = "NUTS",
+  Pineapple = "PINEAPPLE",
+  Raw = "RAW",
+  Seafood = "SEAFOOD",
+  Sugar = "SUGAR",
+  Toxic = "TOXIC",
+  Vegetables = "VEGETABLES",
 }
 
 export enum JobPriority {
@@ -43,7 +40,7 @@ export type Species = {
   icon: string;
 
   use_skintones: BooleanLike;
-  sexes: BooleanLike;
+  possible_genders: string[];
 
   enabled_features: string[];
 
@@ -58,6 +55,7 @@ export type Species = {
     disliked_food: Food[];
     toxic_food: Food[];
   };
+
 };
 
 export type Perk = {
@@ -73,6 +71,7 @@ export type Department = {
 export type Job = {
   description: string;
   department: string;
+  alt_titles: string[];
 };
 
 export type Quirk = {
@@ -80,6 +79,8 @@ export type Quirk = {
   icon: string;
   name: string;
   value: number;
+  mood: BooleanLike;
+  blacklisted: string;
 };
 
 export type QuirkInfo = {
@@ -105,13 +106,15 @@ export enum GamePreferencesSelectedPage {
   Keybindings,
 }
 
-export const createSetPreference =
-  (act: typeof sendAct, preference: string) => (value: unknown) => {
-    act('set_preference', {
-      preference,
-      value,
-    });
-  };
+export const createSetPreference = (
+  act: typeof sendAct,
+  preference: string
+) => (value: unknown) => {
+  act("set_preference", {
+    preference,
+    value,
+  });
+};
 
 export enum Window {
   Character = 0,
@@ -128,7 +131,7 @@ export type PreferencesMenuData = {
     features: Record<string, string>;
     game_preferences: Record<string, unknown>;
     non_contextual: {
-      random_body: RandomSetting;
+      random_body: RandomSetting,
       [otherKey: string]: unknown;
     };
     secondary_features: Record<string, unknown>;
@@ -137,7 +140,7 @@ export type PreferencesMenuData = {
     names: Record<string, string>;
 
     misc: {
-      gender: Gender;
+      gender: string;
       joblessrole: JoblessRole;
       species: string;
     };
@@ -145,22 +148,23 @@ export type PreferencesMenuData = {
     randomization: Record<string, RandomSetting>;
   };
 
-  content_unlocked: BooleanLike;
+  content_unlocked: number,
+  ckey: string,
 
   job_bans?: string[];
   job_days_left?: Record<string, number>;
-  job_required_experience?: Record<
-    string,
-    {
-      experience_type: string;
-      required_playtime: number;
-    }
-  >;
+  job_required_experience?: Record<string, {
+    experience_type: string,
+    required_playtime: number,
+  }>;
   job_preferences: Record<string, JobPriority>;
+  job_alt_titles: Record<string, string>;
 
   keybindings: Record<string, string[]>;
   overflow_role: string;
   selected_quirks: string[];
+  locked_quirks: Record<string, string>;
+  mood_enabled: BooleanLike;
 
   antag_bans?: string[];
   antag_days_left?: Record<string, number>;
@@ -168,6 +172,10 @@ export type PreferencesMenuData = {
 
   active_slot: number;
   name_to_use: string;
+
+  earned_skillcapes: string[];
+
+  available_voices: string[];
 
   window: Window;
 };
@@ -180,7 +188,7 @@ export type ServerData = {
   names: {
     types: Record<string, Name>;
   };
-  quirks: QuirkInfo;
+  quirks: QuirkInfo,
   random: {
     randomizable: string[];
   };

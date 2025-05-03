@@ -1,163 +1,142 @@
 // PRESETS
-var/global/list/station_networks = list(
-	NETWORK_FIRST_SECTION,
-	NETWORK_SECOND_SECTION,
-	NETWORK_THIRD_SECTION,
-	NETWORK_FOURTH_SECTION,
-	NETWORK_COMMAND,
-	NETWORK_ENGINE,
-	NETWORK_ENGINEERING,
-	NETWORK_CEV_ERIS,
-	NETWORK_MEDICAL,
-	NETWORK_MINE,
-	NETWORK_RESEARCH,
-	NETWORK_ROBOTS,
-	NETWORK_PRISON,
-	NETWORK_SECURITY
-)
-
-var/global/list/engineering_networks = list(
-	NETWORK_ENGINE,
-	NETWORK_ENGINEERING,
-	"Atmosphere Alarms",
-	"Fire Alarms",
-	"Power Alarms"
-)
-
-/obj/machinery/camera/network/crescent
-	network = list(NETWORK_CRESCENT)
-
-/obj/machinery/camera/network/fist_section
-	network = list(NETWORK_FIRST_SECTION)
-
-/obj/machinery/camera/network/second_section
-	network = list(NETWORK_SECOND_SECTION)
-
-/obj/machinery/camera/network/third_section
-	network = list(NETWORK_THIRD_SECTION)
-
-/obj/machinery/camera/network/fourth_section
-	network = list(NETWORK_FOURTH_SECTION)
-
-/obj/machinery/camera/network/command
-	network = list(NETWORK_COMMAND)
-
-/obj/machinery/camera/network/engine
-	network = list(NETWORK_ENGINE)
-
-/obj/machinery/camera/network/engineering
-	network = list(NETWORK_ENGINEERING)
-
-/obj/machinery/camera/network/cev_eris
-	network = list(NETWORK_CEV_ERIS)
-
-/obj/machinery/camera/network/mining
-	network = list(NETWORK_MINE)
-
-/obj/machinery/camera/network/prison
-	network = list(NETWORK_PRISON)
-
-/obj/machinery/camera/network/medbay
-	network = list(NETWORK_MEDICAL)
-
-/obj/machinery/camera/network/research
-	network = list(NETWORK_RESEARCH)
-
-/obj/machinery/camera/network/research_outpost
-	network = list(NETWORK_RESEARCH_OUTPOST)
-
-/obj/machinery/camera/network/security
-	network = list(NETWORK_SECURITY)
-
-/obj/machinery/camera/network/telecom
-	network = list(NETWORK_TELECOM)
-
-/obj/machinery/camera/network/thunder
-	network = list(NETWORK_THUNDER)
 
 // EMP
+/obj/machinery/camera/emp_proof
+	start_active = TRUE
 
-/obj/machinery/camera/emp_proof/New()
-	..()
+/obj/machinery/camera/emp_proof/Initialize(mapload)
+	. = ..()
 	upgradeEmpProof()
 
-// X-RAY
+// EMP + Motion
+
+/obj/machinery/camera/emp_proof/motion/Initialize(mapload)
+	. = ..()
+	upgradeMotion()
+
+// X-ray
 
 /obj/machinery/camera/xray
-	icon_state = "xraycam" // Thanks to Krutchen for the icons.
+	start_active = TRUE
+	icon_state = "xraycamera" //mapping icon - Thanks to Krutchen for the icons.
 
-/obj/machinery/camera/xray/security
-	network = list(NETWORK_SECURITY)
-
-/obj/machinery/camera/xray/medbay
-	network = list(NETWORK_MEDICAL)
-
-/obj/machinery/camera/xray/research
-	network = list(NETWORK_RESEARCH)
-
-/obj/machinery/camera/xray/New()
-	..()
+/obj/machinery/camera/xray/Initialize(mapload)
+	. = ..()
 	upgradeXRay()
 
 // MOTION
+/obj/machinery/camera/motion
+	start_active = TRUE
+	name = "motion-sensitive security camera"
 
-/obj/machinery/camera/motion/New()
-	..()
+/obj/machinery/camera/motion/Initialize(mapload)
+	. = ..()
 	upgradeMotion()
 
-/obj/machinery/camera/motion/security
-	network = list(NETWORK_SECURITY)
-
 // ALL UPGRADES
+/obj/machinery/camera/all
+	start_active = TRUE
+	icon_state = "xraycamera" //mapping icon.
 
-
-/obj/machinery/camera/all/command
-	network = list(NETWORK_COMMAND)
-
-/obj/machinery/camera/all/New()
-	..()
+/obj/machinery/camera/all/Initialize(mapload)
+	. = ..()
 	upgradeEmpProof()
 	upgradeXRay()
 	upgradeMotion()
 
-// CHECKS
+// AUTONAME
 
-/obj/machinery/camera/proc/isEmpProof()
-	var/O = locate(/obj/item/stack/material/osmium) in assembly.upgrades
-	return O
+/obj/machinery/camera/autoname
+	var/number = 0 //camera number in area
 
-/obj/machinery/camera/proc/isXRay()
-	var/obj/item/stock_parts/scanning_module/O = locate(/obj/item/stock_parts/scanning_module) in assembly.upgrades
-	if (O && O.rating >= 2)
-		return O
-	return null
+//This camera type automatically sets it's name to whatever the area that it's in is called.
+/obj/machinery/camera/autoname/Initialize(mapload)
+	..()
+	return INITIALIZE_HINT_LATELOAD
 
-/obj/machinery/camera/proc/isMotion()
-	var/O = locate(/obj/item/device/assembly/prox_sensor) in assembly.upgrades
-	return O
+/obj/machinery/camera/autoname/LateInitialize()
+	. = ..()
+	number = 1
+	var/area/A = get_area(src)
+	if(A)
+		for(var/obj/machinery/camera/autoname/C in GLOB.machines)
+			if(C == src)
+				continue
+			var/area/CA = get_area(C)
+			if(CA.type == A.type)
+				if(C.number)
+					number = max(number, C.number+1)
+		c_tag = "[A.name] #[number]"
+
 
 // UPGRADE PROCS
 
-/obj/machinery/camera/proc/upgradeEmpProof()
-	assembly.upgrades.Add(new /obj/item/stack/material/osmium(assembly))
-	setPowerUsage()
-	update_coverage()
+/obj/machinery/camera/proc/isEmpProof(ignore_malf_upgrades)
+	return (upgrades & CAMERA_UPGRADE_EMP_PROOF) && (!(ignore_malf_upgrades && assembly.malf_emp_firmware_active))
 
-/obj/machinery/camera/proc/upgradeXRay()
-	assembly.upgrades.Add(new /obj/item/stock_parts/scanning_module/adv(assembly))
-	setPowerUsage()
-	update_coverage()
+/obj/machinery/camera/proc/upgradeEmpProof(malf_upgrade, ignore_malf_upgrades)
+	if(isEmpProof(ignore_malf_upgrades)) //pass a malf upgrade to ignore_malf_upgrades so we can replace the malf module with the normal one
+		return							//that way if someone tries to upgrade an already malf-upgraded camera, it'll just upgrade it to a normal version.
+	ADD_TRAIT(src, TRAIT_EMPPROOF_SELF, "empproof_upgrade")
+	ADD_TRAIT(src, TRAIT_EMPPROOF_CONTENTS, "empproof_upgrade")
+	if(malf_upgrade)
+		assembly.malf_emp_firmware_active = TRUE //don't add parts to drop, update icon, ect. reconstructing it will also retain the upgrade.
+		assembly.malf_emp_firmware_present = TRUE //so the upgrade is retained after incompatible parts are removed.
+
+	else if(!assembly.emp_module) //only happens via upgrading in camera/attackby()
+		assembly.emp_module = new(assembly)
+		if(assembly.malf_emp_firmware_active)
+			assembly.malf_emp_firmware_active = FALSE //make it appear like it's just normally upgraded so the icons and examine texts are restored.
+
+	upgrades |= CAMERA_UPGRADE_EMP_PROOF
+
+/obj/machinery/camera/proc/removeEmpProof(ignore_malf_upgrades)
+	if(ignore_malf_upgrades) //don't downgrade it if malf software is forced onto it.
+		return
+	REMOVE_TRAIT(src, TRAIT_EMPPROOF_SELF, "empproof_upgrade")
+	REMOVE_TRAIT(src, TRAIT_EMPPROOF_CONTENTS, "empproof_upgrade")
+	upgrades &= ~CAMERA_UPGRADE_EMP_PROOF
+
+
+
+/obj/machinery/camera/proc/isXRay(ignore_malf_upgrades)
+	return (upgrades & CAMERA_UPGRADE_XRAY) && (!(ignore_malf_upgrades && assembly.malf_xray_firmware_active))
+
+/obj/machinery/camera/proc/upgradeXRay(malf_upgrade, ignore_malf_upgrades)
+	if(isXRay(ignore_malf_upgrades)) //pass a malf upgrade to ignore_malf_upgrades so we can replace the malf upgrade with the normal one
+		return						//that way if someone tries to upgrade an already malf-upgraded camera, it'll just upgrade it to a normal version.
+	if(malf_upgrade)
+		assembly.malf_xray_firmware_active = TRUE //don't add parts to drop, update icon, ect. reconstructing it will also retain the upgrade.
+		assembly.malf_xray_firmware_present = TRUE //so the upgrade is retained after incompatible parts are removed.
+
+	else if(!assembly.xray_module) //only happens via upgrading in camera/attackby()
+		assembly.xray_module = new(assembly)
+		if(assembly.malf_xray_firmware_active)
+			assembly.malf_xray_firmware_active = FALSE //make it appear like it's just normally upgraded so the icons and examine texts are restored.
+
+	upgrades |= CAMERA_UPGRADE_XRAY
+	update_appearance(UPDATE_ICON)
+
+/obj/machinery/camera/proc/removeXRay(ignore_malf_upgrades)
+	if(!ignore_malf_upgrades) //don't downgrade it if malf software is forced onto it.
+		upgrades &= ~CAMERA_UPGRADE_XRAY
+	update_appearance(UPDATE_ICON)
+
+
+
+/obj/machinery/camera/proc/isMotion()
+	return upgrades & CAMERA_UPGRADE_MOTION
 
 /obj/machinery/camera/proc/upgradeMotion()
-	assembly.upgrades.Add(new /obj/item/device/assembly/prox_sensor(assembly))
-	setPowerUsage()
-	START_PROCESSING(SSmachines, src)
-	update_coverage()
+	if(isMotion())
+		return
+	if(name == initial(name))
+		name = "motion-sensitive security camera"
+	if(!assembly.proxy_module)
+		assembly.proxy_module = new(assembly)
+	upgrades |= CAMERA_UPGRADE_MOTION
 
-/obj/machinery/camera/proc/setPowerUsage()
-	var/mult = 1
-	if (isXRay())
-		mult++
-	if (isMotion())
-		mult++
-	active_power_usage = mult*initial(active_power_usage)
+/obj/machinery/camera/proc/removeMotion()
+	if(name == "motion-sensitive security camera")
+		name = "security camera"
+	upgrades &= ~CAMERA_UPGRADE_MOTION

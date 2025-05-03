@@ -1,223 +1,252 @@
-/obj/item/device/transfer_valve
-	name = "tank transfer valve"
-	desc = "Regulates the transfer of air between two tanks"
+/obj/item/transfer_valve
 	icon = 'icons/obj/assemblies.dmi'
+	name = "tank transfer valve"
 	icon_state = "valve_1"
-	flags = PROXMOVE
+	item_state = "ttv"
+	lefthand_file = 'icons/mob/inhands/weapons/bombs_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/weapons/bombs_righthand.dmi'
+	desc = "Regulates the transfer of air between two tanks."
+	w_class = WEIGHT_CLASS_BULKY
 	var/obj/item/tank/tank_one
 	var/obj/item/tank/tank_two
-	var/obj/item/device/attached_device
-	var/mob/attacher
-	var/valve_open = 0
-	var/toggle = 1
+	var/obj/item/assembly/attached_device
+	var/mob/attacher = null
+	var/valve_open = FALSE
+	var/toggle = TRUE
 
-/obj/item/device/transfer_valve/proc/process_activation(var/obj/item/device/D)
+/obj/item/transfer_valve/Initialize(mapload)
+	. = ..()
+	var/static/list/loc_connections = list(
+		COMSIG_ATOM_ENTERED = PROC_REF(on_entered),
+	)
+	AddElement(/datum/element/connect_loc, loc_connections)
 
+/obj/item/transfer_valve/Destroy()
+	attached_device = null
+	return ..()
 
-/obj/item/device/transfer_valve/attackby(obj/item/item, mob/user)
-	var/turf/location = get_turf(src) // For admin logs
+/obj/item/transfer_valve/attackby(obj/item/item, mob/user, params)
 	if(istype(item, /obj/item/tank))
 		if(tank_one && tank_two)
-			to_chat(user, SPAN_WARNING("There are already two tanks attached, remove one first."))
+			to_chat(user, span_warning("There are already two tanks attached, remove one first!"))
 			return
 
 		if(!tank_one)
+			if(!user.transferItemToLoc(item, src))
+				return
 			tank_one = item
-			user.drop_item()
-			item.loc = src
-			to_chat(user, SPAN_NOTICE("You attach the tank to the transfer valve."))
+			to_chat(user, span_notice("You attach the tank to the transfer valve."))
 		else if(!tank_two)
+			if(!user.transferItemToLoc(item, src))
+				return
 			tank_two = item
-			user.drop_item()
-			item.loc = src
-			to_chat(user, SPAN_NOTICE("You attach the tank to the transfer valve."))
-			message_admins("[key_name_admin(user)] attached both tanks to a transfer valve. (<A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[location.x];Y=[location.y];Z=[location.z]'>JMP</a>)")
-			log_game("[key_name_admin(user)] attached both tanks to a transfer valve.")
+			to_chat(user, span_notice("You attach the tank to the transfer valve."))
 
-		update_icon()
+		update_appearance(UPDATE_ICON)
 //TODO: Have this take an assemblyholder
 	else if(isassembly(item))
-		var/obj/item/device/assembly/A = item
+		var/obj/item/assembly/A = item
 		if(A.secured)
-			to_chat(user, SPAN_NOTICE("The device is secured."))
+			to_chat(user, span_notice("The device is secured."))
 			return
 		if(attached_device)
-			to_chat(user, SPAN_WARNING("There is already an device attached to the valve, remove it first."))
+			to_chat(user, span_warning("There is already a device attached to the valve, remove it first!"))
 			return
-		user.remove_from_mob(item)
+		if(!user.transferItemToLoc(item, src))
+			return
 		attached_device = A
-		A.loc = src
-		to_chat(user, SPAN_NOTICE("You attach the [item] to the valve controls and secure it."))
+		to_chat(user, span_notice("You attach the [item] to the valve controls and secure it."))
 		A.holder = src
-		A.toggle_secure()	//this calls update_icon(), which calls update_icon() on the holder (i.e. the bomb).
-
-		bombers += "[key_name(user)] attached a [item] to a transfer valve."
-		message_admins("[key_name_admin(user)] attached a [item] to a transfer valve. (<A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[location.x];Y=[location.y];Z=[location.z]'>JMP</a>)")
-		log_game("[key_name_admin(user)] attached a [item] to a transfer valve.")
+		A.toggle_secure()	//this calls update_appearance(UPDATE_ICON), which calls update_appearance(UPDATE_ICON) on the holder (i.e. the bomb).
+		log_bomber(user, "attached a [item.name] to a ttv -", src, null, FALSE)
 		attacher = user
 	return
 
+//Attached device memes
+/obj/item/transfer_valve/Move()
+	. = ..()
+	if(attached_device)
+		attached_device.holder_movement()
 
-/obj/item/device/transfer_valve/HasProximity(atom/movable/AM as mob|obj)
-	if(!attached_device)	return
-	attached_device.HasProximity(AM)
-	return
+/obj/item/transfer_valve/dropped()
+	. = ..()
+	if(attached_device)
+		attached_device.dropped()
 
+/obj/item/transfer_valve/on_found(mob/finder)
+	if(attached_device)
+		attached_device.on_found(finder)
 
-/obj/item/device/transfer_valve/attack_self(mob/user)
-	ui_interact(user)
+/obj/item/transfer_valve/proc/on_entered(datum/source, atom/movable/AM, ...)
+	if(attached_device)
+		attached_device.Crossed(AM)
 
-/obj/item/device/transfer_valve/ui_state(mob/user)
-	return GLOB.hands_state
-
-/obj/item/device/transfer_valve/ui_interact(mob/user, datum/tgui/ui)
-	ui = SStgui.try_update_ui(user, src, ui)
-	if(!ui)
-		ui = new(user, src, "TransferValve", name)
-		ui.open()
-
-/obj/item/device/transfer_valve/ui_data(mob/user)
-	var/list/data = list(
-		"attachmentOne" = tank_one ? tank_one.name : null,
-		"attachmentTwo" = tank_two ? tank_two.name : null,
-		"attachment" = attached_device ? attached_device.name : null,
-		"isOpen" = valve_open
-	)
-	return data
-
-/obj/item/device/transfer_valve/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
+/obj/item/transfer_valve/attack_hand(mob/user, modifiers)//Triggers mousetraps
 	. = ..()
 	if(.)
 		return
+	if(attached_device)
+		attached_device.attack_hand(user, modifiers)
 
-	switch(action)
-		if("toggle")
-			toggle_valve()
-			. = TRUE
-		if("device")
-			attached_device?.attack_self(usr)
-			. = TRUE
-		if("remove_device")
-			remove_device()
-			. = TRUE
-		if("tankone")
-			remove_tank(tank_one)
-			. = TRUE
-		if("tanktwo")
-			remove_tank(tank_two)
-			. = TRUE
+//These keep attached devices synced up, for example a TTV with a mouse trap being found in a bag so it's triggered, or moving the TTV with an infrared beam sensor to update the beam's direction.
 
-/obj/item/device/transfer_valve/process_activation(var/obj/item/device/D)
+
+
+
+/obj/item/transfer_valve/proc/process_activation(obj/item/D)
 	if(toggle)
-		toggle = 0
+		toggle = FALSE
 		toggle_valve()
-		spawn(50) // To stop a signal being spammed from a proxy sensor constantly going off or whatever
-			toggle = 1
+		addtimer(CALLBACK(src, PROC_REF(toggle_off)), 5)	//To stop a signal being spammed from a proxy sensor constantly going off or whatever
 
-/obj/item/device/transfer_valve/update_icon()
-	overlays.Cut()
-	underlays = null
+/obj/item/transfer_valve/proc/toggle_off()
+	toggle = TRUE
 
+/obj/item/transfer_valve/update_icon_state()
+	. = ..()
 	if(!tank_one && !tank_two && !attached_device)
 		icon_state = "valve_1"
 		return
 	icon_state = "valve"
 
+/obj/item/transfer_valve/update_overlays()
+	. = ..()
 	if(tank_one)
-		overlays += "[tank_one.icon_state]"
+		. += "[tank_one.icon_state]"
 	if(tank_two)
-		var/icon/J = new(icon, icon_state = "[tank_two.icon_state]")
-		J.Shift(WEST, 13)
-		underlays += J
-	if(attached_device)
-		overlays += "device"
-
-/obj/item/device/transfer_valve/proc/remove_device()
-	if(isnull(attached_device))
-		return
-
-	attached_device.forceMove(get_turf(src))
-	attached_device:holder = null // Very-very bad, somebody fix.
-	attached_device = null
-	update_icon()
-
-/obj/item/device/transfer_valve/proc/remove_tank(obj/item/tank/T)
-	if(tank_one == T)
-		split_gases()
-		tank_one = null
-	else if(tank_two == T)
-		split_gases()
-		tank_two = null
+		var/mutable_appearance/J = mutable_appearance(icon, icon_state = "[tank_two.icon_state]")
+		var/matrix/T = matrix()
+		T.Translate(-13, 0)
+		J.transform = T
+		underlays = list(J)
 	else
+		underlays = null
+	if(attached_device)
+		. += "device"
+		if(istype(attached_device, /obj/item/assembly/infra))
+			var/obj/item/assembly/infra/sensor = attached_device
+			if(sensor.on && sensor.visible)
+				. += "proxy_beam"
+
+/obj/item/transfer_valve/proc/merge_gases(datum/gas_mixture/target, change_volume = TRUE)
+	var/target_self = FALSE
+	if(!target || (target == tank_one.air_contents))
+		target = tank_two.air_contents
+	if(target == tank_two.air_contents)
+		target_self = TRUE
+	if(change_volume)
+		if(!target_self)
+			target.set_volume(target.return_volume() + tank_two.volume)
+		target.set_volume(target.return_volume() + tank_one.air_contents.return_volume())
+	tank_one.air_contents.transfer_ratio_to(target, 1)
+	if(!target_self)
+		tank_two.air_contents.transfer_ratio_to(target, 1)
+
+/obj/item/transfer_valve/proc/split_gases()
+	if (!valve_open || !tank_one || !tank_two)
 		return
-
-	T.loc = get_turf(src)
-	update_icon()
-
-/obj/item/device/transfer_valve/proc/merge_gases()
-	if(valve_open)
-		return
-	tank_two.air_contents.volume += tank_one.air_contents.volume
-	var/datum/gas_mixture/temp
-	temp = tank_one.air_contents.remove_ratio(1)
-	tank_two.air_contents.merge(temp)
-	valve_open = 1
-
-/obj/item/device/transfer_valve/proc/split_gases()
-	if(!valve_open)
-		return
-
-	valve_open = 0
-
-	if(QDELETED(tank_one) || QDELETED(tank_two))
-		return
-
-	var/ratio1 = tank_one.air_contents.volume/tank_two.air_contents.volume
-	var/datum/gas_mixture/temp
-	temp = tank_two.air_contents.remove_ratio(ratio1)
-	tank_one.air_contents.merge(temp)
-	tank_two.air_contents.volume -=  tank_one.air_contents.volume
-
+	var/ratio1 = tank_one.air_contents.return_volume()/tank_two.air_contents.return_volume()
+	tank_two.air_contents.transfer_ratio_to(tank_one.air_contents, ratio1)
+	tank_two.air_contents.set_volume(tank_two.air_contents.return_volume() - tank_one.air_contents.return_volume())
 
 	/*
 	Exadv1: I know this isn't how it's going to work, but this was just to check
 	it explodes properly when it gets a signal (and it does).
 	*/
 
-/obj/item/device/transfer_valve/proc/toggle_valve()
-	if(!valve_open && (tank_one && tank_two))
+/obj/item/transfer_valve/proc/toggle_valve()
+	if(!valve_open && tank_one && tank_two)
+		valve_open = TRUE
 		var/turf/bombturf = get_turf(src)
-		var/area/A = get_area(bombturf)
 
-		var/attacher_name = ""
-		if(!attacher)
-			attacher_name = "Unknown"
-		else
-			attacher_name = "[attacher.name]([attacher.ckey])"
+		var/attachment
+		if(attached_device)
+			if(istype(attached_device, /obj/item/assembly/signaler))
+				attachment = "<A href='byond://?_src_=holder;[HrefToken()];secrets=list_signalers'>[attached_device]</A>"
+			else
+				attachment = attached_device
 
-		var/log_str = "Bomb valve opened in <A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[bombturf.x];Y=[bombturf.y];Z=[bombturf.z]'>[A.name]</a> "
-		log_str += "with [attached_device ? attached_device : "no device"] attacher: [attacher_name]"
+		var/admin_attachment_message
+		var/attachment_message
+		if(attachment)
+			admin_attachment_message = " with [attachment] attached by [attacher ? ADMIN_LOOKUPFLW(attacher) : "Unknown"]"
+			attachment_message = " with [attachment] attached by [attacher ? key_name_admin(attacher) : "Unknown"]"
 
-		if(attacher)
-			log_str += "(<A HREF='?_src_=holder;adminmoreinfo=\ref[attacher]'>?</A>)"
+		var/mob/bomber = get_mob_by_key(fingerprintslast)
+		var/admin_bomber_message
+		var/bomber_message
+		if(bomber)
+			admin_bomber_message = " - Last touched by: [ADMIN_LOOKUPFLW(bomber)]"
+			bomber_message = " - Last touched by: [key_name_admin(bomber)]"
 
-		var/mob/mob = get_mob_by_key(src.fingerprintslast)
-		var/last_touch_info = ""
-		if(mob)
-			last_touch_info = "(<A HREF='?_src_=holder;adminmoreinfo=\ref[mob]'>?</A>)"
 
-		log_str += " Last touched by: [src.fingerprintslast][last_touch_info]"
-		bombers += log_str
-		message_admins(log_str, 0, 1)
-		log_game(log_str)
+		var/admin_bomb_message = "Bomb valve opened in [ADMIN_VERBOSEJMP(bombturf)][admin_attachment_message][admin_bomber_message]"
+		GLOB.bombers += admin_bomb_message
+		if(SSticker.current_state != GAME_STATE_FINISHED) //don't bother alerting admins after the game has ended, but we still log it in the game log
+			message_admins(admin_bomb_message)
+		log_game("Bomb valve opened in [AREACOORD(bombturf)][attachment_message][bomber_message]")
+
 		merge_gases()
+		for(var/i in 1 to 6)
+			addtimer(CALLBACK(src, TYPE_PROC_REF(/atom/, update_icon)), 20 + (i - 1) * 10)
 
-	else if(valve_open==1 && (tank_one && tank_two))
+	else if(valve_open && tank_one && tank_two)
 		split_gases()
-
-	src.update_icon()
+		valve_open = FALSE
+		update_appearance(UPDATE_ICON)
 
 // this doesn't do anything but the timer etc. expects it to be here
 // eventually maybe have it update icon to show state (timer, prox etc.) like old bombs
-/obj/item/device/transfer_valve/proc/c_state()
+/obj/item/transfer_valve/proc/c_state()
 	return
+
+/obj/item/transfer_valve/ui_state(mob/user)
+	return GLOB.hands_state
+
+/obj/item/transfer_valve/ui_interact(mob/user, datum/tgui/ui)
+	ui = SStgui.try_update_ui(user, src, ui)
+	if(!ui)
+		ui = new(user, src, "TransferValve", name)
+		ui.open()
+
+/obj/item/transfer_valve/ui_data(mob/user)
+	var/list/data = list()
+	data["tank_one"] = tank_one ? tank_one.name : null
+	data["tank_two"] = tank_two ? tank_two.name : null
+	data["attached_device"] = attached_device ? attached_device.name : null
+	data["valve"] = valve_open
+	return data
+
+/obj/item/transfer_valve/ui_act(action, params)
+	if(..())
+		return
+
+	switch(action)
+		if("tankone")
+			if(tank_one)
+				split_gases()
+				valve_open = FALSE
+				tank_one.forceMove(drop_location())
+				tank_one = null
+				. = TRUE
+		if("tanktwo")
+			if(tank_two)
+				split_gases()
+				valve_open = FALSE
+				tank_two.forceMove(drop_location())
+				tank_two = null
+				. = TRUE
+		if("toggle")
+			toggle_valve()
+			. = TRUE
+		if("device")
+			if(attached_device)
+				attached_device.attack_self(usr)
+				. = TRUE
+		if("remove_device")
+			if(attached_device)
+				attached_device.on_detach()
+				attached_device = null
+				. = TRUE
+
+	update_appearance(UPDATE_ICON)

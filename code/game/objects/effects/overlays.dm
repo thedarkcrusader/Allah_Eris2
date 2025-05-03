@@ -1,38 +1,24 @@
 /obj/effect/overlay
 	name = "overlay"
-	unacidable = TRUE
-	mouse_opacity = MOUSE_OPACITY_TRANSPARENT
-	var/i_attached  // Added for possible image attachments to objects. For hallucinations and the like.
+
+/obj/effect/overlay/singularity_act()
+	return
+
+/obj/effect/overlay/singularity_pull()
+	return
 
 /obj/effect/overlay/beam//Not actually a projectile, just an effect.
 	name="beam"
 	icon='icons/effects/beam.dmi'
 	icon_state="b_beam"
-	var/tmp/atom/BeamSource
-	New()
-		..()
-		spawn(10) qdel(src)
+	var/atom/BeamSource
 
-/obj/effect/overlay/pulse
-	icon = 'icons/effects/effects.dmi'
-	icon_state = "empdisable"
-	name = "emp sparks"
-	layer = FLY_LAYER
-	anchored = TRUE
-	density = FALSE
-
-/obj/effect/overlay/pulse/New(loc, var/lifetime = 10)
-	..(loc)
-	set_dir(pick(cardinal))
-	spawn(lifetime)
-		qdel(src)
-
-/obj/effect/overlay/pulse/heatwave
-	icon_state = "sparks"
-	name = "heatwave sparks"
+/obj/effect/overlay/beam/Initialize(mapload)
+	. = ..()
+	QDEL_IN(src, 10)
 
 /obj/effect/overlay/palmtree_r
-	name = "Palm tree"
+	name = "palm tree"
 	icon = 'icons/misc/beach2.dmi'
 	icon_state = "palm1"
 	density = TRUE
@@ -40,7 +26,7 @@
 	anchored = TRUE
 
 /obj/effect/overlay/palmtree_l
-	name = "Palm tree"
+	name = "palm tree"
 	icon = 'icons/misc/beach2.dmi'
 	icon_state = "palm2"
 	density = TRUE
@@ -48,84 +34,61 @@
 	anchored = TRUE
 
 /obj/effect/overlay/coconut
-	name = "Coconuts"
+	gender = PLURAL
+	name = "coconuts"
 	icon = 'icons/misc/beach.dmi'
 	icon_state = "coconuts"
 
-/obj/effect/overlay/bluespacify
-	name = "Bluespace"
-	icon = 'icons/turf/space.dmi'
-	icon_state = "bluespacify"
-	layer = 10
-
-/obj/effect/overlay/bmark
-	name = "bullet hole"
-	desc = "Well someone shot something."
+/obj/effect/overlay/sparkles
+	gender = PLURAL
+	name = "sparkles"
+	desc = "Flashing lights, lights."
 	icon = 'icons/effects/effects.dmi'
-	layer = WALL_OBJ_LAYER
-	icon_state = "scorch"
-
-/obj/effect/overlay/temp
+	icon_state = "shieldsparkles"
 	anchored = TRUE
-	layer = ABOVE_MOB_LAYER
-	mouse_opacity = 0
-	var/duration = 10
-	var/randomdir = TRUE
 
-/obj/effect/overlay/temp/New()
-	if(randomdir)
-		dir = pick(GLOB.cardinal)
+/obj/effect/overlay/vis
+	mouse_opacity = MOUSE_OPACITY_TRANSPARENT
+	anchored = TRUE
+	vis_flags = VIS_INHERIT_DIR | VIS_INHERIT_ID
+	///When detected to be unused it gets set to world.time, after a while it gets removed
+	var/unused = 0
+	///overlays which go unused for this amount of time get cleaned up
+	var/cache_expiration = 2 MINUTES
 
-	flick("[icon_state]", src) //Because we might be pulling it from a pool, flick whatever icon it uses so it starts at the start of the icon's animation.
+/obj/effect/overlay/airlock_part
+	anchored = TRUE
+	plane = FLOAT_PLANE
+	layer = FLOAT_LAYER - 1
+	vis_flags = VIS_INHERIT_ID
+	var/side_id
+	var/open_px = 0
+	var/open_py = 0
+	var/move_start_time = 0 // for opening; closing uses reversed.
+	var/move_end_time = 5
+	var/aperture_angle = 0
+	var/obj/machinery/door/airlock/parent
+// in case some caveman is still using 512
+/obj/effect/overlay/airlock_part/Click()
+	parent.Click(arglist(args))
 
-	..()
-	spawn(duration)
-		qdel(src)
+/obj/effect/overlay/closet_door
+	anchored = TRUE
+	plane = FLOAT_PLANE
+	layer = FLOAT_LAYER
+	vis_flags = VIS_INHERIT_ID
+	appearance_flags = KEEP_TOGETHER | LONG_GLIDE | PIXEL_SCALE
 
+/obj/effect/overlay/light_visible
+	name = ""
+	icon = 'icons/effects/light_overlays/light_32.dmi'
+	icon_state = "light"
+	plane = O_LIGHTING_VISUAL_PLANE
+	appearance_flags = RESET_COLOR | RESET_ALPHA | RESET_TRANSFORM
+	mouse_opacity = MOUSE_OPACITY_TRANSPARENT
+	alpha = 0
+	vis_flags = NONE
 
-/obj/effect/overlay/temp/dir_setting/bloodsplatter
-	icon = 'icons/effects/blood.dmi'
-	duration = 5
-	randomdir = FALSE
-	layer = ABOVE_ALL_MOB_LAYER
-	color = "#C80000"
-	var/splatter_type = "splatter"
-
-/obj/effect/overlay/temp/dir_setting/bloodsplatter/New(loc, set_dir, blood_color)
-	if(blood_color)
-		color = blood_color
-	if(set_dir in GLOB.cornerdirs)
-		icon_state = "[splatter_type][pick(1, 2, 6)]"
-	else
-		icon_state = "[splatter_type][pick(3, 4, 5)]"
-	..()
-	var/target_pixel_x = 0
-	var/target_pixel_y = 0
-	switch(set_dir)
-		if(NORTH)
-			target_pixel_y = 16
-		if(SOUTH)
-			target_pixel_y = -16
-			layer = ABOVE_ALL_MOB_LAYER + 0.1
-		if(EAST)
-			target_pixel_x = 16
-		if(WEST)
-			target_pixel_x = -16
-		if(NORTHEAST)
-			target_pixel_x = 16
-			target_pixel_y = 16
-		if(NORTHWEST)
-			target_pixel_x = -16
-			target_pixel_y = 16
-		if(SOUTHEAST)
-			target_pixel_x = 16
-			target_pixel_y = -16
-			layer = ABOVE_ALL_MOB_LAYER + 0.1
-		if(SOUTHWEST)
-			target_pixel_x = -16
-			target_pixel_y = -16
-			layer = ABOVE_ALL_MOB_LAYER + 0.1
-	animate(src, pixel_x = target_pixel_x, pixel_y = target_pixel_y, alpha = 0, time = duration)
-
-/obj/effect/overlay/temp/dir_setting/bloodsplatter/xenosplatter
-	splatter_type = "xsplatter"
+/obj/effect/overlay/light_visible/cone
+	icon = 'icons/effects/light_overlays/light_cone.dmi'
+	alpha = 110

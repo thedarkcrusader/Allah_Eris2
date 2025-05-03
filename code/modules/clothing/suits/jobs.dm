@@ -2,370 +2,222 @@
  * Job related
  */
 
-//vagabond
-/obj/item/clothing/suit/storage/ass_jacket
-	name = "assistant jacket"
-	desc = "Practical and comfortable jacket. It seems have a little protection from physical harm."
-	icon_state = "ass_jacket"
-	item_state = "ass_jacket"
-	blood_overlay_type = "coat"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|ARMS
-	style_coverage = COVERS_TORSO|COVERS_UPPER_ARMS
-	armor = list(
-		melee = 2,
-		bullet = 2,
-		energy = 2,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-
-//Club Artist
-/obj/item/clothing/suit/artist
-	name = "Complicated Vest"
-	desc = "The tubes don't even do anything."
-	icon_state = "artist"
-	item_state = "artist_armor"
-	blood_overlay_type = "armor"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO
-	armor = list(
-		melee = 1,
-		bullet = 0,
-		energy = 0,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-	spawn_frequency = 0
-
-//Guild Technician
-/obj/item/clothing/suit/storage/cargo_jacket
-	name = "guild technician jacket"
-	desc = "An orange and grey jacket, a hybrid of a hazard vest and a proper jacket."
-	icon_state = "cargo_jacket"
-	item_state = "cargo_jacket"
-	blood_overlay_type = "coat"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|ARMS
-	style_coverage = COVERS_TORSO|COVERS_UPPER_ARMS
-	armor = list(
-		melee = 2,
-		bullet = 2,
-		energy = 2,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-
-/obj/item/clothing/suit/storage/cargo_jacket/black
-	name = "black guild technician jacket"
-	desc = "A black stylish jacket. Used by guild technicians."
-	icon_state = "cargo_jacket_black"
-	item_state = "cargo_jacket_black"
-	blood_overlay_type = "coat"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|ARMS
-	style_coverage = COVERS_TORSO|COVERS_UPPER_ARMS
-	armor = list(
-		melee = 2,
-		bullet = 2,
-		energy = 2,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-
-/obj/item/clothing/suit/storage/cargo_jacket/black/old
-	name = "old guild technician jacket"
-	desc = "An older version of the guild tech coat, still used occasionally."
-	icon_state = "cargo_jacket_old"
-	item_state = "cargo_jacket_old"
-
-//Merchant
-/obj/item/clothing/suit/storage/qm_coat
-	name = "guild merchant coat"
-	desc = "A grungy brown coat, perfect for a smuggler."
-	icon_state = "qm_coat"
-	item_state = "qm_coat"
-	blood_overlay_type = "coat"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|ARMS
-	armor = list(
-		melee = 5,
-		bullet = 5,
-		energy = 5,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-	siemens_coefficient = 0.8
-
-/*/obj/item/clothing/suit/storage/qm_coat/old
-	name = "old brown guild coat"
-	desc = "One of the old merchant coat designs, passed down to technicians after it fell out of fashion."
-	icon_state = "qm_coat_old"
-	item_state = "qm_coat_old"*/
-
 //Botanist
 /obj/item/clothing/suit/apron
 	name = "apron"
-	desc = "A basic yellow apron."
+	desc = "A basic blue apron."
 	icon_state = "apron"
 	item_state = "apron"
 	blood_overlay_type = "armor"
-	body_parts_covered = 0
-	spawn_blacklisted = TRUE
-	extra_allowed = list(
-		/obj/item/seeds,
-		/obj/item/reagent_containers/glass/fertilizer,
-		/obj/item/weedkiller
-	)
-
-//Club
-/obj/item/clothing/suit/storage/toggle/club
-	name = "manager's jacket"
-	desc = "A well tailored and rich jacket of the club manager"
-	icon_state = "cm_coat"
-	item_state = "cm_coat"
-	icon_open = "cm_coat_open"
-	icon_closed = "cm_coat"
-	body_parts_covered = UPPER_TORSO|ARMS
-	cold_protection = UPPER_TORSO|ARMS
-	min_cold_protection_temperature = T0C - 20
-	siemens_coefficient = 0.7
-	spawn_blacklisted = TRUE
-	style = STYLE_HIGH
+	body_parts_covered = CHEST|GROIN
+	allowed = list(/obj/item/reagent_containers/spray/plantbgone, /obj/item/plant_analyzer, /obj/item/seeds, /obj/item/reagent_containers/glass/bottle, /obj/item/reagent_containers/glass/beaker, /obj/item/cultivator, /obj/item/reagent_containers/spray/pestspray, /obj/item/hatchet, /obj/item/storage/bag/plants)
 
 //Captain
-/obj/item/clothing/suit/storage/captain
-	name = "captain's coat"
-	desc = "A very stylish black coat with fancy shoulder straps. Shows who the boss here."
-	icon_state = "captain"
-	item_state = "captain"
-	blood_overlay_type = "coat"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|LEGS|ARMS
-	style_coverage = COVERS_TORSO|COVERS_UPPER_ARMS|COVERS_UPPER_LEGS
-	spawn_blacklisted = TRUE
-	armor = list(
-		melee = 5,
-		bullet = 5,
-		energy = 5,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-	price_tag = 5000
-	style = STYLE_HIGH
-
-//NeoTheology
-/obj/item/clothing/suit/storage/neotheology_jacket
-	name = "acolyte jacket"
-	desc = "A long jacket. Dark, stylish, and authoritarian."
-	icon_state = "chaplain_hoodie"
-	item_state = "chaplain_hoodie"
-	blood_overlay_type = "coat"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|ARMS
-	style_coverage = COVERS_TORSO|COVERS_UPPER_ARMS
-	spawn_blacklisted = TRUE
-	armor = list(
-		melee = 5,
-		bullet = 2,
-		energy = 2,
-		bomb = 0,
-		bio = 50,  //same as labcoats at LEAST
-		rad = 0
-	)
-
-/obj/item/clothing/suit/storage/neotheology_jacket/black
-	name = "black acolyte jacket"
-	desc = "A long black jacket. Dark, stylish, and authoritarian."
-	icon_state = "chaplain_hoodie_old"
-	item_state = "chaplain_hoodie_old"
-	blood_overlay_type = "coat"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|ARMS
-	style_coverage = COVERS_TORSO|COVERS_UPPER_ARMS
-	spawn_blacklisted = TRUE
-	armor = list(
-		melee = 5,
-		bullet = 2,
-		energy = 2,
-		bomb = 0,
-		bio = 50,  //same as labcoats at LEAST
-		rad = 0
-	)
-
-/obj/item/clothing/suit/storage/neotheology_coat
-	name = "preacher coat"
-	desc = "A snugly fitting, lightly armoured brown coat."
-	icon_state = "church_coat"
-	item_state = "church_coat"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|LEGS|ARMS
-	style_coverage = COVERS_TORSO|COVERS_UPPER_ARMS|COVERS_UPPER_LEGS
-	spawn_blacklisted = TRUE
-	matter = list(MATERIAL_BIOMATTER = 20, MATERIAL_GOLD = 5)
-	armor = list(
-		melee = 5,
-		bullet = 5,
-		energy = 5,
-		bomb = 0,
-		bio = 50,  //same as labcoats at LEAST
-		rad = 0
-	)
-
-/obj/item/clothing/suit/storage/neotheosports
-	name = "NeoTheology sports jacket"
-	desc = "NeoTheology styled sports jacket to keep the faithful always on their feet."
-	icon_state = "nt_sportsjacket"
-	item_state = "nt_sportsjacket"
-	body_parts_covered = UPPER_TORSO|ARMS
-	style_coverage = COVERS_CHEST|COVERS_UPPER_ARMS
-	spawn_blacklisted = TRUE
-	armor = list(
-		melee = 2,
-		bullet = 2,
-		energy = 2,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-
-//Chaplain
-/obj/item/clothing/suit/nun
-	name = "nun robe"
-	desc = "Maximum piety in this star system."
-	icon_state = "nun"
-	item_state = "nun"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|LEGS|ARMS
-	style_coverage = COVERS_WHOLE_LEGS|COVERS_TORSO|COVERS_UPPER_ARMS
-	flags_inv = HIDESHOES|HIDEJUMPSUIT
-	spawn_blacklisted = TRUE
+/obj/item/clothing/suit/captunic
+	name = "captain's parade tunic"
+	desc = "Worn by a Captain to show their class."
+	icon_state = "captunic"
+	item_state = "bio_suit"
+	body_parts_covered = CHEST|GROIN|LEGS|ARMS
+	flags_inv = HIDEJUMPSUIT
+	allowed = list(/obj/item/disk, /obj/item/stamp, /obj/item/reagent_containers/food/drinks/flask, /obj/item/melee, /obj/item/storage/lockbox/medal, /obj/item/assembly/flash/handheld, /obj/item/storage/box/matches, /obj/item/lighter, /obj/item/clothing/mask/cigarette, /obj/item/storage/fancy/cigarettes, /obj/item/tank/internals/emergency_oxygen, /obj/item/tank/internals/plasmaman, /obj/item/tank/internals/ipc_coolant)
 
 //Chef
-/obj/item/clothing/suit/chef
+/obj/item/clothing/suit/toggle/chef
 	name = "chef's apron"
-	desc = "An apron used by a high class chef."
+	desc = "An apron-jacket used by a high class chef."
 	icon_state = "chef"
 	item_state = "chef"
 	gas_transfer_coefficient = 0.9
-	permeability_coefficient = 0.5
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|ARMS
-	style_coverage = COVERS_TORSO|COVERS_UPPER_ARMS
-	style = STYLE_HIGH
-	spawn_blacklisted = TRUE
+	armor = list(MELEE = 0, BULLET = 0, LASER = 0, ENERGY = 0, BOMB = 0, BIO = 10, RAD = 0, FIRE = 0, ACID = 0)
+	body_parts_covered = CHEST|GROIN|ARMS
+	allowed = list(/obj/item/kitchen)
+	togglename = "sleeves"
 
-//Chef
-/obj/item/clothing/suit/chef/classic
-	name = "classic chef's apron."
+//Cook
+/obj/item/clothing/suit/apron/chef
+	name = "cook's apron"
 	desc = "A basic, dull, white chef's apron."
 	icon_state = "apronchef"
 	item_state = "apronchef"
 	blood_overlay_type = "armor"
-	body_parts_covered = 0
-	spawn_blacklisted = TRUE
+	body_parts_covered = CHEST|GROIN
+	allowed = list(/obj/item/kitchen)
 
-//Inspector
-/obj/item/clothing/suit/storage/detective
-	name = "inspector's grey armored trenchcoat"
-	desc = "Grey armored trenchcoat, designed and created by Ironhammer Security. The coat is externally impact resistant - perfect for your next act of autodefenestration!"
-	icon_state = "detective_gray"
-	item_state = "detective_gray"
+//Detective
+/obj/item/clothing/suit/det_suit
+	name = "trenchcoat"
+	desc = "An 18th-century multi-purpose trenchcoat. Someone who wears this means serious business."
+	icon_state = "detective"
+	item_state = "det_suit"
 	blood_overlay_type = "coat"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|LEGS|ARMS
-	style_coverage = COVERS_TORSO|COVERS_UPPER_ARMS|COVERS_UPPER_LEGS
-	armor = list(
-		melee = 7,
-		bullet = 5,
-		energy = 5,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-	siemens_coefficient = 0.8
-	price_tag = 250
-	style = STYLE_HIGH
+	body_parts_covered = CHEST|GROIN|LEGS|ARMS
+	armor = list(MELEE = 30, BULLET = 30, LASER = 30, ENERGY = 10, BOMB = 25, BIO = 0, RAD = 0, FIRE = 50, ACID = 50, WOUND = 15)
+	cold_protection = CHEST|GROIN|LEGS|ARMS
+	heat_protection = CHEST|GROIN|LEGS|ARMS
+	mutantrace_variation = DIGITIGRADE_VARIATION
 
-/obj/item/clothing/suit/storage/detective/brown
-	name = "inspector's brown armored trenchcoat"
-	desc = "Brown armored trenchcoat, designed and created by Ironhammer Security. The coat is externally impact resistant - perfect for your next act of autodefenestration!"
-	icon_state = "detective_brown"
-	item_state = "detective_brown"
+/obj/item/clothing/suit/det_suit/Initialize(mapload)
+	. = ..()
+	allowed = GLOB.detective_vest_allowed
 
-/obj/item/clothing/suit/storage/detective/black
-	name = "inspector's black armored trenchcoat"
-	desc = "Black armored trenchcoat, designed and created by Ironhammer Security. The coat is externally impact resistant - perfect for your next act of autodefenestration!"
-	icon_state = "detective_black"
-	item_state = "detective_black"
+/obj/item/clothing/suit/det_suit/civilian
+	desc = "All the class of a trenchcoat without the security fibers."
+	armor = list(MELEE = 0, BULLET = 0, LASER = 0, ENERGY = 0, BOMB = 0, BIO = 0, RAD = 0, FIRE = 0, ACID = 0)
 
-//Technomancers
-/obj/item/clothing/suit/storage/hazardvest
+/obj/item/clothing/suit/det_suit/civilian/Initialize(mapload)
+	. = ..()
+	//Same permissions as the leather jacket/leather overcoat, because you know, trench coat
+	allowed = list(/obj/item/flashlight, /obj/item/tank/internals/emergency_oxygen, /obj/item/tank/internals/plasmaman, /obj/item/tank/internals/ipc_coolant, /obj/item/toy, /obj/item/storage/fancy/cigarettes, /obj/item/lighter, /obj/item/gun/ballistic/automatic/pistol, /obj/item/gun/ballistic/revolver, /obj/item/gun/ballistic/revolver/detective, /obj/item/radio)
+
+/obj/item/clothing/suit/det_suit/civilian/grey
+	name = "grey trenchcoat"
+	desc = "A dark trenchcoat without any security weaving present."
+	icon_state = "greydet"
+	item_state = "greydet"
+
+/obj/item/clothing/suit/det_suit/civilian/tan
+	name = "tan trenchcoat"
+	desc = "A lighter, warmer trenchcoat. This one doesn't offer protection."
+	icon_state = "detective_tan"
+	item_state = "detective_tan"
+
+/obj/item/clothing/suit/det_suit/grey
+	name = "noir trenchcoat"
+	desc = "A hard-boiled private investigator's grey trenchcoat."
+	icon_state = "greydet"
+	item_state = "greydet"
+
+/obj/item/clothing/suit/det_suit/grey/evil
+	name = "grey trenchcoat"
+	desc = "A dark trenchcoat that offers significantly more protection than your average duster."
+	armor = list(MELEE = 30, BULLET = 30, LASER = 30, ENERGY = 10, BOMB = 25, BIO = 0, RAD = 0, FIRE = 70, ACID = 90, WOUND = 20)
+
+/obj/item/clothing/suit/det_suit/tan
+	name = "tan trenchcoat"
+	desc = "For those warmer days in the city. Or nights, if you're a grizzled P.I."
+	icon_state = "detective_tan"
+	item_state = "detective_tan"
+
+/obj/item/clothing/suit/det_suit/noir
+	name = "noir suit coat"
+	desc = "A dapper private investigator's grey suit coat."
+	icon_state = "detsuit"
+	item_state = "detsuit"
+	mutantrace_variation = NONE //This should be done for any det_suit that isn't an overcoat, as to not require two sprites to deal with weird-ass legs
+
+//Engineering
+/obj/item/clothing/suit/hazardvest
 	name = "hazard vest"
 	desc = "A high-visibility vest used in work zones."
 	icon_state = "hazard"
 	item_state = "hazard"
 	blood_overlay_type = "armor"
-	extra_allowed = list(/obj/item/tool)
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO
-	price_tag = 50
+	allowed = list(/obj/item/flashlight, /obj/item/tank/internals/emergency_oxygen, /obj/item/tank/internals/plasmaman, /obj/item/tank/internals/ipc_coolant, /obj/item/t_scanner, /obj/item/radio, /obj/item/extinguisher/mini)
+	resistance_flags = NONE
+	armor = list(MELEE = 0, BULLET = 0, LASER = 0, ENERGY = 0, BOMB = 0, BIO = 0, RAD = 0, FIRE = 0, ACID = 0, ELECTRIC = 20) // slightly more OSHA-compliant!
 
-/obj/item/clothing/suit/storage/hazardvest/orange
-	icon_state = "hazard_orange"
-	item_state = "hazard_orange"
-
-//Paramedics
-/obj/item/clothing/suit/storage/hazardvest/black
-	icon_state = "hazard_black"
-	item_state = "hazard_black"
-
-//Technomancer Exultant
-/obj/item/clothing/suit/storage/te_coat
-	name = "exultant coat"
-	desc = "A sturdy and proud crimson coat. Lightly armored, with some protection against radiation."
-	icon_state = "te_coat"
-	item_state = "te_coat"
+//Lawyer
+/obj/item/clothing/suit/toggle/lawyer
+	name = "blue suit jacket"
+	desc = "A snappy dress jacket."
+	icon_state = "suitjacket_blue"
+	item_state = "suitjacket_blue"
 	blood_overlay_type = "coat"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|LEGS|ARMS
-	spawn_blacklisted = TRUE
-	armor = list(
-		melee = 7,
-		bullet = 5,
-		energy = 5,
-		bomb = 0,
-		bio = 0,
-		rad = 10
-	)
-	price_tag = 250
+	body_parts_covered = CHEST|ARMS
+	togglename = "buttons"
+
+/obj/item/clothing/suit/toggle/lawyer/purple
+	name = "purple suit jacket"
+	desc = "A foppish dress jacket."
+	icon_state = "suitjacket_purp"
+	item_state = "suitjacket_purp"
+
+/obj/item/clothing/suit/toggle/lawyer/black
+	name = "black suit jacket"
+	desc = "A professional suit jacket."
+	icon_state = "suitjacket_black"
+	item_state = "ro_suit"
+
+
+//Mime
+/obj/item/clothing/suit/suspenders
+	name = "suspenders"
+	desc = "They suspend the illusion of the mime's play."
+	icon = 'icons/obj/clothing/belts.dmi'
+	icon_state = "suspenders"
+	blood_overlay_type = "armor" //it's the less thing that I can put here
+
+//Security
+/obj/item/clothing/suit/armor/officerjacket
+	name = "security officer's jacket"
+	desc = "This jacket is for those special occasions when a security officer isn't required to wear their armor."
+	icon_state = "officerbluejacket"
+	item_state = "officerbluejacket"
+
+/obj/item/clothing/suit/armor/wardenjacket
+	name = "warden's jacket"
+	desc = "Perfectly suited for the warden that wants to leave an impression of style on those who visit the brig."
+	icon_state = "wardenbluejacket"
+	item_state = "wardenbluejacket"
+
+/obj/item/clothing/suit/armor/hosjacket
+	name = "head of security's jacket"
+	desc = "This piece of clothing was specifically designed for asserting superior authority."
+	icon_state = "hosbluejacket"
+	item_state = "hosbluejacket"
+
+//Surgeon
+/obj/item/clothing/suit/apron/surgical
+	name = "surgical apron"
+	desc = "A sterile blue surgical apron."
+	icon_state = "surgical"
+	allowed = list(/obj/item/scalpel, /obj/item/surgical_drapes, /obj/item/cautery, /obj/item/hemostat, /obj/item/retractor)
+
+//Curator
+/obj/item/clothing/suit/curator
+	name = "treasure hunter's coat"
+	desc = "Both fashionable and lightly armoured, this jacket is favoured by treasure hunters the galaxy over."
+	icon_state = "curator"
+	item_state = "curator"
+	blood_overlay_type = "coat"
+	body_parts_covered = CHEST|ARMS
+	allowed = list(/obj/item/tank/internals, /obj/item/melee/curator_whip)
+	armor = list(MELEE = 25, BULLET = 10, LASER = 25, ENERGY = 10, BOMB = 0, BIO = 0, RAD = 0, FIRE = 0, ACID = 45)
+	cold_protection = CHEST|ARMS
+	heat_protection = CHEST|ARMS
 
 //Roboticist
-/obj/item/clothing/suit/storage/robotech_jacket
-	name = "robotech jacket"
-	desc = "Jacket for those who like to get dirty in a machine oil."
-	icon_state = "robotech_jacket"
-	item_state = "robotech_jacket"
-	blood_overlay_type = "coat"
-	body_parts_covered = UPPER_TORSO|ARMS
-	price_tag = 50
-	armor = list(
-		melee = 2,
-		bullet = 2,
-		energy = 2,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
+/obj/item/clothing/suit/hooded/techpriest
+	name = "techpriest robes"
+	desc = "For those who REALLY love their toasters."
+	icon_state = "techpriest"
+	item_state = "techpriest"
+	body_parts_covered = CHEST|GROIN|LEGS|ARMS
+	hoodtype = /obj/item/clothing/head/hooded/techpriest
+	mutantrace_variation = DIGITIGRADE_VARIATION
 
-/obj/item/clothing/suit/storage/surgical_apron
-	name = "surgical apron"
-	desc = "Excellent blood collector."
-	icon_state = "surgeon"
-	item_state = "surgeon"
-	blood_overlay_type = "armor"
-	spawn_blacklisted = TRUE
-	extra_allowed = list(
-		/obj/item/tool/bonesetter,
-		/obj/item/tool/cautery,
-		/obj/item/tool/saw/circular,
-		/obj/item/tool/hemostat,
-		/obj/item/tool/retractor,
-		/obj/item/tool/scalpel,
-		/obj/item/tool/surgicaldrill,
-		/obj/item/stack/medical/advanced/bruise_pack
-	)
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO
-	price_tag = 50
+/obj/item/clothing/head/hooded/techpriest
+	name = "techpriest's hood"
+	desc = "A hood for those who REALLY love their toasters."
+	icon_state = "techpriesthood"
+	item_state = "techpriesthood"
+	body_parts_covered = HEAD
+	flags_inv = HIDEHAIR|HIDEEARS 
+
+/obj/item/clothing/suit/hooded/amech
+	name = "red robes"
+	desc = "A robe that used to be used by cultist."
+	icon_state = "amech"
+	item_state = "amech"
+	body_parts_covered = CHEST|GROIN|LEGS|ARMS
+	hoodtype = /obj/item/clothing/head/hooded/amech
+
+
+/obj/item/clothing/head/hooded/amech
+	name = "red robe's hood"
+	desc = "A hood that used to be used by cultist."
+	icon_state = "amech"
+	item_state = "amech"
+	body_parts_covered = HEAD|HAIR
+	flags_inv = HIDEHAIR|HIDEEARS 

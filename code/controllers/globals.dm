@@ -25,13 +25,19 @@ GLOBAL_REAL(GLOB, /datum/controller/global_vars)
 	SHOULD_CALL_PARENT(FALSE)
 	return QDEL_HINT_IWILLGC
 
-/datum/controller/global_vars/VV_hidden()//Part of bay var viewer improvements
-	return ..() + gvars_datum_protected_varlist
+/datum/controller/global_vars/stat_entry(msg)
+	msg = "Edit"
+	return msg
 
-// /datum/controller/global_vars/vv_edit_var(var_name, var_value)
-// 	if(gvars_datum_protected_varlist[var_name])
-// 		return FALSE
-// 	return ..()
+/datum/controller/global_vars/vv_edit_var(var_name, var_value)
+	if(gvars_datum_protected_varlist[var_name])
+		return FALSE
+	return ..()
+
+/datum/controller/global_vars/can_vv_get(var_name)
+	if(var_name == NAMEOF(src, gvars_datum_protected_varlist))
+		return FALSE
+	return ..()
 
 /datum/controller/global_vars/Initialize()
 	gvars_datum_init_order = list()

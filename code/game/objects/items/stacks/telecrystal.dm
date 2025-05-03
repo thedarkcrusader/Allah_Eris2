@@ -4,24 +4,54 @@
 	singular_name = "telecrystal"
 	icon = 'icons/obj/telescience.dmi'
 	icon_state = "telecrystal"
-	w_class = ITEM_SIZE_TINY
+	w_class = WEIGHT_CLASS_TINY
 	max_amount = 50
-	flags = NOBLUDGEON
-	origin_tech = list(TECH_MATERIAL = 6, TECH_BLUESPACE = 4)
-	price_tag = 50
-	spawn_blacklisted = TRUE
+	item_flags = NOBLUDGEON
+	novariants = FALSE
+	grind_results = list(/datum/reagent/redspace = 20)
 
-/obj/item/stack/telecrystal/random
-	rand_min = 3
-	rand_max = 15
-
-/obj/item/stack/telecrystal/afterattack(var/obj/item/I, mob/user as mob, proximity)
-	if(!proximity)
+/obj/item/stack/telecrystal/attack_self(mob/user)
+	if(!isliving(user))
 		return
-	if(istype(I, /obj/item))
-		if(I.hidden_uplink && I.hidden_uplink.active) //No metagaming by using this on every PDA around just to see if it gets used up.
-			I.hidden_uplink.uses += amount
-			I.hidden_uplink.update_nano_data()
-			SSnano.update_uis(I.hidden_uplink)
-			use(amount)
-			to_chat(user, SPAN_NOTICE("You slot \the [src] into \the [I] and charge its internal uplink."))
+
+	var/mob/living/L = user
+
+	var/turf/destination = get_teleport_loc(loc, L, rand(3,6)) // Gets 3-6 tiles in the user's direction
+
+	if(!istype(destination))
+		return
+
+	L.visible_message(span_warning("[L] crushes [src]!"), span_danger("You crush [src]!"))
+	new /obj/effect/particle_effect/sparks(loc)
+	playsound(loc, "sparks", 50, 1)
+
+	if(!do_teleport(L, destination, asoundin = 'sound/effects/phaseinred.ogg', channel = TELEPORT_CHANNEL_BLUESPACE))
+		L.visible_message(span_warning("[src] refuses to be crushed by [L]! There must be something interfering!"), span_danger("[src] suddenly hardens in your hand! There must be something interfering!"))
+		return
+
+	// Throws you one additional tile, giving it that cool "exit portal" effect and also throwing people very far if they are in space
+	L.throw_at(get_edge_target_turf(L, L.dir), 1, 3, spin = FALSE, diagonals_first = TRUE)
+	if(iscarbon(L))
+		var/mob/living/carbon/C = L
+		// Half as debilitating than a bluespace crystal, as this is a precious resource you're using
+		C.adjust_disgust(15)
+
+	use(1)
+
+/obj/item/stack/telecrystal/attack(mob/target, mob/user)
+	if(target == user) //You can't go around smacking people with crystals to find out if they have an uplink or not.
+		for(var/obj/item/implant/uplink/I in target)
+			if(I && I.imp_in)
+				var/datum/component/uplink/hidden_uplink = I.GetComponent(/datum/component/uplink)
+				if(hidden_uplink)
+					hidden_uplink.telecrystals += amount
+					use(amount)
+					to_chat(user, span_notice("You press [src] onto yourself and charge your hidden uplink."))
+	else
+		return ..()
+
+/obj/item/stack/telecrystal/five
+	amount = 5
+
+/obj/item/stack/telecrystal/twenty
+	amount = 20

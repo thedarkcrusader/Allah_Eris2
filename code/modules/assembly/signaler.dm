@@ -1,309 +1,314 @@
-#define SIGNALER_DEFAULT_CODE      30
-#define SIGNALER_DEFAULT_FREQUENCY 1457
-
-/obj/item/device/assembly/signaler
+/obj/item/assembly/signaler
 	name = "remote signaling device"
-	desc = "Used to remotely activate devices."
+	desc = "Used to remotely activate devices. Allows for syncing when using a secure signaler on another."
 	icon_state = "signaller"
 	item_state = "signaler"
-	origin_tech = list(TECH_MAGNET = 1)
-	matter = list(MATERIAL_PLASTIC = 1)
+	lefthand_file = 'icons/mob/inhands/misc/devices_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/misc/devices_righthand.dmi'
+	materials = list(/datum/material/iron=400, /datum/material/glass=120)
 	wires = WIRE_RECEIVE | WIRE_PULSE | WIRE_RADIO_PULSE | WIRE_RADIO_RECEIVE
-
-	secured = 1
-
-	var/code = 30
-	var/frequency = 1457
+	attachable = TRUE
+	var/code = DEFAULT_SIGNALER_CODE
+	var/frequency = FREQ_SIGNALER
 	var/delay = 0
-	var/airlock_wire
-	var/datum/wires/connected
 	var/datum/radio_frequency/radio_connection
-	var/deadman = 0
-	var/roundstart_barrier_id // Text. Links this signaller with a group of pre-mapped barriers that has matching ID
+	var/suicider = null
+	var/hearing_range = 1
 
+/obj/item/assembly/signaler/suicide_act(mob/living/carbon/user)
+	user.visible_message(span_suicide("[user] eats \the [src]! If it is signaled, [user.p_they()] will die!"))
+	playsound(src, 'sound/items/eatfood.ogg', 50, TRUE)
+	user.transferItemToLoc(src, user, TRUE)
+	suicider = user
+	return MANUAL_SUICIDE_NONLETHAL
 
-/obj/item/device/assembly/signaler/Initialize()
+/obj/item/assembly/signaler/proc/manual_suicide(mob/living/carbon/user)
+	user.visible_message(span_suicide("[user]'s [src] receives a signal, killing [user.p_them()] instantly!"))
+	user.adjustOxyLoss(200)//it sends an electrical pulse to their heart, killing them. or something.
+	user.death(0)
+	user.set_suicide(TRUE)
+	user.suicide_log()
+
+/obj/item/assembly/signaler/Initialize(mapload)
 	. = ..()
-	if(roundstart_barrier_id)
-		var/list/frequency_and_code_list = GLOB.roundstart_barrier_groups[roundstart_barrier_id]
-		if(!frequency_and_code_list)
-			frequency_and_code_list = list(	rand(1,100), // var/code used by src and /obj/structure/barrier/four_way
-											rand(1200, 1600)) // var/frequency, just like above
-			GLOB.roundstart_barrier_groups[roundstart_barrier_id] = frequency_and_code_list
-
-		code = frequency_and_code_list[1]
-		frequency = frequency_and_code_list[2]
-		radio_connection = SSradio.add_object(src, frequency)
 	set_frequency(frequency)
+	update_appearance(UPDATE_ICON)
 
+/obj/item/assembly/signaler/Destroy()
+	SSradio.remove_object(src,frequency)
+	. = ..()
 
-/obj/item/device/assembly/signaler/activate()
-	if(cooldown > 0)	return 0
-	cooldown = 2
-	spawn(10)
-		process_cooldown()
-
+/obj/item/assembly/signaler/activate()
+	if(!..())//cooldown processing
+		return FALSE
 	signal()
-	return 1
+	return TRUE
 
-
-/obj/item/device/assembly/signaler/update_icon()
+/obj/item/assembly/signaler/update_icon(updates=ALL)
+	. = ..()
 	if(holder)
-		holder.update_icon()
-	return
+		holder.update_icon(updates)
 
-
-/obj/item/device/assembly/signaler/proc/set_code(new_code)
-	code = clamp(round(new_code), 1, 100)
-
-
-/obj/item/device/assembly/signaler/proc/set_freq(new_freq)
-	set_frequency(sanitize_frequency(round(new_freq), RADIO_LOW_FREQ, RADIO_HIGH_FREQ))
-
-
-/obj/item/device/assembly/signaler/ui_status(mob/user)
+/obj/item/assembly/signaler/ui_status(mob/user)
 	if(is_secured(user))
 		return ..()
-
 	return UI_CLOSE
 
-
-/obj/item/device/assembly/signaler/ui_interact(mob/user, datum/tgui/ui)
+/obj/item/assembly/signaler/ui_interact(mob/user, datum/tgui/ui)
 	ui = SStgui.try_update_ui(user, src, ui)
 	if(!ui)
 		ui = new(user, src, "Signaler", name)
 		ui.open()
 
+/obj/item/assembly/signaler/ui_data(mob/user)
+	var/list/data = list()
+	data["frequency"] = frequency
+	data["code"] = code
+	data["minFrequency"] = MIN_FREE_FREQ
+	data["maxFrequency"] = MAX_FREE_FREQ
+	data["color"] = label_color
 
-/obj/item/device/assembly/signaler/ui_data(mob/user)
-	var/list/data = list(
-		"maxFrequency" = RADIO_HIGH_FREQ,
-		"minFrequency" = RADIO_LOW_FREQ,
-		"frequency" = frequency,
-		"code" = code
-		)
 	return data
 
-
-/obj/item/device/assembly/signaler/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
-	. = ..()
-	if(.)
+/obj/item/assembly/signaler/ui_act(action, params)
+	if(..())
 		return
 
 	switch(action)
 		if("signal")
-			signal()
+			if(TIMER_COOLDOWN_CHECK(src, COOLDOWN_SIGNALLER_SEND))
+				to_chat(usr, span_warning("[src] is still recharging..."))
+				return
+			TIMER_COOLDOWN_START(src, COOLDOWN_SIGNALLER_SEND, 1 SECONDS)
+			INVOKE_ASYNC(src, PROC_REF(signal))
 			. = TRUE
-		if("adjust")
-			if(params["freq"])
-				var/value = params["freq"]
-				set_freq(frequency + value)
-				. = TRUE
-			else if(params["code"])
-				var/value = params["code"]
-				set_code(code + value)
-				. = TRUE
+		if("freq")
+			frequency = unformat_frequency(params["freq"])
+			frequency = sanitize_frequency(frequency, TRUE)
+			set_frequency(frequency)
+			. = TRUE
+		if("code")
+			code = text2num(params["code"])
+			code = round(code)
+			. = TRUE
 		if("reset")
-			if(params["freq"])
-				frequency = SIGNALER_DEFAULT_FREQUENCY
-				. = TRUE
-			else if(params["code"])
-				code = SIGNALER_DEFAULT_CODE
-				. = TRUE
+			if(params["reset"] == "freq")
+				frequency = initial(frequency)
+			else
+				code = initial(code)
+			. = TRUE
+		if("color")
+			var/idx = label_colors.Find(label_color)
+			if(idx == label_colors.len || idx == 0)
+				idx = 1
+			else
+				idx++
+			label_color = label_colors[idx]
+			update_appearance(UPDATE_ICON)
 
+	update_appearance(UPDATE_ICON)
 
-/obj/item/device/assembly/signaler/proc/signal()
+/obj/item/assembly/signaler/attackby(obj/item/W, mob/user, params)
+	if(issignaler(W))
+		var/obj/item/assembly/signaler/signaler2 = W
+		if(secured && signaler2.secured)
+			code = signaler2.code
+			set_frequency(signaler2.frequency)
+			// yogs start - signaller colors
+			label_color = signaler2.label_color
+			update_appearance(UPDATE_ICON)
+			// yogs end
+			to_chat(user, "You transfer the frequency and code of \the [signaler2.name] to \the [name]")
+	..()
+
+/obj/item/assembly/signaler/proc/signal()
 	if(!radio_connection)
 		return
 
-	var/datum/signal/signal = new
-	signal.source = src
-	signal.encryption = code
-	signal.data["message"] = "ACTIVATE"
+	var/datum/signal/signal = new(list("code" = code))
 	radio_connection.post_signal(src, signal)
 
+	var/time = time2text(world.realtime,"hh:mm:ss")
+	var/turf/T = get_turf(src)
+	if(usr && T)
+		GLOB.lastsignalers.Add("[time] <B>:</B> [usr.key] used [src] @ location ([T.x],[T.y],[T.z]) <B>:</B> [format_frequency(frequency)]/[code]")
 
-/obj/item/device/assembly/signaler/pulse(var/radio = 0)
-	if(src.connected && src.wires)
-		connected.Pulse(src)
-	else if(holder)
-		holder.process_activation(src, 1, 0)
-	else
-		..(radio)
-
-
-/obj/item/device/assembly/signaler/receive_signal(datum/signal/signal)
+/obj/item/assembly/signaler/receive_signal(datum/signal/signal)
+	. = FALSE
 	if(!signal)
 		return
-	if(signal.encryption != code)
+	if(signal.data["code"] != code)
 		return
 	if(!(src.wires & WIRE_RADIO_RECEIVE))
 		return
-	pulse(1)
+	if(suicider)
+		manual_suicide(suicider)
+	pulse(TRUE)
+	audible_message("[icon2html(src, hearers(src))] *beep* *beep* *beep*", null, hearing_range)
+	for(var/CHM in get_hearers_in_view(hearing_range, src))
+		if(ismob(CHM))
+			var/mob/LM = CHM
+			LM.playsound_local(get_turf(src), 'sound/machines/triple_beep.ogg', ASSEMBLY_BEEP_VOLUME, TRUE)
+	return TRUE
 
-	if(!holder)
-		for(var/mob/O in hearers(1, src.loc))
-			O.show_message("\icon[src] *beep* *beep*", 3, "*beep* *beep*", 2)
 
-
-/obj/item/device/assembly/signaler/proc/set_frequency(new_frequency)
-	if(!frequency)
-		return
+/obj/item/assembly/signaler/proc/set_frequency(new_frequency)
 	SSradio.remove_object(src, frequency)
 	frequency = new_frequency
-	radio_connection = SSradio.add_object(src, frequency, RADIO_CHAT)
+	radio_connection = SSradio.add_object(src, frequency, RADIO_SIGNALER)
 	return
 
+// Embedded signaller used in grenade construction.
+// It's necessary because the signaler doens't have an off state.
+// Generated during grenade construction.  -Sayu
+/obj/item/assembly/signaler/receiver
+	var/on = FALSE
 
-/obj/item/device/assembly/signaler/Process()
-	if(!deadman)
-		STOP_PROCESSING(SSobj, src)
-	var/mob/M = src.loc
-	if(!M || !ismob(M))
-		if(prob(5))
-			signal()
-		deadman = 0
-		STOP_PROCESSING(SSobj, src)
-	else if(prob(5))
-		M.visible_message("[M]'s finger twitches a bit over [src]'s signal button!")
+/obj/item/assembly/signaler/receiver/proc/toggle_safety()
+	on = !on
+
+/obj/item/assembly/signaler/receiver/activate()
+	toggle_safety()
+	return TRUE
+
+/obj/item/assembly/signaler/receiver/examine(mob/user)
+	. = ..()
+	. += span_notice("The radio receiver is [on?"on":"off"].")
+
+/obj/item/assembly/signaler/receiver/receive_signal(datum/signal/signal)
+	if(!on)
+		return
+	return ..(signal)
+
+
+// Embedded signaller used in anomalies.
+/obj/item/assembly/signaler/anomaly
+	name = "anomaly core"
+	desc = "The neutralized core of an anomaly. It'd probably be valuable for research."
+	icon_state = "anomaly_core"
+	item_state = "electronic"
+	lefthand_file = 'icons/mob/inhands/misc/devices_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/misc/devices_righthand.dmi'
+	resistance_flags = FIRE_PROOF
+	var/anomaly_type = /obj/effect/anomaly
+
+/obj/item/assembly/signaler/anomaly/receive_signal(datum/signal/signal)
+	if(!signal)
+		return FALSE
+	if(signal.data["code"] != code)
+		return FALSE
+	if(suicider)
+		manual_suicide(suicider)
+	for(var/obj/effect/anomaly/A in get_turf(src))
+		A.anomalyNeutralize()
+	return TRUE
+
+/obj/item/assembly/signaler/anomaly/manual_suicide(mob/living/carbon/user)
+	user.visible_message(span_suicide("[user]'s [src] is reacting to the radio signal, warping [user.p_their()] body!"))
+	user.set_suicide(TRUE)
+	user.suicide_log()
+	user.gib()
+
+/obj/item/assembly/signaler/anomaly/attackby(obj/item/I, mob/user, params)
+	if(I.tool_behaviour == TOOL_ANALYZER)
+		to_chat(user, span_notice("Analyzing... [src]'s stabilized field is fluctuating along frequency [format_frequency(frequency)], code [code]."))
+	..()
+
+/obj/item/assembly/signaler/anomaly/attack_self()
 	return
 
+//Anomaly cores
+/obj/item/assembly/signaler/anomaly/pyro
+	name = "\improper pyroclastic anomaly core"
+	desc = "The neutralized core of a pyroclastic anomaly. It feels warm to the touch. It'd probably be valuable for research."
+	anomaly_type = /obj/effect/anomaly/pyro
 
-/obj/item/device/assembly/signaler/verb/deadman_it()
-	set src in usr
-	set name = "Threaten to push the button!"
-	set desc = "BOOOOM!"
-	deadman = 1
-	START_PROCESSING(SSobj, src)
-	log_and_message_admins("is threatening to trigger a signaler deadman's switch")
-	usr.visible_message("\red [usr] moves their finger over [src]'s signal button...")
+/obj/item/assembly/signaler/anomaly/grav
+	name = "\improper gravitational anomaly core"
+	desc = "The neutralized core of a gravitational anomaly. It feels much heavier than it looks. It'd probably be valuable for research."
+	anomaly_type = /obj/effect/anomaly/grav
 
-/obj/item/device/assembly/signaler/Destroy()
-	SSradio.remove_object(src,frequency)
-	frequency = 0
+/obj/item/assembly/signaler/anomaly/flux
+	name = "\improper flux anomaly core"
+	desc = "The neutralized core of a flux anomaly. Touching it makes your skin tingle. It'd probably be valuable for research."
+	anomaly_type = /obj/effect/anomaly/flux
+
+/obj/item/assembly/signaler/anomaly/bluespace
+	name = "\improper bluespace anomaly core"
+	desc = "The neutralized core of a bluespace anomaly. It keeps phasing in and out of view. It'd probably be valuable for research."
+	anomaly_type = /obj/effect/anomaly/bluespace
+
+/obj/item/assembly/signaler/anomaly/vortex
+	name = "\improper vortex anomaly core"
+	desc = "The neutralized core of a vortex anomaly. It won't sit still, as if some invisible force is acting on it. It'd probably be valuable for research."
+	anomaly_type = /obj/effect/anomaly/bhole
+
+/obj/item/assembly/signaler/anomaly/hallucination
+	name = "\improper hallucination anomaly core"
+	desc = "The neutralized core of a hallucination anomaly. It seems to be moving, but it's probably your imagination. It'd probably be valuable for research."
+	icon_state = "hallucination_core"
+	anomaly_type = /obj/effect/anomaly/hallucination
+
+/obj/item/assembly/signaler/anomaly/radiation
+	name = "\improper radiation anomaly core"
+	desc = "The neutralized core of a radiation anomaly. It keeps pulsing an ominous green. It'd probably be valuable for research."
+	icon_state = "radiation_core"
+	anomaly_type = /obj/effect/anomaly/radiation
+
+/obj/item/assembly/signaler/cyborg
+
+/obj/item/assembly/signaler/cyborg/attackby(obj/item/W, mob/user, params)
+	return
+/obj/item/assembly/signaler/cyborg/screwdriver_act(mob/living/user, obj/item/I)
+	return
+
+/obj/item/assembly/signaler/internal
+	name = "internal remote signaling device"
+
+/obj/item/assembly/signaler/internal/ui_state(mob/user)
+	return GLOB.inventory_state
+
+/obj/item/assembly/signaler/internal/attackby(obj/item/W, mob/user, params)
+	return
+
+/obj/item/assembly/signaler/internal/screwdriver_act(mob/living/user, obj/item/I)
+	return
+
+/obj/item/assembly/signaler/internal/can_interact(mob/user)
+	if(ispAI(user))
+		return TRUE
 	. = ..()
 
-/obj/item/device/assembly/signaler/door_controller
-	name = "remote door signaling device"
-	desc = "Used to remotely activate doors. 2 Beeps for opened, 1 for closed, 0 for no answer. Alt-Click to change Mode, Ctrl-Click to change code."
-	icon_state = "signaller"
-	item_state = "signaler"
-	origin_tech = list(TECH_MAGNET = 1)
-	matter = list(MATERIAL_PLASTIC = 1)
-	wires = WIRE_RECEIVE | WIRE_PULSE | WIRE_RADIO_PULSE | WIRE_RADIO_RECEIVE
-	spawn_blacklisted = TRUE
+/**
+ * Button signaler
+ *
+ * Activated by attack_self instead of UI
+ *
+ * UI is instead opened by multitool
+ */
+/obj/item/assembly/signaler/button
+	name = "remote signaling button"
+	desc = "A modern design of the remote signaling device, for when you need to signal NOW. Configured via multitool. Cannot receive signals."
+	icon = 'icons/obj/assemblies/new_assemblies.dmi'
+	icon_state = "radio"
+	item_state = "radio"
 
-	secured = TRUE
-	code = 0
-	frequency = BLAST_DOOR_FREQ
-	delay = 1
+/obj/item/assembly/signaler/button/attack_self(mob/user, modifiers)
+	if(HAS_TRAIT(user, TRAIT_NOINTERACT))
+		to_chat(user, span_notice("You can't use things!"))
+		return
+	if(SEND_SIGNAL(src, COMSIG_ITEM_ATTACK_SELF, user, modifiers) & COMPONENT_NO_INTERACT)
+		return
+	if(!user)
+		return FALSE
+	activate()
+	pulse()
+	return TRUE
 
-	var/last_message = 0
-	var/command = "CMD_DOOR_TOGGLE"
+/obj/item/assembly/signaler/button/multitool_act(mob/living/user, obj/item/I)
+	. = ..()
+	user.set_machine(src)
+	interact(user)
 
-/obj/item/device/assembly/signaler/door_controller/set_frequency(new_frequency)
-	SSradio.remove_object(src, BLAST_DOOR_FREQ)
-	frequency = BLAST_DOOR_FREQ
-	radio_connection = SSradio.add_object(src, BLAST_DOOR_FREQ, RADIO_BLASTDOORS)
-
-// No nanoUI for u
-/obj/item/device/assembly/signaler/door_controller/nano_ui_interact(mob/user, ui_key, datum/nanoui/ui, force_open, datum/nano_topic_state/state)
-	return FALSE
-
-// No TGui for u
-/obj/item/device/assembly/signaler/door_controller/ui_interact(mob/user, datum/tgui/ui)
-	return FALSE
-
-/obj/item/device/assembly/signaler/door_controller/receive_signal(datum/signal/signal)
-	if(!signal)
-		return
-	if(signal.encryption != code)
-		return
-	if(!(src.wires & WIRE_RADIO_RECEIVE))
-		return
-	pulse(1)
-	/// prevent spam if theres multiple doors.
-	if(last_message > world.timeofday)
-		return
-	var/local_message = ""
-	switch(signal.data["message"])
-		if("DATA_DOOR_OPENED")
-			local_message = "\icon[src] beeps twice."
-		if("DATA_DOOR_CLOSED")
-			local_message = "\icon[src] beeps once."
-		if("CMD_DOOR_OPEN")
-			return
-		if("CMD_DOOR_CLOSE")
-			return
-		if("CMD_DOOR_TOGGLE")
-			return
-		if("CMD_DOOR_STATE")
-			return
-		else
-			local_message = "\icon[src] beeps ominously."
-	last_message = world.timeofday + 1 SECONDS
-
-	for(var/mob/O in hearers(1, src.loc))
-		O.show_message(local_message, 3, "*beep* *beep*", 2)
-
-/obj/item/device/assembly/signaler/door_controller/AltClick(mob/living/carbon/human/user)
-	if(!istype(user))
-		return
-	if(user.stat)
-		return
-	if(!Adjacent(user,2))
-		return
-	var/option = input(user, "Choose signalling mode", "[src] configuration", "Toggle") as anything in list("Toggle", "Close", "Open")
-	if(!istype(user))
-		return
-	if(user.stat)
-		return
-	if(!Adjacent(user,2))
-		return
-	switch(option)
-		if("Toggle")
-			command = "CMD_DOOR_TOGGLE"
-		if("Close")
-			command = "CMD_DOOR_CLOSE"
-		if("Open")
-			command = "CMD_DOOR_OPEN"
-	to_chat(user, SPAN_NOTICE("You change the signalling mode of \the [src]to [option]."))
-
-/obj/item/device/assembly/signaler/door_controller/CtrlClick(mob/living/carbon/human/user)
-	if(!istype(user))
-		return
-	if(user.stat)
-		return
-	if(!Adjacent(user,2))
-		return
-	var/option = input(user, "Choose signaller code", "[src] configuration", 1) as num
-	if(!istype(user))
-		return
-	if(user.stat)
-		return
-	if(!Adjacent(user,2))
-		return
-	code = clamp(option, 0, 1000)
-	to_chat(user, SPAN_NOTICE("You change the code of \the [src] to [option]."))
-
-
-/obj/item/device/assembly/signaler/door_controller/attack_self(mob/user)
-	if(!..())
-		return
-	signal()
-
-
-/// data is expected to be a list
-/obj/item/device/assembly/signaler/door_controller/signal(list/data)
-	if(!radio_connection)
-		return
-
-	var/datum/signal/signal = new
-	signal.source = src
-	signal.encryption = code
-	signal.data["message"] = command
-	radio_connection.post_signal(src, signal, RADIO_BLASTDOORS)
-
-#undef SIGNALER_DEFAULT_FREQUENCY
-#undef SIGNALER_DEFAULT_CODE
-
+/obj/item/assembly/signaler/button/receive_signal(datum/signal/signal)
+	return

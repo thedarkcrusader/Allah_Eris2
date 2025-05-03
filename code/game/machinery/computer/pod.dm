@@ -1,146 +1,75 @@
-//This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:31
-
 /obj/machinery/computer/pod
-	name = "pod launch control console"
-	desc = "A control console for launching pods. Some people prefer firing Mechas."
-	icon_screen = "mass_driver"
-	light_color = COLOR_LIGHTING_GREEN_MACHINERY
-	circuit = /obj/item/electronics/circuitboard/pod
+	name = "mass driver launch control"
+	desc = "A combined blastdoor and mass driver control unit."
+	var/obj/machinery/mass_driver/connected = null
+	var/title = "Mass Driver Controls"
 	var/id = 1
-	var/obj/machinery/mass_driver/connected
 	var/timing = 0
 	var/time = 30
-	var/title = "Mass Driver Controls"
+	var/range = 4
 
 
-/obj/machinery/computer/pod/New()
-	..()
-	spawn( 5 )
-		for(var/obj/machinery/mass_driver/M in world)
-			if(M.id == id)
-				connected = M
-			else
-		return
-	return
+/obj/machinery/computer/pod/Initialize(mapload)
+	. = ..()
+	for(var/obj/machinery/mass_driver/M in range(range, src))
+		if(M.id == id)
+			connected = M
 
 
 /obj/machinery/computer/pod/proc/alarm()
 	if(stat & (NOPOWER|BROKEN))
 		return
 
-	if(!( connected ))
-		to_chat(viewers(null, null), "Cannot locate mass driver connector. Cancelling firing sequence!")
+	if(!connected)
+		say("Cannot locate mass driver connector. Cancelling firing sequence!")
 		return
 
-	for(var/obj/machinery/door/blast/M in world)
+	for(var/obj/machinery/door/poddoor/M in range(range, src))
 		if(M.id == id)
 			M.open()
 
-	sleep(20)
-
-	for(var/obj/machinery/mass_driver/M in world)
+	sleep(2 SECONDS)
+	for(var/obj/machinery/mass_driver/M in range(range, src))
 		if(M.id == id)
 			M.power = connected.power
 			M.drive()
 
-	sleep(50)
-	for(var/obj/machinery/door/blast/M in world)
+	sleep(5 SECONDS)
+	for(var/obj/machinery/door/poddoor/M in range(range, src))
 		if(M.id == id)
 			M.close()
-			return
-	return
 
-/*
-/obj/machinery/computer/pod/attackby(I as obj, user as mob)
-	if(istype(I, /obj/item/tool/screwdriver))
-		playsound(loc, 'sound/items/Screwdriver.ogg', 50, 1)
-		if(do_after(user, 20))
-			if(stat & BROKEN)
-				to_chat(user, SPAN_NOTICE("The broken glass falls out."))
-				var/obj/structure/computerframe/A = new /obj/structure/computerframe( loc )
-				new /obj/item/material/shard( loc )
-
-				//generate appropriate circuitboard. Accounts for /pod/old computer types
-				var/obj/item/electronics/circuitboard/pod/M = null
-				if(istype(src, /obj/machinery/computer/pod/old))
-					M = new /obj/item/electronics/circuitboard/olddoor( A )
-					if(istype(src, /obj/machinery/computer/pod/old/syndicate))
-						M = new /obj/item/electronics/circuitboard/syndicatedoor( A )
-					if(istype(src, /obj/machinery/computer/pod/old/swf))
-						M = new /obj/item/electronics/circuitboard/swfdoor( A )
-				else //it's not an old computer. Generate standard pod circuitboard.
-					M = new /obj/item/electronics/circuitboard/pod( A )
-
-				for (var/obj/C in src)
-					C.loc = loc
-				M.id = id
-				A.circuit = M
-				A.state = 3
-				A.icon_state = "3"
-				A.anchored = TRUE
-				qdel(src)
-			else
-				to_chat(user, SPAN_NOTICE("You disconnect the monitor."))
-				var/obj/structure/computerframe/A = new /obj/structure/computerframe( loc )
-
-				//generate appropriate circuitboard. Accounts for /pod/old computer types
-				var/obj/item/electronics/circuitboard/pod/M = null
-				if(istype(src, /obj/machinery/computer/pod/old))
-					M = new /obj/item/electronics/circuitboard/olddoor( A )
-					if(istype(src, /obj/machinery/computer/pod/old/syndicate))
-						M = new /obj/item/electronics/circuitboard/syndicatedoor( A )
-					if(istype(src, /obj/machinery/computer/pod/old/swf))
-						M = new /obj/item/electronics/circuitboard/swfdoor( A )
-				else //it's not an old computer. Generate standard pod circuitboard.
-					M = new /obj/item/electronics/circuitboard/pod( A )
-
-				for (var/obj/C in src)
-					C.loc = loc
-				M.id = id
-				A.circuit = M
-				A.state = 4
-				A.icon_state = "4"
-				A.anchored = TRUE
-				qdel(src)
-	else
-		attack_hand(user)
-	return
-*/
-
-
-/obj/machinery/computer/pod/attack_hand(mob/user)
-	if(..())
+/obj/machinery/computer/pod/ui_interact(mob/user)
+	. = ..()
+	if(!allowed(user))
+		to_chat(user, span_warning("Access denied."))
 		return
 
-	var/dat = "<HTML><BODY><TT><B>[title]</B>"
-	user.set_machine(src)
+	var/dat = ""
 	if(connected)
 		var/d2
 		if(timing)	//door controls do not need timers.
-			d2 = "<A href='?src=\ref[src];time=0'>Stop Time Launch</A>"
+			d2 = "<A href='byond://?src=[REF(src)];time=0'>Stop Time Launch</A>"
 		else
-			d2 = "<A href='?src=\ref[src];time=1'>Initiate Time Launch</A>"
-		var/second = time % 60
-		var/minute = (time - second) / 60
-		dat += "<HR>\nTimer System: [d2]\nTime Left: [minute ? "[minute]:" : null][second] <A href='?src=\ref[src];tp=-30'>-</A> <A href='?src=\ref[src];tp=-1'>-</A> <A href='?src=\ref[src];tp=1'>+</A> <A href='?src=\ref[src];tp=30'>+</A>"
+			d2 = "<A href='byond://?src=[REF(src)];time=1'>Initiate Time Launch</A>"
+		dat += "<HR>\nTimer System: [d2]\nTime Left: [DisplayTimeText((time SECONDS))] <A href='byond://?src=[REF(src)];tp=-30'>-</A> <A href='byond://?src=[REF(src)];tp=-1'>-</A> <A href='byond://?src=[REF(src)];tp=1'>+</A> <A href='byond://?src=[REF(src)];tp=30'>+</A>"
 		var/temp = ""
 		var/list/L = list( 0.25, 0.5, 1, 2, 4, 8, 16 )
 		for(var/t in L)
 			if(t == connected.power)
 				temp += "[t] "
 			else
-				temp += "<A href = '?src=\ref[src];power=[t]'>[t]</A> "
-		dat += "<HR>\nPower Level: [temp]<BR>\n<A href = '?src=\ref[src];alarm=1'>Firing Sequence</A><BR>\n<A href = '?src=\ref[src];drive=1'>Test Fire Driver</A><BR>\n<A href = '?src=\ref[src];door=1'>Toggle Outer Door</A><BR>"
+				temp += "<A href='byond://?src=[REF(src)];power=[t]'>[t]</A> "
+		dat += "<HR>\nPower Level: [temp]<BR>\n<A href='byond://?src=[REF(src)];alarm=1'>Firing Sequence</A><BR>\n<A href='byond://?src=[REF(src)];drive=1'>Test Fire Driver</A><BR>\n<A href='byond://?src=[REF(src)];door=1'>Toggle Outer Door</A><BR>"
 	else
-		dat += "<BR>\n<A href = '?src=\ref[src];door=1'>Toggle Outer Door</A><BR>"
-	dat += "<BR><BR><A href='?src=\ref[user];mach_close=computer'>Close</A></TT></BODY></HTML>"
-	user << browse(dat, "window=computer;size=400x500")
+		dat += "<BR>\n<A href='byond://?src=[REF(src)];door=1'>Toggle Outer Door</A><BR>"
+	dat += "<BR><BR><A href='byond://?src=[REF(user)];mach_close=computer'>Close</A>"
 	add_fingerprint(usr)
-	onclose(user, "computer")
-	return
+	var/datum/browser/popup = new(user, "computer", title, 400, 500)
+	popup.set_content(dat)
+	popup.open()
 
-
-/obj/machinery/computer/pod/Process()
+/obj/machinery/computer/pod/process()
 	if(!..())
 		return
 	if(timing)
@@ -151,13 +80,12 @@
 			time = 0
 			timing = 0
 		updateDialog()
-	return
 
 
 /obj/machinery/computer/pod/Topic(href, href_list)
 	if(..())
-		return 1
-	if((usr.contents.Find(src) || (in_range(src, usr) && istype(loc, /turf))) || (issilicon(usr)))
+		return
+	if(usr.contents.Find(src) || (in_range(src, usr) && isturf(loc)) || issilicon(usr))
 		usr.set_machine(src)
 		if(href_list["power"])
 			var/t = text2num(href_list["power"])
@@ -166,12 +94,6 @@
 				connected.power = t
 		if(href_list["alarm"])
 			alarm()
-		if(href_list["drive"])
-			for(var/obj/machinery/mass_driver/M in GLOB.machines)
-				if(M.id == id)
-					M.power = connected.power
-					M.drive()
-
 		if(href_list["time"])
 			timing = text2num(href_list["time"])
 		if(href_list["tp"])
@@ -179,39 +101,32 @@
 			time += tp
 			time = min(max(round(time), 0), 120)
 		if(href_list["door"])
-			for(var/obj/machinery/door/blast/M in world)
+			for(var/obj/machinery/door/poddoor/M in range(range, src))
 				if(M.id == id)
 					if(M.density)
 						M.open()
 					else
 						M.close()
+		if(href_list["drive"])
+			for(var/obj/machinery/mass_driver/M in range(range, src))
+				if(M.id == id)
+					M.power = connected.power
+					M.drive()
 		updateUsrDialog()
-	return
-
-
 
 /obj/machinery/computer/pod/old
-	icon_state = "oldcomp"
-	icon_keyboard = null
-	icon_screen = "library"
-	name = "DoorMex Control Computer"
+	name = "\improper DoorMex control console"
 	title = "Door Controls"
-
-
+	icon_state = "oldcomp"
+	icon_screen = "library"
+	icon_keyboard = null
 
 /obj/machinery/computer/pod/old/syndicate
-	name = "ProComp Executive IIc"
-	desc = "Criminals often operate on a tight budget. Operates external airlocks."
+	name = "\improper ProComp Executive IIc"
+	desc = "The Syndicate operate on a tight budget. Operates external airlocks."
 	title = "External Airlock Controls"
-	req_access = list(access_syndicate)
-
-/obj/machinery/computer/pod/old/syndicate/attack_hand(var/mob/user as mob)
-	if(!allowed(user))
-		to_chat(user, SPAN_WARNING("Access Denied"))
-		return
-	else
-		..()
+	req_access = list(ACCESS_SYNDICATE)
 
 /obj/machinery/computer/pod/old/swf
-	name = "Magix System IV"
-	desc = "An arcane artifact that holds much magic. Running E-Knock 2.2: Sorceror's Edition"
+	name = "\improper Magix System IV"
+	desc = "An arcane artifact that holds much magic. Running E-Knock 2.2: Sorcerer's Edition."

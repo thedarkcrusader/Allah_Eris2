@@ -3,20 +3,8 @@
 	desc = "Because you really needed another excuse to punch your crewmates."
 	icon_state = "boxing"
 	item_state = "boxing"
-	armor = list(
-		melee = 6,
-		bullet = 0,
-		energy = 0,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-
-/obj/item/clothing/gloves/boxing/attackby(obj/item/W, mob/user)
-	if(istype(W, /obj/item/tool/wirecutters) || istype(W, /obj/item/tool/scalpel))
-		to_chat(user, SPAN_NOTICE("That won't work."))	//Nope
-		return
-	..()
+	equip_delay_other = 60
+	species_exception = list(/datum/species/golem) // now you too can be a golem boxing champion
 
 /obj/item/clothing/gloves/boxing/green
 	icon_state = "boxinggreen"
@@ -29,3 +17,9 @@
 /obj/item/clothing/gloves/boxing/yellow
 	icon_state = "boxingyellow"
 	item_state = "boxingyellow"
+
+/obj/item/clothing/gloves/boxing/crustacean
+	name = "lobster claws"
+	desc = "Thematic gloves for the sole purpose of being as big a nuisance as their namesake."
+	icon_state = "lobster"
+	item_state = "lobster"

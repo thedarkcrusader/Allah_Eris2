@@ -1,288 +1,282 @@
-/obj/item/clothing/gloves/captain
-	desc = "Black gloves, with a nice gold trim. Swanky."
-	name = "captain's gloves"
-	icon_state = "captain"
-	item_state = "egloves"
-	armor = list(
-		melee = 6,
-		bullet = 2,
-		energy = 6,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-	price_tag = 500
-	style = STYLE_HIGH
-
-/obj/item/clothing/gloves/insulated
-	desc = "These gloves will protect the wearer from electric shock."
-	name = "insulated gloves"
-	icon_state = "yellow"
-	item_state = "yellow"
-	armor = list(
-		melee = 0,
-		bullet = 0,
-		energy = 3,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-	siemens_coefficient = 0
-	permeability_coefficient = 0.05
-	price_tag = 200
-	spawn_tags = SPAWN_TAG_GLOVES_INSULATED
-	style = STYLE_NEG_HIGH // very powergame much unstylish... literal power this time
-
-/obj/item/clothing/gloves/insulated/cheap                          //Cheap Chinese Crap
-	desc = "These gloves are cheap copies of the coveted gloves, no way this can end badly."
-	name = "budget insulated gloves"
-	siemens_coefficient = 1			//Set to a default of 1, gets overridden in New()
-	permeability_coefficient = 0.05
-	price_tag = 50
-
-/obj/item/clothing/gloves/insulated/cheap/Initialize(mapload, ...)
-	. = ..()
-	//average of 0.5, somewhat better than regular gloves' 0.75
-	siemens_coefficient = pick(0,0.1,0.3,0.5,0.5,0.75,1.35)
-
-/obj/item/clothing/gloves/thick
-	desc = "These work gloves are thick and fire-resistant."
-	name = "black gloves"
-	icon_state = "black"
-	item_state = "black"
-	siemens_coefficient = 0.5
-	permeability_coefficient = 0.05
-	armor = list(
-		melee = 5,
-		bullet = 0,
-		energy = 5,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-	price_tag = 100
-
-	cold_protection = ARMS
-	min_cold_protection_temperature = GLOVES_MIN_COLD_PROTECTION_TEMPERATURE
-	heat_protection = ARMS
-	max_heat_protection_temperature = GLOVES_MAX_HEAT_PROTECTION_TEMPERATURE
-
-/obj/item/clothing/gloves/security
-	name = "security gloves"
-	desc = "Padded security gloves."
-	icon_state = "security"
-	item_state = "security"
-	siemens_coefficient = 0.5
-	permeability_coefficient = 0.05
-	armor = list(
-		melee = 6,
-		bullet = 1,
-		energy = 5,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-	cold_protection = ARMS
-	min_cold_protection_temperature = GLOVES_MIN_COLD_PROTECTION_TEMPERATURE
-	heat_protection = ARMS
-	max_heat_protection_temperature = GLOVES_MAX_HEAT_PROTECTION_TEMPERATURE
-	price_tag = 100
-
-/obj/item/clothing/gloves/security/ironhammer
-	name = "operator's gloves"
-	icon_state = "security_ironhammer"
-	item_state = "security_ironhammer"
-	spawn_blacklisted = TRUE
-
-/obj/item/clothing/gloves/security/tactical
-	name = "tactical gloves"
-	desc = "These tactical gloves are somewhat fire, shock and impact resistant."
-	icon_state = "security_tactical"
-	item_state = "security_tactical"
-	siemens_coefficient = 0
-	price_tag = 500
-
-/obj/item/clothing/gloves/latex
-	name = "latex gloves"
-	desc = "Sterile latex gloves."
-	icon_state = "latex"
-	item_state = "latex"
-	armor = list(
-		melee = 0,
-		bullet = 0,
-		energy = 0,
-		bomb = 0,
-		bio = 75,
-		rad = 0
-	)
-	siemens_coefficient = 1 //thin latex gloves, much more conductive than fabric gloves (basically a capacitor for AC)
-	permeability_coefficient = 0.01
-	price_tag = 50
-
-/obj/item/clothing/gloves/latex/nitrile
-	name = "nitrile gloves"
-	desc = "Sterile nitrile gloves."
-	icon_state = "nitrile"
-	item_state = "nitrile"
-	spawn_blacklisted = TRUE
-
-/obj/item/clothing/gloves/botanic_leather
-	desc = "These leather work gloves protect against thorns, barbs, prickles, spikes and other harmful objects of floral origin."
-	name = "botanist's leather gloves"
-	icon_state = "leather"
-	item_state = "ggloves"
-	permeability_coefficient = 0.05
-	siemens_coefficient = 0.50 //thick work gloves
-	price_tag = 50
 
 /obj/item/clothing/gloves/fingerless
 	name = "fingerless gloves"
 	desc = "Plain black gloves without fingertips for the hard working."
 	icon_state = "fingerless"
 	item_state = "fingerless"
-	clipped = TRUE
-	cold_protection = ARMS
-	min_cold_protection_temperature = GLOVES_MIN_COLD_PROTECTION_TEMPERATURE
-	heat_protection = ARMS
-	max_heat_protection_temperature = GLOVES_MAX_HEAT_PROTECTION_TEMPERATURE
-	price_tag = 10
+	transfer_prints = TRUE
+	strip_delay = 40
+	equip_delay_other = 20
+	cold_protection = HANDS
+	min_cold_protection_temperature = GLOVES_MIN_TEMP_PROTECT
+	custom_price = 10
+	undyeable = TRUE
+	armor = list(MELEE = 0, BULLET = 0, LASER = 0, ENERGY = 0, BOMB = 0, BIO = 0, RAD = 0, FIRE = 0, ACID = 0, ELECTRIC = 0)
+	var/tacticalspeed = 0.9
+	var/worn
 
-/obj/item/clothing/gloves/aerostatic
-	name = "red designer leather gloves"
-	desc = "Fancy red leather gloves from a designer brand."
-	icon_state = "aerostatic_gloves"
-	item_state = "aerostatic_gloves"
-	cold_protection = ARMS
-	min_cold_protection_temperature = GLOVES_MIN_COLD_PROTECTION_TEMPERATURE
-	heat_protection = ARMS
-	max_heat_protection_temperature = GLOVES_MAX_HEAT_PROTECTION_TEMPERATURE
-	style = STYLE_HIGH
-	price_tag = 100
-
-/obj/item/clothing/gloves/german
-	name = "Oberth Republic gloves"
-	desc = "Brown gloves."
-	icon_state = "germangloves"
-	item_state = "germangloves"
-	armor = list(
-		melee = 2,
-		bullet = 0,
-		energy = 6,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-
-/obj/item/clothing/gloves/korund
-	name = "KULAK power gauntlet"
-	desc = "A pair of heavy gloves with left one dedicated to offensive use of electric shock. Requires external power supply from korund-sh-p carapace, and is just flexible enough to pull Maxim's trigger."
-	icon_state = "kilak_glove"
-	item_state = "kilak_glove"
-	armor = list(
-		melee = 4,
-		bullet = 4,
-		energy = 5,
-		bomb = 15, //basically an EOD suit
-		bio = 0,
-		rad = 0
-	)
-	spawn_blacklisted = TRUE
-
-/obj/item/clothing/gloves/knuckles
-	name = "knuckle gloves"
-	desc = "Gloves with additional reinforcment on the knuckles."
-	icon_state = "knuckles"
-	item_state = "knuckles"
-	style = STYLE_HIGH
-	armor = list(
-		melee = 4,
-		bullet = 1,
-		energy = 0,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-	price_tag = 500
-
-/obj/item/clothing/gloves/dusters
-	name = "steel knuckle dusters"
-	desc = "More pain for them, less for you."
-	description_info = "Have to be worn in your gloves slot to increase your punch damage."
-	icon_state = "dusters"
-	item_state = "dusters"
-	var/punch_increase = 5
-	matter = list(MATERIAL_STEEL = 3)
-	price_tag = 20
-	spawn_blacklisted = TRUE
-
-/obj/item/clothing/gloves/dusters/silver
-	name = "silver knuckle dusters"
-	desc = "More pain for them, more bling for you."
-	icon_state = "dusters_silver"
-	item_state = "dusters_silver"
-	matter = list(MATERIAL_SILVER = 3)
-	price_tag = 40
-	style = STYLE_LOW
-
-/obj/item/clothing/gloves/dusters/plasteel
-	name = "plasteel knuckle dusters"
-	desc = "More pain for them, now doubled."
-	icon_state = "dusters_plasteel"
-	item_state = "dusters_plasteel"
-	punch_increase = 10
-	matter = list(MATERIAL_PLASTEEL = 3)
-	price_tag = 60
-
-/obj/item/clothing/gloves/dusters/gold
-	name = "golden knuckle dusters"
-	desc = "More pain for them, more style for you."
-	icon_state = "dusters_gold"
-	item_state = "dusters_gold"
-	punch_increase = 10
-	matter = list(MATERIAL_PLASTEEL = 3, MATERIAL_GOLD = 3)
-	price_tag = 100
-	style = STYLE_HIGH
-
-/obj/item/clothing/gloves/dusters/platinum
-	name = "spiked platinum knuckle dusters"
-	desc = "Hurt like hell, and stylish as well."
-	icon_state = "dusters_platinum"
-	item_state = "dusters_platinum"
-	punch_increase = 15
-	matter = list(MATERIAL_PLATINUM = 3, MATERIAL_PLASTEEL = 3, MATERIAL_STEEL = 2)
-	price_tag = 120
-	style = STYLE_HIGH
-
-/obj/item/clothing/gloves/dusters/gloves
-	name = "knuckle gloves"
-	desc = "Gloves with additional reinforcment on the knuckles. \
-	These have plasteel powder sewn into the knuckles, adding more kinetic energy to your punches."
-	icon_state = "knuckles"
-	item_state = "knuckles"
-	punch_increase = 10
-	style = STYLE_HIGH
-	armor = list(
-		melee = 4,
-		bullet = 1,
-		energy = 0,
-		bomb = 0,
-		bio = 0,
-		rad = 0
-	)
-	matter = list(MATERIAL_BIOMATTER = 10, MATERIAL_PLASTEEL = 3)
-	price_tag = 540
-
-/obj/item/clothing/gloves/dusters/New()
+/obj/item/clothing/gloves/fingerless/equipped(mob/user, slot)
 	..()
-	RegisterSignal(src, COMSIG_CLOTH_EQUIPPED, PROC_REF(increase_punch_damage))
-	RegisterSignal(src, COMSIG_CLOTH_DROPPED, PROC_REF(decrease_punch_damage))
+	var/mob/living/carbon/human/boss = user
+	if(slot == ITEM_SLOT_GLOVES)
+		if(!worn) //Literally just in case there's some weirdness so you can't cheese this
+			boss.physiology.do_after_speed *= tacticalspeed //Does channels 10% faster
+			worn = TRUE
 
-/obj/item/clothing/gloves/dusters/proc/increase_punch_damage(mob/living/carbon/human/user)
-	SIGNAL_HANDLER
-	if(istype(user))
-		user.punch_damage_increase += punch_increase
+/obj/item/clothing/gloves/fingerless/dropped(mob/user)
+	..()
+	var/mob/living/carbon/human/boss = user
+	if(worn) //This way your speed isn't slowed if you never actually put on the gloves
+		boss.physiology.do_after_speed /= tacticalspeed
+		worn = FALSE
 
-/obj/item/clothing/gloves/dusters/proc/decrease_punch_damage(mob/living/carbon/human/user)
-	SIGNAL_HANDLER
-	if(istype(user))
-		user.punch_damage_increase -= punch_increase
+/obj/item/clothing/gloves/fingerless/bigboss
+	tacticalspeed = 0.66 //Does channels 34% faster
+	clothing_traits = list(TRAIT_QUICKER_CARRY, TRAIT_STRONG_GRIP)
+
+/obj/item/clothing/gloves/fingerless/bigboss/Touch(mob/living/target, proximity = TRUE)
+	var/mob/living/M = loc
+	M.changeNext_move(CLICK_CD_CLICK_ABILITY) //0.6 seconds instead of 0.8, but affects any intent instead of just harm
+	. = FALSE
+
+/obj/item/clothing/gloves/fingerless/weaver
+	name = "weaver chitin gloves"
+	desc = "Grey gloves without fingertips made from the hide of a dead arachnid found on lavaland. Increases the work speed of the wearer."
+	icon_state = "weaver_chitin"
+	item_state = "weaver_chitin"
+	tacticalspeed = 0.8
+
+/obj/item/clothing/gloves/botanic_leather
+	name = "botanist's leather gloves"
+	desc = "These leather gloves protect against thorns, barbs, prickles, spikes and other harmful objects of floral origin.  They're also quite warm."
+	icon_state = "leather"
+	item_state = "ggloves"
+	cold_protection = HANDS
+	min_cold_protection_temperature = GLOVES_MIN_TEMP_PROTECT
+	heat_protection = HANDS
+	max_heat_protection_temperature = GLOVES_MAX_TEMP_PROTECT
+	resistance_flags = NONE
+	armor = list(MELEE = 0, BULLET = 0, LASER = 0, ENERGY = 0, BOMB = 0, BIO = 5, RAD = 0, FIRE = 70, ACID = 30)
+
+/obj/item/clothing/gloves/combat
+	name = "combat gloves"
+	desc = "These tactical gloves are fireproof and shock resistant."
+	icon_state = "combat"
+	item_state = "blackgloves"
+	strip_delay = 80
+	cold_protection = HANDS
+	min_cold_protection_temperature = GLOVES_MIN_TEMP_PROTECT
+	heat_protection = HANDS
+	max_heat_protection_temperature = GLOVES_MAX_TEMP_PROTECT
+	resistance_flags = NONE
+	armor = list(MELEE = 0, BULLET = 0, LASER = 0, ENERGY = 0, BOMB = 0, BIO = 60, RAD = 0, FIRE = 80, ACID = 50, ELECTRIC = 100)
+
+/obj/item/clothing/gloves/bracer
+	name = "bone bracers"
+	desc = "For when you're expecting to get slapped on the wrist. Offers modest protection to your arms."
+	icon_state = "bracers"
+	item_state = "bracers"
+	transfer_prints = TRUE
+	strip_delay = 40
+	equip_delay_other = 20
+	body_parts_covered = ARMS
+	cold_protection = ARMS
+	min_cold_protection_temperature = GLOVES_MIN_TEMP_PROTECT
+	max_heat_protection_temperature = GLOVES_MAX_TEMP_PROTECT
+	resistance_flags = NONE
+	armor = list(MELEE = 15, BULLET = 25, LASER = 15, ENERGY = 15, BOMB = 20, BIO = 10, RAD = 0, FIRE = 0, ACID = 0, ELECTRIC = 0)
+
+/obj/item/clothing/gloves/rapid
+	name = "Gloves of the North Star"
+	desc = "Just looking at these fills you with an urge to beat the shit out of people."
+	icon_state = "rapid"
+	item_state = "rapid"
+	transfer_prints = TRUE
+	var/warcry = "AT"
+
+/obj/item/clothing/gloves/rapid/Touch(mob/living/target,proximity = TRUE)
+	var/mob/living/M = loc
+
+	if(M.combat_mode)
+		M.changeNext_move(CLICK_CD_RAPID)
+		if(warcry)
+			M.say("[warcry]", ignore_spam = TRUE, forced = "north star warcry")
+	.= FALSE
+
+/obj/item/clothing/gloves/rapid/attack_self(mob/user)
+	var/input = stripped_input(user,"What do you want your battlecry to be? Max length of 6 characters.", ,"", 7)
+	input = replacetext(input, "*", "")
+	if(input)
+		warcry = input
+
+/obj/item/clothing/gloves/rapid/hug
+	name = "Gloves of Hugging"
+	desc = "Just looking at these fills you with an urge to hug the shit out of people."
+
+/obj/item/clothing/gloves/rapid/hug/Touch(mob/living/target, proximity = TRUE, modifiers)
+	var/mob/living/M = loc
+
+	if(!M.combat_mode && !(modifiers && modifiers[RIGHT_CLICK]))
+		M.changeNext_move(CLICK_CD_RAPID)
+	else if(M.combat_mode)
+		to_chat(M, span_warning("You don't want to hurt anyone, just give them hugs!"))
+		M.set_combat_mode(FALSE)
+	. = FALSE
+
+/obj/item/clothing/gloves/bracer/cuffs
+	name = "rabid cuffs"
+	desc = "Wristbands fashioned after one of the hungriest slaughter demons. Wearing these invokes a hunger in the wearer that can only be sated by bloodshed."
+	icon_state = "cuff"
+	item_state = "cuff"
+	var/datum/action/cooldown/swipe/swipe_ability
+	alternate_worn_layer = ABOVE_BODY_FRONT_LAYER
+
+/obj/item/clothing/gloves/bracer/cuffs/Initialize(mapload)
+	. = ..()
+	swipe_ability = new(swipe_ability)
+
+/obj/item/clothing/gloves/bracer/cuffs/equipped(mob/living/user, slot)
+	. = ..()
+	if(ishuman(user) && (slot & ITEM_SLOT_GLOVES))
+		swipe_ability.Grant(user)
+
+/obj/item/clothing/gloves/bracer/cuffs/dropped(mob/living/user)
+	. = ..()
+	swipe_ability?.Remove(user)
+
+/datum/action/cooldown/swipe //you stupid
+	name = "Swipe"
+	desc = "Swipe at a target area, dealing damage to heal yourself. \
+		Creatures take 60 damage while people and cyborgs take 20 damage. \
+		Living creatures hit with this ability will heal the user for 13 brute/burn/poison while dead ones heal for 20 and get butchered, \
+		while killing a creature with a swipe will heal the user for 33. \
+		People and cyborgs hit will heal for 5."
+	background_icon_state = "bg_demon"
+	button_icon = 'icons/mob/actions/actions_items.dmi'
+	button_icon_state = "cuff"
+	ranged_mousepointer = 'icons/effects/mouse_pointers/supplypod_target.dmi'
+	click_to_activate = TRUE
+	check_flags = AB_CHECK_HANDS_BLOCKED | AB_CHECK_CONSCIOUS
+
+	cooldown_time = 10 SECONDS
+
+/datum/action/cooldown/swipe/Remove(mob/living/user)
+	unset_click_ability(user)
+	return ..()
+
+/datum/action/cooldown/swipe/IsAvailable(feedback = FALSE)
+	if(!iscarbon(owner))
+		return FALSE
+	return ..()
+
+/datum/action/cooldown/swipe/Activate(mob/living/target)
+	. = ..()
+	var/turf/open/target_turf = get_turf(target)
+	var/mob/living/carbon/caller_but_not_a_byond_built_in_proc = owner
+	if(!istype(target_turf))
+		return FALSE
+	if(!(target_turf in range(9, owner)))
+		to_chat(owner, warning("The target is too far!"))
+		return FALSE
+	new /obj/effect/temp_visual/bubblegum_hands/rightpaw(target_turf)
+	new /obj/effect/temp_visual/bubblegum_hands/rightthumb(target_turf)
+	to_chat(target, span_userdanger("Claws reach out from the floor and maul you!"))
+	to_chat(owner, "You summon claws at [target]'s location!")
+	target.visible_message(span_warning("[owner] rends [target]!"))
+	for(target in range(0, target_turf))
+		playsound(target_turf, 'sound/magic/demon_attack1.ogg', 80, TRUE, -1)
+		if(isanimal(target))
+			if(target.stat != DEAD)
+				target.adjustBruteLoss(60)
+				caller_but_not_a_byond_built_in_proc.adjustBruteLoss(-13)
+				caller_but_not_a_byond_built_in_proc.adjustFireLoss(-13)
+				caller_but_not_a_byond_built_in_proc.adjustToxLoss(-13)
+				if(target.stat == DEAD)
+					to_chat(caller_but_not_a_byond_built_in_proc, span_notice("You kill [target], healing yourself more!"))
+			if(target.stat == DEAD)
+				target.gib()
+				to_chat(caller_but_not_a_byond_built_in_proc, span_notice("You're able to consume the body entirely!"))
+				caller_but_not_a_byond_built_in_proc.adjustBruteLoss(-20)
+				caller_but_not_a_byond_built_in_proc.adjustFireLoss(-20)
+				caller_but_not_a_byond_built_in_proc.adjustToxLoss(-20)
+		if(iscarbon(target))
+			target.adjustBruteLoss(20)
+			caller_but_not_a_byond_built_in_proc.adjustBruteLoss(-5)
+			caller_but_not_a_byond_built_in_proc.adjustFireLoss(-5)
+			caller_but_not_a_byond_built_in_proc.adjustToxLoss(-5)
+	addtimer(CALLBACK(src, PROC_REF(cooldown_over), owner), cooldown_time)
+	unset_click_ability(owner)
+	return TRUE
+
+/datum/action/cooldown/swipe/proc/cooldown_over()
+	owner.balloon_alert(owner, "ready to swipe!")
+
+/obj/item/clothing/gloves/gauntlets
+	name = "concussive gauntlets"
+	desc = "Ancient gauntlets lost to the necropolis, fabled to bestow the wearer the power to shatter stone with but a simple punch."
+	icon_state = "concussive_gauntlets"
+	item_state = "concussive_gauntlets"
+	worn_icon = 'icons/mob/clothing/hands/hands.dmi'
+	icon = 'icons/obj/lavaland/artefacts.dmi'
+	toolspeed = 0
+	strip_delay = 40
+	equip_delay_other = 20
+	body_parts_covered = ARMS
+	cold_protection = ARMS
+	min_cold_protection_temperature = GLOVES_MIN_TEMP_PROTECT
+	heat_protection = ARMS
+	max_heat_protection_temperature = GLOVES_MAX_TEMP_PROTECT
+	resistance_flags = LAVA_PROOF | FIRE_PROOF //they are from lavaland after all
+	armor = list(MELEE = 25, BULLET = 25, LASER = 15, ENERGY = 25, BOMB = 100, BIO = 0, RAD = 0, FIRE = 100, ACID = 100)
+
+/obj/item/clothing/gloves/gauntlets/equipped(mob/user, slot)
+	. = ..()
+	if(slot == ITEM_SLOT_GLOVES)
+		tool_behaviour = TOOL_MINING
+		RegisterSignal(user, COMSIG_HUMAN_EARLY_UNARMED_ATTACK, PROC_REF(rocksmash))
+		RegisterSignal(user, COMSIG_MOVABLE_PRE_ENTER, PROC_REF(walksmash))
+	else
+		stopmining(user)
+
+/obj/item/clothing/gloves/gauntlets/dropped(mob/user)
+	. = ..()
+	stopmining(user)
+
+/obj/item/clothing/gloves/gauntlets/proc/stopmining(mob/user)
+	tool_behaviour = initial(tool_behaviour)
+	UnregisterSignal(user, COMSIG_HUMAN_EARLY_UNARMED_ATTACK)
+	UnregisterSignal(user, COMSIG_MOVABLE_PRE_ENTER)
+
+/obj/item/clothing/gloves/gauntlets/proc/walksmash(mob/user, atom/A)
+	var/turf/target = get_turf(A)
+	if(istype(target, /turf/closed/mineral))
+		target.attackby(src, user)
+		return
+	for(var/atom/thing as anything in target.contents)
+		if(istype(thing, /turf/closed/mineral))
+			thing.attackby(src, user)
+
+/obj/item/clothing/gloves/gauntlets/proc/rocksmash(mob/user, atom/A, proximity)
+	if(!istype(A, /turf/closed/mineral))
+		return
+	A.attackby(src, user)
+	return COMPONENT_NO_ATTACK_OBJ
+
+/obj/item/clothing/gloves/atmos
+	name = "firefighter gloves"
+	desc = "Heavy duty gloves for firefighters. These are thick, non-flammable and let you carry people faster."
+	icon_state = "atmos"
+	cold_protection = HANDS
+	min_cold_protection_temperature = GLOVES_MIN_TEMP_PROTECT
+	heat_protection = HANDS
+	max_heat_protection_temperature = FIRE_IMMUNITY_MAX_TEMP_PROTECT
+	resistance_flags = FIRE_PROOF
+	armor = list(MELEE = 0, BULLET = 0, LASER = 0, ENERGY = 0, BOMB = 0, BIO = 90, RAD = 0, FIRE = 100, ACID = 90, ELECTRIC = 80)
+	clothing_flags = THICKMATERIAL
+	clothing_traits = list(TRAIT_QUICKEST_CARRY, TRAIT_RESISTHEATHANDS)
+
+/obj/item/clothing/gloves/atmos/ce
+	name = "advanced insulated gloves"
+	desc = "These gloves provide excellent thermal and electrical insulation."
+	icon_state = "ce_insuls"
+	armor = list(MELEE = 0, BULLET = 0, LASER = 0, ENERGY = 0, BOMB = 0, BIO = 90, RAD = 0, FIRE = 100, ACID = 90, ELECTRIC = 100)

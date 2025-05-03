@@ -1,29 +1,23 @@
-//Items labled as 'trash' for the trash bag.
-//TODO: Make this an item var or something...
-
+//Added by Jack Rost
 /obj/item/trash
-	name = "trash"
+	icon = 'yogstation/icons/obj/janitor.dmi'
+	lefthand_file = 'icons/mob/inhands/misc/food_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/misc/food_righthand.dmi'
 	desc = "This is rubbish."
-	icon = 'icons/obj/trash.dmi'
-	w_class = ITEM_SIZE_SMALL
-	rarity_value = 20
-	spawn_tags = SPAWN_TAG_JUNK
-	matter = list(MATERIAL_PLASTIC = 1)
-
-/obj/item/trash/attack(mob/M, mob/living/user)
-	return
-
+	w_class = WEIGHT_CLASS_TINY
+	resistance_flags = FLAMMABLE
+	fryable = TRUE
 
 /obj/item/trash/raisins
 	name = "\improper 4no raisins"
 	icon_state= "4no_raisins"
 
-/obj/item/trash/shokoloud
-	name = "Shokoloud chocolate bar"
-	icon_state = "shokoloud"
+/obj/item/trash/candy
+	name = "candy"
+	icon_state= "candy"
 
 /obj/item/trash/cheesie
-	name = "\improper Cheesie Honkers"
+	name = "cheesie honkers"
 	icon_state = "cheesie_honkers"
 
 /obj/item/trash/chips
@@ -35,61 +29,76 @@
 	icon_state = "popcorn"
 
 /obj/item/trash/sosjerky
-	name = "Scaredy's Private Reserve Beef Jerky"
+	name = "\improper Scaredy's Private Reserve Beef Jerky"
 	icon_state = "sosjerky"
 
-/obj/item/trash/wok
-	name = "Wok"
-	icon_state = "wok"
+/obj/item/trash/syndi_cakes
+	name = "syndi-cakes"
+	icon_state = "syndi_cakes"
+
+/obj/item/trash/energybar
+	name = "energybar wrapper"
+	icon_state = "energybar"
 
 /obj/item/trash/waffles
-	name = "waffles"
+	name = "waffles tray"
 	icon_state = "waffles"
 
 /obj/item/trash/plate
 	name = "plate"
+	desc = "A relic from a forgotten time... I miss eating off of plates..."
 	icon_state = "plate"
-	matter = list(MATERIAL_GLASS = 1)
+	resistance_flags = NONE
 
-/obj/item/trash/snack_bowl
-	name = "snack bowl"
-	icon_state	= "snack_bowl"
-	matter = list(MATERIAL_GLASS = 1)
+/obj/item/trash/pistachios
+	name = "pistachios pack"
+	icon_state = "pistachios_pack"
+
+/obj/item/trash/semki
+	name = "semki pack"
+	icon_state = "semki_pack"
 
 /obj/item/trash/tray
 	name = "tray"
 	icon_state = "tray"
-	matter = list(MATERIAL_STEEL = 1)
+	resistance_flags = NONE
 
 /obj/item/trash/candle
 	name = "candle"
 	icon = 'icons/obj/candle.dmi'
 	icon_state = "candle4"
 
-/obj/item/trash/liquidfood
-	name = "\improper \"LiquidFood\" ration"
-	icon_state = "liquidfood"
+/obj/item/trash/candle/resin
+	name = "resin candle"
+	icon = 'icons/obj/candle.dmi'
+	icon_state = "resincandle4"
 
-/obj/item/trash/tastybread
-	name = "bread tube"
-	icon_state = "tastybread"
+/obj/item/trash/can
+	name = "crushed can"
+	icon_state = "cola"
+	resistance_flags = NONE
+	grind_results = list(/datum/reagent/aluminium = 10)
 
-/obj/item/trash/mre
-	name = "mre"
-	icon_state = "mre_trash"
+/obj/item/trash/attack(mob/M, mob/living/user)
+	return
 
-/obj/item/trash/mre_paste
-	name = "nutrient paste"
-	icon_state = "paste_trash"
+/obj/item/trash/floursack
+	name = "torn flour sack"
+	icon = 'icons/obj/food/containers.dmi'
+	icon_state = "floursad"
+	desc = "Perhaps it shouldn't have been filled with water."
 
-/obj/item/trash/mre_candy
-	name = "candy"
-	icon_state = "mre_candy_trash"
+/obj/item/trash/toritose
+	name = "toritose"
+	icon = 'icons/obj/janitor.dmi'
+	icon_state = "toritoseded"
 
-/obj/item/trash/mre_can
-	name = "ration can"
-	icon_state = "ration_can_trash"
+/obj/item/trash/topkakes
+	name = "top kakes"
+	icon = 'icons/obj/janitor.dmi'
+	icon_state = "topkakesded"
 
-/obj/item/trash/gym_ticket
-	name = "expired electronic ticket"
-	icon_state = "gym_ticket_trash"
+/obj/item/trash/vermin
+	name = "vermin bites"
+	icon = 'icons/obj/janitor.dmi'
+	icon_state = "verminded"

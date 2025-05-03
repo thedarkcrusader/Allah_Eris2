@@ -3,239 +3,184 @@
 	desc = "..."
 	icon = 'icons/obj/chemical.dmi'
 	icon_state = null
-	w_class = ITEM_SIZE_SMALL
-	bad_type = /obj/item/reagent_containers
-	price_tag = 20
+	w_class = WEIGHT_CLASS_TINY
 	var/amount_per_transfer_from_this = 5
-	var/possible_transfer_amounts = list(5,10,15,25,30)
+	var/list/possible_transfer_amounts = list(5,10,15,20,25,30)
 	var/volume = 30
-	var/filling_states				// List of percentages full that have icons
+	var/reagent_flags
+	var/list/list_reagents = null
+	var/spawned_disease = null
+	var/disease_amount = 20
 
+/obj/item/reagent_containers/Initialize(mapload, vol)
+	. = ..()
+	if(isnum(vol) && vol > 0)
+		volume = vol
+	create_reagents(volume, reagent_flags)
+	if(spawned_disease)
+		var/datum/disease/F = new spawned_disease()
+		var/list/data = list("viruses"= list(F))
+		reagents.add_reagent(/datum/reagent/blood, disease_amount, data)
 
-/obj/item/reagent_containers/verb/set_APTFT() //set amount_per_transfer_from_this
-	set name = "Set transfer amount"
-	set category = "Object"
-	set src in range(0)
-	var/N = input("Amount per transfer from this:","[src]") as null|anything in possible_transfer_amounts
-	if(N)
-		amount_per_transfer_from_this = N
+	add_initial_reagents()
 
-/obj/item/reagent_containers/Initialize()
-	create_reagents(volume)
-	. = ..() // This creates initial reagents
-	if(!possible_transfer_amounts)
-		src.verbs -= /obj/item/reagent_containers/verb/set_APTFT
+	AddComponent(/datum/component/liquids_interaction, TYPE_PROC_REF(/obj/item/reagent_containers, attack_on_liquids_turf))
 
+/obj/item/reagent_containers/proc/attack_on_liquids_turf(obj/item/reagent_containers/my_beaker, turf/T, mob/living/user, obj/effect/abstract/liquid_turf/liquids)
+	if(!user.Adjacent(T))
+		return FALSE
+	if(!my_beaker.is_open_container())
+		return FALSE
+	if(!user.Adjacent(T))
+		return FALSE
+	if(user.combat_mode)
+		return FALSE
+	if(liquids.fire_state) //Use an extinguisher first
+		to_chat(user, "<span class='warning'>You can't scoop up anything while it's on fire!</span>")
+		return TRUE
+	if(liquids.liquid_group.expected_turf_height == 1)
+		to_chat(user, "<span class='warning'>The puddle is too shallow to scoop anything up!</span>")
+		return TRUE
+	var/free_space = my_beaker.reagents.maximum_volume - my_beaker.reagents.total_volume
+	if(free_space <= 0)
+		to_chat(user, "<span class='warning'>You can't fit any more liquids inside [my_beaker]!</span>")
+		return TRUE
+	var/desired_transfer = my_beaker.amount_per_transfer_from_this
+	if(desired_transfer > free_space)
+		desired_transfer = free_space
+	if(desired_transfer > liquids.liquid_group.reagents_per_turf)
+		desired_transfer = liquids.liquid_group.reagents_per_turf
+	liquids.liquid_group.trans_to_seperate_group(my_beaker.reagents, desired_transfer, liquids)
+	to_chat(user, "<span class='notice'>You scoop up around [round(desired_transfer)] units of liquids with [my_beaker].</span>")
+	user.changeNext_move(CLICK_CD_MELEE)
+	return TRUE
 
-/obj/item/reagent_containers/attack_self(mob/user as mob)
-	return
+/obj/item/reagent_containers/proc/add_initial_reagents()
+	if(list_reagents)
+		reagents.add_reagent_list(list_reagents)
 
-/obj/item/reagent_containers/afterattack(obj/target, mob/user, flag)
-	return
+/obj/item/reagent_containers/examine(mob/user)
+	. = ..()
+	if(islist(possible_transfer_amounts) && possible_transfer_amounts.len)
+		. += "It is transferring [amount_per_transfer_from_this] units at a time."
 
-/obj/item/reagent_containers/on_reagent_change()
-	update_icon()
+/obj/item/reagent_containers/attack_self(mob/user)
+	if(possible_transfer_amounts.len)
+		var/i=0
+		for(var/A in possible_transfer_amounts)
+			i++
+			if(A == amount_per_transfer_from_this)
+				if(i<possible_transfer_amounts.len)
+					amount_per_transfer_from_this = possible_transfer_amounts[i+1]
+				else
+					amount_per_transfer_from_this = possible_transfer_amounts[1]
+				balloon_or_message(user, "Transferring [amount_per_transfer_from_this]u", \
+					span_notice("[src]'s transfer amount is now [amount_per_transfer_from_this] units."))
+				return
 
-/obj/item/reagent_containers/proc/get_filling_state()
-	var/percent = round((reagents.total_volume / volume) * 100)
-	var/list/increments = cached_number_list_decode(filling_states)
-	if(!length(increments))
+/obj/item/reagent_containers/attack(mob/living/M, mob/living/user, params)
+	if (!user.combat_mode)
+		return
+	return ..()
+
+/obj/item/reagent_containers/proc/canconsume(mob/eater, mob/user)
+	if(!iscarbon(eater))
+		return 0
+	var/mob/living/carbon/C = eater
+	var/covered = ""
+	if(C.is_mouth_covered(head_only = 1))
+		covered = "headgear"
+	else if(C.is_mouth_covered(mask_only = 1))
+		covered = "mask"
+	if(covered)
+		var/who = (isnull(user) || eater == user) ? "your" : "[eater.p_their()]"
+		to_chat(user, span_warning("You have to remove [who] [covered] first!"))
+		return FALSE
+	if(!eater.has_mouth())
+		if(eater == user)
+			to_chat(eater, "<span class='warning'>You have no mouth, and cannot eat.</span>")
+		else
+			to_chat(user, "<span class='warning'>You can't feed [eater], because they have no mouth!</span>")
+		return FALSE
+	return TRUE
+
+/obj/item/reagent_containers/ex_act()
+	if(reagents)
+		for(var/datum/reagent/R in reagents.reagent_list)
+			R.on_ex_act()
+	if(!QDELETED(src))
+		..()
+
+/obj/item/reagent_containers/fire_act(exposed_temperature, exposed_volume)
+	reagents.expose_temperature(exposed_temperature)
+	..()
+
+/obj/item/reagent_containers/throw_impact(atom/hit_atom, datum/thrownthing/throwingdatum)
+	. = ..()
+	SplashReagents(hit_atom, TRUE)
+
+/obj/item/reagent_containers/proc/bartender_check(atom/target)
+	. = FALSE
+	if(target.CanPass(src, get_turf(src)) && thrownby && HAS_TRAIT(thrownby, TRAIT_BOOZE_SLIDER))
+		. = TRUE
+
+/obj/item/reagent_containers/proc/SplashReagents(atom/target, thrown = FALSE)
+	if(!reagents || !reagents.total_volume || !is_spillable())
 		return
 
-	var/last_increment = increments[1]
-	for(var/increment in increments)
-		if(percent < increment)
-			break
+	if(ismob(target) && target.reagents)
+		if(thrown)
+			reagents.total_volume *= rand(5,10) * 0.1 //Not all of it makes contact with the target
+		var/mob/M = target
+		var/R
+		target.visible_message(span_danger("[M] has been splashed with something!"), \
+						span_userdanger("[M] has been splashed with something!"))
+		for(var/datum/reagent/A in reagents.reagent_list)
+			R += "[A.type]  ([num2text(A.volume)]),"
 
-		last_increment = increment
+		if(thrownby)
+			log_combat(thrownby, M, "splashed", R)
+		reagents.reaction(target, TOUCH)
 
-	return last_increment
-
-/obj/item/reagent_containers/proc/standard_dispenser_refill(mob/user, atom/target) // This goes into afterattack
-	if(!target.is_drainable())
-		return FALSE
-
-	if(!is_refillable())
-		is_closed_message(user)
-		return TRUE
-
-	if(!target.reagents.total_volume)
-		to_chat(user, SPAN_NOTICE("[target] is empty."))
-		return TRUE
-
-	if(reagents && !reagents.get_free_space())
-		to_chat(user, SPAN_NOTICE("[src] is full."))
-		return TRUE
-
-	var/transfer_amount = amount_per_transfer_from_this
-	if(istype(target, /obj/item/reagent_containers))
-		var/obj/item/reagent_containers/C = target
-		transfer_amount = C.amount_per_transfer_from_this
-
-	var/trans = target.reagents.trans_to_obj(src, transfer_amount)
-	to_chat(user, SPAN_NOTICE("You fill [src] with [trans] units of the contents of [target]."))
-	playsound(loc, 'sound/effects/watersplash.ogg', 100, 1)
-	return TRUE
-
-/obj/item/reagent_containers/proc/standard_splash_mob(mob/user, mob/target) // This goes into afterattack
-	if(!istype(target))
-		return FALSE
-
-	if(!is_drainable())
-		is_closed_message(user)
-		return TRUE
-
-	if(!reagents.total_volume)
-		to_chat(user, SPAN_NOTICE("[src] is empty."))
-		return TRUE
-
-	if(target.reagents && !target.reagents.get_free_space())
-		to_chat(user, SPAN_NOTICE("[target] is full."))
-		return TRUE
-
-	var/contained = reagents.log_list()
-	target.attack_log += text("\[[time_stamp()]\] <font color='orange'>Has been splashed with [name] by [user.name] ([user.ckey]). Reagents: [contained]</font>")
-	user.attack_log += text("\[[time_stamp()]\] <font color='red'>Used the [name] to splash [target.name] ([target.key]). Reagents: [contained]</font>")
-	msg_admin_attack("[user.name] ([user.ckey]) splashed [target.name] ([target.key]) with [name]. Reagents: [contained] (INTENT: [uppertext(user.a_intent)]) (<A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[user.x];Y=[user.y];Z=[user.z]'>JMP</a>)")
-
-	user.visible_message(
-		SPAN_DANGER("[target] has been splashed with something by [user]!"),
-		SPAN_NOTICE("You splash the solution onto [target].")
-	)
-	reagents.splash(target, reagents.total_volume)
-	return TRUE
-
-/obj/item/reagent_containers/proc/self_feed_message(mob/user)
-	to_chat(user, SPAN_NOTICE("You eat \the [src]"))
-
-/obj/item/reagent_containers/proc/is_closed_message(mob/user)
-	return
-
-/obj/item/reagent_containers/proc/other_feed_message_start(mob/user, mob/target)
-	user.visible_message(SPAN_WARNING("[user] is trying to feed [target] \the [src]!"))
-
-/obj/item/reagent_containers/proc/other_feed_message_finish(mob/user, mob/target)
-	user.visible_message(SPAN_WARNING("[user] has fed [target] \the [src]!"))
-
-/obj/item/reagent_containers/proc/feed_sound(mob/user)
-	return
-
-/obj/item/reagent_containers/proc/standard_feed_mob(mob/user, mob/target) // This goes into attack
-	if(!istype(target) || !target?.can_be_fed)
-		return FALSE
-
-	if(!is_drainable() && !istype(src, /obj/item/reagent_containers/pill)) // Pills are swallowed whole
-		is_closed_message(user)
-		return TRUE
-
-	if(!reagents.total_volume)
-		to_chat(user, SPAN_NOTICE("\The [src] is empty."))
-		return TRUE
-
-	if(ishuman(target))
-		var/mob/living/carbon/human/H = target
-		if(!H.check_has_mouth())
-			if(target == user)
-				to_chat(user, "Where do you intend to put \the [src]? You don't have a mouth!")
-			else
-				to_chat(user, "Where do you intend to put \the [src]? \The [H] doesn't have a mouth!")
-			return TRUE
-
-		var/obj/item/blocked = H.check_mouth_coverage()
-		if(blocked)
-			to_chat(user, SPAN_WARNING("\The [blocked] is in the way!"))
-			return TRUE
-
-	user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN) //puts a limit on how fast people can eat/drink things
-
-	if(target == user)
-		self_feed_message(user)
+	else if(bartender_check(target) && thrown)
+		visible_message(span_notice("[src] lands onto the [target.name] without spilling a single drop."))
+		transform = initial(transform)
+		return
 
 	else
-		other_feed_message_start(user, target)
-
-		if(!do_mob(user, target, 15))
-			return FALSE
-
-		other_feed_message_finish(user, target)
-
-		var/contained = reagents.log_list()
-		target.attack_log += text("\[[time_stamp()]\] <font color='orange'>Has been fed [name] by [user.name] ([user.ckey]). Reagents: [contained]</font>")
-		user.attack_log += text("\[[time_stamp()]\] <font color='red'>Fed [name] by [target.name] ([target.ckey]). Reagents: [contained]</font>")
-		msg_admin_attack("[key_name(user)] fed [key_name(target)] with [name]. Reagents: [contained] (INTENT: [uppertext(user.a_intent)]) (<A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[user.x];Y=[user.y];Z=[user.z]'>JMP</a>)")
-
-	reagents.trans_to_mob(target, issmall(user) ? CEILING(amount_per_transfer_from_this * 0.5, 1) : amount_per_transfer_from_this, CHEM_INGEST)
-
-	feed_sound(user)
-	if(istype(src, /obj/item/reagent_containers/pill))
-		qdel(src) //pills are swallowed whole, so delete it here
-	return TRUE
-
-/obj/item/reagent_containers/proc/standard_pour_into(mob/user, atom/target) // This goes into afterattack and yes, it's atom-level
-	// Ensure we don't splash beakers and similar containers.
-	if(!target.is_refillable())
-		if(istype(target, /obj/item/reagent_containers))
-			var/obj/item/reagent_containers/container = target
-			container.is_closed_message(user)
-			return FALSE
-		// Otherwise don't care about splashing.
+		if(isturf(target))
+			var/turf/T = target
+			if(istype(T, /turf/open))
+				T.add_liquid_from_reagents(reagents, FALSE, reagents.chem_temp)
+			if(reagents.reagent_list.len && thrownby)
+				log_combat(thrownby, target, "splashed (thrown) [english_list(reagents.reagent_list)]", "in [AREACOORD(target)]")
+				log_game("[key_name(thrownby)] splashed (thrown) [english_list(reagents.reagent_list)] on [target] in [AREACOORD(target)].")
+				message_admins("[ADMIN_LOOKUPFLW(thrownby)] splashed (thrown) [english_list(reagents.reagent_list)] on [target] in [ADMIN_VERBOSEJMP(target)].")
 		else
-			return FALSE
+			reagents.reaction(target, TOUCH)
+			var/turf/targets_loc = target.loc
+			if(istype(targets_loc, /turf/open) && !target.density)
+				targets_loc.add_liquid_from_reagents(reagents)
+			else
+				targets_loc = get_step_towards(targets_loc, thrownby)
+				targets_loc.add_liquid_from_reagents(reagents) //not perfect but i can't figure out how to move something to the nearest visible turf from throw_target
+		visible_message(span_notice("[src] spills its contents all over [target]."))
+		reagents.reaction(target, TOUCH)
+		if(QDELETED(src))
+			return
 
-	if(!is_drainable())
-		is_closed_message(user)
-		return FALSE
+	playsound(target, 'sound/effects/slosh.ogg', 25, TRUE)
+	var/image/splash_animation = image('icons/effects/effects.dmi', target, "splash")
+	if(isturf(target))
+		splash_animation = image('icons/effects/effects.dmi', target, "splash_floor")
+	splash_animation.color = mix_color_from_reagents(reagents.reagent_list)
+	flick_overlay_global(splash_animation, GLOB.clients, 1.0 SECONDS)
 
-	if(!reagents.total_volume)
-		to_chat(user, SPAN_NOTICE("[src] is empty."))
-		return TRUE // if it returns false, it drains from its target when empty
+	reagents.clear_reagents()
 
-	if(!target.reagents.get_free_space())
-		to_chat(user, SPAN_NOTICE("[target] is full."))
-		return TRUE // if it returns false, it drains from a full target
+/obj/item/reagent_containers/microwave_act(obj/machinery/microwave/M)
+	reagents.expose_temperature(1000)
+	..()
 
-	var/trans = reagents.trans_to(target, amount_per_transfer_from_this)
-	playsound(src,'sound/effects/Liquid_transfer_mono.ogg',50,1)
-	to_chat(user, SPAN_NOTICE("You transfer [trans] units of the solution to [target]."))
-	user.investigate_log("transfered [trans] units from [src]([reagents.log_list()]) to [target]([target.reagents.log_list()])", "chemistry")
-	return TRUE
-
-// if amount_per_reagent is null or zero it will transfer all
-/obj/item/reagent_containers/proc/separate_solution(var/list/obj/item/reagent_containers/accepting_containers, var/amount_per_reagent, var/list/ignore_reagents_ids)
-	if(!is_drainable())
-		return FALSE
-	if(!reagents.total_volume)
-		return FALSE
-
-	// nothing to separate
-	if(reagents.reagent_list.len <= 1)
-		return FALSE
-	reagents.update_total()
-
-	var/list/obj/item/reagent_containers/containers = accepting_containers.Copy()
-	for(var/obj/item/reagent_containers/C in containers)
-		if(!C.is_refillable())
-			containers.Remove(C)
-	if(!containers.len)
-		return FALSE
-	for(var/datum/reagent/R in reagents.reagent_list)
-		if(R.id in ignore_reagents_ids)
-			continue
-		var/amount_to_transfer = amount_per_reagent ? amount_per_reagent : R.volume
-
-		for(var/obj/item/reagent_containers/C in containers)
-			if(!amount_to_transfer)
-				break
-			if(!C.reagents.get_free_space())
-				containers.Remove(C)
-				continue
-			var/amount = min(C.reagents.get_free_space(), min(amount_to_transfer, R.volume))
-			if(!C.reagents.total_volume || C.reagents.has_reagent(R.id))
-				C.reagents.add_reagent(R.id, amount, R.get_data())
-				reagents.remove_reagent(R.id, amount)
-				amount_to_transfer = max(0,amount_to_transfer - amount)
-	return TRUE
-
-/obj/item/reagent_containers/get_item_cost(export)
-	. = ..()
-	. += reagents?.get_price()
+/obj/item/reagent_containers/temperature_expose(datum/gas_mixture/air, exposed_temperature, exposed_volume)
+	reagents.expose_temperature(exposed_temperature)

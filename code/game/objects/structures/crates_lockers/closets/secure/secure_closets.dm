@@ -1,29 +1,24 @@
 /obj/structure/closet/secure_closet
 	name = "secure locker"
-	desc = "A card-locked storage unit."
-	icon = 'icons/obj/closet.dmi'
-	icon_state = "secure1"
-	density = TRUE
-	opened = FALSE
-	broken = FALSE
+	desc = "It's a card-locked storage unit."
 	locked = TRUE
+	icon_state = "secure"
+	max_integrity = 250
+	armor = list(MELEE = 30, BULLET = 50, LASER = 50, ENERGY = 50, BOMB = 0, BIO = 0, RAD = 0, FIRE = 80, ACID = 80, ELECTRIC = 100)
 	secure = TRUE
-	wall_mounted = 0 //never solid (You can always pass over it)
-	health = 200
-	spawn_tags = SPAWN_TAG_CLOSET_SECURE
-	spawn_blacklisted = TRUE
+	var/obj/item/electronics/airlock/electronics
 
-/obj/structure/closet/secure_closet/req_breakout()
-	if(!opened && locked) return TRUE
-	return ..() //It's a secure closet, but isn't locked.
+/obj/structure/closet/secure_closet/run_atom_armor(damage_amount, damage_type, damage_flag = 0, attack_dir)
+	if(damage_flag == MELEE && damage_amount < 20)
+		return 0
+	. = ..()
 
-/obj/structure/closet/secure_closet/break_open()
-	desc += " It appears to be broken."
-	broken = TRUE
-	locked = FALSE
-	..()
-
-/obj/structure/closet/secure_closet/reinforced
-	icon = 'icons/obj/closet.dmi'
-	icon_state = "hop"
-	icon_lock = "reinforced"
+/obj/structure/closet/secure_closet/CheckParts(list/parts_list)
+	. = ..()
+	electronics = locate(/obj/item/electronics/airlock) in parts_list
+	if(electronics)
+		if(electronics.one_access)
+			req_one_access = electronics.accesses
+		else
+			req_access = electronics.accesses
+		qdel(electronics)

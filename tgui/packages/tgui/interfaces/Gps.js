@@ -2,11 +2,12 @@ import { map, sortBy } from 'common/collections';
 import { flow } from 'common/fp';
 import { clamp } from 'common/math';
 import { vecLength, vecSubtract } from 'common/vector';
+
 import { useBackend } from '../backend';
 import { Box, Button, Icon, LabeledList, Section, Table } from '../components';
 import { Window } from '../layouts';
 
-const coordsToVec = (coords) => map(parseFloat)(coords.split(', '));
+const coordsToVec = coords => map(parseFloat)(coords.split(', '));
 
 export const Gps = (props, context) => {
   const { act, data } = useBackend(context);
@@ -32,42 +33,37 @@ export const Gps = (props, context) => {
     ),
   ])(data.signals || []);
   return (
-    <Window title="Global Positioning System" width={470} height={700}>
+    <Window title="Global Positioning System" width={470} height={700} resizable>
       <Window.Content scrollable>
         <Section
           title="Control"
-          buttons={
+          buttons={(
             <Button
               icon="power-off"
-              content={power ? 'On' : 'Off'}
+              content={power ? "On" : "Off"}
               selected={power}
-              onClick={() => act('power')}
-            />
-          }
-        >
+              onClick={() => act('power')} />
+          )}>
           <LabeledList>
             <LabeledList.Item label="Tag">
               <Button
                 icon="pencil-alt"
                 content={tag}
-                onClick={() => act('rename')}
-              />
+                onClick={() => act('rename')} />
             </LabeledList.Item>
             <LabeledList.Item label="Scan Mode">
               <Button
-                icon={updating ? 'unlock' : 'lock'}
-                content={updating ? 'AUTO' : 'MANUAL'}
-                color={!updating && 'bad'}
-                onClick={() => act('updating')}
-              />
+                icon={updating ? "unlock" : "lock"}
+                content={updating ? "AUTO" : "MANUAL"}
+                color={!updating && "bad"}
+                onClick={() => act('updating')} />
             </LabeledList.Item>
             <LabeledList.Item label="Range">
               <Button
                 icon="sync"
-                content={globalmode ? 'MAXIMUM' : 'LOCAL'}
+                content={globalmode ? "MAXIMUM" : "LOCAL"}
                 selected={!globalmode}
-                onClick={() => act('globalmode')}
-              />
+                onClick={() => act('globalmode')} />
             </LabeledList.Item>
           </LabeledList>
         </Section>

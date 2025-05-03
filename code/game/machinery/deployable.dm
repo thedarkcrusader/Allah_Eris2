@@ -1,378 +1,220 @@
-/*
-CONTAINS:
-Deployable items
-Barricades
+#define SINGLE "single"
 
-for reference:
-	access_security = 1
-	access_brig = 2
-	access_armory = 3
-	access_forensics_lockers= 4
-	access_moebius = 5
-	access_morgue = 6
-	access_tox = 7
-	access_tox_storage = 8
-	access_genetics = 9
-	access_engine = 10
-	access_engine_equip= 11
-	access_maint_tunnels = 12
-	access_external_airlocks = 13
-	access_emergency_storage = 14
-	access_change_ids = 15
-	access_ai_upload = 16
-	access_teleporter = 17
-	access_eva = 18
-	access_heads = 19
-	access_captain = 20
-	access_all_personal_lockers = 21
-	access_chapel_office = 22
-	access_tech_storage = 23
-	access_atmospherics = 24
-	access_bar = 25
-	access_janitor = 26
-	access_crematorium = 27
-	access_kitchen = 28
-	access_robotics = 29
-	access_rd = 30
-	access_cargo = 31
-	access_construction = 32
-	access_chemistry = 33
-	access_cargo_bot = 34
-	access_hydroponics = 35
-	access_manufacturing = 36
-	access_virology = 39
-	access_cmo = 40
-	access_merchant = 41
-	access_court = 42
-	access_clown = 43
-*/
+#define METAL 1
+#define WOOD 2
+#define SAND 3
 
-//Barricades!
+//Barricades/cover
+
 /obj/structure/barricade
-	name = "barricade"
-	desc = "This space is blocked off by a barricade."
-	icon = 'icons/obj/structures.dmi'
-	icon_state = "barricade"
+	name = "chest high wall"
+	desc = "Looks like this would make good cover."
 	anchored = TRUE
 	density = TRUE
-	health = 100
-	maxHealth = 100
-	explosion_coverage = 0.7
-	var/material/material
+	max_integrity = 100
+	layer = ABOVE_WINDOW_LAYER // Barricades should probably be over windows especially if you can put them on windows
+	var/proj_pass_rate = 50 //How many projectiles will pass the cover. Lower means stronger cover
+	var/bar_material = METAL
 
-/obj/structure/barricade/New(newloc, material_name)
-	..(newloc)
-	if(!material_name)
-		material_name = "wood"
-	material = get_material_by_name("[material_name]")
-	if(!material)
-		qdel(src)
-		return
-	name = "[material.display_name] barricade"
-	desc = "This space is blocked off by a barricade made of [material.display_name]."
-	color = material.icon_colour
-	maxHealth = material.integrity
-	health = maxHealth
-
-/obj/structure/barricade/get_matter()
-	var/list/matter = ..()
-	. = matter.Copy()
-	if(material)
-		LAZYAPLUS(., material.name, 5)
-
-/obj/structure/barricade/get_material()
-	return material
-
-/obj/structure/barricade/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W, /obj/item/stack))
-		var/obj/item/stack/D = W
-		if(D.get_material_name() != material.name)
-			return //hitting things with the wrong type of stack usually doesn't produce messages, and probably doesn't need to.
-		if(health < maxHealth)
-			if(D.get_amount() < 1)
-				to_chat(user, SPAN_WARNING("You need one sheet of [material.display_name] to repair \the [src]."))
-				return
-			visible_message(SPAN_NOTICE("[user] begins to repair \the [src]."))
-			if(do_after(user,20,src) && health < maxHealth)
-				if(D.use(1))
-					health = maxHealth
-					visible_message(SPAN_NOTICE("[user] repairs \the [src]."))
-				return
-		return
-	else
-		user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-		switch(W.damtype)
-			if("fire")
-				health -= W.force * 1
-			if("brute")
-				health -= W.force * 0.75
-			else
-		if(health <= 0)
-			visible_message(SPAN_DANGER("The barricade is smashed apart!"))
-			dismantle()
-			qdel(src)
-			return
-		..()
-
-/obj/structure/barricade/proc/dismantle()
-	drop_materials(drop_location())
+/obj/structure/barricade/deconstruct(disassembled = TRUE)
+	if(!(flags_1 & NODECONSTRUCT_1))
+		make_debris()
 	qdel(src)
+
+/obj/structure/barricade/proc/make_debris()
 	return
 
-/obj/structure/barricade/take_damage(damage)
-	. = health - damage < 0 ? damage - (damage - health) : damage
-	. *= density ? explosion_coverage : explosion_coverage / 2
-	health -= damage
-	if(health <= 0)
-		dismantle()
-	return
+/obj/structure/barricade/attackby(obj/item/I, mob/user, params)
+	if(I.tool_behaviour == TOOL_WELDER && !user.combat_mode && bar_material == METAL)
+		if(atom_integrity < max_integrity)
+			if(!I.tool_start_check(user, amount=0))
+				return
 
-/obj/structure/barricade/attack_generic(mob/M, damage, attack_message)
-	if(damage)
-		M.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-		M.do_attack_animation(src)
-		M.visible_message(SPAN_DANGER("\The [M] [attack_message] \the [src]!"))
-		playsound(loc, 'sound/effects/metalhit2.ogg', 50, 1)
-		take_damage(damage)
+			to_chat(user, span_notice("You begin repairing [src]..."))
+			if(I.use_tool(src, user, 40, volume=40))
+				update_integrity(clamp(atom_integrity + 20, 0, max_integrity))
 	else
-		attack_hand(M)
+		return ..()
 
-/obj/structure/barricade/CanPass(atom/movable/mover, turf/target, height=0, air_group=0)//So bullets will fly over and stuff.
-
-	if(istype(mover,/obj/item/projectile))
-		return (check_cover(mover,target))
-
-	if(air_group || (height==0))
+/obj/structure/barricade/CanAllowThrough(atom/movable/mover, turf/target)//So bullets will fly over and stuff.
+	. = ..()
+	if(locate(/obj/structure/barricade) in get_turf(mover))
 		return TRUE
-	else
+	else if(istype(mover, /obj/projectile))
+		if(!anchored)
+			return TRUE
+		var/obj/projectile/proj = mover
+		if(proj.firer && Adjacent(proj.firer))
+			return TRUE
+		if(prob(proj_pass_rate))
+			return TRUE
 		return FALSE
 
-/obj/structure/barricade/proc/check_cover(obj/item/projectile/P, turf/from)
 
-	if(config.z_level_shooting)
-		if(P.height == HEIGHT_HIGH)
-			return TRUE // Bullet is too high to hit
-		P.height = (P.height == HEIGHT_LOW) ? HEIGHT_LOW : HEIGHT_CENTER
 
-	if (get_dist(P.starting, loc) <= 1) //Cover won't help you if people are THIS close
-		return TRUE
-	if(get_dist(loc, P.trajectory.target) > 1 ) // Target turf must be adjacent for it to count as cover
-		return TRUE
-	var/valid = FALSE
-	if(!P.def_zone)
-		return TRUE // Emitters, or anything with no targeted bodypart will always bypass the cover
+/////BARRICADE TYPES///////
 
-	var/targetzone = check_zone(P.def_zone)
-	if (targetzone in list(BP_R_LEG, BP_L_LEG, BP_GROIN))
-		valid = TRUE //The lower body is always concealed
-	if (ismob(P.original))
-		var/mob/M = P.original
-		if (M.lying)
-			valid = TRUE			//Lying down covers your whole body
+/obj/structure/barricade/wooden
+	name = "wooden barricade"
+	desc = "This space is blocked off by a wooden barricade."
+	icon = 'icons/obj/structures.dmi'
+	icon_state = "woodenbarricade"
+	bar_material = WOOD
+	var/drop_amount = 3
 
-	// Bullet is low enough to hit the wall
-	if(config.z_level_shooting && P.height == HEIGHT_LOW)
-		valid = TRUE
-
-	if(valid)
-		var/pierce = P.check_penetrate(src)
-		health -= P.get_structure_damage()/2
-		if (health > 0)
-			visible_message(SPAN_WARNING("[P] hits \the [src]!"))
-			return pierce
+/obj/structure/barricade/wooden/attackby(obj/item/I, mob/living/user)
+	if(istype(I,/obj/item/stack/sheet/mineral/wood))
+		var/obj/item/stack/sheet/mineral/wood/W = I
+		if(W.amount < 5)
+			to_chat(user, span_warning("You need at least five wooden planks to make a wall!"))
+			return
 		else
-			visible_message(SPAN_WARNING("[src] breaks down!"))
-			qdel(src)
-			return TRUE
-	return TRUE
-
-//Actual Deployable machinery stuff
-/obj/machinery/deployable
-	name = "deployable"
-	desc = "deployable"
-	icon = 'icons/obj/objects.dmi'
-	req_access = list(access_security)//I'm changing this until these are properly tested./N
-
-/obj/machinery/deployable/barrier
-	name = "deployable barrier"
-	desc = "A deployable barrier. Swipe your ID card to lock/unlock it."
-	icon = 'icons/obj/objects.dmi'
-	anchored = FALSE
-	density = TRUE
-	icon_state = "barrier0"
-	health = 300
-	maxHealth = 300
-	var/locked = FALSE
-//	req_access = list(access_maint_tunnels)
-
-/obj/machinery/deployable/barrier/New()
-	..()
-
-	icon_state = "barrier[locked]"
-
-/obj/machinery/deployable/barrier/attackby(obj/item/W, mob/user)
-
-	if(W.GetIdCard())
-		if(allowed(user))
-			if	(emagged < 2)
-				locked = !locked
-				anchored = !anchored
-				icon_state = "barrier[locked]"
-				if((locked) && (emagged < 2))
-					to_chat(user, "Barrier lock toggled on.")
-					return
-				else if((!locked) && (emagged < 2))
-					to_chat(user, "Barrier lock toggled off.")
-					return
-			else
-				var/datum/effect/effect/system/spark_spread/s = new /datum/effect/effect/system/spark_spread
-				s.set_up(2, 1, src)
-				s.start()
-				visible_message(SPAN_WARNING("BZZzZZzZZzZT"))
+			to_chat(user, span_notice("You start adding [I] to [src]..."))
+			if(do_after(user, 5 SECONDS, src))
+				W.use(5)
+				new /turf/closed/wall/mineral/wood/nonmetal(get_turf(src))
+				qdel(src)
 				return
-		return
-	else if(istype(W, /obj/item/tool/wrench))
-		if(health < maxHealth)
-			health = maxHealth
-			emagged = 0
-			req_access = list(access_security)
-			visible_message(SPAN_WARNING("[user] repairs \the [src]!"))
-			return
-		else if(emagged > 0)
-			emagged = 0
-			req_access = list(access_security)
-			visible_message(SPAN_WARNING("[user] repairs \the [src]!"))
-			return
-		return
-	else
-		switch(W.damtype)
-			if("fire")
-				health -= W.force * 0.75
-			if("brute")
-				health -= W.force * 0.5
-			else
-		if(health <= 0)
-			explode()
-		..()
-
-/obj/machinery/deployable/barrier/explosion_act(target_power, explosion_handler/handler)
-	return take_damage(target_power)
-
-/obj/machinery/deployable/barrier/take_damage(amount)
-	. = health - amount <= 0 ? amount - (amount - health) : amount
-	// decent amount of protection
-	. *= 0.7
-	health -= amount
-	if(health <= 0)
-		explode()
-		qdel(src)
-
-/obj/machinery/deployable/barrier/emp_act(severity)
-	if(stat & (BROKEN|NOPOWER))
-		return
-	if(prob(50/severity))
-		locked = !locked
-		anchored = !anchored
-		icon_state = "barrier[locked]"
-
-/obj/machinery/deployable/barrier/CanPass(atom/movable/mover, turf/target, height=0, air_group=0)//So bullets will fly over and stuff.
-	if(istype(mover,/obj/item/projectile))
-		return (check_cover(mover,target))
-
-	if(air_group || (height==0))
-		return TRUE
-
-	if(ishuman(mover))
-		var/mob/living/carbon/human/H = mover
-		if(H.checkpass(PASSTABLE) && H.stats?.getPerk(PERK_PARKOUR))
-			return TRUE
-
-/obj/machinery/deployable/barrier/proc/explode()
-
-	visible_message(SPAN_DANGER("[src] blows apart!"))
-	var/turf/Tsec = get_turf(src)
-
-/*	var/obj/item/stack/rods/ =*/
-	new /obj/item/stack/rods(Tsec)
-
-	var/datum/effect/effect/system/spark_spread/s = new /datum/effect/effect/system/spark_spread
-	s.set_up(3, 1, src)
-	s.start()
-	explosion(get_turf(src), 100, 50)
-	explosion(src.loc,-1,-1,0)
-	if(src)
-		qdel(src)
-
-/obj/machinery/deployable/barrier/emag_act(var/remaining_charges, var/mob/user)
-	if(emagged == 0)
-		emagged = 1
-		req_access.Cut()
-		req_one_access.Cut()
-		to_chat(user, "You break the ID authentication lock on \the [src].")
-		var/datum/effect/effect/system/spark_spread/s = new /datum/effect/effect/system/spark_spread
-		s.set_up(2, 1, src)
-		s.start()
-		visible_message(SPAN_WARNING("BZZzZZzZZzZT"))
-		return 1
-	else if(emagged == 1)
-		emagged = 2
-		to_chat(user, "You short out the anchoring mechanism on \the [src].")
-		var/datum/effect/effect/system/spark_spread/s = new /datum/effect/effect/system/spark_spread
-		s.set_up(2, 1, src)
-		s.start()
-		visible_message(SPAN_WARNING("BZZzZZzZZzZT"))
-		return 1
-
-/obj/machinery/deployable/barrier/proc/check_cover(obj/item/projectile/P, turf/from)
-
-	if(config.z_level_shooting)
-		if(P.height == HEIGHT_HIGH)
-			return TRUE // Bullet is too high to hit
-		P.height = (P.height == HEIGHT_LOW) ? HEIGHT_LOW : HEIGHT_CENTER
-
-	if (get_dist(P.starting, loc) <= 1) //Cover won't help you if people are THIS close
-		return 1
-	if(get_dist(loc, P.trajectory.target) > 1 ) // Target turf must be adjacent for it to count as cover
-		return TRUE
-	var/valid = FALSE
-	if(!P.def_zone)
-		return 1 // Emitters, or anything with no targeted bodypart will always bypass the cover
-
-	var/targetzone = check_zone(P.def_zone)
-	if (targetzone in list(BP_R_LEG, BP_L_LEG, BP_GROIN))
-		valid = TRUE //The lower body is always concealed
-	if (ismob(P.original))
-		var/mob/M = P.original
-		if (M.lying)
-			valid = TRUE			//Lying down covers your whole body
-
-	// Bullet is low enough to hit the wall
-	if(config.z_level_shooting && P.height == HEIGHT_LOW)
-		valid = TRUE
-
-	if(valid)
-		var/pierce = P.check_penetrate(src)
-		health -= P.get_structure_damage()/2
-		if (health > 0)
-			visible_message(SPAN_WARNING("[P] hits \the [src]!"))
-			return pierce
-		else
-			visible_message(SPAN_WARNING("[src] breaks down!"))
+	else if(I.tool_behaviour == TOOL_CROWBAR && !user.combat_mode)
+		user.visible_message("[user.name] starts prying [src.name] apart.", \
+							span_notice("You start prying the barricade apart."))
+		if(I.use_tool(src, user, 190, volume=50))
+			to_chat(user, span_notice("You disassemble the barricade."))
+			new /obj/item/stack/sheet/mineral/wood(user.loc, 5)
 			qdel(src)
-			return 1
-	return 1
-
-/obj/machinery/deployable/barrier/take_damage(damage)
-	health -= damage
-	if(health <= 0)
-		dismantle()
-
-/obj/machinery/deployable/barrier/attack_generic(mob/M, damage, attack_message)
-	if(damage)
-		M.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-		M.do_attack_animation(src)
-		M.visible_message(SPAN_DANGER("\The [M] [attack_message] \the [src]!"))
-		playsound(loc, 'sound/effects/metalhit2.ogg', 50, 1)
-		take_damage(damage * 1.25)
 	else
-		attack_hand(M)
+		return ..()
+
+
+/obj/structure/barricade/wooden/crude
+	name = "crude plank barricade"
+	desc = "This space is blocked off by a crude assortment of planks."
+	icon_state = "woodenbarricade-old"
+	drop_amount = 1
+	max_integrity = 50
+	proj_pass_rate = 65
+
+/obj/structure/barricade/wooden/crude/attackby(obj/item/I, mob/living/user) // Make it so you cant turn crude planks into walls
+	if(I.tool_behaviour == TOOL_CROWBAR && !user.combat_mode)
+		user.visible_message("[user.name] starts prying [src.name] apart.", \
+							span_notice("You start prying the barricade apart."))
+		if(I.use_tool(src, user, 10 SECONDS, volume=50))
+			to_chat(user, span_notice("You disassemble the barricade."))
+			new /obj/item/stack/sheet/mineral/wood(user.loc, 5)
+			qdel(src)
+		return
+	return ..()
+
+/obj/structure/barricade/wooden/crude/snow
+	desc = "This space is blocked off by a crude assortment of planks. It seems to be covered in a layer of snow."
+	icon_state = "woodenbarricade-snow-old"
+	max_integrity = 75
+
+/obj/structure/barricade/wooden/make_debris()
+	new /obj/item/stack/sheet/mineral/wood(get_turf(src), drop_amount)
+
+
+/obj/structure/barricade/sandbags
+	name = "sandbags"
+	desc = "Bags of sand. Self explanatory."
+	icon = 'icons/obj/smooth_structures/sandbags.dmi'
+	icon_state = "sandbags-0"
+	base_icon_state = "sandbags"
+	max_integrity = 280
+	proj_pass_rate = 20
+	pass_flags = LETPASSTHROW
+	bar_material = SAND
+	smoothing_flags = SMOOTH_BITMASK
+	smoothing_groups = SMOOTH_GROUP_SANDBAGS
+	canSmoothWith = SMOOTH_GROUP_SANDBAGS + SMOOTH_GROUP_SECURITY_BARRICADE + SMOOTH_GROUP_WALLS
+
+/obj/structure/barricade/sandbags/Initialize(mapload)
+	. = ..()
+	AddElement(/datum/element/climbable)
+
+/obj/structure/barricade/security
+	name = "security barrier"
+	desc = "A deployable barrier. Provides good cover in fire fights."
+	icon = 'icons/obj/objects.dmi'
+	icon_state = "barrier0"
+	density = FALSE
+	anchored = FALSE
+	max_integrity = 180
+	proj_pass_rate = 20
+	armor = list(MELEE = 10, BULLET = 50, LASER = 50, ENERGY = 50, BOMB = 10, BIO = 100, RAD = 100, FIRE = 10, ACID = 0)
+
+	var/deploy_time = 40
+	var/deploy_message = TRUE
+
+
+/obj/structure/barricade/security/Initialize(mapload)
+	. = ..()
+	addtimer(CALLBACK(src, PROC_REF(deploy)), deploy_time)
+
+/obj/structure/barricade/security/proc/deploy()
+	icon_state = "barrier1"
+	density = TRUE
+	anchored = TRUE
+	if(deploy_message)
+		visible_message(span_warning("[src] deploys!"))
+
+
+/obj/item/grenade/barrier
+	name = "barrier grenade"
+	desc = "Instant cover."
+	icon = 'icons/obj/grenade.dmi'
+	icon_state = "flashbang"
+	item_state = "flashbang"
+	actions_types = list(/datum/action/item_action/toggle_barrier_spread)
+	var/mode = SINGLE
+
+/obj/item/grenade/barrier/examine(mob/user)
+	. = ..()
+	. += span_notice("Alt-click to toggle modes.")
+
+/obj/item/grenade/barrier/AltClick(mob/living/carbon/user)
+	if(!istype(user) || !user.canUseTopic(src, BE_CLOSE))
+		return
+	toggle_mode(user)
+
+/obj/item/grenade/barrier/proc/toggle_mode(mob/user)
+	switch(mode)
+		if(SINGLE)
+			mode = VERTICAL
+		if(VERTICAL)
+			mode = HORIZONTAL
+		if(HORIZONTAL)
+			mode = SINGLE
+
+	to_chat(user, "[src] is now in [mode] mode.")
+
+/obj/item/grenade/barrier/prime()
+	new /obj/structure/barricade/security(get_turf(src.loc))
+	switch(mode)
+		if(VERTICAL)
+			var/turf/target_turf = get_step(src, NORTH)
+			if(!(target_turf.is_blocked_turf()))
+				new /obj/structure/barricade/security(target_turf)
+
+			var/turf/target_turf2 = get_step(src, SOUTH)
+			if(!(target_turf2.is_blocked_turf()))
+				new /obj/structure/barricade/security(target_turf2)
+		if(HORIZONTAL)
+			var/turf/target_turf = get_step(src, EAST)
+			if(!(target_turf.is_blocked_turf()))
+				new /obj/structure/barricade/security(target_turf)
+
+			var/turf/target_turf2 = get_step(src, WEST)
+			if(!(target_turf2.is_blocked_turf()))
+				new /obj/structure/barricade/security(target_turf2)
+	qdel(src)
+
+/obj/item/grenade/barrier/ui_action_click(mob/user)
+	toggle_mode(user)
+
+
+#undef SINGLE
+
+#undef METAL
+#undef WOOD
+#undef SAND

@@ -1,120 +1,123 @@
-/obj/structure/dispenser
-	name = "tank storage unit"
-	desc = "A simple yet bulky storage device for gas tanks. Has room for up to ten oxygen tanks, and ten plasma tanks."
+#define TANK_DISPENSER_CAPACITY 10
+
+/obj/structure/tank_dispenser
+	name = "tank dispenser"
+	desc = "A simple yet bulky storage device for gas tanks. Holds up to 10 oxygen tanks and 10 plasma tanks."
 	icon = 'icons/obj/objects.dmi'
 	icon_state = "dispenser"
 	density = TRUE
 	anchored = TRUE
-	w_class = ITEM_SIZE_HUGE
-	layer = BELOW_OBJ_LAYER
-	spawn_tags = SPAWN_TAG_STRUCTURE_COMMON
-	rarity_value = 50
-	var/oxygentanks = 10
-	var/plasmatanks = 10
-	var/list/oxytanks = list()	//sorry for the similar var names
-	var/list/platanks = list()
+	max_integrity = 300
+	var/oxygentanks = TANK_DISPENSER_CAPACITY
+	var/plasmatanks = TANK_DISPENSER_CAPACITY
 
-
-/obj/structure/dispenser/oxygen
+/obj/structure/tank_dispenser/oxygen
 	plasmatanks = 0
-	rarity_value = 10
 
-/obj/structure/dispenser/plasma
+/obj/structure/tank_dispenser/plasma
 	oxygentanks = 0
-	rarity_value = 25
 
-
-/obj/structure/dispenser/Initialize()
+/obj/structure/tank_dispenser/Initialize(mapload)
 	. = ..()
-	update_icon()
+	for(var/i in 1 to oxygentanks)
+		new /obj/item/tank/internals/oxygen(src)
+	for(var/i in 1 to plasmatanks)
+		new /obj/item/tank/internals/plasma(src)
+	update_appearance(UPDATE_ICON)
 
-
-/obj/structure/dispenser/update_icon()
-	overlays.Cut()
+/obj/structure/tank_dispenser/update_overlays()
+	. = ..()
 	switch(oxygentanks)
-		if(1 to 3)	overlays += "oxygen-[oxygentanks]"
-		if(4 to INFINITY) overlays += "oxygen-4"
+		if(1 to 3)
+			. += "oxygen-[oxygentanks]"
+		if(4 to TANK_DISPENSER_CAPACITY)
+			. += "oxygen-4"
 	switch(plasmatanks)
-		if(1 to 4)	overlays += "plasma-[plasmatanks]"
-		if(5 to INFINITY) overlays += "plasma-5"
+		if(1 to 4)
+			. += "plasma-[plasmatanks]"
+		if(5 to TANK_DISPENSER_CAPACITY)
+			. += "plasma-5"
 
-/obj/structure/dispenser/attack_ai(mob/user)
-	if(user.Adjacent(src))
-		return attack_hand(user)
-	..()
+/obj/structure/tank_dispenser/attack_ai(mob/user)
+	. = ..()
+	return ui_interact(user)
 
-/obj/structure/dispenser/attack_hand(mob/user)
-	user.set_machine(src)
-	var/dat = "[src]<br><br>"
-	dat += "Oxygen tanks: [oxygentanks] - [oxygentanks ? "<A href='?src=\ref[src];oxygen=1'>Dispense</A>" : "empty"]<br>"
-	dat += "Plasma tanks: [plasmatanks] - [plasmatanks ? "<A href='?src=\ref[src];plasma=1'>Dispense</A>" : "empty"]"
-	user << browse(dat, "window=dispenser")
-	onclose(user, "dispenser")
-
-
-/obj/structure/dispenser/attackby(obj/item/I, mob/user)
-	if(istype(I, /obj/item/tank/oxygen) || istype(I, /obj/item/tank/air) || istype(I, /obj/item/tank/anesthetic))
-		if(oxygentanks < 10)
-			user.drop_item()
-			I.forceMove(src)
-			oxytanks.Add(I)
-			oxygentanks++
-			to_chat(user, SPAN_NOTICE("You put [I] in [src]."))
-			if(oxygentanks < 5)
-				update_icon()
-		else
-			to_chat(user, SPAN_NOTICE("[src] is full."))
-		updateUsrDialog()
-		return
-	if(istype(I, /obj/item/tank/plasma))
-		if(plasmatanks < 10)
-			user.drop_item()
-			I.forceMove(src)
-			platanks.Add(I)
+/obj/structure/tank_dispenser/attackby(obj/item/I, mob/living/user, params)
+	var/full
+	if(istype(I, /obj/item/tank/internals/plasma))
+		if(plasmatanks < TANK_DISPENSER_CAPACITY)
 			plasmatanks++
-			to_chat(user, SPAN_NOTICE("You put [I] in [src]."))
-			if(plasmatanks < 6)
-				update_icon()
 		else
-			to_chat(user, SPAN_NOTICE("[src] is full."))
-		updateUsrDialog()
+			full = TRUE
+	else if(istype(I, /obj/item/tank/internals/oxygen))
+		if(oxygentanks < TANK_DISPENSER_CAPACITY)
+			oxygentanks++
+		else
+			full = TRUE
+	else if(I.tool_behaviour == TOOL_WRENCH)
+		default_unfasten_wrench(user, I, time = 20)
 		return
-	if(QUALITY_BOLT_TURNING in I.tool_qualities)
-		if(I.use_tool(user, src, WORKTIME_NORMAL, QUALITY_BOLT_TURNING, FAILCHANCE_EASY,  required_stat = STAT_MEC))
-			if(anchored)
-				to_chat(user, SPAN_NOTICE("You lean down and unwrench [src]."))
-				anchored = FALSE
-			else
-				to_chat(user, SPAN_NOTICE("You wrench [src] into place."))
-				anchored = TRUE
-			return
+	else if(!user.combat_mode)
+		to_chat(user, span_notice("[I] does not fit into [src]."))
+		return
+	else
+		return ..()
+	if(full)
+		to_chat(user, span_notice("[src] can't hold any more of [I]."))
+		return
 
-/obj/structure/dispenser/Topic(href, href_list)
+	if(!user.transferItemToLoc(I, src))
+		return
+	to_chat(user, span_notice("You put [I] in [src]."))
+	update_appearance(UPDATE_ICON)
+
+/obj/structure/tank_dispenser/ui_state(mob/user)
+	return GLOB.physical_state
+
+/obj/structure/tank_dispenser/ui_interact(mob/user, datum/tgui/ui)
+	ui = SStgui.try_update_ui(user, src, ui)
+	if(!ui)
+		ui = new(user, src, "TankDispenser", name)
+		ui.open()
+
+/obj/structure/tank_dispenser/ui_data(mob/user)
+	var/list/data = list()
+	data["oxygen"] = oxygentanks
+	data["plasma"] = plasmatanks
+
+	return data
+
+/obj/structure/tank_dispenser/ui_act(action, params)
 	if(..())
-		return 1
+		return
+	switch(action)
+		if("plasma")
+			var/obj/item/tank/internals/plasma/tank = locate() in src
+			if(tank && Adjacent(usr))
+				if(iscyborg(usr))
+					usr.transferItemToLoc(tank, src.loc)
+				else
+					usr.put_in_hands(tank)
+				plasmatanks--
+			. = TRUE
+		if("oxygen")
+			var/obj/item/tank/internals/oxygen/tank = locate() in src
+			if(tank && Adjacent(usr))
+				if(iscyborg(usr))
+					usr.transferItemToLoc(tank,src.loc)
+				else
+					usr.put_in_hands(tank)
+				oxygentanks--
+			. = TRUE
+	update_appearance(UPDATE_ICON)
 
-	usr.set_machine(src)
 
-	var/obj/item/tank/tank
-	if(href_list["oxygen"] && oxygentanks > 0)
-		if(oxytanks.len)
-			tank = oxytanks[oxytanks.len]	// Last stored tank is always the first one to be dispensed
-			oxytanks.Remove(tank)
-		else
-			tank = new /obj/item/tank/oxygen(loc)
-		oxygentanks--
-	if(href_list["plasma"] && plasmatanks > 0)
-		if(platanks.len)
-			tank = platanks[platanks.len]
-			platanks.Remove(tank)
-		else
-			tank = new /obj/item/tank/plasma(loc)
-		plasmatanks--
+/obj/structure/tank_dispenser/deconstruct(disassembled = TRUE)
+	if(!(flags_1 & NODECONSTRUCT_1))
+		for(var/X in src)
+			var/obj/item/I = X
+			I.forceMove(loc)
+		new /obj/item/stack/sheet/metal (loc, 2)
+	qdel(src)
 
-	if(tank)
-		tank.forceMove(drop_location())
-		to_chat(usr, SPAN_NOTICE("You take [tank] out of [src]."))
-		update_icon()
-
-	playsound(usr.loc, 'sound/machines/Custom_extout.ogg', 100, 1)
-	updateUsrDialog()
+#undef TANK_DISPENSER_CAPACITY

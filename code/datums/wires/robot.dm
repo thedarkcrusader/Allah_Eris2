@@ -1,83 +1,91 @@
 /datum/wires/robot
 	holder_type = /mob/living/silicon/robot
-	wire_count = 5
-	descriptions = list(
-		new /datum/wire_description(BORG_WIRE_LAWCHECK, "LawSync"),
-		new /datum/wire_description(BORG_WIRE_MAIN_POWER, "Power",),
-		new /datum/wire_description(BORG_WIRE_LOCKED_DOWN, "Failsafe"),
-		new /datum/wire_description(BORG_WIRE_AI_CONTROL, "Remote access"),
-		new /datum/wire_description(BORG_WIRE_CAMERA,  "Camera")
+	proper_name = "Cyborg"
+	randomize = TRUE
+
+/datum/wires/robot/New(atom/holder)
+	wires = list(
+		WIRE_AI, WIRE_CAMERA,
+		WIRE_LAWSYNC, WIRE_LOCKDOWN,
+		WIRE_RESET_MODULE
 	)
+	add_duds(2)
+	..()
 
-var/const/BORG_WIRE_LAWCHECK = 1
-var/const/BORG_WIRE_MAIN_POWER = 2 // The power wires do nothing whyyyyyyyyyyyyy
-var/const/BORG_WIRE_LOCKED_DOWN = 4
-var/const/BORG_WIRE_AI_CONTROL = 8
-var/const/BORG_WIRE_CAMERA = 16
-
-/datum/wires/robot/GetInteractWindow(mob/living/user)
-
-	. = ..(user)
-	var/mob/living/silicon/robot/R = holder
-	. += text("<br>\n[(R.lawupdate ? "The LawSync light is on." : "The LawSync light is off.")]")
-	. += text("<br>\n[(R.connected_ai ? "The AI link light is on." : "The AI link light is off.")]")
-	. += text("<br>\n[((!isnull(R.camera) && R.camera.status == 1) ? "The Camera light is on." : "The Camera light is off.")]")
-	. += text("<br>\n[(R.lockcharge ? "The lockdown light is on." : "The lockdown light is off.")]")
-	return .
-
-/datum/wires/robot/UpdateCut(var/index, var/mended)
-
-	var/mob/living/silicon/robot/R = holder
-	switch(index)
-		if(BORG_WIRE_LAWCHECK) //Cut the law wire, and the borg will no longer receive law updates from its AI
-			if(!mended)
-				if (R.lawupdate == 1)
-					to_chat(R, "LawSync protocol engaged.")
-					R.show_laws()
-			else
-				if (R.lawupdate == 0 && !R.HasTrait(CYBORG_TRAIT_EMAGGED))
-					R.lawupdate = 1
-
-		if (BORG_WIRE_AI_CONTROL) //Cut the AI wire to reset AI control
-			if(!mended)
-				R.disconnect_from_ai()
-
-		if (BORG_WIRE_CAMERA)
-			if(!isnull(R.camera) && !R.scrambledcodes)
-				R.camera.status = mended
-
-		if(BORG_WIRE_LAWCHECK)	//Forces a law update if the borg is set to receive them. Since an update would happen when the borg checks its laws anyway, not much use, but eh
-			if (R.lawupdate)
-				R.lawsync()
-
-		if(BORG_WIRE_LOCKED_DOWN)
-			R.SetLockdown(!mended)
-
-
-/datum/wires/robot/UpdatePulsed(var/index)
-	var/mob/living/silicon/robot/R = holder
-	switch(index)
-		if (BORG_WIRE_AI_CONTROL) //pulse the AI wire to make the borg reselect an AI
-			if(!R.HasTrait(CYBORG_TRAIT_EMAGGED))
-				var/mob/living/silicon/ai/new_ai = select_active_ai(R)
-				R.connect_to_ai(new_ai)
-
-		if (BORG_WIRE_CAMERA)
-			if(!isnull(R.camera) && R.camera.can_use() && !R.scrambledcodes)
-				R.visible_message("[R]'s camera lense focuses loudly.")
-				to_chat(R, "Your camera lense focuses loudly.")
-
-		if(BORG_WIRE_LOCKED_DOWN)
-			R.SetLockdown(!R.lockcharge) // Toggle
-
-/datum/wires/robot/CanUse(var/mob/living/L)
+/datum/wires/robot/interactable(mob/user)
 	var/mob/living/silicon/robot/R = holder
 	if(R.wiresexposed)
-		return 1
-	return 0
+		return TRUE
 
-/datum/wires/robot/proc/IsCameraCut()
-	return wires_status & BORG_WIRE_CAMERA
+/datum/wires/robot/get_status()
+	var/mob/living/silicon/robot/R = holder
+	var/list/status = list()
+	status += "The law sync module is [R.lawupdate ? "on" : "off"]."
+	status += "The intelligence link display shows [R.connected_ai ? R.connected_ai.name : "NULL"]."
+	status += "The camera light is [!isnull(R.builtInCamera) && R.builtInCamera.status ? "on" : "off"]."
+	status += "The lockdown indicator is [R.lockcharge ? "on" : "off"]."
+	status += "There is a star symbol above the [get_color_of_wire(WIRE_RESET_MODULE)] wire."
+	return status
 
-/datum/wires/robot/proc/LockedCut()
-	return wires_status & BORG_WIRE_LOCKED_DOWN
+/datum/wires/robot/on_pulse(wire, user)
+	var/mob/living/silicon/robot/R = holder
+	switch(wire)
+		if(WIRE_AI) // Pulse to pick a new AI.
+			if(!R.emagged)
+				var/new_ai
+				if(user)
+					new_ai = select_active_ai(user)
+				else
+					new_ai = select_active_ai(R)
+				R.notify_ai(DISCONNECT)
+				if(new_ai && (new_ai != R.connected_ai))
+					R.set_connected_ai(new_ai)
+					if(R.shell)
+						R.undeploy() //If this borg is an AI shell, disconnect the controlling AI and assign ti to a new AI
+						R.notify_ai(AI_SHELL)
+					else
+						R.notify_ai(TRUE)
+		if(WIRE_CAMERA) // Pulse to disable the camera.
+			if(!QDELETED(R.builtInCamera) && !R.scrambledcodes)
+				R.builtInCamera.toggle_cam(usr, 0)
+				R.visible_message("[R]'s camera lens focuses loudly.", "Your camera lens focuses loudly.")
+		if(WIRE_LAWSYNC) // Forces a law update if possible.
+			if(R.lawupdate)
+				R.visible_message("[R] gently chimes.", "LawSync protocol engaged.")
+				R.lawsync()
+				R.show_laws()
+		if(WIRE_LOCKDOWN)
+			R.SetLockdown(!R.lockcharge) // Toggle
+		if(WIRE_RESET_MODULE)
+			if(R.has_module())
+				R.visible_message("[R]'s module servos twitch.", "Your module display flickers.")
+
+/datum/wires/robot/on_cut(wire, mend)
+	var/mob/living/silicon/robot/R = holder
+	switch(wire)
+		if(WIRE_AI) // Cut the AI wire to reset AI control.
+			if(!mend)
+				R.notify_ai(DISCONNECT)
+				if(R.shell)
+					R.undeploy()
+				R.set_connected_ai(null)
+			R.logevent("AI connection fault [mend?"cleared":"detected"]")
+		if(WIRE_LAWSYNC) // Cut the law wire, and the borg will no longer receive law updates from its AI. Repair and it will re-sync.
+			if(mend)
+				if(!R.emagged)
+					R.lawupdate = TRUE
+			else if(!R.deployed) //AI shells must always have the same laws as the AI
+				R.lawupdate = FALSE
+			R.logevent("Lawsync Module fault [mend?"cleared":"detected"]")
+		if (WIRE_CAMERA) // Disable the camera.
+			if(!QDELETED(R.builtInCamera) && !R.scrambledcodes)
+				R.builtInCamera.status = mend
+				R.builtInCamera.toggle_cam(usr, 0)
+				R.visible_message("[R]'s camera lens focuses loudly.", "Your camera lens focuses loudly.")
+				R.logevent("Camera Module fault [mend?"cleared":"detected"]")
+		if(WIRE_LOCKDOWN) // Simple lockdown.
+			R.SetLockdown(!mend)
+			R.logevent("Motor Controller fault [mend?"cleared":"detected"]")
+		if(WIRE_RESET_MODULE)
+			if(R.has_module() && !mend)
+				R.ResetModule()

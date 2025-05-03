@@ -20,7 +20,7 @@
 	var/wait = 20
 
 	/// Priority Weight: When mutiple subsystems need to run in the same tick, higher priority subsystems will be given a higher share of the tick before MC_TICK_CHECK triggers a sleep, higher priority subsystems also run before lower priority subsystems
-	var/priority = SS_PRIORITY_DEFAULT
+	var/priority = FIRE_PRIORITY_DEFAULT
 
 	/// [Subsystem Flags][SS_NO_INIT] to control binary behavior. Flags must be set at compile time or before preinit finishes to take full effect. (You can also restart the mc to force them to process again)
 	var/flags = NONE
@@ -65,6 +65,9 @@
 
 	/// Tracks the current execution state of the subsystem. Used to handle subsystems that sleep in fire so the mc doesn't run them again while they are sleeping
 	var/state = SS_IDLE
+	
+	/// Tracks how many times a subsystem has ever slept in fire().
+	var/slept_count = 0
 
 	/// Tracks how many fires the subsystem has consecutively paused on in the current run
 	var/paused_ticks = 0
@@ -98,6 +101,11 @@
 	//Do not blindly add vars here to the bottom, put it where it goes above
 	//If your var only has two values, put it in as a flag.
 
+	//yogs start -- loading time stuff
+	var/static/total_loading_points_progress = 0 //! How much progress we've made in loading all the subsystems so far.
+	var/static/total_loading_points = 0 //! The total amount of loading points among all subsystems. Should be defined by MC before subsystem inits.
+	var/loading_points = 0 //! The amount of loading points this subsystem has, measured in deciseconds of approximate load time. This being 0 is fine.
+//yogs end
 
 //Do not override
 ///datum/controller/subsystem/New()
@@ -121,8 +129,10 @@
 	fire(resumed)
 	. = state
 	if (state == SS_SLEEPING)
+		slept_count++
 		state = SS_IDLE
 	if (state == SS_PAUSING)
+		slept_count++
 		var/QT = queued_time
 		enqueue()
 		state = SS_PAUSED
@@ -254,25 +264,17 @@
 /// Called after the config has been loaded or reloaded.
 /datum/controller/subsystem/proc/OnConfigLoad()
 
-//used to initialize the subsystem AFTER the map has loaded
+/**
+ * Used to initialize the subsystem. This is expected to be overriden by subtypes.
+ */
 /datum/controller/subsystem/Initialize()
-	initialized = TRUE
-	// SEND_SIGNAL_OLD(src, COMSIG_SUBSYSTEM_POST_INITIALIZE)
-
-	var/time = rustg_time_milliseconds(SS_INIT_TIMER_KEY)
-	var/seconds = round(time / 1000, 0.01)
-
-	var/msg = "Initialized [name] subsystem within [seconds] second[seconds == 1 ? "" : "s"]!"
-	to_chat(world, span_boldannounce("[msg]"))
-	log_world(msg)
-	return seconds
+	return SS_INIT_NONE
 
 /datum/controller/subsystem/stat_entry(msg)
 	if(can_fire && !(SS_NO_FIRE & flags) && init_stage <= Master.init_stage_completed)
 		msg = "[round(cost,1)]ms|[round(tick_usage,1)]%([round(tick_overrun,1)]%)|[round(ticks,0.1)]\t[msg]"
 	else
 		msg = "OFFLINE\t[msg]"
-
 	return msg
 
 /datum/controller/subsystem/proc/state_letter()
@@ -297,12 +299,26 @@
 //should attempt to salvage what it can from the old instance of subsystem
 /datum/controller/subsystem/Recover()
 
-// /datum/controller/subsystem/vv_edit_var(var_name, var_value)
-// 	switch (var_name)
-// 		if (NAMEOF(src, can_fire))
-// 			//this is so the subsystem doesn't rapid fire to make up missed ticks causing more lag
-// 			if (var_value)
-// 				update_nextfire(reset_time = TRUE)
-// 		if (NAMEOF(src, queued_priority)) //editing this breaks things.
-// 			return FALSE
-// 	. = ..()
+/datum/controller/subsystem/vv_edit_var(var_name, var_value)
+	switch (var_name)
+		if (NAMEOF(src, can_fire))
+			//this is so the subsystem doesn't rapid fire to make up missed ticks causing more lag
+			if (var_value)
+				update_nextfire(reset_time = TRUE)
+		if (NAMEOF(src, queued_priority)) //editing this breaks things.
+			return FALSE
+	. = ..()
+
+/datum/controller/subsystem/proc/get_metrics()
+	SHOULD_CALL_PARENT(TRUE)
+	. = list()
+	.["@measurement"] = "subsystem"
+	.["@tags"] = list("subsystem" = type)
+	.["$cost"] = cost
+	.["$tick_usage"] = tick_usage
+	.["$tick_overrun"] = tick_overrun
+	.["$last_fire"] = last_fire
+	.["$next_fire"] = next_fire
+	.["$tick_allocation_avg"] = tick_allocation_avg
+	.["$times_fired"] = times_fired
+	.["$postponed_fires"] = postponed_fires

@@ -1,293 +1,301 @@
-////////////////////////////////////////////////////////////////////////////////
-/// Pills.
-////////////////////////////////////////////////////////////////////////////////
 /obj/item/reagent_containers/pill
 	name = "pill"
-	desc = "A pill."
+	desc = "A tablet or capsule."
 	icon = 'icons/obj/chemical.dmi'
-	icon_state = null
+	icon_state = "pill"
 	item_state = "pill"
-	possible_transfer_amounts = null
-	w_class = ITEM_SIZE_TINY
-	slot_flags = SLOT_EARS
-	volume = 60
-	matter = list(MATERIAL_BIOMATTER = 1)
-	bad_type = /obj/item/reagent_containers/pill
+	lefthand_file = 'icons/mob/inhands/equipment/medical_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/equipment/medical_righthand.dmi'
+	possible_transfer_amounts = list()
+	volume = 15
+	grind_results = list()
+	var/apply_type = INGEST
+	var/apply_method = "swallow"
+	var/rename_with_volume = FALSE
+	var/self_delay = 0 //pills are instant, this is because patches inheret their aplication from pills
+	var/dissolvable = TRUE
 
-/obj/item/reagent_containers/pill/Initialize()
+/obj/item/reagent_containers/pill/Initialize(mapload)
 	. = ..()
 	if(!icon_state)
-		icon_state = "pill[rand(1, 20)]"
+		icon_state = "pill[rand(1,20)]"
+	if(reagents.total_volume && rename_with_volume)
+		name += " ([reagents.total_volume]u)"
 
 
-/obj/item/reagent_containers/pill/attack(mob/M as mob, mob/user as mob, def_zone)
-	standard_feed_mob(user, M)
-
-/obj/item/reagent_containers/pill/self_feed_message(var/mob/user)
-	to_chat(user, SPAN_NOTICE("You swallow \the [src]."))
-
-/obj/item/reagent_containers/pill/other_feed_message_start(var/mob/user, var/mob/target)
-	user.visible_message("<span class='warning'>[user] attempts to force [target] to swallow \the [src].</span>")
-
-/obj/item/reagent_containers/pill/other_feed_message_finish(var/mob/user, var/mob/target)
-	user.visible_message("<span class='warning'>[user] forces [target] to swallow \the [src].</span>")
-
-/obj/item/reagent_containers/pill/afterattack(obj/target, mob/user, proximity)
-	if(!proximity) return
-
-	..()
-
-	if(target.is_refillable())
-		if(!target.reagents.total_volume)
-			to_chat(user, SPAN_NOTICE("[target] is empty. Can't dissolve \the [src]."))
-			return
-		to_chat(user, SPAN_NOTICE("You dissolve \the [src] in [target]."))
-
-		user.attack_log += text("\[[time_stamp()]\] <font color='red'>Spiked \a [target] with a pill. Reagents: [reagents.log_list()]</font>")
-		msg_admin_attack("[user.name] ([user.ckey]) spiked \a [target] with a pill. Reagents: [reagents.log_list()] (INTENT: [uppertext(user.a_intent)]) (<A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[user.x];Y=[user.y];Z=[user.z]'>JMP</a>)")
-
-		reagents.trans_to(target, reagents.total_volume)
-		for(var/mob/O in viewers(2, user))
-			if(!user.stats.getPerk(PERK_FAST_FINGERS))
-				O.show_message(SPAN_WARNING("[user] puts something in \the [target]."), 1)
-
-		qdel(src)
+/obj/item/reagent_containers/pill/attack_self(mob/user)
+	return
 
 
-////////////////////////////////////////////////////////////////////////////////
-/// Pills. END
-////////////////////////////////////////////////////////////////////////////////
+/obj/item/reagent_containers/pill/attack(mob/M, mob/user, def_zone)
+	if(!canconsume(M, user))
+		return FALSE
 
-//Pills
-/obj/item/reagent_containers/pill/antitox
-	name = "Anti-toxins pill"
-	desc = "Neutralizes many common toxins."
-	icon_state = "pill17"
-	preloaded_reagents = list("anti_toxin" = 25)
+	if(M == user)
+		M.visible_message(span_notice("[user] attempts to [apply_method] [src]."))
+		if(self_delay)
+			if(!do_after(user, self_delay, M))
+				return FALSE
+		to_chat(M, span_notice("You [apply_method] [src]."))
 
+	else
+		M.visible_message(span_danger("[user] attempts to force [M] to [apply_method] [src]."), \
+							span_userdanger("[user] attempts to force [M] to [apply_method] [src]."))
+		if(!do_after(user, 3 SECONDS, M))
+			return FALSE
+		M.visible_message(span_danger("[user] forces [M] to [apply_method] [src]."), \
+							span_userdanger("[user] forces [M] to [apply_method] [src]."))
+
+	var/makes_me_think = pick(strings(REDPILL_FILE, "redpill_questions"))
+	if(icon_state == "pill4" && prob(5)) //you take the red pill - you stay in Wonderland, and I show you how deep the rabbit hole goes
+		sleep(5 SECONDS)
+		to_chat(M, span_notice("[makes_me_think]"))
+
+	if(reagents.total_volume)
+		reagents.reaction(M, apply_type)
+		reagents.trans_to(M, reagents.total_volume, transfered_by = user)
+	qdel(src)
+	return TRUE
+
+
+/obj/item/reagent_containers/pill/afterattack(obj/target, mob/user , proximity)
+	. = ..()
+	if(!proximity)
+		return
+	if(!dissolvable || !target.is_refillable())
+		return
+	if(target.is_drainable() && !target.reagents.total_volume)
+		to_chat(user, span_warning("[target] is empty! There's nothing to dissolve [src] in."))
+		return
+
+	if(target.reagents.holder_full())
+		to_chat(user, span_warning("[target] is full."))
+		return
+
+	user.visible_message(span_warning("[user] slips something into [target]!"), span_notice("You dissolve [src] in [target]."), null, 2)
+	reagents.trans_to(target, reagents.total_volume, transfered_by = user)
+	qdel(src)
 
 /obj/item/reagent_containers/pill/tox
-	name = "Toxins pill"
+	name = "toxins pill"
 	desc = "Highly toxic."
 	icon_state = "pill5"
-	preloaded_reagents = list("toxin" = 50)
-
+	volume = 50
+	list_reagents = list(/datum/reagent/toxin = 50)
+	rename_with_volume = TRUE
 
 /obj/item/reagent_containers/pill/cyanide
-	name = "Cyanide pill"
+	name = "cyanide pill"
 	desc = "Don't swallow this."
 	icon_state = "pill5"
-	preloaded_reagents = list("cyanide" = 50)
+	volume = 50
+	list_reagents = list(/datum/reagent/toxin/cyanide = 50)
 
+/obj/item/reagent_containers/pill/iaa
+	name = "death pill"
+	desc = "Don't swallow this."
+	icon_state = "pill5"
+	volume = 50
+	list_reagents = list(/datum/reagent/toxin/cyanide = 20, /datum/reagent/toxin/initropidril = 15, /datum/reagent/toxin/coniine = 15)
 
 /obj/item/reagent_containers/pill/adminordrazine
-	name = "Adminordrazine pill"
+	name = "adminordrazine pill"
 	desc = "It's magic. We don't have to explain it."
 	icon_state = "pill16"
-	preloaded_reagents = list("adminordrazine" = 50)
+	volume = 5
+	grind_results = null
+	dissolvable = FALSE
+	list_reagents = list(/datum/reagent/medicine/adminordrazine = 5)
 
-/obj/item/reagent_containers/pill/stox
-	name = "Sleeping pill"
+/obj/item/reagent_containers/pill/morphine
+	name = "morphine pill"
 	desc = "Commonly used to treat insomnia."
 	icon_state = "pill8"
-	preloaded_reagents = list("stoxin" = 15)
+	volume = 30
+	list_reagents = list(/datum/reagent/medicine/morphine = 30)
+	rename_with_volume = TRUE
 
+/obj/item/reagent_containers/pill/stimulant
+	name = "stimulant pill"
+	desc = "Often taken by overworked employees, athletes, and the inebriated. You'll snap to attention immediately!"
+	icon_state = "pill19"
+	volume = 50
+	list_reagents = list(/datum/reagent/medicine/ephedrine = 10, /datum/reagent/medicine/antihol = 10, /datum/reagent/consumable/coffee/hot = 30)
 
-/obj/item/reagent_containers/pill/kelotane
-	name = "Kelotane pill"
-	desc = "Used to treat burns."
-	icon_state = "pill11"
-	preloaded_reagents = list("kelotane" = 15)
-
-
-/obj/item/reagent_containers/pill/paracetamol
-	name = "Paracetamol pill"
-	desc = "Tylenol! A painkiller for the ages. Chewables!"
-	icon_state = "pill8"
-	preloaded_reagents = list("paracetamol" = 15)
-
-
-/obj/item/reagent_containers/pill/tramadol
-	name = "Tramadol pill"
-	desc = "A simple painkiller."
-	icon_state = "pill8"
-	preloaded_reagents = list("tramadol" = 15)
-
-/obj/item/reagent_containers/pill/oxycodone
-	name = "Oxycodone pill"
-	desc = "The heavy artillery of painkillers."
-	icon_state = "pill8"
-	preloaded_reagents = list("oxycodone" = 10)
-
-
-/obj/item/reagent_containers/pill/methylphenidate
-	name = "Methylphenidate pill"
-	desc = "Improves the ability to concentrate."
-	icon_state = "pill8"
-	preloaded_reagents = list("methylphenidate" = 15)
-
-
-/obj/item/reagent_containers/pill/citalopram
-	name = "Citalopram pill"
-	desc = "Mild anti-depressant."
-	icon_state = "pill8"
-	preloaded_reagents = list("citalopram" = 15)
-
-/obj/item/reagent_containers/pill/suppressital
-	name = "Njoy pill"
-	desc = "Stops all breakdowns."
-	icon_state = "pill_njoy_red"
-	preloaded_reagents = list("suppressital" = 15)
-
-/obj/item/reagent_containers/pill/suppressital/red
-	name = "Njoy red pill"
-	desc = "Stops all breakdowns. Tastes faintly of cherry."
-	icon_state = "pill_njoy_red"
-	preloaded_reagents = list("suppressital" = 15, "cherryjelly" = 5)
-
-/obj/item/reagent_containers/pill/suppressital/blue
-	name = "Njoy blue pill"
-	desc = "Stops all breakdowns. Tastes faintly of blueberry."
-	icon_state = "pill_njoy_blue"
-	preloaded_reagents = list("suppressital" = 15, "berryjuice" = 5)
-
-/obj/item/reagent_containers/pill/suppressital/green
-	name = "Njoy green pill"
-	desc = "Stops all breakdowns. Tastes faintly of watermelon."
-	icon_state = "pill_njoy_green"
-	preloaded_reagents = list("suppressital" = 15, "watermelonjuice" = 5)
-
-
-/obj/item/reagent_containers/pill/inaprovaline
-	name = "Inaprovaline pill"
-	desc = "Used to stabilize patients."
-	icon_state = "pill20"
-	preloaded_reagents = list("inaprovaline" = 30)
-
-
-/obj/item/reagent_containers/pill/dexalin
-	name = "Dexalin pill"
+/obj/item/reagent_containers/pill/salbutamol
+	name = "salbutamol pill"
 	desc = "Used to treat oxygen deprivation."
 	icon_state = "pill16"
-	preloaded_reagents = list("dexalin" = 15)
+	volume = 30
+	list_reagents = list(/datum/reagent/medicine/salbutamol = 30)
+	rename_with_volume = TRUE
 
+/obj/item/reagent_containers/pill/charcoal
+	name = "charcoal pill"
+	desc = "Neutralizes many common toxins."
+	icon_state = "pill17"
+	list_reagents = list(/datum/reagent/medicine/charcoal = 10)
+	rename_with_volume = TRUE
 
-/obj/item/reagent_containers/pill/dexalin_plus
-	name = "Dexalin Plus pill"
-	desc = "Used to treat extreme oxygen deprivation."
-	icon_state = "pill8"
-	preloaded_reagents = list("dexalinp" = 15)
-
-
-/obj/item/reagent_containers/pill/dermaline
-	name = "Dermaline pill"
-	desc = "Used to treat burn wounds."
-	icon_state = "pill12"
-	preloaded_reagents = list("dermaline" = 15)
-
-
-/obj/item/reagent_containers/pill/dylovene
-	name = "Dylovene pill"
-	desc = "A broad-spectrum anti-toxin."
-	icon_state = "pill13"
-	preloaded_reagents = list("anti_toxin" = 15)
-
-/obj/item/reagent_containers/pill/carbon
-	name = "Carbon pill"
-	desc = "A pill of activated charcoal, used to purge stomach contents."
-	icon_state = "pill9"
-	preloaded_reagents = list("carbon" = 15)
-
-/obj/item/reagent_containers/pill/inaprovaline
-	name = "Inaprovaline pill"
+/obj/item/reagent_containers/pill/epinephrine
+	name = "epinephrine pill"
 	desc = "Used to stabilize patients."
+	icon_state = "pill5"
+	volume = 15
+	list_reagents = list(/datum/reagent/medicine/epinephrine = 15)
+	rename_with_volume = TRUE
+
+/obj/item/reagent_containers/pill/mannitol
+	name = "mannitol pill"
+	desc = "Used to treat brain damage."
+	icon_state = "pill17"
+	volume = 50
+	list_reagents = list(/datum/reagent/medicine/mannitol = 50)
+	rename_with_volume = TRUE
+
+/obj/item/reagent_containers/pill/mannitol/braintumor
+	volume = 20
+	list_reagents = list(/datum/reagent/medicine/mannitol = 20)
+
+/obj/item/reagent_containers/pill/mutadone
+	name = "mutadone pill"
+	desc = "Used to treat genetic damage."
 	icon_state = "pill20"
-	preloaded_reagents = list("inaprovaline" = 30)
+	volume = 50
+	list_reagents = list(/datum/reagent/medicine/mutadone = 50)
+	rename_with_volume = TRUE
 
+/obj/item/reagent_containers/pill/mutadone/five
+	list_reagents = list(/datum/reagent/medicine/mutadone = 5)
 
-/obj/item/reagent_containers/pill/bicaridine
-	name = "Bicaridine pill"
-	desc = "Used to treat physical injuries."
+/obj/item/reagent_containers/pill/salicylic
+	name = "salicylic acid pill"
+	desc = "Used to stimulate bruise healing."
+	icon_state = "pill9"
+	list_reagents = list(/datum/reagent/medicine/sal_acid = 5)
+	rename_with_volume = TRUE
+
+/obj/item/reagent_containers/pill/oxandrolone
+	name = "oxandrolone pill"
+	desc = "Used to stimulate burn healing."
+	icon_state = "pill11"
+	list_reagents = list(/datum/reagent/medicine/oxandrolone = 5)
+	rename_with_volume = TRUE
+
+/obj/item/reagent_containers/pill/insulin
+	name = "insulin pill"
+	desc = "Handles hyperglycaemic coma."
 	icon_state = "pill18"
-	preloaded_reagents = list("bicaridine" = 20)
+	volume = 50
+	list_reagents = list(/datum/reagent/medicine/insulin = 50)
+	rename_with_volume = TRUE
+
+/obj/item/reagent_containers/pill/psicodine
+	name = "psicodine pill"
+	desc = "Used to treat mental instability and phobias."
+	list_reagents = list(/datum/reagent/medicine/psicodine = 10)
+	icon_state = "pill22"
+	rename_with_volume = TRUE
+
+/obj/item/reagent_containers/pill/penacid
+	name = "pentetic acid pill"
+	desc = "Used to expunge radiation and toxins."
+	list_reagents = list(/datum/reagent/medicine/pen_acid = 10)
+	icon_state = "pill22"
+	rename_with_volume = TRUE
+
+/obj/item/reagent_containers/pill/neurine
+	name = "neurine pill"
+	desc = "Used to treat non-severe mental traumas."
+	list_reagents = list(/datum/reagent/medicine/neurine = 10)
+	icon_state = "pill22"
+	rename_with_volume = TRUE
+
+///////////////////////////////////////// this pill is used only in a legion mob drop
+/obj/item/reagent_containers/pill/shadowtoxin
+	name = "black pill"
+	desc = "I wouldn't eat this if I were you."
+	icon_state = "pill9"
+	color = "#454545"
+	list_reagents = list(/datum/reagent/mutationtoxin/shadow = 1)
+
+//////////////////////////////////////// drugs
+/obj/item/reagent_containers/pill/zoom
+	name = "yellow pill"
+	desc = "A poorly made canary-yellow pill; it is slightly crumbly."
+	volume = 21
+	list_reagents = list(/datum/reagent/medicine/synaptizine = 10, /datum/reagent/drug/nicotine = 10, /datum/reagent/drug/methamphetamine = 1)
+	icon_state = "pill7"
 
 
 /obj/item/reagent_containers/pill/happy
-	name = "Happy pill"
-	desc = "Happy happy joy joy!"
-	icon_state = "pill18"
-	preloaded_reagents = list("space_drugs" = 15, "sugar" = 15)
+	name = "happy pill"
+	desc = "They have little happy faces on them, and they smell like marker pens."
+	volume = 20
+	list_reagents = list(/datum/reagent/consumable/sugar = 10, /datum/reagent/drug/space_drugs = 10)
+	icon_state = "pill_happy"
 
 
-/obj/item/reagent_containers/pill/zoom
-	name = "Zoom pill"
-	desc = "Zoooom!"
-	icon_state = "pill18"
-	preloaded_reagents = list("impedrezene" = 10, "synaptizine" = 5, "hyperzine" = 5)
+/obj/item/reagent_containers/pill/lsd
+	name = "sunshine pill"
+	desc = "Engraved on this split-coloured pill is a half-sun, half-moon."
+	volume = 30
+	list_reagents = list(/datum/reagent/drug/mushroomhallucinogen = 15, /datum/reagent/toxin/mindbreaker = 15)
+	icon_state = "pill14"
 
 
-/obj/item/reagent_containers/pill/spaceacillin
-	name = "Spaceacillin pill"
-	desc = "Contains antiviral agents."
-	icon_state = "pill19"
-	preloaded_reagents = list("spaceacillin" = 15)
-
-
-/obj/item/reagent_containers/pill/prosurgeon
-	name = "ProSurgeon pill"
-	desc = "Contains a stimulating drug that is used to reduce tremor to minimum."
+/obj/item/reagent_containers/pill/aranesp
+	name = "smooth pill"
+	desc = "This blue pill feels slightly moist."
+	list_reagents = list(/datum/reagent/drug/aranesp = 10)
 	icon_state = "pill3"
-	preloaded_reagents = list("prosurgeon" = 10)
 
-/obj/item/reagent_containers/pill/meralyne
-	name = "Meralyne pill"
-	desc = "Contains a powerful medicine that is used to treat severe physical trauma."
-	icon_state = "pill3"
-	preloaded_reagents = list("meralyne" = 10)
+/obj/item/reagent_containers/pill/happiness
+	name = "happiness pill"
+	desc = "It has a creepy smiling face on it."
+	icon_state = "pill_happy"
+	list_reagents = list(/datum/reagent/drug/happiness = 10)
 
-//Pills with random content
 /obj/item/reagent_containers/pill/floorpill
-	name = "floor pill"
-	desc = "Dare you?"
-	rarity_value = 4
-	spawn_tags = SPAWN_TAG_JUNK
+	name = "floorpill"
+	desc = "A strange pill found in the depths of maintenance."
+	icon_state = "pill21"
+	var/static/list/names = list("maintenance pill","floorpill","mystery pill","suspicious pill","strange pill")
+	var/static/list/descs = list("Your feeling is telling you no, but...","Drugs are expensive, you can't afford not to eat any pills that you find."\
+	, "Surely, there's no way this could go bad.")
+	volume = 50
 
-/obj/item/reagent_containers/pill/floorpill/Initialize()
+/obj/item/reagent_containers/pill/floorpill/Initialize(mapload)
+	list_reagents = list(get_random_reagent_id() = rand(10,50))
 	. = ..()
+	name = pick(names)
+	if(prob(20))
+		desc = pick(descs)
 
-	var/random_reagent = pickweight(list(
-					list("spaceacillin" = 15) = 2,\
-					list("inaprovaline" = 30) = 2,\
-					list("anti_toxin" = 15) = 2,\
-					list("methylphenidate" = 15) = 2,\
-					list("paracetamol" = 15) = 2,\
-					list("dexalin" = 15) = 2,\
-					list("dexalinp" = 15) = 2,\
-					list("impedrezene" = 10, "synaptizine" = 5, "hyperzine" = 5, "citalopram" = 15) = 1,\
-					list("space_drugs" = 15, "sugar" = 15) = 1,\
-					list("dermaline" = 15, "citalopram" = 15) = 1,\
-					list("tramadol" = 15, "spaceacillin" = 15) = 1,\
-					list("blattedin" = 15) = 1,\
-					list("imidazoline" = 15, "space_drugs" = 15) = 1,\
-					list("ethylredoxrazine" = 15, "hyperzine" = 35) = 1,\
-					list("potassium_chlorophoride" = 15) = 1,\
-					list("mindbreaker" = 15, "synaptizine" = 5) = 1,\
-					list("plantbgone" = 15, "cleaner" = 15) = 1,\
-					list("coolant" = 50) = 1,\
-					list("fuel" = 50) = 1,\
-					list("water" = 15) = 1,\
-					list("sterilizine" = 50) = 1,\
-					list("tramadol" = 15, "sugar" = 15) = 1,\
-					list("thermite" = 15) = 1,\
-					list("lube" = 50) = 1,\
-					list("pacid" = 15) = 1,\
-					list("sacid" = 15) = 1,\
-					list("hclacid" = 15) = 1,\
-					list("impedrezene" = 15, "dexalinp" = 35) = 1,\
-					list("leporazine" = 15) = 1,\
-					list("anti_toxin" = 15, "zombiepowder" = 10) = 0.5,\
-					list("dexalinp" = 35, "cyanide" = 15) = 0.5,\
-					list("toxin" = 40, "cyanide" = 10) = 0.5))
+/obj/item/reagent_containers/pill/bica
+	name = "bicaridine pill"
+	desc = "Used heal bruises and cuts."
+	icon_state = "pill10"
+	volume = 14
+	list_reagents = list(/datum/reagent/medicine/bicaridine = 14)
 
-	for(var/reagent in random_reagent)
-		reagents.add_reagent(reagent, random_reagent[reagent])
+/obj/item/reagent_containers/pill/kelo
+	name = "kelotane pill"
+	desc = "Used to heal burns."
+	icon_state = "pill12"
+	volume = 14
+	list_reagents = list(/datum/reagent/medicine/kelotane = 14)
+
+/obj/item/reagent_containers/pill/libi
+	name = "libital pill"
+	desc = "Used heal bruises and cuts."
+	icon_state = "pill10"
+	volume = 14
+	list_reagents = list(/datum/reagent/medicine/c2/libital = 14)
+
+/obj/item/reagent_containers/pill/aiur
+	name = "aiuri pill"
+	desc = "Used to heal burns."
+	icon_state = "pill12"
+	volume = 14
+	list_reagents = list(/datum/reagent/medicine/c2/aiuri = 14)

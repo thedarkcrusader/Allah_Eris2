@@ -1,15 +1,7 @@
 import { createSearch } from 'common/string';
 import { filter, map, reduce, sortBy } from 'common/collections';
 import { useBackend, useLocalState } from '../backend';
-import {
-  Box,
-  Button,
-  Input,
-  NoticeBox,
-  Section,
-  Collapsible,
-  Table,
-} from '../components';
+import { Box, Button, Input, NoticeBox, Section, Collapsible, Table } from '../components';
 import { Window } from '../layouts';
 import { clamp } from 'common/math';
 import { flow } from 'common/fp';
@@ -68,7 +60,7 @@ function isRecipeList(value: Recipe | RecipeList): value is RecipeList {
  */
 const filterRecipeList = (
   list: RecipeList,
-  keyFilter: (key: string) => boolean,
+  keyFilter: (key: string) => boolean
 ) => {
   const filteredList: RecipeList = flow([
     map((entry: RecipeListEntry): RecipeListFilterableEntry => {
@@ -122,8 +114,7 @@ export const StackCrafting = (_props, context) => {
                 mx={1}
               />
             </>
-          }
-        >
+          }>
           {filteredRecipes ? (
             <RecipeListBox recipes={filteredRecipes} />
           ) : (
@@ -144,14 +135,14 @@ const RecipeListBox = (props: RecipeListProps) => {
         const recipe = recipes[title];
         if (isRecipeList(recipe)) {
           return (
-            <Collapsible ml={1} color="label" title={title}>
+            <Collapsible key={recipe.id} ml={1} color="label" title={title}>
               <Box ml={2}>
                 <RecipeListBox recipes={recipe} />
               </Box>
             </Collapsible>
           );
         } else {
-          return <RecipeBox title={title} recipe={recipe} />;
+          return <RecipeBox title={title} key={title} recipe={recipe} />;
         }
       })}
     </>
@@ -173,7 +164,7 @@ const Multipliers = (props: MultiplierProps, context) => {
 
   const maxM = Math.min(
     maxMultiplier,
-    Math.floor(recipe.max_res_amount / recipe.res_amount),
+    Math.floor(recipe.max_res_amount / recipe.res_amount)
   );
 
   const multipliers = [5, 10, 25];
@@ -191,7 +182,7 @@ const Multipliers = (props: MultiplierProps, context) => {
               multiplier: multiplier,
             })
           }
-        />,
+        />
       );
     }
   }
@@ -206,7 +197,7 @@ const Multipliers = (props: MultiplierProps, context) => {
             multiplier: maxM,
           })
         }
-      />,
+      />
     );
   }
 

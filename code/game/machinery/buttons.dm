@@ -1,198 +1,341 @@
 /obj/machinery/button
 	name = "button"
-	icon = 'icons/obj/machines/buttons.dmi'
-	icon_state = "launcher0"
-	desc = "A remote control switch for something."
+	desc = "A remote control switch."
+	icon = 'icons/obj/stationobjs.dmi'
+	icon_state = "doorctrl"
+	var/skin = "doorctrl"
+	power_channel = AREA_USAGE_ENVIRON
+	var/obj/item/assembly/device
+	var/obj/item/electronics/airlock/board
+	var/device_type = null
 	var/id = null
-	var/active = 0
-	var/operating = 0
-	anchored = TRUE
+	var/initialized_button = 0
+	light_power = 0.5 // Minimums, we want the button to glow if it has a mask, not light an area
+	light_range = 1.5
+	light_color = LIGHT_COLOR_VIVID_GREEN
+	armor = list(MELEE = 50, BULLET = 50, LASER = 50, ENERGY = 50, BOMB = 10, BIO = 100, RAD = 100, FIRE = 90, ACID = 70)
 	use_power = IDLE_POWER_USE
 	idle_power_usage = 2
-	active_power_usage = 4
-	var/_wifi_id
-	var/datum/wifi/sender/wifi_sender
+	resistance_flags = LAVA_PROOF | FIRE_PROOF
 
-/obj/machinery/button/Initialize()
+/obj/machinery/button/indestructible
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | UNACIDABLE | ACID_PROOF
+
+/obj/machinery/button/Initialize(mapload, ndir = 0, built = 0)
 	. = ..()
-	update_icon()
-	if(_wifi_id && !wifi_sender)
-		wifi_sender = new/datum/wifi/sender/button(_wifi_id, src)
+	if(built)
+		setDir(ndir)
+		pixel_x = (dir & 3)? 0 : (dir == 4 ? -24 : 24)
+		pixel_y = (dir & 3)? (dir ==1 ? -24 : 24) : 0
+		panel_open = TRUE
+		update_appearance()
 
-/obj/machinery/button/Destroy()
-	qdel(wifi_sender)
-	wifi_sender = null
-	return ..()
 
-/obj/machinery/button/attackby(obj/item/W, mob/user as mob)
-	return attack_hand(user)
+	if(!built && !device && device_type)
+		device = new device_type(src)
 
-/obj/machinery/button/attack_hand(mob/living/user)
-	if(..()) return 1
-	playsound(loc, 'sound/machines/button.ogg', 100, 1)
-	activate(user)
+	src.check_access(null)
 
-/obj/machinery/button/proc/activate(mob/living/user)
-	if(operating || !istype(wifi_sender))
+	if(req_access.len || req_one_access.len)
+		board = new(src)
+		if(req_access.len)
+			board.accesses = req_access
+		else
+			board.one_access = 1
+			board.accesses = req_one_access
+
+
+/obj/machinery/button/update_icon_state()
+	. = ..()
+	if(panel_open)
+		icon_state = "doorctrl-open"
+	else
+		if(stat & (NOPOWER|BROKEN))
+			icon_state = "[skin]-p"
+		else
+			icon_state = skin
+
+/obj/machinery/button/update_appearance()
+	. = ..()
+
+	if(panel_open || (stat & (NOPOWER|BROKEN)))
+		set_light(0)
+	else
+		set_light(initial(light_range), light_power, light_color)
+
+/obj/machinery/button/update_overlays()
+	. = ..()
+	if(!panel_open)
+		return
+	if(device)
+		. += "button-device"
+	if(board)
+		. += "button-board"
+
+/obj/machinery/button/attackby(obj/item/W, mob/living/user, params)
+	if(W.tool_behaviour == TOOL_SCREWDRIVER)
+		if(panel_open || allowed(user))
+			default_deconstruction_screwdriver(user, "doorctrl-open", "[skin]",W)
+			update_appearance()
+		else
+			to_chat(user, span_danger("Maintenance Access Denied"))
+			flick("[skin]-denied", src)
 		return
 
-	operating = 1
-	active = 1
-	use_power(5)
-	update_icon()
-	wifi_sender.activate(user)
-	sleep(10)
-	active = 0
-	update_icon()
-	operating = 0
+	if(panel_open)
+		if(!device && istype(W, /obj/item/assembly))
+			if(!user.transferItemToLoc(W, src))
+				to_chat(user, span_warning("\The [W] is stuck to you!"))
+				return
+			device = W
+			to_chat(user, span_notice("You add [W] to the button."))
 
-/obj/machinery/button/update_icon()
-	if(active)
-		icon_state = "launcher1"
-	else if(stat & (NOPOWER))
-		icon_state = "launcher-p"
-	else
-		icon_state = "launcher0"
+		if(!board && istype(W, /obj/item/electronics/airlock))
+			if(!user.transferItemToLoc(W, src))
+				to_chat(user, span_warning("\The [W] is stuck to you!"))
+				return
+			board = W
+			if(board.one_access)
+				req_one_access = board.accesses
+			else
+				req_access = board.accesses
+			to_chat(user, span_notice("You add [W] to the button."))
 
-//alternate button with the same functionality, except has a lightswitch sprite instead
-/obj/machinery/button/switch
-	icon_state = "light0"
+		if(!device && !board && W.tool_behaviour == TOOL_WRENCH)
+			to_chat(user, span_notice("You start unsecuring the button frame..."))
+			W.play_tool_sound(src)
+			if(W.use_tool(src, user, 4 SECONDS))
+				to_chat(user, span_notice("You unsecure the button frame."))
+				transfer_fingerprints_to(new /obj/item/wallframe/button(get_turf(src)))
+				playsound(loc, 'sound/items/deconstruct.ogg', 50, 1)
+				qdel(src)
 
-/obj/machinery/button/switch/update_icon()
-	icon_state = "light[active]"
+		if(W.tool_behaviour == TOOL_MULTITOOL)
+			if(istype(device, /obj/item/assembly/control)) // User Feedback
+				var/obj/item/assembly/control/controller = device
+				var/obj/item/multitool/P = W
+				if(controller.id)
+					id = controller.id
+				else if(!id) // Generate New ID if none exists
+					id = getnewid()
+					to_chat(user, span_notice("No ID found. Generating New ID"))
 
-//alternate button with the same functionality, except has a door control sprite instead
-/obj/machinery/button/alternate
-	icon_state = "doorctrl0"
+				multitool_set_buffer(user, W, id)
+				to_chat(user, span_notice("You link the button to the [P]."))
+				setup_device() // Has to be done. It sets the signaller up
+			else
+				to_chat(user, span_warning("No blast door controller found"))
 
-/obj/machinery/button/alternate/update_icon()
-	if(active)
-		icon_state = "doorctrl0"
-	else
-		icon_state = "doorctrl2"
+		if(board && W.tool_behaviour == TOOL_WIRECUTTER)
+			to_chat(user, span_warning("You start wiping the button's ID..."))
+			W.play_tool_sound(src)
+			if(W.use_tool(src, user, 4 SECONDS)) // To make sure they're not doing this unintentionally
+				to_chat(user, span_notice("You wipe the button's ID."))
+				id = null
 
-//Toggle button with two states (on and off) and calls seperate procs for each state
-/obj/machinery/button/toggle/activate(mob/living/user)
-	if(operating || !istype(wifi_sender))
+		update_appearance()
 		return
 
-	operating = 1
-	active = !active
+	if(!user.combat_mode && !(W.item_flags & NOBLUDGEON))
+		var/list/modifiers = params2list(params)
+		return attack_hand(user, modifiers)
+	else if(istype(W, /obj/item/airlock_scanner))		//yogs start
+		var/obj/item/airlock_scanner/S = W
+		S.show_access(src, user)					//yogs end
+	else
+		return ..()
+
+/obj/machinery/button/emag_act(mob/user, obj/item/card/emag/emag_card)
+	if(obj_flags & EMAGGED)
+		return FALSE
+	req_access = list()
+	req_one_access = list()
+	playsound(src, "sparks", 100, 1)
+	obj_flags |= EMAGGED
+	return TRUE
+	
+/obj/machinery/button/attack_ai(mob/user)
+	if(!panel_open)
+		return attack_hand(user)
+
+/obj/machinery/button/attack_robot(mob/user)
+	return attack_ai(user)
+
+/obj/machinery/button/proc/setup_device()
+	if(id && istype(device, /obj/item/assembly/control))
+		var/obj/item/assembly/control/A = device
+		A.id = id
+	initialized_button = 1
+
+/obj/machinery/button/connect_to_shuttle(mapload, obj/docking_port/mobile/port, obj/docking_port/stationary/dock)
+	if(id)
+		id = "[id]"
+		setup_device()
+
+/obj/machinery/button/attack_hand(mob/user, modifiers)
+	. = ..()
+	if(.)
+		return
+	if(!initialized_button)
+		setup_device()
+	add_fingerprint(user)
+	play_click_sound("button")
+	if(panel_open)
+		if(device || board)
+			if(device)
+				device.forceMove(drop_location())
+				device = null
+			if(board)
+				board.forceMove(drop_location())
+				req_access = list()
+				req_one_access = list()
+				board = null
+			update_appearance()
+			to_chat(user, span_notice("You remove electronics from the button frame."))
+
+		else
+			if(skin == "doorctrl")
+				skin = "launcher"
+			else
+				skin = "doorctrl"
+			to_chat(user, span_notice("You change the button frame's front panel."))
+		return
+
+	if((stat & (NOPOWER|BROKEN)))
+		return
+
+	if(device && device.next_activate > world.time)
+		return
+
+	if(!allowed(user))
+		to_chat(user, span_danger("Access Denied"))
+		flick("[skin]-denied", src)
+		return
+
 	use_power(5)
-	if(active)
-		wifi_sender.activate(user)
-	else
-		wifi_sender.deactivate(user)
-	update_icon()
-	operating = 0
+	icon_state = "[skin]1"
 
-//alternate button with the same toggle functionality, except has a lightswitch sprite instead
-/obj/machinery/button/toggle/switch
-	icon_state = "light0"
+	if(device)
+		device.pulsed()
 
-/obj/machinery/button/toggle/switch/update_icon()
-	icon_state = "light[active]"
+	addtimer(CALLBACK(src, TYPE_PROC_REF(/atom/, update_icon)), 15)
 
-//alternate button with the same toggle functionality, except has a door control sprite instead
-/obj/machinery/button/toggle/alternate
-	icon_state = "doorctrl0"
+/obj/machinery/button/door
+	name = "door button"
+	desc = "A door remote control switch."
+	var/normaldoorcontrol = FALSE
+	var/specialfunctions = OPEN // Bitflag, see assembly file
+	var/sync_doors = TRUE
 
-/obj/machinery/button/toggle/alternate/update_icon()
-	if(active)
-		icon_state = "doorctrl0"
-	else
-		icon_state = "doorctrl2"
+/obj/machinery/button/door/indestructible
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | UNACIDABLE | ACID_PROOF
 
-//-------------------------------
-// Mass Driver Button
-//  Passes the activate call to a mass driver wifi sender
-//-------------------------------
-/obj/machinery/button/mass_driver
+/obj/machinery/button/door/indestructible/allowed(mob/M)
+	if(IsAdminGhost(M))
+		//Access can't stop the abuse
+		return TRUE
+	return FALSE
+
+/obj/machinery/button/door/setup_device()
+	if(!device)
+		if(normaldoorcontrol)
+			var/obj/item/assembly/control/airlock/A = new(src)
+			A.specialfunctions = specialfunctions
+			device = A
+		else
+			var/obj/item/assembly/control/C = new(src)
+			C.sync_doors = sync_doors
+			device = C
+	..()
+
+/obj/machinery/button/door/incinerator_vent_toxmix
+	name = "combustion chamber vent control"
+	id = INCINERATOR_TOXMIX_VENT
+	req_access = list(ACCESS_TOXINS)
+
+/obj/machinery/button/door/incinerator_vent_atmos_main
+	name = "turbine vent control"
+	id = INCINERATOR_ATMOS_MAINVENT
+	req_one_access = list(ACCESS_ATMOSPHERICS)
+
+/obj/machinery/button/door/incinerator_vent_atmos_aux
+	name = "combustion chamber vent control"
+	id = INCINERATOR_ATMOS_AUXVENT
+	req_one_access = list(ACCESS_ATMOSPHERICS)
+
+/obj/machinery/button/door/incinerator_vent_syndicatelava_main
+	name = "turbine vent control"
+	id = INCINERATOR_SYNDICATELAVA_MAINVENT
+	req_access = list(ACCESS_SYNDICATE)
+
+/obj/machinery/button/door/incinerator_vent_syndicatelava_aux
+	name = "combustion chamber vent control"
+	id = INCINERATOR_SYNDICATELAVA_AUXVENT
+	req_access = list(ACCESS_SYNDICATE)
+
+/obj/machinery/button/massdriver
 	name = "mass driver button"
+	desc = "A remote control switch for a mass driver."
+	icon_state = "launcher"
+	skin = "launcher"
+	device_type = /obj/item/assembly/control/massdriver
 
-/obj/machinery/button/mass_driver/Initialize()
-	if(_wifi_id)
-		wifi_sender = new/datum/wifi/sender/mass_driver(_wifi_id, src)
-	. = ..()
+/obj/machinery/button/massdriver/indestructible
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | UNACIDABLE | ACID_PROOF
 
-/obj/machinery/button/mass_driver/activate(mob/living/user)
-	if(active || !istype(wifi_sender))
-		return
+/obj/machinery/button/ignition
+	name = "ignition switch"
+	desc = "A remote control switch for a mounted igniter."
+	icon_state = "launcher"
+	skin = "launcher"
+	device_type = /obj/item/assembly/control/igniter
 
-	active = 1
-	use_power(5)
-	update_icon()
-	wifi_sender.activate()
-	active = 0
-	update_icon()
+/obj/machinery/button/ignition/indestructible
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | UNACIDABLE | ACID_PROOF
 
+/obj/machinery/button/ignition/incinerator
+	name = "combustion chamber ignition switch"
+	desc = "A remote control switch for the combustion chamber's igniter."
 
-//-------------------------------
-// Door Button
-//-------------------------------
+/obj/machinery/button/ignition/incinerator/toxmix
+	id = INCINERATOR_TOXMIX_IGNITER
 
-// Bitmasks for door switches.
-#define OPEN   0x1
-#define IDSCAN 0x2
-#define BOLTS  0x4
-#define SHOCK  0x8
-#define SAFE   0x10
+/obj/machinery/button/ignition/incinerator/atmos
+	id = INCINERATOR_ATMOS_IGNITER
 
-/obj/machinery/button/toggle/door
-	icon_state = "doorctrl0"
+/obj/machinery/button/ignition/incinerator/syndicatelava
+	id = INCINERATOR_SYNDICATELAVA_IGNITER
 
-	var/_door_functions = 1
-/*	Bitflag, 	1 = open
-				2 = idscan
-				4 = bolts
-				8 = shock
-				16 = door safties  */
+/obj/machinery/button/flasher
+	name = "flasher button"
+	desc = "A remote control switch for a mounted flasher."
+	icon_state = "launcher"
+	skin = "launcher"
+	device_type = /obj/item/assembly/control/flasher
 
-/obj/machinery/button/toggle/door/update_icon()
-	if(active)
-		icon_state = "doorctrl0"
-	else
-		icon_state = "doorctrl2"
+/obj/machinery/button/flasher/indestructible
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | UNACIDABLE | ACID_PROOF
 
-/obj/machinery/button/toggle/door/Initialize()
-	if(_wifi_id)
-		wifi_sender = new/datum/wifi/sender/door(_wifi_id, src)
-	. = ..()
+/obj/machinery/button/crematorium
+	name = "crematorium igniter"
+	desc = "Burn baby burn!"
+	icon_state = "launcher"
+	skin = "launcher"
+	device_type = /obj/item/assembly/control/crematorium
+	req_access = list()
+	id = 1
 
-/obj/machinery/button/toggle/door/activate(mob/living/user)
-	if(operating || !istype(wifi_sender))
-		return
+/obj/machinery/button/crematorium/indestructible
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | UNACIDABLE | ACID_PROOF
 
-	operating = 1
-	active = !active
-	use_power(5)
-	update_icon()
-	if(active)
-		if(_door_functions & IDSCAN)
-			wifi_sender.activate("enable_idscan")
-		if(_door_functions & SHOCK)
-			wifi_sender.activate("electrify")
-		if(_door_functions & SAFE)
-			wifi_sender.activate("enable_safeties")
-		if(_door_functions & BOLTS)
-			wifi_sender.activate("unlock")
-		if(_door_functions & OPEN)
-			wifi_sender.activate("open")
-	else
-		if(_door_functions & IDSCAN)
-			wifi_sender.activate("disable_idscan")
-		if(_door_functions & SHOCK)
-			wifi_sender.activate("unelectrify")
-		if(_door_functions & SAFE)
-			wifi_sender.activate("disable_safeties")
-		if(_door_functions & OPEN)
-			wifi_sender.activate("close")
-		if(_door_functions & BOLTS)
-			wifi_sender.activate("lock")
-	operating = 0
+/obj/machinery/button/holosign
+	name = "holosign button"
+	desc = "A remote control switch for a holosign."
+	device_type = /obj/item/assembly/control/holosign
 
-#undef OPEN
-#undef IDSCAN
-#undef BOLTS
-#undef SHOCK
-#undef SAFE
+/obj/item/wallframe/button
+	name = "button frame"
+	desc = "Used for building buttons."
+	icon_state = "doorctrl"
+	result_path = /obj/machinery/button
+	materials = list(/datum/material/iron=MINERAL_MATERIAL_AMOUNT)

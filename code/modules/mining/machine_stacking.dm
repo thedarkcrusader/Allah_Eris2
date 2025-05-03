@@ -4,123 +4,183 @@
 	name = "stacking machine console"
 	icon = 'icons/obj/machines/mining_machines.dmi'
 	icon_state = "console"
-	density = TRUE
-	anchored = TRUE
-	var/obj/machinery/mineral/stacking_machine/machine = null
+	desc = "Controls a stacking machine... in theory."
+	density = FALSE
+	circuit = /obj/item/circuitboard/machine/stacking_unit_console
+	var/obj/machinery/mineral/stacking_machine/machine
+	var/machinedir = SOUTHEAST
 
-/obj/machinery/mineral/stacking_unit_console/New()
-	..()
+/obj/machinery/mineral/stacking_unit_console/Initialize(mapload)
+	. = ..()
+	machine = locate(/obj/machinery/mineral/stacking_machine, get_step(src, machinedir))
+	if (machine)
+		machine.console = src
 
-	spawn()
-		src.machine = locate(/obj/machinery/mineral/stacking_machine) in range(3, src)
-		if (machine)
-			machine.console = src
-		else
-			log_debug("[src] ([x],[y],[z]) can't find coresponding staking unit.")
+/obj/machinery/mineral/stacking_unit_console/ui_interact(mob/user)
+	. = ..()
 
-/obj/machinery/mineral/stacking_unit_console/attack_hand(mob/user)
-	add_fingerprint(user)
-	interact(user)
+	if(!machine)
+		to_chat(user, span_notice("[src] is not linked to a machine!"))
+		return
 
-/obj/machinery/mineral/stacking_unit_console/interact(mob/user)
-	user.set_machine(src)
+	var/obj/item/stack/sheet/s
+	var/dat = text("<HTML><HEAD><meta charset='UTF-8'></HEAD><BODY>")
 
-	var/dat
+	dat += text("<b>Stacking unit console</b><br><br>")
 
-	dat += text("<h1>Stacking unit console</h1><hr><table>")
+	for(var/O in machine.stack_list)
+		s = machine.stack_list[O]
+		if(s.amount > 0)
+			dat += text("[capitalize(s.name)]: [s.amount] <A href='byond://?src=[REF(src)];release=[s.type]'>Release</A><br>")
 
-	for(var/stacktype in machine.stack_storage)
-		if(machine.stack_storage[stacktype] > 0)
-			var/display_name = material_display_name(stacktype) //Added to allow non-standard minerals to have proper names in the machine.
-			dat += "<tr><td width = 150><b>[capitalize(display_name)]:</b></td><td width = 30>[machine.stack_storage[stacktype]]</td><td width = 50><A href='?src=\ref[src];release_stack=[stacktype]'>\[release\]</a></td></tr>"
-	dat += "</table><hr>"
-	dat += text("<br>Stacking: [machine.stack_amt] <A href='?src=\ref[src];change_stack=1'>\[change\]</a><br><br>")
-	user << browse("[dat]", "window=console_stacking_machine")
-	onclose(user, "console_stacking_machine")
+	dat += text("<br>Stacking: [machine.stack_amt]<br><br>")
 
+	dat += text("</BODY></HTML>")
+
+	user << browse(dat, "window=console_stacking_machine")
+
+/obj/machinery/mineral/stacking_unit_console/multitool_act(mob/living/user, obj/item/I)
+	if(!multitool_check_buffer(user, I))
+		return
+	multitool_set_buffer(user, I, src)
+	to_chat(user, span_notice("You store linkage information in [I]'s buffer."))
+	return TRUE
 
 /obj/machinery/mineral/stacking_unit_console/Topic(href, href_list)
 	if(..())
-		return 1
+		return
+	usr.set_machine(src)
+	src.add_fingerprint(usr)
+	if(href_list["release"])
+		if(!(text2path(href_list["release"]) in machine.stack_list))
+			return //someone tried to spawn materials by spoofing hrefs
+		var/obj/item/stack/sheet/inp = machine.stack_list[text2path(href_list["release"])]
+		var/obj/item/stack/sheet/out = new inp.type(null, inp.amount)
+		inp.amount = 0
+		machine.unload_mineral(out)
 
-	if(href_list["change_stack"])
-		var/choice = input("What would you like to set the stack amount to?") as null|anything in list(1,5,10,20,50,120)
-		if(!choice) return
-		machine.stack_amt = choice
-
-	if(href_list["release_stack"])
-		var/material_name = href_list["release_stack"]
-		machine.outputMaterial(material_name, machine.stack_amt)
-
-	playsound(loc, 'sound/machines/machine_switch.ogg', 100, 1)
 	src.updateUsrDialog()
+	return
+
+/obj/machinery/mineral/stacking_unit_console/attackby(obj/item/W, mob/user, params)
+	if(default_deconstruction_screwdriver(user, "console-open", "console", W))
+		updateUsrDialog()
+		return
+	if(default_deconstruction_crowbar(W))
+		return
+	return ..()
 
 /**********************Mineral stacking unit**************************/
-
+#define INPUT 0
+#define OUTPUT 1
 
 /obj/machinery/mineral/stacking_machine
 	name = "stacking machine"
 	icon = 'icons/obj/machines/mining_machines.dmi'
 	icon_state = "stacker"
+	desc = "A machine that automatically stacks acquired materials. Controlled by a nearby console."
 	density = TRUE
-	anchored = TRUE
+	circuit = /obj/item/circuitboard/machine/stacking_machine
+	input_dir = EAST
+	output_dir = WEST
 	var/obj/machinery/mineral/stacking_unit_console/console
-	var/input_dir = null
-	var/output_dir = null
-	var/list/stack_storage
-	var/stack_amt = 120 // Amount to stack before releassing
+	var/stk_types = list()
+	var/stk_amt   = list()
+	var/stack_list[0] //Key: Type.  Value: Instance of type.
+	var/stack_amt = 50 //amount to stack before releassing
+	var/datum/component/remote_materials/materials
+	var/force_connect = FALSE
+	var/io = INPUT //This is used for determining whether we change the Input or Output
 
-/obj/machinery/mineral/stacking_machine/Initialize(mapload, d)
+
+/obj/machinery/mineral/stacking_machine/examine(mob/user)
 	. = ..()
-	stack_storage = new
+	. += "<span class='notice'>Currently outputting stacks at <b>[stack_amt] sheet[(stack_amt > 1) ? "s" : ""]</b><span>"
+	if(panel_open)
+		. += "The I/O is set to change <b>[io ? "output" : "input"]</b> currently."
+		. += "Input is <b>[dir2text(input_dir)]</b>"
+		. += "Output is <b>[dir2text(output_dir)]</b>."
+		. += "There is a dial that can be <b>turned by hand</b> to change direction."
+		. += "The I/O setting can be <b>changed with a multitool</b> to change what the dial controls."
+		. += "There are some <b>bolts</b> to limit stack size."
 
-	//TODO: Make this dynamic based on detecting conveyor belts or something. Maybe an interface to manually configure it
-	//These markers delete themselves on initialize so the machine can never be properly rebuilt during a round. This is bad.
-	input_dir = NORTH //Sensible default so that the machine can at least be replaced in the same location
-	output_dir = SOUTH
-	return INITIALIZE_HINT_LATELOAD
-
-/obj/machinery/mineral/stacking_machine/LateInitialize()
+/obj/machinery/mineral/stacking_machine/Initialize(mapload)
 	. = ..()
-	//Locate our output and input machinery.
-	var/obj/marker
-	marker = locate(/obj/landmark/machinery/input) in range(1, loc)
-	if(marker)
-		input_dir = get_dir(src, marker)
-	marker = locate(/obj/landmark/machinery/output) in range(1, loc)
-	if(marker)
-		output_dir = get_dir(src, marker)
+	proximity_monitor = new(src, 1)
+	materials = AddComponent(/datum/component/remote_materials, "stacking", mapload, FALSE, mapload && force_connect)
 
-/obj/machinery/mineral/stacking_machine/proc/outputMaterial(var/material_name, var/amount)
-	var/stored_amount = stack_storage[material_name] || 0
-	amount = min(stored_amount, amount)
-	if (amount > 0)
-		stack_storage[material_name] -= amount
-		var/stacktype = material_stack_type(material_name)
-		new stacktype (get_step(src, output_dir), amount)
-		flick("stacker_eject", src)
+/obj/machinery/mineral/stacking_machine/HasProximity(atom/movable/AM)
+	if(panel_open || (stat & (BROKEN|NOPOWER)))
+		return
+	if(istype(AM, /obj/item/stack/sheet) && AM.loc == get_step(src, input_dir))
+		process_sheet(AM)
 
-/obj/machinery/mineral/stacking_machine/Process()
-	if (src.output_dir && src.input_dir)
-		var/turf/T = get_step(src, input_dir)
-		for (var/obj/item/O in T.contents)
-			if (istype(O))
-				if (istype(O, /obj/item/stack/material))
-					var/obj/item/stack/material/M = O
-					if (M.material && M.material.name)
-						var/material_name = M.material.name
-						var/stack_amount = M.amount
-						var/stored_amount = stack_storage[material_name] || 0
-						stack_storage[material_name] = stored_amount + stack_amount
-						qdel(M)
-					else
-						M.forceMove(get_step(src, output_dir))
-				else
-					O.forceMove(get_step(src, output_dir))
+/obj/machinery/mineral/stacking_machine/proc/process_sheet(obj/item/stack/sheet/inp)
+	var/key = inp.merge_type
+	var/obj/item/stack/sheet/storage = stack_list[key]
+	if(!storage) //It's the first of this sheet added
+		stack_list[key] = storage = new inp.type(src, 0)
+	storage.amount += inp.amount //Stack the sheets
+	qdel(inp)
 
-	//Output amounts that are past stack_amt.
-	for (var/material_name in stack_storage)
-		if (stack_storage[material_name] >= stack_amt)
-			outputMaterial(material_name, stack_amt)
+	if(materials.silo && !materials.on_hold()) //Dump the sheets to the silo
+		var/matlist = storage.materials & materials.mat_container.materials
+		if (length(matlist))
+			var/inserted = materials.mat_container.insert_stack(storage)
+			materials.silo_log(src, "collected", inserted, "sheets", matlist)
+			if (QDELETED(storage))
+				stack_list -= key
+			return
 
-	console.updateUsrDialog()
+	while(storage.amount >= stack_amt) //Get rid of excessive stackage
+		var/obj/item/stack/sheet/out = new inp.type(null, stack_amt)
+		unload_mineral(out)
+		storage.amount -= stack_amt
+
+/obj/machinery/mineral/stacking_machine/attackby(obj/item/W, mob/user, params)
+	if(default_deconstruction_screwdriver(user, "stacker-open", "stacker", W))
+		updateUsrDialog()
+		return
+	if(default_deconstruction_crowbar(W))
+		return
+
+	if(!powered())
+		return
+
+	if(W.tool_behaviour == TOOL_WRENCH && panel_open)
+		var/stsize = input(user, "How much should [src] stack to? (1-50)", "Stack size") as null|num
+		if(stsize)
+			stack_amt = clamp(stsize,1,50)
+			to_chat(user, "<span class='notice'>[src] is now set to output <b>[stack_amt] sheet[(stack_amt > 1) ? "s" : ""]</b><span>")
+			return
+
+	return ..()
+
+/obj/machinery/mineral/stacking_machine/attack_hand(mob/user)
+	if(!panel_open)
+		return ..()
+	if(io == INPUT)
+		input_dir = turn(input_dir, -90)
+		if(input_dir == output_dir) //Input and output can't be the same or you create the immovable sheet.
+			input_dir = turn(input_dir, -90)
+		to_chat(user, span_notice("You set [src]'s input to take from the [dir2text(input_dir)]."))
+		return
+	else if (io == OUTPUT)
+		output_dir = turn(output_dir, -90)
+		if(input_dir == output_dir)
+			output_dir = turn(output_dir, -90)
+		to_chat(user, span_notice("You set [src]'s output to drop stacks [dir2text(output_dir)]."))
+		return
+	return ..()
+
+/obj/machinery/mineral/stacking_machine/multitool_act(mob/living/user, obj/item/multitool/M)
+	var/atom/buffer_atom = multitool_get_buffer(user, M)
+	if(istype(buffer_atom, /obj/machinery/mineral/stacking_unit_console) && !panel_open)
+		console = buffer_atom
+		console.machine = src
+		to_chat(user, span_notice("You link [src] to the console in [M]'s buffer."))
+		return TRUE
+	if(panel_open)
+		io = !io
+		to_chat(user, span_notice("You set the I/O to change [io ? "output" : "input"]."))
+		return TRUE

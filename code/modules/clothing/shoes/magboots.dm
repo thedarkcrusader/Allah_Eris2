@@ -1,60 +1,77 @@
 /obj/item/clothing/shoes/magboots
-	desc = "Magnetic boots, often used during extravehicular activity to ensure the user remains safely attached to the vehicle. They're large enough to be worn over other footwear."
+	desc = "Magnetic boots, often used during extravehicular activity to ensure the user remains safely attached to the vehicle."
 	name = "magboots"
 	icon_state = "magboots0"
-	species_restricted = null
-	force = WEAPON_FORCE_WEAK
-	overslot = 1
-	action_button_name = "Toggle Magboots"
-	siemens_coefficient = 0 // DAMN BOI
-	//This armor only applies to legs
-	style = STYLE_NEG_LOW
-	spawn_blacklisted = TRUE
-	var/magpulse = FALSE
-	var/mag_slow = 3
-	var/icon_base = "magboots"
+	var/magboot_state = "magboots"
+	var/magpulse = 0
+	var/slowdown_active = 2
+	armor = list(MELEE = 0, BULLET = 0, LASER = 0, ENERGY = 0, BOMB = 0, BIO = 60, RAD = 0, FIRE = 0, ACID = 0, ELECTRIC = 100)
+	actions_types = list(/datum/action/item_action/toggle)
+	strip_delay = 70
+	equip_delay_other = 70
+	resistance_flags = FIRE_PROOF
+	cryo_preserve = TRUE
 
-/obj/item/clothing/shoes/magboots/proc/set_slowdown()
-	var/obj/item/clothing/shoes/shoes = overslot_contents
-	slowdown = shoes? max(SHOES_SLOWDOWN, shoes.slowdown): SHOES_SLOWDOWN	//So you can't put on magboots to make you walk faster.
-	if (magpulse)
-		slowdown += mag_slow
+/obj/item/clothing/shoes/magboots/verb/toggle()
+	set name = "Toggle Magboots"
+	set category = "Object"
+	set src in usr
+	if(!can_use(usr))
+		return
+	attack_self(usr)
+
 
 /obj/item/clothing/shoes/magboots/attack_self(mob/user)
 	if(magpulse)
-		item_flags &= ~NOSLIP
-		magpulse = FALSE
-		set_slowdown()
-		force = WEAPON_FORCE_WEAK
-		if(icon_base) icon_state = "[icon_base]0"
-		to_chat(user, "You disable the mag-pulse traction system.")
+		clothing_flags &= ~NOSLIP
+		slowdown = SHOES_SLOWDOWN
 	else
-		item_flags |= NOSLIP
-		magpulse = TRUE
-		set_slowdown()
-		force = WEAPON_FORCE_PAINFUL
-		if(icon_base) icon_state = "[icon_base]1"
-		to_chat(user, "You enable the mag-pulse traction system.")
+		clothing_flags |= NOSLIP
+		slowdown = slowdown_active
+	magpulse = !magpulse
+	icon_state = "[magboot_state][magpulse]"
+	to_chat(user, span_notice("You [magpulse ? "enable" : "disable"] the mag-pulse traction system."))
 	user.update_inv_shoes()	//so our mob-overlays update
-	user.update_action_buttons()
-	user.update_floating()
+	user.update_gravity(user.has_gravity())
+	for(var/X in actions)
+		var/datum/action/A = X
+		A.build_all_button_icons()
 
-/obj/item/clothing/shoes/magboots/examine(mob/user, extra_description = "")
-	extra_description += "Mag-pulse traction system appears to be [(item_flags & NOSLIP) ? "enabled" : "disabled"]."
-	..(user, extra_description)
+/obj/item/clothing/shoes/magboots/negates_gravity()
+	return clothing_flags & NOSLIP
 
-/*
-	Used by mercenaries
-*/
-/obj/item/clothing/shoes/magboots/merc
-	name = "military magboots"
-	desc = "Sturdy hiking boots with powerful magnetic soles. Useful in or out of a vessel."
-	icon_state = "mercboots"
-	item_flags = NOSLIP|DRAG_AND_DROP_UNEQUIP
-	species_restricted = null
-	force = WEAPON_FORCE_PAINFUL
-	overslot = FALSE
-	magpulse = FALSE
-	mag_slow = 0
-	icon_base = null
-	can_hold_knife = TRUE
+/obj/item/clothing/shoes/magboots/examine(mob/user)
+	. = ..()
+	. += "Its mag-pulse traction system appears to be [magpulse ? "enabled" : "disabled"]."
+
+
+/obj/item/clothing/shoes/magboots/advance
+	desc = "Advanced magnetic boots that have a lighter magnetic pull, placing less burden on the wearer."
+	name = "advanced magboots"
+	icon_state = "advmag0"
+	magboot_state = "advmag"
+	slowdown_active = SHOES_SLOWDOWN
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | ACID_PROOF
+
+/obj/item/clothing/shoes/magboots/advance/attack_self(mob/user)
+	. = ..()
+	if(magpulse)
+		clothing_flags &= ~NOSLIP | ~NOSLIP_ICE
+
+/obj/item/clothing/shoes/magboots/syndie
+	desc = "Reverse-engineered magnetic boots that have a heavy magnetic pull. Property of Gorlex Marauders."
+	name = "blood-red magboots"
+	icon_state = "syndiemag0"
+	magboot_state = "syndiemag"
+
+/obj/item/clothing/shoes/magboots/syndie/attack_self(mob/user)
+	. = ..()
+	if(magpulse)
+		clothing_flags &= ~NOSLIP | ~NOSLIP_ICE
+
+/obj/item/clothing/shoes/magboots/security
+	name = "combat magboots"
+	desc = "Combat-edition magboots issued by Nanotrasen Security for extravehicular missions."
+	icon_state = "cmagboots0"
+	magboot_state = "cmagboots"
+	slowdown_active = 1

@@ -1,242 +1,93 @@
 /***************************************************************
 **						Design Datums						  **
-**	All the data for building stuff and tracking reliability. **
+**	All the data for building stuff.						  **
 ***************************************************************/
 /*
 For the materials datum, it assumes you need reagents unless specified otherwise. To designate a material that isn't a reagent,
 you use one of the material IDs below. These are NOT ids in the usual sense (they aren't defined in the object or part of a datum),
-they are simply references used as part of a "has materials?" type proc. They all start with a  to denote that they aren't reagents.
-The currently supporting non-reagent materials:
+they are simply references used as part of a "has materials?" type proc. They all start with a $ to denote that they aren't reagents.
+The currently supporting non-reagent materials. All material amounts are set as the define MINERAL_MATERIAL_AMOUNT, which defaults to 2000
 
 Don't add new keyword/IDs if they are made from an existing one (such as rods which are made from metal). Only add raw materials.
 
-Design Guidlines
+Design Guidelines
 - When adding new designs, check rdreadme.dm to see what kind of things have already been made and where new stuff is needed.
-- A single sheet of anything is 1 unit of material. Materials besides metal/glass require help from other jobs (mining for
+- A single sheet of anything is 2000 units of material. Materials besides metal/glass require help from other jobs (mining for
 other types of metals and chemistry for reagents).
-
+- Add the AUTOLATHE tag to
 */
 
+//DESIGNS ARE GLOBAL. DO NOT CREATE OR DESTROY THEM AT RUNTIME OUTSIDE OF INIT, JUST REFERENCE THEM TO WHATEVER YOU'RE DOING! //why are you yelling?
+//DO NOT REFERENCE OUTSIDE OF SSRESEARCH. USE THE PROCS IN SSRESEARCH TO OBTAIN A REFERENCE.
 
-/datum/design/research				//Datum for object designs, used in construction
-	starts_unlocked = FALSE
+/datum/design						//Datum for object designs, used in construction
+	var/name = "Name"					//Name of the created object.
+	var/desc = "Desc"					//Description of the created object.
+	var/id = DESIGN_ID_IGNORE						//ID of the created object for easy refernece. Alphanumeric, lower-case, no symbols
+	var/build_type = null				//Flag as to what kind machine the design is built in. See defines.
+	var/list/materials = list()			//List of materials. Format: "id" = amount.
+	var/construction_time				//Amount of time required for building the object
+	var/build_path = null				//The file path of the object that gets created
+	var/list/make_reagents = list()			//Reagents produced. Format: "id" = amount. Currently only supported by the biogenerator.
+	var/list/category = null 			//Primarily used for Mech Fabricators, but can be used for anything
+	var/list/reagents_list = list()			//List of reagents. Format: "id" = amount.
+	var/maxstack = 1
+	var/lathe_time_factor = 1			//How many times faster than normal is this to build on the protolathe
+	var/dangerous_construction = FALSE	//notify and log for admin investigations if this is printed.
+	var/departmental_flags = ALL			//bitflags for deplathes.
+	var/list/datum/techweb_node/unlocked_by = list()
+	var/research_icon					//Replaces the item icon in the research console
+	var/research_icon_state
+	var/icon_cache
+	/// Optional string that interfaces can use as part of search filters. See- item/borg/upgrade/ai and the Exosuit Fabs.
+	var/search_metadata
+	var/combat_design = FALSE // Limit the mechfab producing these
 
-/datum/design/research/item
-	category = "Misc" //We default to misc so that we are sorted
-	build_type = AUTOLATHE | PROTOLATHE
+/datum/design/error_design
+	name = "ERROR"
+	desc = "This usually means something in the database has corrupted. If this doesn't go away automatically, inform Central Comamnd so their techs can fix this ASAP(tm)"
 
-/datum/design/research/item/mechfab
-	build_type = MECHFAB
-	category = "Misc"
+/datum/design/Destroy()
+	SSresearch.techweb_designs -= id
+	return ..()
 
-/datum/design/research/item/flash
-	name = "flash"
-	build_type = AUTOLATHE | MECHFAB
-	build_path = /obj/item/device/flash
-	category = "Misc"
+/datum/design/proc/InitializeMaterials()
+	var/list/temp_list = list()
+	for(var/i in materials) //Go through all of our materials, get the subsystem instance, and then replace the list.
+		var/amount = materials[i]
+		if(!istext(i)) //Not a category, so get the ref the normal way
+			var/datum/material/M =  getmaterialref(i)
+			temp_list[M] = amount
+		else
+			temp_list[i] = amount
+	materials = temp_list
 
-/datum/design/research/item/science_tool
-	name = "science tool"
-	build_path = /obj/item/device/science_tool
+/datum/design/proc/icon_html(client/user)
+	var/datum/asset/spritesheet/sheet = get_asset_datum(/datum/asset/spritesheet/research_designs)
+	sheet.send(user)
+	return sheet.icon_tag(id)
 
-/datum/design/research/item/hud
-	name_category = "HUD glasses"
+////////////////////////////////////////
+//Disks for transporting design datums//
+////////////////////////////////////////
 
-/datum/design/research/item/hud/health
-	name = "health scanner"
-	build_path = /obj/item/clothing/glasses/hud/health
-	sort_string = "GAAAA"
-	category = "Medical"
+/obj/item/disk/design_disk
+	name = "Component Design Disk"
+	desc = "A disk for storing device design data for construction in lathes."
+	icon_state = "datadisk1"
+	materials = list(/datum/material/iron=300, /datum/material/glass=100)
+	var/list/blueprints = list()
+	var/max_blueprints = 1
 
-/datum/design/research/item/hud/security
-	name = "security records"
-	build_path = /obj/item/clothing/glasses/hud/security
-	sort_string = "GAAAB"
+/obj/item/disk/design_disk/Initialize(mapload)
+	. = ..()
+	pixel_x = rand(-5, 5)
+	pixel_y = rand(-5, 5)
+	for(var/i in 1 to max_blueprints)
+		blueprints += null
 
-/datum/design/research/item/medical
-	name_category = "biotech device prototype"
-	category = "Medical"
-
-/datum/design/research/item/medical/robot_scanner
-	desc = "A hand-held scanner able to diagnose robotic injuries."
-	build_path = /obj/item/device/robotanalyzer
-	sort_string = "MACFA"
-
-/datum/design/research/item/medical/mass_spectrometer
-	desc = "A device for analyzing chemicals in blood."
-	build_path = /obj/item/device/scanner/mass_spectrometer
-	sort_string = "MACAA"
-
-/datum/design/research/item/medical/adv_mass_spectrometer
-	desc = "A device for analyzing chemicals in blood and their quantities."
-	build_path = /obj/item/device/scanner/mass_spectrometer/adv
-	sort_string = "MACAB"
-
-/datum/design/research/item/medical/reagent_scanner
-	desc = "A device for identifying chemicals."
-	build_path = /obj/item/device/scanner/reagent
-	sort_string = "MACBA"
-
-/datum/design/research/item/medical/adv_reagent_scanner
-	desc = "A device for identifying chemicals and their proportions."
-	build_path = /obj/item/device/scanner/reagent/adv
-	sort_string = "MACBB"
-
-/datum/design/research/item/beaker
-	name_category = "beaker prototype"
-	category = "Medical"
-
-/datum/design/research/item/beaker/noreact
-	name = "cryostasis"
-	desc = "A cryostasis beaker that allows for chemical storage without reactions. Can hold up to 50 units."
-	build_path = /obj/item/reagent_containers/glass/beaker/noreact
-	sort_string = "MADAA"
-
-/datum/design/research/item/beaker/bluespace
-	name = "bluespace"
-	desc = "A bluespace beaker, powered by experimental bluespace technology and Element Cuban combined with the Compound Pete. Can hold up to 300 units."
-	build_path = /obj/item/reagent_containers/glass/beaker/bluespace
-	sort_string = "MADAB"
-
-/datum/design/research/item/medical/nanopaste
-	desc = "A tube of paste containing swarms of repair nanites. Very effective in repairing robotic machinery."
-	build_path = /obj/item/stack/nanopaste
-	sort_string = "MBAAA"
-	chemicals = list("nanites" = 5)
-
-/datum/design/research/item/scalpel_laser
-	desc = "A scalpel augmented with a directed laser, for more precise cutting without blood entering the field."
-	build_path = /obj/item/tool/scalpel/laser
-	category = "Medical"
-	sort_string = "MBBAA"
-
-/datum/design/research/item/makeshift_centrifuge
-	name = "Portable centrifuge"
-	desc = "A centrifuge with manual mechanism."
-	build_path = /obj/item/device/makeshift_centrifuge
-	category = "Medical"
-	sort_string = "MBBAA"
-
-/datum/design/research/item/light_replacer
-	name = "light replacer"
-	desc = "A device to automatically replace lights. Refill with working lightbulbs."
-	build_path = /obj/item/device/lightreplacer
-	sort_string = "VAAAH"
-
-/datum/design/research/item/paicard
-	name = "'pAI', personal artificial intelligence device"
-	build_path = /obj/item/device/paicard
-	sort_string = "VABAI"
-
-/datum/design/research/item/intellicard
-	name = "'intelliCard', AI preservation and transportation system"
-	desc = "Allows for the construction of an intelliCard."
-	build_path = /obj/item/device/aicard
-	sort_string = "VACAA"
-
-/datum/design/research/item/posibrain
-	name = "Positronic brain"
-	build_type = PROTOLATHE | MECHFAB
-	build_path = /obj/item/device/mmi/digital/posibrain
-	category = "Medical"
-	sort_string = "VACAB"
-
-/datum/design/research/item/mmi
-	name = "Man-machine interface"
-	build_type = PROTOLATHE | MECHFAB
-	build_path = /obj/item/device/mmi
-	category = "Medical"
-	sort_string = "VACBA"
-
-/datum/design/research/item/mmi_radio
-	name = "Radio-enabled man-machine interface"
-	build_type = PROTOLATHE | MECHFAB
-	build_path = /obj/item/device/mmi/radio_enabled
-	category = "Medical"
-	sort_string = "VACBB"
-
-/datum/design/research/item/beacon
-	name = "Bluespace tracking beacon design"
-	build_path = /obj/item/device/radio/beacon
-	category = "Telecoms | Bluespace"
-	sort_string = "VADAA"
-
-/datum/design/research/item/bag_holding
-	name = "'Bag of Holding', an infinite capacity bag prototype"
-	desc = "Using localized pockets of bluespace this bag prototype offers incredible storage capacity with the contents weighing nothing. It's a shame the bag itself is pretty heavy."
-	build_path = /obj/item/storage/backpack/holding
-	category = "Telecoms | Bluespace"
-	sort_string = "VAEAA"
-
-/datum/design/research/item/belt_holding
-	name = "'Belt of Holding', an infinite capacity belt prototype"
-	desc = "Using localized pockets of bluespace this belt prototype offers incredible storage capacity with the contents weighing nothing."
-	build_path = /obj/item/storage/belt/holding
-	category = "Telecoms | Bluespace"
-	sort_string = "VAEAB"
-
-/datum/design/research/item/pouch_holding
-	name = "'Pouch of Holding', an infinite capacity pouch prototype"
-	desc = "Using localized pockets of bluespace this pouch prototype offers incredible storage capacity with the contents weighing nothing."
-	build_path = /obj/item/storage/pouch/holding
-	category = "Telecoms | Bluespace"
-	sort_string = "VAEAC"
-
-/datum/design/research/item/trashbag_holding
-	name = "'Trashbag of Holding', an infinite capacity trashbag prototype"
-	desc = "Using localized pockets of bluespace this trashbag prototype offers incredible storage capacity with the contents weighing nothing."
-	build_path = /obj/item/storage/bag/trash/holding
-	category = "Telecoms | Bluespace"
-	sort_string = "VAEAD"
-
-/datum/design/research/item/oresatchel_holding
-	name = "'Ore satchel of Holding', an infinite capacity ore satchel prototype"
-	desc = "Using localized pockets of bluespace this ore satchel prototype offers incredible storage capacity with the contents weighing nothing."
-	build_path = /obj/item/storage/bag/ore/holding
-	category = "Telecoms | Bluespace"
-	sort_string = "VAEAE"
-
-/datum/design/research/item/binaryencrypt
-	name = "Binary encryption key"
-	desc = "Allows for deciphering the binary channel on-the-fly."
-	build_path = /obj/item/device/encryptionkey/binary
-	category = "Telecoms | Bluespace"
-	sort_string = "VASAA"
-
-/datum/design/research/item/glowstick
-	name = "Undark Glowstick"
-	desc = "A refined cocktail of all the needed things to glow in the dark!"
-	build_path = /obj/item/device/lighting/glowstick/undark //Yes 1920s were a wild time
-	sort_string = "VASAB"
-	chemicals = list("radium" = 5, "phosphorus" = 10)
-	materials = list(MATERIAL_GLASS = 2, MATERIAL_PLASTIC = 15)
-
-/datum/design/research/item/science_voidsuit
-	name = "Moebius combat voidsuit"
-	build_path = /obj/item/clothing/suit/space/void/science
-	sort_string = "VASAC"
- 
-/datum/design/research/item/paramedic_armor
-	name = "Moebius paramedic armor"
-	build_path = /obj/item/clothing/suit/armor/paramedic
-	sort_string = "VASAD"
-
-/datum/design/research/item/paramedic_helmet
-	name = "Moebius paramedic helmet"
-	build_path = /obj/item/clothing/head/armor/faceshield/paramedic
-	sort_string = "VASAE"
-
-/datum/design/research/item/dna_scanner
-	name = "Portable dna sequencer"
-	build_path = /obj/item/dna_scanner
-	sort_string = "VASAF"
-
-//Why is there a science design to craft a cardboard box full of things? That is not how this works
-/*
-/datum/design/research/item/chameleon
-	name = "Holographic equipment kit"
-	desc = "A kit of dangerous, high-tech equipment with changeable looks."
-	req_tech = list(TECH_COVERT = 2)
-	build_path = /obj/item/storage/backpack/chameleon
-	sort_string = "VASBA"
-*/
+/obj/item/disk/design_disk/adv
+	name = "Advanced Component Design Disk"
+	desc = "A disk for storing device design data for construction in lathes. This one has extra storage space."
+	materials = list(/datum/material/iron=300, /datum/material/glass=100, /datum/material/silver = 50)
+	max_blueprints = 5

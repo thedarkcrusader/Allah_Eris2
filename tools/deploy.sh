@@ -10,23 +10,25 @@ if [[ $# -eq 2 ]] ; then
 fi
 
 mkdir -p \
-    $1/maps \
-    $1/strings \
-	$1/config \
-    $1/tgui/public \
-    $1/tgui/packages/tgfont/dist
+    $1/_maps \
+    $1/icons \
+    $1/sound/chatter \
+    $1/sound/voice/complionator \
+    $1/sound/instruments \
+    $1/strings
 
 if [ -d ".git" ]; then
   mkdir -p $1/.git/logs
   cp -r .git/logs/* $1/.git/logs/
 fi
 
-cp cev_eris.dmb cev_eris.rsc $1/
-cp -r maps/* $1/maps/
+cp yogstation.dmb yogstation.rsc $1/
+cp -r _maps/* $1/_maps/
+cp icons/default_title.dmi $1/icons/
+cp -r sound/chatter/* $1/sound/chatter/
+cp -r sound/voice/complionator/* $1/sound/voice/complionator/
+cp -r sound/instruments/* $1/sound/instruments/
 cp -r strings/* $1/strings/
-cp -r config/names $1/config/
-cp -r tgui/public/* $1/tgui/public/
-cp -r tgui/packages/tgfont/dist/* $1/tgui/packages/tgfont/dist/
 
 #remove .dm files from _maps
 
@@ -34,6 +36,5 @@ cp -r tgui/packages/tgfont/dist/* $1/tgui/packages/tgfont/dist/
 #find $1/_maps -name "*.dm" -type f -delete
 
 #dlls on windows
-if [ "$(uname -o)" = "Msys" ]; then
-	cp ./*.dll $1/
-fi
+cp rust_g* $1/ || true
+cp *auxmos.* $1/ || true

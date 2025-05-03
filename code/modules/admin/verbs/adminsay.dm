@@ -1,40 +1,28 @@
-//admin-only ooc chat
-/client/proc/cmd_admin_say(msg as text)
-	set category = "Special Verbs"
+/client/verb/cmd_admin_say(msg as text)
+	set category = "Misc.Unused"
 	set name = "Asay" //Gave this shit a shorter name so you only have to time out "asay" rather than "admin say" to use it --NeoFite
-	set hidden = 1
-	if(!check_rights(R_ADMIN))
+	
+	if(!check_rights(0))
 		return
 
-	msg = sanitize(msg)
+	msg = copytext(msg, 1, MAX_MESSAGE_LEN)
 	if(!msg)
 		return
 
-	log_admin("ADMIN: [key_name(src)] : [msg]")
-
-	msg = emoji_parse(msg)
-
-	if(check_rights(R_ADMIN,0))
-		for(var/client/C in admins)
-			if(R_ADMIN & C.holder.rights)
-				to_chat(C, "<span class='admin_channel'>" + create_text_tag("admin", "ADMIN:", C) + " <span class='name'>[key_name(usr, 1)]</span>([admin_jump_link(mob, src)]): <span class='message linkify'>[msg]</span></span>")
-
-/client/proc/cmd_mod_say(msg as text)
-	set category = "Special Verbs"
-	set name = "Msay"
-	set hidden = 1
-
-	if(!check_rights(R_ADMIN|R_MOD|R_MENTOR))
-		return
+	webhook_send_asay(key_name(src), msg)
 
 	msg = sanitize(msg)
-	log_admin("MOD: [key_name(src)] : [msg]")
 
-	if (!msg)
-		return
+	mob.log_talk(msg, LOG_ADMIN_PRIVATE)
 
-	var/sender_name = key_name(usr, 1)
-	if(check_rights(R_ADMIN, 0))
-		sender_name = "<span class='admin'>[sender_name]</span>"
-	for(var/client/C in admins)
-		to_chat(C, "<span class='mod_channel'>" + create_text_tag("mod", "MOD:", C) + " <span class='name'>[sender_name]</span>([admin_jump_link(mob, C.holder)]): <span class='message linkify'>[msg]</span></span>")
+	msg = emoji_parse(msg)
+	msg = keywords_lookup(msg)
+	if(check_rights(R_ADMIN,0))
+		msg = span_adminsay("[span_prefix("ADMIN:")] <EM>[key_name(usr, 1)]</EM> [ADMIN_FLW(mob)]: [span_message("[msg]")]")
+		to_chat(GLOB.permissions.admins, msg, confidential=TRUE)
+	else
+		msg = span_adminsay("[span_prefix("OBSERVER:")] <EM>[key_name(usr, 1)]</EM> [ADMIN_FLW(mob)]: [span_message("[msg]")]")
+		to_chat(GLOB.permissions.admins, msg, confidential=TRUE)
+
+	SSblackbox.record_feedback("tally", "admin_verb", 1, "Asay") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+

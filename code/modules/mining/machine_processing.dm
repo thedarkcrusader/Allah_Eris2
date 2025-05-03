@@ -1,246 +1,212 @@
-#define ORE_STORING 0
-#define ORE_PASSING 1
-#define ORE_SMELTING 2
-#define ORE_COMPRESSING 3
-#define ORE_ALLOYING 4
+#define SMELT_AMOUNT 5
 
 /**********************Mineral processing unit console**************************/
+
+/obj/machinery/mineral
+	var/input_dir = NORTH
+	var/output_dir = SOUTH
+
+/obj/machinery/mineral/proc/unload_mineral(atom/movable/S)
+	if(!istype(S, /obj/item/stack/ore) && !istype(S, /obj/item/stack/sheet) && !istype(S, /obj/item/storage/bag/money)) // Realistically who is gonna shove a sheet into the loading machine --Redmoogle
+		return
+	S.forceMove(drop_location())
+	var/turf/T = get_step(src,output_dir)
+	if(T)
+		S.forceMove(T)
 
 /obj/machinery/mineral/processing_unit_console
 	name = "production machine console"
 	icon = 'icons/obj/machines/mining_machines.dmi'
 	icon_state = "console"
 	density = TRUE
-	anchored = TRUE
-
 	var/obj/machinery/mineral/processing_unit/machine = null
-	var/show_all_ores = 0
+	var/machinedir = EAST
+	speed_process = TRUE
 
-/obj/machinery/mineral/processing_unit_console/New()
-	..()
-	spawn()
-		src.machine = locate(/obj/machinery/mineral/processing_unit) in range(3, src)
-		if (machine)
-			machine.console = src
-		else
-			log_debug("[src] ([x],[y],[z]) can't find coresponding processing unit.")
+/obj/machinery/mineral/processing_unit_console/Initialize(mapload)
+	. = ..()
+	machine = locate(/obj/machinery/mineral/processing_unit, get_step(src, machinedir))
+	if (machine)
+		machine.CONSOLE = src
+	else
+		return INITIALIZE_HINT_QDEL
 
-/obj/machinery/mineral/processing_unit_console/attack_hand(mob/user)
-	add_fingerprint(user)
-	interact(user)
-
-/obj/machinery/mineral/processing_unit_console/ui_interact(mob/user, datum/tgui/ui)
-	ui = SStgui.try_update_ui(user, src, ui)
-	if(!ui)
-		ui = new(user, src, "Processor")
-		ui.open()
-
-/obj/machinery/mineral/processing_unit_console/ui_data(mob/user)
-	var/list/data = list()
-	data["machine"] = !!machine
+/obj/machinery/mineral/processing_unit_console/ui_interact(mob/user)
+	. = ..()
 	if(!machine)
-		return data
-	data["materials_data"] = list()
-	for(var/ore in ore_data)
-		var/list/ore_list = list()
-		var/ore/ore_thing = ore_data[ore]
-		ore_list["name"] = ore_thing.display_name
-		ore_list["id"] = ore
-		ore_list["current_action"] = machine.ores_processing[ore]
-		ore_list["amount"] = machine.ores_stored[ore]
-		switch(machine.ores_processing[ore])
-			if(ORE_STORING)
-				ore_list["current_action_string"] = "Storing"
-			if(ORE_PASSING)
-				ore_list["current_action_string"] = "Passing"
-			if(ORE_SMELTING)
-				ore_list["current_action_string"] = "Smelting"
-			if(ORE_COMPRESSING)
-				ore_list["current_action_string"] = "Compressing"
-			if(ORE_ALLOYING)
-				ore_list["current_action_string"] = "Alloying"
+		return
 
-		data["materials_data"] += list(ore_list)
-	data["alloy_data"] = list()
-	for(var/datum/alloy/alloy in machine.alloy_data)
-		var/list/alloy_list = list()
-		alloy_list["name"] = alloy.name
-		alloy_list["creating"] = TRUE
-		data["alloy_data"] += list(alloy_list)
-	data["currently_alloying"] = machine.selected_alloy
-	data["running"] = machine.active
-	data["sheet_rate"] = machine.sheets_per_tick
-	return data
+	var/dat = machine.get_machine_data()
 
-/obj/machinery/mineral/processing_unit_console/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
+	var/datum/browser/popup = new(user, "processing", "Smelting Console", 300, 500)
+	popup.set_content(dat)
+	popup.open()
+
+/obj/machinery/mineral/processing_unit_console/Topic(href, href_list)
 	if(..())
 		return
-	if(action == "set_alloying")
-		var/target_name = params["id"]
-		for(var/datum/alloy/the_alloy in machine.alloy_data)
-			if(target_name == the_alloy.name)
-				machine.selected_alloy = the_alloy
-				for(var/required in machine.selected_alloy.requires)
-					machine.ores_processing[required] = ORE_ALLOYING
-		return TRUE
-	if(action == "set_smelting")
-		var/target_material = params["id"]
-		var/processing_type = params["action_type"]
-		if(processing_type > ORE_ALLOYING)
-			processing_type = ORE_STORING
-		machine.ores_processing[target_material] = processing_type
-		return TRUE
-	if(action == "set_running")
-		machine.active = !(machine.active)
-		return TRUE
-	if(action == "set_rate")
-		machine.sheets_per_tick = params["sheets"]
-		return TRUE
-	if(action == "machine_link")
-		machine = locate(/obj/machinery/mineral/processing_unit) in range(3, src)
-		if (machine)
-			machine.console = src
-		return TRUE
+	usr.set_machine(src)
+	add_fingerprint(usr)
 
+	if(href_list["material"])
+		var/datum/material/new_material = locate(href_list["material"])
+		if(istype(new_material))
+			machine.selected_material = new_material
+			machine.selected_alloy = null
 
+	if(href_list["alloy"])
+		machine.selected_material = null
+		machine.selected_alloy = href_list["alloy"]
 
-/obj/machinery/mineral/processing_unit_console/interact(mob/user)
-	if(..())
-		return
-	if(!allowed(user))
-		to_chat(user, "\red Access denied.")
-		return
-	ui_interact(user)
+	if(href_list["set_on"])
+		machine.on = (href_list["set_on"] == "on")
+
+	updateUsrDialog()
+	return
+
+/obj/machinery/mineral/processing_unit_console/Destroy()
+	machine = null
+	return ..()
+
 
 /**********************Mineral processing unit**************************/
 
 
 /obj/machinery/mineral/processing_unit
-	name = "material processor" //This isn't actually a goddamn furnace, we're in space and it's processing platinum and flammable plasma...
+	name = "furnace"
 	icon = 'icons/obj/machines/mining_machines.dmi'
 	icon_state = "furnace"
 	density = TRUE
-	anchored = TRUE
-	light_range = 3
+	var/obj/machinery/mineral/CONSOLE = null
+	var/on = FALSE
+	var/selected_material = /datum/material/iron
+	var/selected_alloy = null
+	var/datum/techweb/stored_research
 
-	var/obj/machinery/mineral/console = null
-	var/sheets_per_tick = 20
-	var/list/ores_processing
-	var/list/ores_stored
-	var/static/list/alloy_data
-	var/datum/alloy/selected_alloy = null
-	var/active = 0
-	var/input_dir = 0
-	var/output_dir = 0
+/obj/machinery/mineral/processing_unit/Initialize(mapload)
+	. = ..()
+	proximity_monitor = new(src, 1)
+	AddComponent(/datum/component/material_container, list(/datum/material/iron, /datum/material/glass, /datum/material/silver, /datum/material/gold, /datum/material/diamond, /datum/material/plasma, /datum/material/uranium, /datum/material/bananium, /datum/material/titanium, /datum/material/bluespace, /datum/material/dilithium),INFINITY, TRUE, /obj/item/stack) //Yogs: added dilithium
+	stored_research = new /datum/techweb/specialized/autounlocking/smelter
 
-/obj/machinery/mineral/processing_unit/New()
+/obj/machinery/mineral/processing_unit/Destroy()
+	CONSOLE = null
+	QDEL_NULL(stored_research)
+	return ..()
+
+/obj/machinery/mineral/processing_unit/HasProximity(atom/movable/AM)
+	if(istype(AM, /obj/item/stack/ore) && AM.loc == get_step(src, input_dir))
+		process_ore(AM)
+
+/obj/machinery/mineral/processing_unit/proc/process_ore(obj/item/stack/ore/O)
+	var/datum/component/material_container/materials = GetComponent(/datum/component/material_container)
+	var/material_amount = materials.get_item_material_amount(O)
+	if(!materials.has_space(material_amount))
+		unload_mineral(O)
+	else
+		materials.insert_item(O)
+		qdel(O)
+		if(CONSOLE)
+			CONSOLE.updateUsrDialog()
+
+/obj/machinery/mineral/processing_unit/proc/get_machine_data()
+	var/dat = "<b>Smelter control console</b><br><br>"
+	var/datum/component/material_container/materials = GetComponent(/datum/component/material_container)
+	for(var/datum/material/M in materials.materials)
+		var/amount = materials.materials[M]
+		dat += "<span class=\"res_name\">[M.name]: </span>[amount] cm&sup3;"
+		if (selected_material == M)
+			dat += " <i>Smelting</i>"
+		else
+			dat += " <A href='byond://?src=[REF(CONSOLE)];material=[REF(M)]'><b>Not Smelting</b></A> "
+		dat += "<br>"
+
+	dat += "<br><br>"
+	dat += "<b>Smelt Alloys</b><br>"
+
+	for(var/v in stored_research.researched_designs)
+		var/datum/design/D = SSresearch.techweb_design_by_id(v)
+		dat += "<span class=\"res_name\">[D.name] "
+		if (selected_alloy == D.id)
+			dat += " <i>Smelting</i>"
+		else
+			dat += " <A href='byond://?src=[REF(CONSOLE)];alloy=[D.id]'><b>Not Smelting</b></A> "
+		dat += "<br>"
+
+	dat += "<br><br>"
+	//On or off
+	dat += "Machine is currently "
+	if (on)
+		dat += "<A href='byond://?src=[REF(CONSOLE)];set_on=off'>On</A> "
+	else
+		dat += "<A href='byond://?src=[REF(CONSOLE)];set_on=on'>Off</A> "
+
+	return dat
+
+/obj/machinery/mineral/processing_unit/process(delta_time)
+	if (on)
+		if(selected_material)
+			smelt_ore(delta_time)
+
+		else if(selected_alloy)
+			smelt_alloy(delta_time)
+
+
+		if(CONSOLE)
+			CONSOLE.updateUsrDialog()
+
+/obj/machinery/mineral/processing_unit/proc/smelt_ore(delta_time)
+	var/datum/component/material_container/materials = GetComponent(/datum/component/material_container)
+	var/datum/material/mat = selected_material
+	if(mat)
+		var/sheets_to_remove = (materials.materials[mat] >= (MINERAL_MATERIAL_AMOUNT * SMELT_AMOUNT * delta_time) ) ? SMELT_AMOUNT * delta_time : round(materials.materials[mat] /  MINERAL_MATERIAL_AMOUNT)
+		if(!sheets_to_remove)
+			on = FALSE
+		else
+			var/out = get_step(src, output_dir)
+			materials.retrieve_sheets(sheets_to_remove, mat, out)
+
+
+/obj/machinery/mineral/processing_unit/proc/smelt_alloy(delta_time = 2)
+	var/datum/design/alloy = stored_research.isDesignResearchedID(selected_alloy) //check if it's a valid design
+	if(!alloy)
+		on = FALSE
+		return
+
+	var/amount = can_smelt(alloy, delta_time)
+
+	if(!amount)
+		on = FALSE
+		return
+
+	var/datum/component/material_container/materials = GetComponent(/datum/component/material_container)
+	materials.use_materials(alloy.materials, amount)
+
+	generate_mineral(alloy.build_path)
+
+/obj/machinery/mineral/processing_unit/proc/can_smelt(datum/design/D, delta_time = 2)
+	if(D.make_reagents.len)
+		return FALSE
+
+	var/build_amount = SMELT_AMOUNT * delta_time
+
+	var/datum/component/material_container/materials = GetComponent(/datum/component/material_container)
+
+	for(var/mat_cat in D.materials)
+		var/required_amount = D.materials[mat_cat]
+		var/amount = materials.materials[mat_cat]
+
+		build_amount = min(build_amount, round(amount / required_amount))
+
+	return build_amount
+
+/obj/machinery/mineral/processing_unit/proc/generate_mineral(P)
+	var/O = new P(src)
+	unload_mineral(O)
+
+/obj/machinery/mineral/processing_unit/on_deconstruction()
+	var/datum/component/material_container/materials = GetComponent(/datum/component/material_container)
+	materials.retrieve_all()
 	..()
 
-	ores_processing = list()
-	ores_stored = list()
-
-	// initialize static alloy_data list
-	if(!alloy_data)
-		alloy_data = list()
-		for(var/alloytype in typesof(/datum/alloy)-/datum/alloy)
-			alloy_data += new alloytype()
-
-	if(!ore_data || !ore_data.len)
-		for(var/oretype in typesof(/ore)-/ore)
-			var/ore/OD = new oretype()
-			ore_data[OD.name] = OD
-			ores_processing[OD.name] = 0
-			ores_stored[OD.name] = 0
-
-	spawn()
-		//Locate our output and input machinery.
-		var/obj/marker = null
-		marker = locate(/obj/landmark/machinery/input) in range(1, loc)
-		if(marker)
-			input_dir = get_dir(src, marker)
-		marker = locate(/obj/landmark/machinery/output) in range(1, loc)
-		if(marker)
-			output_dir = get_dir(src, marker)
-
-/obj/machinery/mineral/processing_unit/update_icon()
-	icon_state = "furnace[active ? "_on" : ""]"
-
-/obj/machinery/mineral/processing_unit/Process()
-
-	if(!output_dir || !input_dir)
-		return
-	//Grab some more ore to process this tick.
-	for(var/obj/item/ore/O in get_step(src, input_dir))
-		if(!isnull(ores_stored[O.material]))
-			ores_stored[O.material]++
-		qdel(O)
-	if(!active)
-		return
-	//Process our stored ores and spit out sheets.
-	var/sheets_to_process = sheets_per_tick
-	// So it doesn't get changed mid-process and leads to funny glitches / dupings by switching it mid-process
-	var/datum/alloy/cur_alloy = selected_alloy
-	var/produced_sheets = 0
-	while(sheets_to_process && cur_alloy)
-		var/valid = TRUE
-		for(var/required_ore in cur_alloy.requires)
-			if(ores_processing[required_ore] != ORE_ALLOYING)
-				valid = FALSE
-				break
-			if(ores_stored[required_ore] < cur_alloy.requires[required_ore])
-				valid = FALSE
-				break
-		if(!valid)
-			break
-		for(var/required_ore in cur_alloy.requires)
-			ores_stored[required_ore] -= cur_alloy.requires[required_ore]
-		produced_sheets += cur_alloy.product_mod * cur_alloy.ore_input
-		sheets_to_process--
-	sheets_to_process = sheets_per_tick - round(produced_sheets)
-	while(round(produced_sheets) > 0)
-		new cur_alloy.product(get_step(src, output_dir))
-		produced_sheets--
-	for(var/ore in ores_processing)
-		if(sheets_to_process < 1)
-			break
-		if(ores_processing[ore] == ORE_ALLOYING)
-			continue
-		if(ores_processing[ore] == ORE_STORING)
-			continue
-		/// Would've named this ore_data , but it gives infinite cross reference ( and also conflicts with the global version)
-		var/ore/stored_ore_data = ore_data[ore]
-		if(ores_processing[ore] == ORE_PASSING && stored_ore_data.ore)
-			if(ores_stored[ore] < 1)
-				continue
-			var/ore_amount = min(round(ores_stored[ore]), sheets_per_tick)
-			ore_amount = min(ore_amount, sheets_to_process)
-			sheets_to_process -= ore_amount
-			var/ore/product = stored_ore_data.ore
-			while(ore_amount)
-				new product(get_step(src, output_dir))
-				ore_amount--
-				ores_stored[ore] -= 1
-		if(ores_processing[ore] == ORE_SMELTING && stored_ore_data.smelts_to)
-			if(ores_stored[ore] < 1)
-				continue
-			var/sheet_amount = min(round(ores_stored[ore]), sheets_per_tick)
-			sheet_amount = min(sheet_amount, sheets_to_process)
-			sheets_to_process -= sheet_amount
-			var/material/product = get_material_by_name(stored_ore_data.smelts_to)
-			while(sheet_amount)
-				new product.stack_type(get_step(src, output_dir))
-				sheet_amount--
-				ores_stored[ore]--
-		if(ores_processing[ore] == ORE_COMPRESSING && stored_ore_data.compresses_to)
-			if(ores_stored[ore] < 2)
-				continue
-			var/sheet_amount = min(round(ores_stored[ore] / 2), round(sheets_per_tick / 2))
-			sheet_amount = min(sheet_amount, sheets_to_process)
-			sheets_to_process -= sheet_amount
-			var/material/product = get_material_by_name(stored_ore_data.compresses_to)
-			while(sheet_amount)
-				new product.stack_type(get_step(src, output_dir))
-				sheet_amount--
-				ores_stored[ore] -= 2
-	return
-
+#undef SMELT_AMOUNT

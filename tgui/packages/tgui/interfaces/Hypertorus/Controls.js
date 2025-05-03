@@ -1,16 +1,5 @@
 import { useBackend } from '../../backend';
-import {
-  Box,
-  Button,
-  Icon,
-  Knob,
-  LabeledControls,
-  LabeledList,
-  NumberInput,
-  Section,
-  Tooltip,
-} from '../../components';
-import { getGasLabel } from '../../constants';
+import { Box, Button, Icon, Knob, LabeledControls, LabeledList, NumberInput, Section, Tooltip } from '../../components';
 import { HelpDummy, HoverHelp } from './helpers';
 
 /*
@@ -140,7 +129,7 @@ export const HypertorusSecondaryControls = (props, context) => {
             parameter="magnetic_constrictor"
             icon="magnet"
             flipIcon
-            help="Adjusts the density of the fusion reaction. Denser reactions expose more energy, but may destabilize the reaction if too much mass is involved."
+            help="Adjusts the density of the fusion reaction. Denser reactions are much faster, but may become unstable if too much mass is involved."
           />
         </LabeledControls.Item>
         <LabeledControls.Item label="Current Damper">
@@ -172,14 +161,52 @@ export const HypertorusWasteRemove = (props, context) => {
             <>
               <HoverHelp
                 content={
+                  'Remove fuel gases from Fusion,' +
+                  ' and any selected gases from the Fuel.'
+                }
+              />
+              Fuel remove:
+            </>
+          }>
+          <Button
+            icon={data.fuel_remove ? 'power-off' : 'times'}
+            content={data.fuel_remove ? 'On' : 'Off'}
+            selected={data.fuel_remove}
+            onClick={() => act('fuel_remove')}
+          />
+        </LabeledList.Item>
+        <LabeledList.Item
+          label={
+            <>
+              <HelpDummy />
+              Fuel filtering rate:
+            </>
+          }>
+          <NumberInput
+            animated
+            value={parseFloat(data.fl_filtering_rate)}
+            unit="mol/s"
+            minValue={5}
+            maxValue={200}
+            onDrag={(e, value) =>
+              act('fl_filtering_rate', {
+                fl_filtering_rate: value,
+              })
+            }
+          />
+        </LabeledList.Item>
+        <LabeledList.Item
+          label={
+            <>
+              <HoverHelp
+                content={
                   'Remove waste gases from Fusion,' +
                   ' and any selected gases from the Moderator.'
                 }
               />
               Waste remove:
             </>
-          }
-        >
+          }>
           <Button
             icon={data.waste_remove ? 'power-off' : 'times'}
             content={data.waste_remove ? 'On' : 'Off'}
@@ -193,8 +220,7 @@ export const HypertorusWasteRemove = (props, context) => {
               <HelpDummy />
               Moderator filtering rate:
             </>
-          }
-        >
+          }>
           <NumberInput
             animated
             value={parseFloat(data.mod_filtering_rate)}
@@ -214,14 +240,13 @@ export const HypertorusWasteRemove = (props, context) => {
               <HelpDummy />
               Filter from moderator mix:
             </>
-          }
-        >
+          }>
           {filterTypes.map((filter) => (
             <Button
               key={filter.gas_id}
               icon={filter.enabled ? 'check-square-o' : 'square-o'}
               selected={filter.enabled}
-              content={getGasLabel(filter.gas_id, filter.gas_name)}
+              content={filter.gas_name}
               onClick={() =>
                 act('filter', {
                   mode: filter.gas_id,

@@ -1,22 +1,23 @@
-import { Antagonist, Category } from '../base';
-import { multiline } from 'common/string';
+import { Antagonist, Category } from "../base";
+import { multiline } from "common/string";
+
+export const SPACENINJA_MECHANICAL_DESCRIPTION
+   = multiline`
+      Assist either the Syndicate or Nanotrasen as a hired, stealthy mercenary.
+      Fulfill your contract and flex technological prowess as you do so.
+   `;
+
 
 const SpaceNinja: Antagonist = {
-  key: 'spaceninja',
-  name: 'Space Ninja',
+  key: "spaceninja",
+  name: "Space Ninja",
   description: [
     multiline`
-      The Spider Clan practice a sort of augmentation of human flesh in order to
-      achieve a more perfect state of being and follow Postmodern Space Bushido.
+      The flesh is imperfect. This... metal, this suit, is what humanity shall become.
+      It is the future. A contract comes in, and you answer.
+      Superiority must be established. Honor will be fulfilled.
     `,
-
-    multiline`
-      Become a conniving space ninja, equipped with a katana, gloves to hack
-      into airlocks and APCs, a suit to make you go near-invisible,
-      as well as a variety of abilities in your kit. Hack into arrest consoles
-      to mark everyone as arrest, and even hack into communication consoles to
-      summon more threats to cause chaos on the station!
-    `,
+    SPACENINJA_MECHANICAL_DESCRIPTION,
   ],
   category: Category.Midround,
 };

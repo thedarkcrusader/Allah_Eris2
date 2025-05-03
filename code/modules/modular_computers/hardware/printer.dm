@@ -1,64 +1,82 @@
 /obj/item/computer_hardware/printer
-	name = "printer unit"
-	desc = "Small integrated printer that supports paper recycling."
-	power_usage = 50
-	origin_tech = list(TECH_DATA = 2, TECH_ENGINEERING = 2)
+	name = "printer"
+	desc = "Computer-integrated printer with paper recycling module."
+	power_usage = 100
 	icon_state = "printer"
-	hardware_size = 1
-	var/stored_paper = 10
-	var/max_paper = 10
+	w_class = WEIGHT_CLASS_BULKY
+	device_type = MC_PRINT
+	expansion_hw = TRUE
+	var/stored_paper = 20
+	var/max_paper = 30
 
-/obj/item/computer_hardware/printer/diagnostics(var/mob/user)
+/obj/item/computer_hardware/printer/diagnostics(mob/living/user)
 	..()
-	to_chat(user, "Paper buffer level: [stored_paper]/[max_paper]")
+	to_chat(user, "Paper level: [stored_paper]/[max_paper].")
 
-/obj/item/computer_hardware/printer/proc/print_text(var/text_to_print, var/paper_title = null)
+/obj/item/computer_hardware/printer/examine(mob/user)
+	. = ..()
+	. += span_notice("Paper level: [stored_paper]/[max_paper].")
+
+
+/obj/item/computer_hardware/printer/proc/print_text(text_to_print, paper_title = "", do_encode = TRUE)
 	if(!stored_paper)
-		return 0
-	if(!enabled)
-		return 0
+		return FALSE
 	if(!check_functionality())
-		return 0
+		return FALSE
+	
+	if(do_encode)
+		text_to_print = html_encode(text_to_print)
+		paper_title = html_encode(paper_title)
+
+	var/obj/item/paper/P = new/obj/item/paper(holder.drop_location())
 
 	// Damaged printer causes the resulting paper to be somewhat harder to read.
 	if(damage > damage_malfunction)
-		text_to_print = stars(text_to_print, 100-malfunction_probability)
-	new/obj/item/paper(drop_location(), text_to_print, paper_title)
-
+		P.info = stars(text_to_print, 100-malfunction_probability)
+	else
+		P.info = text_to_print
+	if(paper_title)
+		P.name = paper_title
+	P.update_appearance(UPDATE_ICON)
+	P.reload_fields()
 	stored_paper--
-	return 1
+	P = null
+	return TRUE
 
-/obj/item/computer_hardware/printer/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W, /obj/item/paper))
+/obj/item/computer_hardware/printer/proc/print_type(paper_type)
+	if(!stored_paper || !check_functionality() || !ispath(paper_type))
+		return FALSE
+
+	var/obj/item/paper/P = new paper_type(holder.drop_location())
+
+	// Damaged printer causes the resulting paper to be somewhat harder to read.
+	if(damage > damage_malfunction)
+		P.info = stars(P.info, 100-malfunction_probability)
+	P.update_appearance(UPDATE_ICON)
+	P.reload_fields()
+	stored_paper--
+	P = null
+	return TRUE
+
+/obj/item/computer_hardware/printer/try_insert(obj/item/I, mob/living/user = null)
+	if(istype(I, /obj/item/paper))
 		if(stored_paper >= max_paper)
-			to_chat(user, "You try to add \the [W] into \the [src], but its paper bin is full.")
-			return
+			to_chat(user, span_warning("You try to add \the [I] into [src], but its paper bin is full!"))
+			return FALSE
 
-		to_chat(user, "You insert \the [W] into [src].")
-		qdel(W)
+		if(user && !user.temporarilyRemoveItemFromInventory(I))
+			return FALSE
+		to_chat(user, span_notice("You insert \the [I] into [src]'s paper recycler."))
+		qdel(I)
 		stored_paper++
-	else if(istype(W, /obj/item/paper_bundle))
-		var/obj/item/paper_bundle/B = W
-		var/num_of_pages_added = 0
-		if(stored_paper >= max_paper)
-			to_chat(user, "You try to add \the [W] into \the [src], but its paper bin is full.")
-			return
-		for(var/obj/item/bundleitem in B) //loop through items in bundle
-			if(istype(bundleitem, /obj/item/paper)) //if item is paper (and not photo), add into the bin
-				B.pages.Remove(bundleitem)
-				qdel(bundleitem)
-				num_of_pages_added++
-				stored_paper++
-			if(stored_paper >= max_paper) //check if the printer is full yet
-				to_chat(user, "The printer has been filled to full capacity.")
-				break
-		if(B.pages.len == 0) //if all its papers have been put into the printer, delete bundle
-			qdel(W)
-		else if(B.pages.len == 1) //if only one item left, extract item and delete the one-item bundle
-			user.drop_from_inventory(B)
-			user.put_in_hands(B[1])
-			qdel(B)
-		else //if at least two items remain, just update the bundle icon
-			B.update_icon()
-		to_chat(user, "You add [num_of_pages_added] papers from \the [W] into \the [src].")
-	return
+		return TRUE
+	return FALSE
+
+/obj/item/computer_hardware/printer/mini
+	name = "miniprinter"
+	desc = "A small printer with paper recycling module."
+	power_usage = 50
+	icon_state = "printer_mini"
+	w_class = WEIGHT_CLASS_TINY
+	stored_paper = 5
+	max_paper = 15

@@ -1,149 +1,104 @@
 //Please use mob or src (not usr) in these procs. This way they can be called in the same fashion as procs.
-/client/verb/wiki()
+/client/verb/wiki(query as text)
 	set name = "wiki"
-	set desc = "Visit the wiki."
+	set desc = "Type what you want to know about.  This will open the wiki in your web browser. Type nothing to go to the main page."
 	set hidden = TRUE
-	var/wikiurl = config.wikiurl
+	var/wikiurl = CONFIG_GET(string/wikiurl)
 	if(wikiurl)
-		src << link(wikiurl)
+		if(query)
+			var/output = wikiurl + "/index.php?search=" + query
+			src << link(output)
+		else if (query != null)
+			src << link(wikiurl)
 	else
-		to_chat(src, SPAN_DANGER("The wiki URL is not set in the server configuration."))
+		to_chat(src, span_danger("The wiki URL is not set in the server configuration."))
+	return
 
 /client/verb/forum()
 	set name = "forum"
 	set desc = "Visit the forum."
 	set hidden = TRUE
-	var/forumurl = config.forumurl
+	var/forumurl = CONFIG_GET(string/forumurl)
 	if(forumurl)
+		if(tgui_alert(src, "This will open the forum in your browser. Are you sure?",, list("Yes","No"))!="Yes")
+			return
 		src << link(forumurl)
 	else
-		to_chat(src, SPAN_DANGER("The forum URL is not set in the server configuration."))
+		to_chat(src, span_danger("The forum URL is not set in the server configuration."))
+	return
+
+
+/client/verb/demoview(roundnumber as num)
+	set name = "demoview"
+	set desc = "Enter Round Number you wish to see the replay of"
+	set hidden = 1
+	var/roundurl = CONFIG_GET(string/demourl)
+	if(roundnumber < 26360)
+		roundnumber = 26360
+	if(roundurl)
+		if(!roundnumber)
+			roundnumber = text2num(GLOB.round_id-1)
+		if(alert("This will open the demo in your browser. Are you sure?",,"Yes","No")!="Yes")
+			return
+		src << link("[roundurl][roundnumber]")
+	else
+		to_chat(src, span_danger("The demo URL is not set in the server configuration."))
 
 /client/verb/rules()
 	set name = "rules"
 	set desc = "Show Server Rules."
 	set hidden = TRUE
-	var/rulesurl = "https://wiki.cev-eris.com/Rules_ErisEn" // TODO: Move this to the config -- KIROV
+	var/rulesurl = CONFIG_GET(string/rulesurl)
 	if(rulesurl)
+		if(tgui_alert(src, "This will open the rules in your browser. Are you sure?",, list("Yes","No"))!="Yes")
+			return
 		src << link(rulesurl)
 	else
-		to_chat(src, SPAN_DANGER("The rules URL is not set in the server configuration."))
+		to_chat(src, span_danger("The rules URL is not set in the server configuration."))
+	return
 
 /client/verb/github()
 	set name = "github"
 	set desc = "Visit Github"
 	set hidden = TRUE
-	var/githuburl = config.githuburl
+	var/githuburl = CONFIG_GET(string/githuburl)
 	if(githuburl)
+		if(tgui_alert(src, "This will open the Github repository in your browser. Are you sure?",, list("Yes","No"))!="Yes")
+			return
 		src << link(githuburl)
 	else
-		to_chat(src, SPAN_DANGER("The github URL is not set in the server configuration."))
+		to_chat(src, span_danger("The Github URL is not set in the server configuration."))
+	return
 
-/client/verb/discord()
-	set name = "discord"
-	set desc = "Visit Discord"
+/client/verb/reportissue()
+	set name = "report-issue"
+	set desc = "Report an issue"
 	set hidden = TRUE
-	var/discordurl = config.discordurl
-	if(discordurl)
-		src << link(discordurl)
+	var/githuburl = CONFIG_GET(string/githuburl)
+	if(githuburl)
+		var/message = "This will open the Github issue reporter in your browser. Are you sure?"
+		if(GLOB.revdata.testmerge.len)
+			message += "<br>The following experimental changes are active and are probably the cause of any new or sudden issues you may experience. If possible, please try to find a specific thread for your issue instead of posting to the general issue tracker:<br>"
+			message += GLOB.revdata.GetTestMergeInfo(FALSE)
+		if(tgalert(src, message, "Report Issue","Yes","No")!="Yes")
+			return
+		var/static/issue_template = file2text(".github/ISSUE_TEMPLATE.md")
+		var/servername = CONFIG_GET(string/servername)
+		var/url_params = "Reporting client version: [byond_version].[byond_build]\n\n[issue_template]"
+		if(GLOB.round_id || servername)
+			url_params = "Issue reported from [GLOB.round_id ? " Round ID: [GLOB.round_id][servername ? " ([servername])" : ""]" : servername]\n\n[url_params]"
+		DIRECT_OUTPUT(src, link("[githuburl]/issues/new?body=[url_encode(url_params)]"))
 	else
-		to_chat(src, SPAN_DANGER("The discord URL is not set in the server configuration."))
+		to_chat(src, span_danger("The Github URL is not set in the server configuration."))
+	return
 
 /client/verb/changelog()
 	set name = "Changelog"
-	set desc = "See what's new"
-	set hidden = TRUE
-	if(!GLOB.changelog_tgui)
-		GLOB.changelog_tgui = new /datum/changelog()
-
-	GLOB.changelog_tgui.ui_interact(mob)
-	if(prefs.lastchangelog != changelog_hash)
-		prefs.lastchangelog = changelog_hash
+	set category = "OOC"
+	var/datum/asset/simple/namespaced/changelog = get_asset_datum(/datum/asset/simple/namespaced/changelog)
+	changelog.send(src)
+	src << browse(changelog.get_htmlloader("changelog.html"), "window=changes;size=675x650")
+	if(prefs.lastchangelog != GLOB.changelog_hash)
+		prefs.lastchangelog = GLOB.changelog_hash
 		prefs.save_preferences()
 		winset(src, "infowindow.changelog", "font-style=;")
-
-/client/verb/tickets()
-	set name = "tickets"
-	set desc = "Bwoink logs"
-	set hidden = TRUE
-
-	if(check_rights(R_ADMIN))
-		SStickets.showUI(usr)
-	else
-		SStickets.userDetailUI(usr)
-
-/client/verb/hotkeys_help()
-	set name = "Hotkeys Help"
-	set category = "OOC"
-
-	var/static/admin = {"<font color='purple'>
-	Admin:
-	\tF5 = Aghost (admin-ghost)
-	\tF6 = player-panel
-	\tF7 = admin-pm
-	\tF8 = Invisimin
-	Admin Ghost:
-	\tShift + Ctrl + Click = View Variables
-	</font>"}
-
-	var/static/default = {"<font color='blue'>
-	Hotkey-Mode: (hotkey-mode must be on)
-	\tTAB = change focus between the chat and the game
-	\ta = left
-	\ts = down
-	\td = right
-	\tw = up
-	\tq = drop
-	\te = equip
-	\tf = block
-	\tb = resist
-	\tc = rest
-	\tShift+e = belt-equip
-	\tShift+q = suit-storage-equip
-	\tShift+b = bag-equip
-	\tr = throw
-	\tt = say
-	\t5 = emote
-	\tx = swap-hand
-	\tz = activate held object (or y)
-	\tl = toogle flashlight
-	\tj = toggle-aiming-mode
-	\tf = cycle-intents-left
-	\tg = cycle-intents-right
-	\t1 = help-intent
-	\t2 = disarm-intent
-	\t3 = grab-intent
-	\t4 = harm-intent
-	\tCtrl = drag
-	\tShift = examine
-	\tF11 = toggle fullscreen
-	</font>"}
-
-	var/static/robot = {"<font color='purple'>
-	\tTAB = change focus between the chat and the game
-	\ta = left
-	\ts = down
-	\td = right
-	\tw = up
-	\tq = unequip active module
-	\tt = say
-	\tx = cycle active modules
-	\tz = activate held object (or y)
-	\tf = cycle-intents-left
-	\tg = cycle-intents-right
-	\t1 = activate module 1
-	\t2 = activate module 2
-	\t3 = activate module 3
-	\t4 = toggle intents
-	\t5 = emote
-	\tCtrl = drag
-	\tShift = examine
-	\tF11 = toggle fullscreen
-	</font>"}
-
-	if(isrobot(mob))
-		to_chat(src, robot)
-	else
-		to_chat(src, default)
-	if(holder)
-		to_chat(src, admin)

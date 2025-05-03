@@ -1,99 +1,131 @@
-/obj/item/device/assembly/timer
+/obj/item/assembly/timer
 	name = "timer"
 	desc = "Used to time things. Works well with contraptions which has to count down. Tick tock."
 	icon_state = "timer"
-	origin_tech = list(TECH_MAGNET = 1)
-	matter = list(MATERIAL_PLASTIC = 1)
-
-	secured = FALSE
-	wires = WIRE_PULSE
-
+	materials = list(/datum/material/iron=500, /datum/material/glass=50)
+	attachable = TRUE
 	var/timing = FALSE
 	var/time = 10
+	var/saved_time = 10
+	var/loop = FALSE
+	var/hearing_range = 3
 
+/obj/item/assembly/timer/suicide_act(mob/living/user)
+	user.visible_message(span_suicide("[user] looks at the timer and decides [user.p_their()] fate! It looks like [user.p_theyre()] going to commit suicide!"))
+	activate()//doesnt rely on timer_end to prevent weird metas where one person can control the timer and therefore someone's life. (maybe that should be how it works...)
+	addtimer(CALLBACK(src, PROC_REF(manual_suicide), user), time SECONDS)//kill yourself once the time runs out
+	return MANUAL_SUICIDE
 
-/obj/item/device/assembly/timer/activate()
-	if(!..()) //Cooldown check
-		return
+/obj/item/assembly/timer/proc/manual_suicide(mob/living/user)
+	user.visible_message(span_suicide("[user]'s time is up!"))
+	user.adjustOxyLoss(200)
+	user.death(0)
 
+/obj/item/assembly/timer/Initialize(mapload)
+	. = ..()
+	START_PROCESSING(SSobj, src)
+
+/obj/item/assembly/timer/Destroy()
+	STOP_PROCESSING(SSobj, src)
+	. = ..()
+
+/obj/item/assembly/timer/examine(mob/user)
+	. = ..()
+	. += span_notice("The timer is [timing ? "counting down from [time]":"set for [time] seconds"].")
+
+/obj/item/assembly/timer/activate()
+	if(!..())
+		return FALSE//Cooldown check
 	timing = !timing
-	update_icon()
+	update_appearance(UPDATE_ICON)
+	return TRUE
 
 
-/obj/item/device/assembly/timer/toggle_secure()
+/obj/item/assembly/timer/toggle_secure()
 	secured = !secured
 	if(secured)
 		START_PROCESSING(SSobj, src)
 	else
-		timing = 0
+		timing = FALSE
 		STOP_PROCESSING(SSobj, src)
-	update_icon()
+	update_appearance(UPDATE_ICON)
 	return secured
 
 
-/obj/item/device/assembly/timer/proc/timer_end()
-	if(!secured)
+/obj/item/assembly/timer/proc/timer_end()
+	if(!secured || next_activate > world.time)
+		return FALSE
+	pulse(FALSE)
+	audible_message("[icon2html(src, hearers(src))] *beep* *beep* *beep*", null, hearing_range)
+	for(var/CHM in get_hearers_in_view(hearing_range, src))
+		if(ismob(CHM))
+			var/mob/LM = CHM
+			LM.playsound_local(get_turf(src), 'sound/machines/triple_beep.ogg', ASSEMBLY_BEEP_VOLUME, TRUE)
+	if(loop)
+		timing = TRUE
+	update_appearance(UPDATE_ICON)
+
+
+/obj/item/assembly/timer/process(delta_time)
+	if(!timing)
 		return
-	pulse(0)
-	if(!holder)
-		visible_message("\icon[src] *beep* *beep*", "*beep* *beep*")
-	cooldown = 2
-	spawn(10)
-		process_cooldown()
-
-
-/obj/item/device/assembly/timer/Process()
-	if(timing && (time > 0))
-		time--
-	if(timing && time <= 0)
-		timing = 0
+	time -= delta_time
+	if(time <= 0)
+		timing = FALSE
 		timer_end()
-		time = 10
+		time = saved_time
 
+/obj/item/assembly/timer/update_icon(updates=ALL)
+	. = ..()
+	if(holder)
+		holder.update_icon(updates)
 
-/obj/item/device/assembly/timer/update_icon()
-	overlays.Cut()
+/obj/item/assembly/timer/update_overlays()
+	. = ..()
 	attached_overlays = list()
 	if(timing)
-		overlays += "timer_timing"
+		. += "timer_timing"
 		attached_overlays += "timer_timing"
-	if(holder)
-		holder.update_icon()
 
-/obj/item/device/assembly/timer/ui_status(mob/user)
+/obj/item/assembly/timer/ui_status(mob/user)
 	if(is_secured(user))
 		return ..()
-
 	return UI_CLOSE
 
-/obj/item/device/assembly/timer/ui_interact(mob/user, datum/tgui/ui)
+/obj/item/assembly/timer/ui_interact(mob/user, datum/tgui/ui)
 	ui = SStgui.try_update_ui(user, src, ui)
 	if(!ui)
 		ui = new(user, src, "Timer", name)
 		ui.open()
 
-/obj/item/device/assembly/timer/ui_data(mob/user)
-	var/list/data = list(
-		"isTiming" = timing,
-	)
 
-	data["minutes"] = round((time - data["seconds"]) / 60)
+/obj/item/assembly/timer/ui_data(mob/user)
+	var/list/data = list()
 	data["seconds"] = round(time % 60)
+	data["minutes"] = round((time - data["seconds"]) / 60)
 
+	data["timing"] = timing
+	data["loop"] = loop
 	return data
 
-/obj/item/device/assembly/timer/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
-	. = ..()
-	if(.)
+/obj/item/assembly/timer/ui_act(action, params)
+	if(..())
 		return
 
 	switch(action)
 		if("time")
 			timing = !timing
+			if(timing && istype(holder, /obj/item/transfer_valve))
+				log_bomber(usr, "activated a", src, "attachment on [holder]")
+			update_appearance(UPDATE_ICON)
 			. = TRUE
-		if("adjust")
-			if(params["value"])
-				var/value = text2num(params["value"])
-				time = clamp(time + value, 0, 600)
+		if("repeat")
+			loop = !loop
+			. = TRUE
+		if("input")
+			var/value = text2num(params["adjust"])
+			if(value)
+				value = round(time + value)
+				time = clamp(value, 1, 600)
+				saved_time = time
 				. = TRUE
-

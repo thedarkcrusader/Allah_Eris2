@@ -1,173 +1,149 @@
-/obj/structure/computerframe
+/obj/structure/frame/computer
 	name = "computer frame"
-	icon = 'icons/obj/stock_parts.dmi'
 	icon_state = "0"
-	density = TRUE
-	anchored = FALSE
-	matter = list(MATERIAL_STEEL = 5)
-	var/state = 0
-	var/obj/item/electronics/circuitboard/circuit
-	spawn_tags = SPAWN_TAG_MACHINE_FRAME
+	state = 0
 
-//	weight = 1.0E8
-
-/obj/structure/computerframe/verb/rotate()
-	set name = "Rotate Clockwise"
-	set category = "Object"
-	set src in oview(1)
-
-	if(usr.stat || !usr.canmove || usr.restrained())
-		return
-	if(anchored)
-		to_chat(usr, "It is fastened to the floor!")
-		return 0
-	set_dir(turn(dir, -90))
-	return 1
-
-/obj/structure/computerframe/AltClick(mob/user)
-	..()
-	if(user.incapacitated())
-		to_chat(user, SPAN_WARNING("You can't do that right now!"))
-		return
-	if(!in_range(src, user))
-		return
-	else
-		rotate()
-
-/obj/structure/computerframe/get_matter()
-	var/list/matter = ..()
-	. = matter.Copy()
-	if(state >= 4)
-		LAZYAPLUS(., MATERIAL_GLASS, 2)
-
-/obj/structure/computerframe/attackby(obj/item/I, mob/user)
-	var/list/usable_qualities = list()
-	if(state == 0 || state == 1)
-		usable_qualities.Add(QUALITY_BOLT_TURNING)
-	if(state == 0)
-		usable_qualities.Add(QUALITY_WELDING)
-	if((state == 1 && circuit) || (state == 2 && circuit) || (state == 4))
-		usable_qualities.Add(QUALITY_SCREW_DRIVING)
-	if((state == 1 && circuit) || (state == 4))
-		usable_qualities.Add(QUALITY_PRYING)
-	if(state == 3)
-		usable_qualities.Add(QUALITY_WIRE_CUTTING)
-
-	var/tool_type = I.get_tool_type(user, usable_qualities, src)
-	switch(tool_type)
-		if(QUALITY_BOLT_TURNING)
-			if(state == 0)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					to_chat(user, SPAN_NOTICE("You wrench the frame into place."))
-					anchored = TRUE
+/obj/structure/frame/computer/attackby(obj/item/P, mob/living/user, params)
+	add_fingerprint(user)
+	switch(state)
+		if(0)
+			if(P.tool_behaviour == TOOL_WRENCH)
+				to_chat(user, span_notice("You start wrenching the frame into place..."))
+				if(P.use_tool(src, user, 20, volume=50))
+					to_chat(user, span_notice("You wrench the frame into place."))
+					setAnchored(TRUE)
 					state = 1
+				return
+			if(P.tool_behaviour == TOOL_WELDER)
+				if(!P.tool_start_check(user, amount=0))
 					return
-			if(state == 1)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					to_chat(user, SPAN_NOTICE("You unfasten the frame."))
-					anchored = FALSE
-					state = 0
-					return
-			return
 
-		if(QUALITY_WELDING)
-			if(state == 0)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					to_chat(user, SPAN_NOTICE("You deconstruct the frame."))
-					drop_materials(drop_location())
+				to_chat(user, span_notice("You start deconstructing the frame..."))
+				if(P.use_tool(src, user, 20, volume=50))
+					to_chat(user, span_notice("You deconstruct the frame."))
+					var/obj/item/stack/sheet/metal/M = new (drop_location(), 5)
+					M.add_fingerprint(user)
 					qdel(src)
+				return
+		if(1)
+			if(P.tool_behaviour == TOOL_WRENCH)
+				to_chat(user, span_notice("You start to unfasten the frame..."))
+				if(P.use_tool(src, user, 20, volume=50))
+					to_chat(user, span_notice("You unfasten the frame."))
+					setAnchored(FALSE)
+					state = 0
+				return
+			if(istype(P, /obj/item/circuitboard/computer) && !circuit)
+				if(!user.transferItemToLoc(P, src))
 					return
-			return
+				playsound(src, 'sound/items/deconstruct.ogg', 50, 1)
+				to_chat(user, span_notice("You place [P] inside the frame."))
+				icon_state = "1"
+				circuit = P
+				circuit.add_fingerprint(user)
+				return
 
-		if(QUALITY_PRYING)
-			if(state == 1 && circuit)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					to_chat(user, SPAN_NOTICE("You remove the circuit board."))
-					state = 1
-					icon_state = "0"
-					circuit.forceMove(drop_location())
-					circuit = null
+			else if(istype(P, /obj/item/circuitboard) && !circuit)
+				to_chat(user, span_warning("This frame does not accept circuit boards of this type!"))
+				return
+			if(P.tool_behaviour == TOOL_SCREWDRIVER && circuit)
+				P.play_tool_sound(src)
+				to_chat(user, span_notice("You screw [circuit] into place."))
+				state = 2
+				icon_state = "2"
+				return
+			if(P.tool_behaviour == TOOL_CROWBAR && circuit)
+				P.play_tool_sound(src)
+				to_chat(user, span_notice("You remove [circuit]."))
+				state = 1
+				icon_state = "0"
+				circuit.forceMove(drop_location())
+				circuit.add_fingerprint(user)
+				circuit = null
+				return
+		if(2)
+			if(P.tool_behaviour == TOOL_SCREWDRIVER && circuit)
+				P.play_tool_sound(src)
+				to_chat(user, span_notice("You unfasten the circuit board."))
+				state = 1
+				icon_state = "1"
+				return
+			if(istype(P, /obj/item/stack/cable_coil))
+				if(!P.tool_start_check(user, amount=5))
 					return
-			if(state == 4)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					to_chat(user, SPAN_NOTICE("You remove the glass panel."))
+				to_chat(user, span_notice("You start adding cables to the frame..."))
+				if(P.use_tool(src, user, 20, volume=50, amount=5))
+					if(state != 2)
+						return
+					to_chat(user, span_notice("You add cables to the frame."))
 					state = 3
 					icon_state = "3"
-					new /obj/item/stack/material/glass(drop_location(), 2)
-					return
-			return
-
-		if(QUALITY_SCREW_DRIVING)
-			if(state == 1 && circuit)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					to_chat(user, SPAN_NOTICE("You screw the circuit board into place."))
-					state = 2
-					icon_state = "2"
-					return
-			if(state == 2 && circuit)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					to_chat(user, SPAN_NOTICE("You unfasten the circuit board."))
-					state = 1
-					icon_state = "1"
-					return
-			if(state == 4)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					to_chat(user, SPAN_NOTICE("You connect the monitor."))
-					var/B = new circuit.build_path(drop_location(), src.dir)
-					circuit.construct(B)
-					qdel(src)
-					return
-			return
-
-		if(QUALITY_WIRE_CUTTING)
-			if(state == 3)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					to_chat(user, SPAN_NOTICE("You remove the cables."))
-					state = 2
-					icon_state = "2"
-					new /obj/item/stack/cable_coil(drop_location(), 5)
-					return
-			return
-
-		if(ABORT_CHECK)
-			return
-
-	switch(state)
-		if(1)
-			if(istype(I, /obj/item/electronics/circuitboard) && !circuit)
-				var/obj/item/electronics/circuitboard/B = I
-				if(B.board_type == "computer")
-					playsound(src.loc, 'sound/items/Deconstruct.ogg', 50, 1)
-					to_chat(user, SPAN_NOTICE("You place the circuit board inside the frame."))
-					src.icon_state = "1"
-					src.circuit = I
-					user.drop_from_inventory(I)
-					I.forceMove(src)
-				else
-					to_chat(user, SPAN_WARNING("This frame does not accept circuit boards of this type!"))
-		if(2)
-			if(istype(I, /obj/item/stack/cable_coil))
-				var/obj/item/stack/cable_coil/C = I
-				if (C.get_amount() < 5)
-					to_chat(user, SPAN_WARNING("You need five coils of wire to add them to the frame."))
-					return
-				to_chat(user, SPAN_NOTICE("You start to add cables to the frame."))
-				playsound(src.loc, 'sound/items/Deconstruct.ogg', 50, 1)
-				if(do_after(user, 20, src) && state == 2)
-					if (C.use(5))
-						to_chat(user, SPAN_NOTICE("You add cables to the frame."))
-						state = 3
-						icon_state = "3"
+				return
 		if(3)
-			if(istype(I, /obj/item/stack/material) && I.get_material_name() == MATERIAL_GLASS)
-				var/obj/item/stack/G = I
-				if (G.get_amount() < 2)
-					to_chat(user, SPAN_WARNING("You need two sheets of glass to put in the glass panel."))
+			if(P.tool_behaviour == TOOL_WIRECUTTER)
+				P.play_tool_sound(src)
+				to_chat(user, span_notice("You remove the cables."))
+				state = 2
+				icon_state = "2"
+				var/obj/item/stack/cable_coil/A = new (drop_location(), 5)
+				A.add_fingerprint(user)
+				return
+
+			if(istype(P, /obj/item/stack/sheet/glass))
+				if(!P.tool_start_check(user, amount=2))
 					return
-				playsound(src.loc, 'sound/items/Deconstruct.ogg', 50, 1)
-				to_chat(user, SPAN_NOTICE("You start to put in the glass panel."))
-				if(do_after(user, 20, src) && state == 3)
-					if (G.use(2))
-						to_chat(user, SPAN_NOTICE("You put in the glass panel."))
-						src.state = 4
-						src.icon_state = "4"
+				playsound(src, 'sound/items/deconstruct.ogg', 50, 1)
+				to_chat(user, span_notice("You start to put in the glass panel..."))
+				if(P.use_tool(src, user, 20, amount=2))
+					if(state != 3)
+						return
+					to_chat(user, span_notice("You put in the glass panel."))
+					state = 4
+					src.icon_state = "4"
+				return
+		if(4)
+			if(P.tool_behaviour == TOOL_CROWBAR)
+				P.play_tool_sound(src)
+				to_chat(user, span_notice("You remove the glass panel."))
+				state = 3
+				icon_state = "3"
+				var/obj/item/stack/sheet/glass/G = new(drop_location(), 2)
+				G.add_fingerprint(user)
+				return
+			if(P.tool_behaviour == TOOL_SCREWDRIVER)
+				P.play_tool_sound(src)
+				to_chat(user, span_notice("You connect the monitor."))
+				var/obj/B = new circuit.build_path (loc, circuit)
+				B.setDir(dir)
+				transfer_fingerprints_to(B)
+				qdel(src)
+				return
+	if(user.combat_mode)
+		return ..()
+
+
+/obj/structure/frame/computer/deconstruct(disassembled = TRUE)
+	if(!(flags_1 & NODECONSTRUCT_1))
+		if(state == 4)
+			new /obj/item/shard(drop_location())
+			new /obj/item/shard(drop_location())
+		if(state >= 3)
+			new /obj/item/stack/cable_coil(drop_location(), 5)
+	..()
+
+/obj/structure/frame/computer/AltClick(mob/user)
+	..()
+	if(!isliving(user) || !user.canUseTopic(src, BE_CLOSE, ismonkey(user)))
+		return
+
+	if(anchored)
+		to_chat(usr, span_warning("You must unwrench [src] before rotating it!"))
+		return
+
+	setDir(turn(dir, -90))
+
+/obj/structure/frame/computer/MouseDrop_T(atom/dropping, mob/user)
+	if(istype(dropping, /obj/item/circuitboard) && !issilicon(user))
+		attackby(dropping, user)
+	else
+		..()

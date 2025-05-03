@@ -1,694 +1,1194 @@
+
 /*
 Research and Development (R&D) Console
 
 This is the main work horse of the R&D system. It contains the menus/controls for the Destructive Analyzer, Protolathe, and Circuit
-imprinter. It also contains the /datum/research holder which handles the local research database.
+imprinter.
 
 Basic use: When it first is created, it will attempt to link up to related devices within 3 squares. It'll only link up if they
 aren't already linked to another console. Any consoles it cannot link up with (either because all of a certain type are already
 linked or there aren't any in range), you'll just not have access to that menu. In the settings menu, there are menu options that
 allow a player to attempt to re-sync with nearby consoles. You can also force it to disconnect from a specific console.
 
-The imprinting and construction menus do NOT require toxins access to access but all the other menus do. However, if you leave it
-on a menu, nothing is to stop the person from using the options on that menu (although they won't be able to change to a different
-one). You can also lock the console on the settings menu if you're feeling paranoid and you don't want anyone messing with it who
-doesn't have toxins access.
+The only thing that requires toxins access is locking and unlocking the console on the settings menu.
+Nothing else in the console has ID requirements.
 
-When a R&D console is destroyed or even partially disassembled, you lose all research data on it. However, there are two ways around
-this dire fate:
-- The easiest way is to go to the settings menu and select "Sync Database with Network." That causes it to upload
-it's data to every other device in the game. Each console has a "disconnect from network" option that'll will cause data base sync
-operations to skip that console. This is useful if you want to make a "public" R&D console or, for example, give the engineers
-a circuit imprinter with certain designs on it and don't want it accidentally updating. The downside of this method is that you have
-to have physical access to the other console to send data back. Note: An R&D console is on CentCom so if a random griffan happens to
-cause a ton of data to be lost, an admin can go send it back.
-- The second method is with data disks. Each of these disks can hold multiple technology or design datum in
-it's entirety. You can then take the disk to any R&D console and upload it's data to it. This method is a lot more secure (since it
-won't update every console in existence) but it's more of a hassle to do. Also, the disks can be stolen.
 */
-
-#define SCREEN_MAIN "main"
-#define SCREEN_PROTO "protolathe"
-#define SCREEN_IMPRINTER "circuit_imprinter"
-#define SCREEN_WORKING "working"
-#define SCREEN_TREES "tech_trees"
-#define SCREEN_LOCKED "locked"
-#define SCREEN_DISK_DESIGNS "disk_management_designs"
-#define SCREEN_DISK_TECH "disk_management_tech"
-#define SCREEN_DISK_DATA "disk_management_data"
-
 /obj/machinery/computer/rdconsole
-	name = "R&D control console"
-	icon_keyboard = "rd_key"
+	name = "R&D Console"
+	desc = "A console used to interface with R&D tools."
 	icon_screen = "rdcomp"
-	description_info = "You can also upload any unlocked designs onto a disk."
-	description_antag = "You can delete all research data, causing a massive headache for Moebius"
-	light_color = COLOR_LIGHTING_PURPLE_MACHINERY
-	circuit = /obj/item/electronics/circuitboard/rdconsole
-	var/datum/research/files								//Stores all the collected research data.
-	var/obj/item/computer_hardware/hard_drive/portable/disk = null	//Stores the data disk.
+	icon_keyboard = "rd_key"
+	var/datum/techweb/stored_research					//Reference to global science techweb.
+	var/obj/item/disk/tech_disk/t_disk	//Stores the technology disk.
+	var/obj/item/disk/design_disk/d_disk	//Stores the design disk.
+	circuit = /obj/item/circuitboard/computer/rdconsole
 
-	var/obj/machinery/r_n_d/destructive_analyzer/linked_destroy = null	//Linked Destructive Analyzer
-	var/obj/machinery/autolathe/rnd/protolathe/linked_lathe = null		//Linked Protolathe
-	var/obj/machinery/autolathe/rnd/imprinter/linked_imprinter = null	//Linked Circuit Imprinter
+	var/obj/machinery/rnd/destructive_analyzer/linked_destroy	//Linked Destructive Analyzer
+	var/obj/machinery/rnd/production/protolathe/linked_lathe				//Linked Protolathe
+	var/obj/machinery/rnd/production/circuit_imprinter/linked_imprinter	//Linked Circuit Imprinter
 
-	var/screen = SCREEN_MAIN	//Which screen is currently showing.
-	var/id     = 0			//ID of the computer (for server restrictions).
-	var/sync   = 1		//If sync = 0, it doesn't show up on Server Control Console
-	var/can_research = TRUE   //Is this console capable of researching
+	req_access = list(ACCESS_RESEARCH)	//lA AND SETTING MANIPULATION REQUIRES SCIENTIST ACCESS.
 
-	req_access = list(access_research_equipment) //Data and setting manipulation requires scientist access.
+	//UI VARS
+	var/screen = RDSCREEN_MENU
+	var/back = RDSCREEN_MENU
+	var/locked = FALSE ///if the actual console is locked down, nobody can access it
+	var/anyone_can_research = FALSE
+	var/tdisk_uple = FALSE
+	var/ddisk_uple = FALSE
+	var/datum/selected_node_id
+	var/datum/selected_design_id
+	var/selected_category
+	var/list/matching_design_ids
+	var/disk_slot_selected
+	var/searchstring = ""
+	var/searchtype = ""
+	var/ui_mode = RDCONSOLE_UI_MODE_NORMAL
 
-	var/datum/tech/selected_tech_tree
-	var/datum/technology/selected_technology
-	var/show_settings = FALSE
-	var/show_link_menu = FALSE
-	var/selected_protolathe_category
-	var/selected_imprinter_category
-	var/search_text
+	var/research_control = TRUE
+
+	// VV this to TRUE in order to be able to drag techweb nodes around.
+	// In addition it displays the coordinates of the node in the tooltip.
+	// Use this when making new techweb nodes to determine a good position for it.
+	// It will also prevent clicking on nodes.
+	var/do_node_drag = FALSE
+
+/obj/machinery/computer/rdconsole/production
+	circuit = /obj/item/circuitboard/computer/rdconsole/production
+	research_control = FALSE
+
+/proc/CallMaterialName(ID)
+	if (istype(ID, /datum/material))
+		var/datum/material/material = ID
+		return material.name
+
+	else if(GLOB.chemical_reagents_list[ID])
+		var/datum/reagent/reagent = GLOB.chemical_reagents_list[ID]
+		return reagent.name
+	return "ERROR: Report This"
 
 /obj/machinery/computer/rdconsole/proc/SyncRDevices() //Makes sure it is properly sync'ed up with the devices attached to it (if any).
-	for(var/obj/machinery/r_n_d/destructive_analyzer/D in range(3, src))
-		if(!isnull(D.linked_console) || D.panel_open)
+	for(var/obj/machinery/rnd/D in oview(3,src))
+		if(D.linked_console != null || D.disabled || D.panel_open)
 			continue
-		if(isnull(linked_destroy))
-			linked_destroy = D
-			D.linked_console = src
-
-	for(var/obj/machinery/autolathe/rnd/D in range(3, src))
-		if(!isnull(D.linked_console) || D.panel_open)
-			continue
-
-		if(istype(D, /obj/machinery/autolathe/rnd/protolathe))
-			if(isnull(linked_lathe))
+		if(istype(D, /obj/machinery/rnd/destructive_analyzer))
+			if(linked_destroy == null)
+				linked_destroy = D
+				D.linked_console = src
+		else if(istype(D, /obj/machinery/rnd/production/protolathe))
+			if(linked_lathe == null)
+				var/obj/machinery/rnd/production/protolathe/P = D
+				if(!P.console_link)
+					continue
 				linked_lathe = D
 				D.linked_console = src
-
-		else if(istype(D, /obj/machinery/autolathe/rnd/imprinter))
-			if(isnull(linked_imprinter))
+		else if(istype(D, /obj/machinery/rnd/production/circuit_imprinter))
+			if(linked_imprinter == null)
+				var/obj/machinery/rnd/production/circuit_imprinter/C = D
+				if(!C.console_link)
+					continue
 				linked_imprinter = D
 				D.linked_console = src
 
-
-/obj/machinery/computer/rdconsole/proc/griefProtection() //Have it automatically push research to the centcom server so wild griffins can't fuck up R&D's work
-	for(var/obj/machinery/r_n_d/server/centcom/C in GLOB.machines)
-		C.files.download_from(files)
-
-/obj/machinery/computer/rdconsole/Initialize()
+/obj/machinery/computer/rdconsole/Initialize(mapload)
 	. = ..()
-	files = new /datum/research(src) //Setup the research data holder.
+	stored_research = SSresearch.science_tech
+	stored_research.consoles_accessing[src] = TRUE
+	matching_design_ids = list()
+	var/obj/item/circuitboard/computer/rdconsole/board = circuit
+	anyone_can_research = board.unlocked
 	SyncRDevices()
-	if(access_research_equipment in req_access)
-		add_statverb(/datum/statverb/hack_console)
 
 /obj/machinery/computer/rdconsole/Destroy()
-	files = null
+	if(stored_research)
+		stored_research.consoles_accessing -= src
 	if(linked_destroy)
 		linked_destroy.linked_console = null
 		linked_destroy = null
 	if(linked_lathe)
 		linked_lathe.linked_console = null
-		linked_destroy = null
+		linked_lathe = null
 	if(linked_imprinter)
 		linked_imprinter.linked_console = null
-		linked_destroy = null
+		linked_imprinter = null
+	if(t_disk)
+		t_disk.forceMove(get_turf(src))
+		t_disk = null
+	if(d_disk)
+		d_disk.forceMove(get_turf(src))
+		d_disk = null
+	matching_design_ids = null
 	return ..()
 
-/obj/machinery/computer/rdconsole/attackby(var/obj/item/D as obj, var/mob/user as mob)
-	//Loading a disk into it.
-	if(istype(D, /obj/item/computer_hardware/hard_drive/portable))
-		if(disk)
-			to_chat(user, SPAN_NOTICE("A disk is already loaded into the machine."))
-			return
-
-		user.drop_item()
-		D.forceMove(src)
-		disk = D
-		to_chat(user, SPAN_NOTICE("You add \the [D] to the machine."))
-	else if(istype(D, /obj/item/device/science_tool)) // Used when you want to upload autopsy/other scanned data to the console
-		var/research_points = files.experiments.read_science_tool(D)
-		if(research_points > 0)
-			to_chat(user, SPAN_NOTICE("[name] received [research_points] research points from uploaded data."))
-			files.adjust_research_points(research_points)
-		else
-			to_chat(user, SPAN_NOTICE("There was no useful data inside [D.name]'s buffer."))
-	else
-		//The construction/deconstruction of the console code.
-		..()
-
-	SSnano.update_uis(src)
-	return
-
-/obj/machinery/computer/rdconsole/emag_act(var/remaining_charges, var/mob/user)
-	if(!emagged)
-		playsound(loc, 'sound/effects/sparks4.ogg', 75, 1)
-		emagged = TRUE
-		to_chat(user, SPAN_NOTICE("You disable the security protocols."))
+/obj/machinery/computer/rdconsole/attackby(obj/item/D, mob/user, params)
+	if(istype(D, /obj/item/research_notes))
+		var/obj/item/research_notes/R = D
+		SSresearch.science_tech.add_point_list(R.points)
+		playsound(src, 'sound/items/pshred.ogg', 25, 1)
+		qdel(R)
 		return TRUE
-
-/obj/machinery/computer/rdconsole/proc/reset_screen() // simply resets the screen to the main screen and updates the UIs
-	screen = SCREEN_MAIN
-	SSnano.update_uis(src)
-
-/obj/machinery/computer/rdconsole/proc/handle_item_analysis(obj/item/I) // handles deconstructing items.
-	files.check_item_for_tech(I)
-	files.adjust_research_points(files.experiments.get_object_research_value(I))
-	files.experiments.do_research_object(I)
-	var/list/matter = I.get_matter()
-	if(linked_lathe && matter)
-		for(var/t in matter)
-			if(t in linked_lathe.unsuitable_materials)
-				continue
-
-			if(!linked_lathe.stored_material[t])
-				linked_lathe.stored_material[t] = 0
-
-			linked_lathe.stored_material[t] += matter[t] * linked_destroy.decon_mod
-			linked_lathe.stored_material[t] = min(linked_lathe.stored_material[t], linked_lathe.storage_capacity)
-
-/obj/machinery/computer/rdconsole/Topic(href, href_list) // Oh boy here we go.
-	if(..())
-		return 1
-
-	var/obj/machinery/autolathe/rnd/target_device
-	if(screen == SCREEN_PROTO && linked_lathe)
-		target_device = linked_lathe
-	else if(screen == SCREEN_IMPRINTER && linked_imprinter)
-		target_device = linked_imprinter
-
-	if(href_list["select_tech_tree"]) // User selected a tech tree.
-		var/datum/tech/tech_tree = locate(href_list["select_tech_tree"]) in files.researched_tech
-		if(tech_tree && tech_tree.shown)
-			selected_tech_tree = tech_tree
-			selected_technology = null
-	if(href_list["select_technology"]) // User selected a technology node.
-		var/tech_node = locate(href_list["select_technology"]) in SSresearch.all_tech_nodes
-		if(tech_node)
-			selected_technology = tech_node
-	if(href_list["unlock_technology"]) // User attempts to unlock a technology node (Safeties are within UnlockTechnology)
-		var/tech_node = locate(href_list["unlock_technology"]) in SSresearch.all_tech_nodes
-		if(tech_node)
-			files.UnlockTechology(tech_node)
-	if(href_list["go_screen"]) // User is changing the screen.
-		var/where = href_list["go_screen"]
-		if(href_list["need_access"])
-			if(!allowed(usr) && !emagged)
-				to_chat(usr, SPAN_WARNING("Unauthorized access."))
+	//Loading a disk into it.
+	if(istype(D, /obj/item/disk))
+		if(istype(D, /obj/item/disk/tech_disk))
+			if(t_disk)
+				to_chat(user, span_danger("A technology disk is already loaded!"))
 				return
-		screen = where
-		if(screen == SCREEN_PROTO || screen == SCREEN_IMPRINTER)
-			search_text = ""
-	if(href_list["eject_disk"]) // User is ejecting the disk.
-		if(disk)
-			disk.forceMove(drop_location())
-			disk = null
-	if(href_list["delete_disk_file"]) // User is attempting to delete a file from the loaded disk.
-		if(disk)
-			var/datum/computer_file/file = locate(href_list["delete_disk_file"]) in disk.stored_files
-			disk.remove_file(file)
+			if(!user.transferItemToLoc(D, src))
+				to_chat(user, span_danger("[D] is stuck to your hand!"))
+				return
+			t_disk = D
+		else if (istype(D, /obj/item/disk/design_disk))
+			if(d_disk)
+				to_chat(user, span_danger("A design disk is already loaded!"))
+				return
+			if(!user.transferItemToLoc(D, src))
+				to_chat(user, span_danger("[D] is stuck to your hand!"))
+				return
+			d_disk = D
+		else
+			to_chat(user, span_danger("Machine cannot accept disks in that format."))
+			return
+		to_chat(user, span_notice("You insert [D] into \the [src]!"))
+	else if(!(linked_destroy && linked_destroy.busy) && !(linked_lathe && linked_lathe.busy) && !(linked_imprinter && linked_imprinter.busy))
+		. = ..()
 
-	if(href_list["download_disk_design"]) // User is attempting to download (disk->rdconsole) a design from the disk.
-		if(disk)
-			var/datum/computer_file/binary/design/file = locate(href_list["download_disk_design"]) in disk.stored_files
-			if(file && !file.copy_protected)
-				files.AddDesign2Known(file.design)
-				griefProtection() //Update CentCom too
-	if(href_list["upload_disk_design"]) // User is attempting to upload (rdconsole->disk) a design to the disk.
-		if(disk)
-			var/datum/design/D = locate(href_list["upload_disk_design"]) in files.known_designs
-			if(D)
-				disk.store_file(D.file.clone())
-	if(href_list["download_disk_node"]) // User is attempting to download (disk->rdconsole) a technology node from the disk.
-		if(disk)
-			var/datum/computer_file/binary/tech/file = locate(href_list["download_disk_node"]) in disk.stored_files
-			if(file)
-				files.UnlockTechology(file.node, TRUE)
-				griefProtection()
-	if(href_list["upload_disk_node"]) // User is attempting to upload (rdconsole->disk) a technology node to the disk.
-		if(disk)
-			var/datum/technology/T = locate(href_list["upload_disk_node"]) in files.researched_nodes
-			if(T)
-				var/datum/computer_file/binary/tech/tech_file = new
-				tech_file.set_tech(T)
-				disk.store_file(tech_file)
-	if(href_list["download_disk_data"])
-		if(disk)
-			var/datum/computer_file/file = locate(href_list["download_disk_data"]) in disk.stored_files
-			if(file)
-				files.load_file(file)
-	if(href_list["toggle_settings"]) // User wants to see the settings.
-		if(allowed(usr) || emagged)
-			show_settings = !show_settings
+/obj/machinery/computer/rdconsole/proc/research_node(id, mob/user)
+	if(!stored_research.available_nodes[id] || stored_research.researched_nodes[id])
+		say("Node unlock failed: Either already researched or not available!")
+		return FALSE
+	var/datum/techweb_node/TN = SSresearch.techweb_node_by_id(id)
+	if(!istype(TN))
+		say("Node unlock failed: Unknown error.")
+		return FALSE
+	var/list/price = TN.get_price(stored_research)
+	if(stored_research.can_afford(price))
+		investigate_log("[key_name(user)] researched [id]([json_encode(price)]) on techweb id [stored_research.id].", INVESTIGATE_RESEARCH)
+		if(stored_research == SSresearch.science_tech)
+			SSblackbox.record_feedback("associative", "science_techweb_unlock", 1, list("id" = "[id]", "name" = TN.display_name, "price" = "[json_encode(price)]", "time" = SQLtime()))
+		if(stored_research.research_node_id(id))
+			say("Successfully researched [TN.display_name].")
+			for(var/point_type in price)
+				user.add_exp(SKILL_SCIENCE, price[point_type] / 200)
+			var/logname = "Unknown"
+			if(isAI(user))
+				logname = "AI: [user.name]"
+			if(iscarbon(user))
+				var/obj/item/card/id/idcard = user.get_active_held_item()
+				if(istype(idcard))
+					logname = "User: [idcard.registered_name]"
+			if(ishuman(user))
+				var/mob/living/carbon/human/H = user
+				var/obj/item/I = H.wear_id
+				if(istype(I))
+					var/obj/item/card/id/ID = I.GetID()
+					if(istype(ID))
+						logname = "User: [ID.registered_name]"
+			var/i = stored_research.research_logs.len
+			stored_research.research_logs += null
+			stored_research.research_logs[++i] = list(TN.display_name, price["General Research"], logname, "[get_area(src)] ([src.x],[src.y],[src.z])")
+			return TRUE
 		else
-			to_chat(usr, SPAN_WARNING("Unauthorized access.</span>"))
-	if(href_list["toggle_link_menu"]) // User wants to see the device linkage menu.
-		if(allowed(usr) || emagged)
-			show_link_menu = !show_link_menu
-		else
-			to_chat(usr, SPAN_WARNING("Unauthorized access."))
-	if(href_list["sync"]) //Sync the research holder with all the R&D consoles in the game that aren't sync protected (after a 3 seconds delay).
-		if(!sync)
-			to_chat(usr, SPAN_WARNING("You must connect to the network first!"))
-		else
-			screen = SCREEN_WORKING
-			griefProtection() //Putting this here because I dont trust the sync process
-			addtimer(CALLBACK(src, PROC_REF(sync_tech)), 3 SECONDS)
-	if(href_list["togglesync"]) //Prevents the console from being synced by other consoles. Can still send data.
-		sync = !sync
-	if(href_list["select_category"]) // User is selecting a design category while in the protolathe/imprinter screen
-		var/what_cat = href_list["select_category"]
-		if(screen == SCREEN_PROTO)
-			selected_protolathe_category = what_cat
-		if(screen == SCREEN_IMPRINTER)
-			selected_imprinter_category = what_cat
-	if(href_list["search"]) // User is searching for a specific design.
-		var/input = sanitizeSafe(input(usr, "Enter text to search", "Searching") as null|text, MAX_LNAME_LEN)
-		search_text = input
-		if(screen == SCREEN_PROTO)
-			if(!search_text)
-				selected_protolathe_category = null
+			say("Failed to research node: Internal database error!")
+			return FALSE
+	say("Not enough research points...")
+	return FALSE
+
+/obj/machinery/computer/rdconsole/on_deconstruction()
+	if(linked_destroy)
+		linked_destroy.linked_console = null
+		linked_destroy = null
+	if(linked_lathe)
+		linked_lathe.linked_console = null
+		linked_lathe = null
+	if(linked_imprinter)
+		linked_imprinter.linked_console = null
+		linked_imprinter = null
+	..()
+
+/obj/machinery/computer/rdconsole/emag_act(mob/user, obj/item/card/emag/emag_card)
+	if(obj_flags & EMAGGED)
+		return FALSE
+	to_chat(user, span_notice("You disable the security protocols[locked? " and unlock the console":""]."))
+	playsound(src, "sparks", 75, 1)
+	obj_flags |= EMAGGED
+	locked = FALSE
+
+/obj/machinery/computer/rdconsole/multitool_act(mob/user, obj/item/multitool/I)
+	var/lathe = linked_lathe && linked_lathe.multitool_act(user, I)
+	var/print = linked_imprinter && linked_imprinter.multitool_act(user, I)
+	return lathe || print
+
+/obj/machinery/computer/rdconsole/proc/list_categories(list/categories, menu_num as num)
+	if(!categories)
+		return
+
+	var/line_length = 1
+	var/list/l = "<table style='width:100%' align='center'><tr>"
+
+	for(var/C in categories)
+		if(line_length > 2)
+			l += "</tr><tr>"
+			line_length = 1
+
+		l += "<td><A href='byond://?src=[REF(src)];category=[C];switch_screen=[menu_num]'>[C]</A></td>"
+		line_length++
+
+	l += "</tr></table></div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_header()
+	var/list/l = list()
+	var/datum/asset/spritesheet/sheet = get_asset_datum(/datum/asset/spritesheet/research_designs)
+	l += "[sheet.css_tag()][RDSCREEN_NOBREAK]"
+	l += "<div class='statusDisplay'><b>[stored_research.organization] Research and Development Network</b>"
+	l += "Available points: <BR>[techweb_point_display_rdconsole(stored_research.research_points, stored_research.last_bitcoins)]"
+	l += "Security protocols: [obj_flags & EMAGGED ? "<font color='red'>Disabled</font>" : (anyone_can_research ? "<font color='yellow'>Timed Out</font>" : "<font color='green'>Enabled</font>")]"
+	l += "<a href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_MENU]'>Main Menu</a> | <a href='byond://?src=[REF(src)];switch_screen=[back]'>Back</a></div>[RDSCREEN_NOBREAK]"
+	l += "[ui_mode == 1? span_linkOn("Normal View") : "<a href='byond://?src=[REF(src)];ui_mode=1'>Normal View</a>"] | [ui_mode == 2? span_linkOn("Expert View") : "<a href='byond://?src=[REF(src)];ui_mode=2'>Expert View</a>"] | [ui_mode == 3? span_linkOn("List View") : "<a href='byond://?src=[REF(src)];ui_mode=3'>List View</a>"]"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_main_menu()
+	var/list/l = list()
+	if(research_control)
+		l += "<H2><a href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_TECHWEB]'>Technology</a>"
+	if(d_disk)
+		l += "<hr><a href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_DESIGNDISK]'>Design Disk</a>"
+	if(t_disk)
+		l += "<hr><a href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_TECHDISK]'>Tech Disk</a>"
+	if(linked_destroy)
+		l += "<hr><a href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_DECONSTRUCT]'>Destructive Analyzer</a>"
+	if(linked_lathe)
+		l += "<hr><a href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_PROTOLATHE]'>Protolathe</a>"
+	if(linked_imprinter)
+		l += "<hr><a href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_IMPRINTER]'>Circuit Imprinter</a>"
+	l += "<hr><a href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_SETTINGS]'>Settings</a></H2>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_locked()
+	return list("<h3><a href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_MENU];unlock_console=1'>SYSTEM LOCKED</a></h3></br>")
+
+/obj/machinery/computer/rdconsole/proc/ui_settings()
+	var/list/l = list()
+	l += "<div class='statusDisplay'><h3>R&D Console Settings:</h3>"
+	l += "<A href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_DEVICE_LINKING]'>Device Linkage Menu</A>"
+	l += "<A href='byond://?src=[REF(src)];lock_console=1'>Lock Console</A></div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_device_linking()
+	var/list/l = list()
+	l += "<A href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_SETTINGS]'>Settings Menu</A><div class='statusDisplay'>"
+	l += "<h3>R&D Console Device Linkage Menu:</h3>"
+	l += "<A href='byond://?src=[REF(src)];find_device=1'>Re-sync with Nearby Devices</A>"
+	l += "<h3>Linked Devices:</h3>"
+	l += linked_destroy? "* Destructive Analyzer <A href='byond://?src=[REF(src)];disconnect=destroy'>Disconnect</A>" : "* No Destructive Analyzer Linked"
+	l += linked_lathe? "* Protolathe <A href='byond://?src=[REF(src)];disconnect=lathe'>Disconnect</A>" : "* No Protolathe Linked"
+	l += linked_imprinter? "* Circuit Imprinter <A href='byond://?src=[REF(src)];disconnect=imprinter'>Disconnect</A>" : "* No Circuit Imprinter Linked"
+	l += "</div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_protolathe_header()
+	var/list/l = list()
+	l += "<div class='statusDisplay'><A href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_PROTOLATHE]'>Protolathe Menu</A>"
+	if(linked_lathe.materials.mat_container)
+		l += "<A href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_PROTOLATHE_MATERIALS]'><B>Material Amount:</B> [linked_lathe.materials.format_amount()]</A>"
+	else
+		l += "<font color='red'>No material storage connected, please contact the quartermaster.</font>"
+	l += "<A href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_PROTOLATHE_CHEMICALS]'><B>Chemical volume:</B> [linked_lathe.reagents.total_volume] / [linked_lathe.reagents.maximum_volume]</A></div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_protolathe_category_view()	//Legacy code
+	RDSCREEN_UI_LATHE_CHECK
+	var/list/l = list()
+	l += ui_protolathe_header()
+	l += "<div class='statusDisplay'><h3>Browsing [selected_category]:</h3>"
+	for(var/v in stored_research.researched_designs)
+		var/datum/design/D = SSresearch.techweb_design_by_id(v)
+		if(!(selected_category in D.category)|| !(D.build_type & PROTOLATHE))
+			continue
+		if(!(isnull(linked_lathe.allowed_department_flags) || (D.departmental_flags & linked_lathe.allowed_department_flags)))
+			continue
+		var/temp_material
+		var/c = 50
+		var/coeff = linked_lathe.efficiency_coeff
+		if(!linked_lathe.efficient_with(D.build_path))
+			coeff = 1
+
+		var/all_materials = D.materials + D.reagents_list
+		for(var/M in all_materials)
+			var/t = linked_lathe.check_mat(D, M)
+			temp_material += " | "
+			if (t < 1)
+				temp_material += span_bad("[all_materials[M]/coeff] [CallMaterialName(M)]")
 			else
-				selected_protolathe_category = "Search Results"
-		if(screen == SCREEN_IMPRINTER)
-			if(!search_text)
-				selected_imprinter_category = null
+				temp_material += " [all_materials[M]/coeff] [CallMaterialName(M)]"
+			c = min(c,t)
+
+		if (c >= 1)
+			l += "<A href='byond://?src=[REF(src)];build=[D.id];amount=1'>[D.name]</A>[RDSCREEN_NOBREAK]"
+			if(c >= 5)
+				l += "<A href='byond://?src=[REF(src)];build=[D.id];amount=5'>x5</A>[RDSCREEN_NOBREAK]"
+			if(c >= 10)
+				l += "<A href='byond://?src=[REF(src)];build=[D.id];amount=10'>x10</A>[RDSCREEN_NOBREAK]"
+			l += "[temp_material][RDSCREEN_NOBREAK]"
+		else
+			l += "[span_linkOff("[D.name]")][temp_material][RDSCREEN_NOBREAK]"
+		l += ""
+	l += "</div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_protolathe()		//Legacy code
+	RDSCREEN_UI_LATHE_CHECK
+	var/list/l = list()
+	l += ui_protolathe_header()
+
+	l += "<form name='search' action='?src=[REF(src)]'>\
+	<input type='hidden' name='src' value='[REF(src)]'>\
+	<input type='hidden' name='search' value='to_search'>\
+	<input type='hidden' name='type' value='proto'>\
+	<input type='text' name='to_search'>\
+	<input type='submit' value='Search'>\
+	</form><HR>"
+
+	l += list_categories(linked_lathe.categories, RDSCREEN_PROTOLATHE_CATEGORY_VIEW)
+
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_protolathe_search()		//Legacy code
+	RDSCREEN_UI_LATHE_CHECK
+	var/list/l = list()
+	l += ui_protolathe_header()
+	for(var/id in matching_design_ids)
+		var/datum/design/D = SSresearch.techweb_design_by_id(id)
+		if(!(isnull(linked_lathe.allowed_department_flags) || (D.departmental_flags & linked_lathe.allowed_department_flags)))
+			continue
+		var/temp_material
+		var/c = 50
+		var/all_materials = D.materials + D.reagents_list
+		var/coeff = linked_lathe.efficiency_coeff
+		if(!linked_lathe.efficient_with(D.build_path))
+			coeff = 1
+		for(var/M in all_materials)
+			var/t = linked_lathe.check_mat(D, M)
+			temp_material += " | "
+			if (t < 1)
+				temp_material += span_bad("[all_materials[M]/coeff] [CallMaterialName(M)]")
 			else
-				selected_imprinter_category = "Search Results"
-	if(href_list["deconstruct"]) // User is deconstructing an item.
-		if(linked_destroy)
-			if(linked_destroy.deconstruct_item())
-				screen = SCREEN_WORKING // Will be resetted by the linked_destroy.
-	if(href_list["eject_item"]) // User is ejecting an item from the linked_destroy.
-		if(linked_destroy)
-			linked_destroy.eject_item()
+				temp_material += " [all_materials[M]/coeff] [CallMaterialName(M)]"
+			c = min(c,t)
 
-	if(href_list["build"])
-		var/amount = CLAMP(text2num(href_list["amount"]), 1, 10)
-		var/datum/design/being_built = locate(href_list["build"]) in files.known_designs
-		if(being_built && target_device)
-			target_device.queue_design(being_built.file, amount)
-	if(href_list["clear_queue"]) // Clearing a queue
-		if(target_device)
-			target_device.clear_queue()
-	if(href_list["eject_sheet"]) // Removing material sheets
-		if(target_device)
-			target_device.eject(href_list["eject_sheet"], text2num(href_list["amount"]))
+		if (c >= 1)
+			l += "<A href='byond://?src=[REF(src)];build=[D.id];amount=1'>[D.name]</A>[RDSCREEN_NOBREAK]"
+			if(c >= 5)
+				l += "<A href='byond://?src=[REF(src)];build=[D.id];amount=5'>x5</A>[RDSCREEN_NOBREAK]"
+			if(c >= 10)
+				l += "<A href='byond://?src=[REF(src)];build=[D.id];amount=10'>x10</A>[RDSCREEN_NOBREAK]"
+			l += "[temp_material][RDSCREEN_NOBREAK]"
+		else
+			l += "[span_linkOff("[D.name]")][temp_material][RDSCREEN_NOBREAK]"
+		l += ""
+	l += "</div>"
+	return l
 
-	if(href_list["find_device"]) // Connect with the local devices
-		screen = SCREEN_WORKING
-		addtimer(CALLBACK(src, PROC_REF(find_devices)), 2 SECONDS)
-	if(href_list["disconnect"]) //The R&D console disconnects with a specific device.
-		switch(href_list["disconnect"])
+/obj/machinery/computer/rdconsole/proc/ui_protolathe_materials()		//Legacy code
+	RDSCREEN_UI_LATHE_CHECK
+	var/datum/component/material_container/mat_container = linked_lathe.materials.mat_container
+	if (!mat_container)
+		screen = RDSCREEN_PROTOLATHE
+		return ui_protolathe()
+	var/list/l = list()
+	l += ui_protolathe_header()
+	l += "<div class='statusDisplay'><h3>Material Storage:</h3>"
+	for(var/mat_id in mat_container.materials)
+		var/datum/material/M = mat_id
+		var/amount = mat_container.materials[mat_id]
+		var/ref = REF(M)
+		l += "* [amount] of [M.name]: "
+		if(amount >= MINERAL_MATERIAL_AMOUNT) l += "<A href='byond://?src=[REF(src)];ejectsheet=[ref];eject_amt=1'>Eject</A> [RDSCREEN_NOBREAK]"
+		if(amount >= MINERAL_MATERIAL_AMOUNT*5) l += "<A href='byond://?src=[REF(src)];ejectsheet=[ref];eject_amt=5'>5x</A> [RDSCREEN_NOBREAK]"
+		if(amount >= MINERAL_MATERIAL_AMOUNT) l += "<A href='byond://?src=[REF(src)];ejectsheet=[ref];eject_amt=50'>All</A>[RDSCREEN_NOBREAK]"
+		l += ""
+	l += "</div>[RDSCREEN_NOBREAK]"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_protolathe_chemicals()		//Legacy code
+	RDSCREEN_UI_LATHE_CHECK
+	var/list/l = list()
+	l += ui_protolathe_header()
+	l += "<div class='statusDisplay'><A href='byond://?src=[REF(src)];disposeallP=1'>Disposal All Chemicals in Storage</A>"
+	l += "<h3>Chemical Storage:</h3>"
+	for(var/datum/reagent/R in linked_lathe.reagents.reagent_list)
+		l += "[R.name]: [R.volume]"
+		l += "<A href='byond://?src=[REF(src)];disposeP=[R]'>Purge</A>"
+	l += "</div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_circuit_header()		//Legacy Code
+	var/list/l = list()
+	l += "<div class='statusDisplay'><A href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_IMPRINTER]'>Circuit Imprinter Menu</A>"
+	if (linked_imprinter.materials.mat_container)
+		l += "<A href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_IMPRINTER_MATERIALS]'><B>Material Amount:</B> [linked_imprinter.materials.format_amount()]</A>"
+	else
+		l += "<font color='red'>No material storage connected, please contact the quartermaster.</font>"
+	l += "<A href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_IMPRINTER_CHEMICALS]'><B>Chemical volume:</B> [linked_imprinter.reagents.total_volume] / [linked_imprinter.reagents.maximum_volume]</A></div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_circuit()		//Legacy code
+	RDSCREEN_UI_IMPRINTER_CHECK
+	var/list/l = list()
+	l += ui_circuit_header()
+	l += "<h3>Circuit Imprinter Menu:</h3>"
+
+	l += "<form name='search' action='?src=[REF(src)]'>\
+	<input type='hidden' name='src' value='[REF(src)]'>\
+	<input type='hidden' name='search' value='to_search'>\
+	<input type='hidden' name='type' value='imprint'>\
+	<input type='text' name='to_search'>\
+	<input type='submit' value='Search'>\
+	</form><HR>"
+
+	l += list_categories(linked_imprinter.categories, RDSCREEN_IMPRINTER_CATEGORY_VIEW)
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_circuit_category_view()	//Legacy code
+	RDSCREEN_UI_IMPRINTER_CHECK
+	var/list/l = list()
+	l += ui_circuit_header()
+	l += "<div class='statusDisplay'><h3>Browsing [selected_category]:</h3>"
+
+	for(var/v in stored_research.researched_designs)
+		var/datum/design/D = SSresearch.techweb_design_by_id(v)
+		if(!(selected_category in D.category) || !(D.build_type & IMPRINTER))
+			continue
+		if(!(isnull(linked_imprinter.allowed_department_flags) || (D.departmental_flags & linked_imprinter.allowed_department_flags)))
+			continue
+		var/temp_materials
+		var/check_materials = TRUE
+
+		var/all_materials = D.materials + D.reagents_list
+		var/coeff = linked_imprinter.efficiency_coeff
+		if(!linked_imprinter.efficient_with(D.build_path))
+			coeff = 1
+
+		for(var/M in all_materials)
+			temp_materials += " | "
+			if (!linked_imprinter.check_mat(D, M))
+				check_materials = FALSE
+				temp_materials += " [span_bad("[all_materials[M]/coeff] [CallMaterialName(M)]")]"
+			else
+				temp_materials += " [all_materials[M]/coeff] [CallMaterialName(M)]"
+		if (check_materials)
+			l += "<A href='byond://?src=[REF(src)];imprint=[D.id]'>[D.name]</A>[temp_materials]"
+		else
+			l += "[span_linkOff("[D.name]")][temp_materials]"
+	l += "</div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_circuit_search()	//Legacy code
+	RDSCREEN_UI_IMPRINTER_CHECK
+	var/list/l = list()
+	l += ui_circuit_header()
+	l += "<div class='statusDisplay'><h3>Search results:</h3>"
+
+	for(var/id in matching_design_ids)
+		var/datum/design/D = SSresearch.techweb_design_by_id(id)
+		if(!(isnull(linked_imprinter.allowed_department_flags) || (D.departmental_flags & linked_imprinter.allowed_department_flags)))
+			continue
+		var/temp_materials
+		var/check_materials = TRUE
+		var/all_materials = D.materials + D.reagents_list
+		var/coeff = linked_imprinter.efficiency_coeff
+		if(!linked_imprinter.efficient_with(D.build_path))
+			coeff = 1
+		for(var/M in all_materials)
+			temp_materials += " | "
+			if (!linked_imprinter.check_mat(D, M))
+				check_materials = FALSE
+				temp_materials += " [span_bad("[all_materials[M]/coeff] [CallMaterialName(M)]")]"
+			else
+				temp_materials += " [all_materials[M]/coeff] [CallMaterialName(M)]"
+		if (check_materials)
+			l += "<A href='byond://?src=[REF(src)];imprint=[D.id]'>[D.name]</A>[temp_materials]"
+		else
+			l += "[span_linkOff("[D.name]")][temp_materials]"
+	l += "</div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_circuit_chemicals()		//legacy code
+	RDSCREEN_UI_IMPRINTER_CHECK
+	var/list/l = list()
+	l += ui_circuit_header()
+	l += "<A href='byond://?src=[REF(src)];disposeallI=1'>Disposal All Chemicals in Storage</A><div class='statusDisplay'>"
+	l += "<h3>Chemical Storage:</h3>"
+	for(var/datum/reagent/R in linked_imprinter.reagents.reagent_list)
+		l += "[R.name]: [R.volume]"
+		l += "<A href='byond://?src=[REF(src)];disposeI=[R]'>Purge</A>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_circuit_materials()	//Legacy code!
+	RDSCREEN_UI_IMPRINTER_CHECK
+	var/datum/component/material_container/mat_container = linked_imprinter.materials.mat_container
+	if (!mat_container)
+		screen = RDSCREEN_IMPRINTER
+		return ui_circuit()
+	var/list/l = list()
+	l += ui_circuit_header()
+	l += "<h3><div class='statusDisplay'>Material Storage:</h3>"
+	for(var/mat_id in mat_container.materials)
+		var/datum/material/M = mat_id
+		var/amount = mat_container.materials[mat_id]
+		var/ref = REF(M)
+		l += "* [amount] of [M.name]: "
+		if(amount >= MINERAL_MATERIAL_AMOUNT) l += "<A href='byond://?src=[REF(src)];imprinter_ejectsheet=[ref];eject_amt=1'>Eject</A> [RDSCREEN_NOBREAK]"
+		if(amount >= MINERAL_MATERIAL_AMOUNT*5) l += "<A href='byond://?src=[REF(src)];imprinter_ejectsheet=[ref];eject_amt=5'>5x</A> [RDSCREEN_NOBREAK]"
+		if(amount >= MINERAL_MATERIAL_AMOUNT) l += "<A href='byond://?src=[REF(src)];imprinter_ejectsheet=[ref];eject_amt=50'>All</A>[RDSCREEN_NOBREAK]</div>"
+		l += ""
+	l += "</div>[RDSCREEN_NOBREAK]"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_techdisk()		//Legacy code
+	RDSCREEN_UI_TDISK_CHECK
+	var/list/l = list()
+	l += "<div class='statusDisplay'>Disk Operations: <A href='byond://?src=[REF(src)];clear_tech=0'>Clear Disk</A>"
+	l += "<A href='byond://?src=[REF(src)];eject_tech=1'>Eject Disk</A>"
+	l += "<A href='byond://?src=[REF(src)];updt_tech=0'>Upload All</A>"
+	l += "<A href='byond://?src=[REF(src)];copy_tech=1'>Load Technology to Disk</A></div>"
+	l += "<div class='statusDisplay'><h3>Stored Technology Nodes:</h3>"
+	for(var/i in t_disk.stored_research.researched_nodes)
+		var/datum/techweb_node/N = SSresearch.techweb_node_by_id(i)
+		l += "<A href='byond://?src=[REF(src)];view_node=[i];back_screen=[screen]'>[N.display_name]</A>"
+	l += "</div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_designdisk()		//Legacy code
+	RDSCREEN_UI_DDISK_CHECK
+	var/list/l = list()
+	l += "Disk Operations: <A href='byond://?src=[REF(src)];clear_design=0'>Clear Disk</A><A href='byond://?src=[REF(src)];updt_design=0'>Upload All</A><A href='byond://?src=[REF(src)];eject_design=1'>Eject Disk</A>"
+	for(var/i in 1 to d_disk.max_blueprints)
+		l += "<div class='statusDisplay'>"
+		if(d_disk.blueprints[i])
+			var/datum/design/D = d_disk.blueprints[i]
+			l += "<A href='byond://?src=[REF(src)];view_design=[D.id]'>[D.name]</A>"
+			l += "Operations: <A href='byond://?src=[REF(src)];updt_design=[i]'>Upload to database</A> <A href='byond://?src=[REF(src)];clear_design=[i]'>Clear Slot</A>"
+		else
+			l += "Empty Slot Operations: <A href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_DESIGNDISK_UPLOAD];disk_slot=[i]'>Load Design to Slot</A>"
+		l += "</div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_designdisk_upload()	//Legacy code
+	RDSCREEN_UI_DDISK_CHECK
+	var/list/l = list()
+	l += "<A href='byond://?src=[REF(src)];switch_screen=[RDSCREEN_DESIGNDISK];back_screen=[screen]'>Return to Disk Operations</A><div class='statusDisplay'>"
+	l += "<h3>Load Design to Disk:</h3>"
+	for(var/v in stored_research.researched_designs)
+		var/datum/design/D = SSresearch.techweb_design_by_id(v)
+		l += "[D.name] "
+		l += "<A href='byond://?src=[REF(src)];copy_design=[disk_slot_selected];copy_design_ID=[D.id]'>Copy to Disk</A>"
+	l += "</div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_deconstruct()		//Legacy code
+	RDSCREEN_UI_DECONSTRUCT_CHECK
+	var/list/l = list()
+	if(!linked_destroy.loaded_item)
+		l += "<div class='statusDisplay'>No item loaded. Standing-by...</div>"
+	else
+		l += "<div class='statusDisplay'>[RDSCREEN_NOBREAK]"
+		l += "<table><tr><td>[icon2html(linked_destroy.loaded_item, usr)]</td><td><b>[linked_destroy.loaded_item.name]</b> <A href='byond://?src=[REF(src)];eject_item=1'>Eject</A></td></tr></table>[RDSCREEN_NOBREAK]"
+		l += "Select a node to boost by deconstructing this item. This item can boost:"
+
+		var/anything = FALSE
+		var/list/boostable_nodes = techweb_item_boost_check(linked_destroy.loaded_item)
+		for(var/id in boostable_nodes)
+			anything = TRUE
+			var/list/worth = boostable_nodes[id]
+			var/datum/techweb_node/N = SSresearch.techweb_node_by_id(id)
+
+			l += "<div class='statusDisplay'>[RDSCREEN_NOBREAK]"
+			if (stored_research.researched_nodes[N.id])  // already researched
+				l += span_linkOff("[N.display_name]")
+				l += "This node has already been researched."
+			else if(!length(worth))  // reveal only
+				if (stored_research.hidden_nodes[N.id])
+					l += "<A href='byond://?src=[REF(src)];deconstruct=[N.id]'>[N.display_name]</A>"
+					l += "This node will be revealed."
+				else
+					l += span_linkOff("[N.display_name]")
+					l += "This node has already been revealed."
+			else  // boost by the difference
+				var/list/differences = list()
+				var/list/already_boosted = stored_research.boosted_nodes[N.id]
+				for(var/i in worth)
+					var/already_boosted_amount = already_boosted? stored_research.boosted_nodes[N.id][i] : 0
+					var/amt = min(worth[i], N.research_costs[i]) - already_boosted_amount
+					if(amt > 0)
+						differences[i] = amt
+				if (length(differences))
+					l += "<A href='byond://?src=[REF(src)];deconstruct=[N.id]'>[N.display_name]</A>"
+					l += "This node will be boosted with the following:<BR>[techweb_point_display_generic(differences)]"
+				else
+					l += span_linkOff("[N.display_name]")
+					l += "This node has already been boosted.</span>"
+			l += "</div>[RDSCREEN_NOBREAK]"
+
+		// point deconstruction and material reclamation use the same ID to prevent accidentally missing the points
+		var/list/point_values = techweb_item_point_check(linked_destroy.loaded_item)
+		if(point_values)
+			anything = TRUE
+			l += "<div class='statusDisplay'>[RDSCREEN_NOBREAK]"
+			if (stored_research.deconstructed_items[linked_destroy.loaded_item.type])
+				l += span_linkOff("Point Deconstruction")
+				l += "This item's points have already been claimed."
+			else
+				l += "<A href='byond://?src=[REF(src)];deconstruct=[RESEARCH_MATERIAL_RECLAMATION_ID]'>Point Deconstruction</A>"
+				l += "This item is worth: <BR>[techweb_point_display_generic(point_values)]!"
+			l += "</div>[RDSCREEN_NOBREAK]"
+
+		if(!(linked_destroy.loaded_item.resistance_flags & INDESTRUCTIBLE))
+			var/list/materials = linked_destroy.loaded_item.materials
+			l += "<div class='statusDisplay'><A href='byond://?src=[REF(src)];deconstruct=[RESEARCH_MATERIAL_RECLAMATION_ID]'>[materials.len? "Material Reclamation" : "Destroy Item"]</A>"
+			for (var/M in materials)
+				l += "* [CallMaterialName(M)] x [materials[M] * (linked_destroy.decon_mod/10)]"
+			l += "</div>[RDSCREEN_NOBREAK]"
+			anything = TRUE
+
+		if (!anything)
+			l += "Nothing!"
+
+		l += "</div>"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_techweb()
+	var/list/l = list()
+	if(ui_mode != RDCONSOLE_UI_MODE_LIST)
+		var/list/columns = list()
+		var/max_tier = 0
+		for (var/node_ in stored_research.tiers)
+			var/datum/techweb_node/node = SSresearch.techweb_node_by_id(node_)
+			var/tier = stored_research.tiers[node.id]
+			LAZYINITLIST(columns["[tier]"])  // String hackery to make the numbers associative
+			columns["[tier]"] += ui_techweb_single_node(node, minimal=(tier != 1))
+			max_tier = max(max_tier, tier)
+
+		l += "<table><tr><th align='left'>Researched</th><th align='left'>Available</th><th align='left'>Future</th></tr><tr>[RDSCREEN_NOBREAK]"
+		if(max_tier)
+			for(var/tier in 0 to max_tier)
+				l += "<td valign='top'>[RDSCREEN_NOBREAK]"
+				l += columns["[tier]"]
+				l += "</td>[RDSCREEN_NOBREAK]"
+		l += "</tr></table>[RDSCREEN_NOBREAK]"
+	else
+		var/list/avail = list()			//This could probably be optimized a bit later.
+		var/list/unavail = list()
+		var/list/res = list()
+		for(var/v in stored_research.researched_nodes)
+			res += SSresearch.techweb_node_by_id(v)
+		for(var/v in stored_research.available_nodes)
+			if(stored_research.researched_nodes[v])
+				continue
+			avail += SSresearch.techweb_node_by_id(v)
+		for(var/v in stored_research.visible_nodes)
+			if(stored_research.available_nodes[v])
+				continue
+			unavail += SSresearch.techweb_node_by_id(v)
+		l += "<h2>Technology Nodes:</h2>[RDSCREEN_NOBREAK]"
+		l += "<div><h3>Available for Research:</h3>"
+		for(var/datum/techweb_node/N in avail)
+			var/not_unlocked = (stored_research.available_nodes[N.id] && !stored_research.researched_nodes[N.id])
+			var/has_points = (stored_research.can_afford(N.get_price(stored_research)))
+			var/research_href = not_unlocked? (has_points? "<A href='byond://?src=[REF(src)];research_node=[N.id]'>Research</A>" : "<span class='linkOff bad'>Not Enough Points</span>") : null
+			l += "<A href='byond://?src=[REF(src)];view_node=[N.id];back_screen=[screen]'>[N.display_name]</A>[research_href]"
+		l += "</div><div><h3>Locked Nodes:</h3>"
+		for(var/datum/techweb_node/N in unavail)
+			l += "<A href='byond://?src=[REF(src)];view_node=[N.id];back_screen=[screen]'>[N.display_name]</A>"
+		l += "</div><div><h3>Researched Nodes:</h3>"
+		for(var/datum/techweb_node/N in res)
+			l += "<A href='byond://?src=[REF(src)];view_node=[N.id];back_screen=[screen]'>[N.display_name]</A>"
+		l += "</div>[RDSCREEN_NOBREAK]"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/machine_icon(atom/item)
+	return icon2html(initial(item.icon), usr, initial(item.icon_state), SOUTH)
+
+/obj/machinery/computer/rdconsole/proc/can_research(mob/user)
+	if(!locked && (allowed(user) || (obj_flags & EMAGGED) || anyone_can_research))
+		return TRUE
+	return FALSE
+
+/obj/machinery/computer/rdconsole/proc/ui_techweb_single_node(datum/techweb_node/node, selflink=TRUE, minimal=FALSE)
+	var/list/l = list()
+	if (stored_research.hidden_nodes[node.id])
+		return l
+	var/display_name = node.display_name
+	if (selflink)
+		display_name = "<A href='byond://?src=[REF(src)];view_node=[node.id];back_screen=[screen]'>[display_name]</A>"
+	l += "<div class='statusDisplay technode'><b>[display_name]</b> [RDSCREEN_NOBREAK]"
+	if(minimal)
+		l += "<br>[node.description]"
+	else
+		if(stored_research.researched_nodes[node.id])
+			l += span_linkOff("Researched")
+		else if(stored_research.available_nodes[node.id])
+			if(stored_research.can_afford(node.get_price(stored_research)))
+				l += "<BR><A href='byond://?src=[REF(src)];research_node=[node.id]'>[node.price_display(stored_research)]</A>"
+			else
+				l += "<BR>[span_linkOff("[node.price_display(stored_research)]")]"  // gray - too expensive
+		else
+			l += "<BR><span class='linkOff bad'>[node.price_display(stored_research)]</span>"  // red - missing prereqs
+		if(ui_mode == RDCONSOLE_UI_MODE_NORMAL)
+			l += "[node.description]"
+			for(var/i in node.design_ids)
+				var/datum/design/D = SSresearch.techweb_design_by_id(i)
+				l += "<span data-tooltip='[D.name]' onclick='location=\"?src=[REF(src)];view_design=[i];back_screen=[screen]\"'>[D.icon_html(usr)]</span>[RDSCREEN_NOBREAK]"
+	l += "</div>[RDSCREEN_NOBREAK]"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_techweb_nodeview()
+	var/datum/techweb_node/selected_node = SSresearch.techweb_node_by_id(selected_node_id)
+	RDSCREEN_UI_SNODE_CHECK
+	var/list/l = list()
+	if(stored_research.hidden_nodes[selected_node.id])
+		l += "<div><h3>ERROR: RESEARCH NODE UNKNOWN.</h3></div>"
+		return
+
+	l += "<table><tr>[RDSCREEN_NOBREAK]"
+	if (length(selected_node.prereq_ids))
+		l += "<th align='left'>Requires</th>[RDSCREEN_NOBREAK]"
+	l += "<th align='left'>Current Node</th>[RDSCREEN_NOBREAK]"
+	if (length(selected_node.unlock_ids))
+		l += "<th align='left'>Unlocks</th>[RDSCREEN_NOBREAK]"
+
+	l += "</tr><tr>[RDSCREEN_NOBREAK]"
+	if (length(selected_node.prereq_ids))
+		l += "<td valign='top'>[RDSCREEN_NOBREAK]"
+		for (var/i in selected_node.prereq_ids)
+			l += ui_techweb_single_node(SSresearch.techweb_node_by_id(i))
+		l += "</td>[RDSCREEN_NOBREAK]"
+	l += "<td valign='top'>[RDSCREEN_NOBREAK]"
+	l += ui_techweb_single_node(selected_node, selflink=FALSE)
+	l += "</td>[RDSCREEN_NOBREAK]"
+	if (length(selected_node.unlock_ids))
+		l += "<td valign='top'>[RDSCREEN_NOBREAK]"
+		for (var/i in selected_node.unlock_ids)
+			l += ui_techweb_single_node(SSresearch.techweb_node_by_id(i))
+		l += "</td>[RDSCREEN_NOBREAK]"
+
+	l += "</tr></table>[RDSCREEN_NOBREAK]"
+	return l
+
+/obj/machinery/computer/rdconsole/proc/ui_techweb_designview()		//Legacy code
+	var/datum/design/selected_design = SSresearch.techweb_design_by_id(selected_design_id)
+	RDSCREEN_UI_SDESIGN_CHECK
+	var/list/l = list()
+	l += "<div><table><tr><td>[selected_design.icon_html(usr)]</td><td><b>[selected_design.name]</b></td></tr></table>[RDSCREEN_NOBREAK]"
+	if(selected_design.build_type)
+		var/lathes = list()
+		if(selected_design.build_type & IMPRINTER)
+			lathes += "<span data-tooltip='Circuit Imprinter'>[machine_icon(/obj/machinery/rnd/production/circuit_imprinter)]</span>[RDSCREEN_NOBREAK]"
+			if (linked_imprinter && stored_research.researched_designs[selected_design.id])
+				l += "<A href='byond://?src=[REF(src)];search=1;type=imprint;to_search=[selected_design.name]'>Imprint</A>"
+		if(selected_design.build_type & PROTOLATHE)
+			lathes += "<span data-tooltip='Protolathe'>[machine_icon(/obj/machinery/rnd/production/protolathe)]</span>[RDSCREEN_NOBREAK]"
+			if (linked_lathe && stored_research.researched_designs[selected_design.id])
+				l += "<A href='byond://?src=[REF(src)];search=1;type=proto;to_search=[selected_design.name]'>Construct</A>"
+		if(selected_design.build_type & AUTOLATHE)
+			lathes += "<span data-tooltip='Autolathe'>[machine_icon(/obj/machinery/autolathe)]</span>[RDSCREEN_NOBREAK]"
+		if(selected_design.build_type & MECHFAB)
+			lathes += "<span data-tooltip='Exosuit Fabricator'>[machine_icon(/obj/machinery/mecha_part_fabricator)]</span>[RDSCREEN_NOBREAK]"
+		if(selected_design.build_type & BIOGENERATOR)
+			lathes += "<span data-tooltip='Biogenerator'>[machine_icon(/obj/machinery/biogenerator)]</span>[RDSCREEN_NOBREAK]"
+		if(selected_design.build_type & LIMBGROWER)
+			lathes += "<span data-tooltip='Limbgrower'>[machine_icon(/obj/machinery/limbgrower)]</span>[RDSCREEN_NOBREAK]"
+		if(selected_design.build_type & SMELTER)
+			lathes += "<span data-tooltip='Smelter'>[machine_icon(/obj/machinery/mineral/processing_unit)]</span>[RDSCREEN_NOBREAK]"
+		l += "Construction types:"
+		l += lathes
+		l += ""
+	l += "Required materials:"
+	var/all_mats = selected_design.materials + selected_design.reagents_list
+	for(var/M in all_mats)
+		l += "* [CallMaterialName(M)] x [all_mats[M]]"
+	l += "Unlocked by:"
+	for (var/i in selected_design.unlocked_by)
+		l += ui_techweb_single_node(SSresearch.techweb_node_by_id(i))
+	l += "[RDSCREEN_NOBREAK]</div>"
+	return l
+
+//Fuck TGUI.
+/obj/machinery/computer/rdconsole/proc/generate_ui()
+	var/list/ui = list()
+	ui += ui_header()
+	if(locked)
+		ui += ui_locked()
+	else
+		switch(screen)
+			if(RDSCREEN_MENU)
+				ui += ui_main_menu()
+			if(RDSCREEN_TECHWEB)
+				ui += ui_techweb()
+			if(RDSCREEN_TECHWEB_NODEVIEW)
+				ui += ui_techweb_nodeview()
+			if(RDSCREEN_TECHWEB_DESIGNVIEW)
+				ui += ui_techweb_designview()
+			if(RDSCREEN_DESIGNDISK)
+				ui += ui_designdisk()
+			if(RDSCREEN_DESIGNDISK_UPLOAD)
+				ui += ui_designdisk_upload()
+			if(RDSCREEN_TECHDISK)
+				ui += ui_techdisk()
+			if(RDSCREEN_DECONSTRUCT)
+				ui += ui_deconstruct()
+			if(RDSCREEN_PROTOLATHE)
+				ui += ui_protolathe()
+			if(RDSCREEN_PROTOLATHE_CATEGORY_VIEW)
+				ui += ui_protolathe_category_view()
+			if(RDSCREEN_PROTOLATHE_MATERIALS)
+				ui += ui_protolathe_materials()
+			if(RDSCREEN_PROTOLATHE_CHEMICALS)
+				ui += ui_protolathe_chemicals()
+			if(RDSCREEN_PROTOLATHE_SEARCH)
+				ui += ui_protolathe_search()
+			if(RDSCREEN_IMPRINTER)
+				ui += ui_circuit()
+			if(RDSCREEN_IMPRINTER_CATEGORY_VIEW)
+				ui += ui_circuit_category_view()
+			if(RDSCREEN_IMPRINTER_MATERIALS)
+				ui += ui_circuit_materials()
+			if(RDSCREEN_IMPRINTER_CHEMICALS)
+				ui += ui_circuit_chemicals()
+			if(RDSCREEN_IMPRINTER_SEARCH)
+				ui += ui_circuit_search()
+			if(RDSCREEN_SETTINGS)
+				ui += ui_settings()
+			if(RDSCREEN_DEVICE_LINKING)
+				ui += ui_device_linking()
+
+	for(var/i in 1 to length(ui))
+		if(!findtextEx(ui[i], RDSCREEN_NOBREAK))
+			ui[i] += "<br>"
+	. = ui.Join("")
+	return replacetextEx(., RDSCREEN_NOBREAK, "")
+
+/obj/machinery/computer/rdconsole/Topic(raw, ls)
+	if(..())
+		return
+	add_fingerprint(usr)
+	usr.set_machine(src)
+	if(ls["switch_screen"])
+		back = screen
+		screen = text2num(ls["switch_screen"])
+	if(ls["ui_mode"])
+		ui_mode = text2num(ls["ui_mode"])
+	if(ls["lock_console"])
+		if(obj_flags & EMAGGED)
+			to_chat(usr, span_boldwarning("Security protocol error: Unable to lock."))
+			return
+		if(allowed(usr))
+			lock_console(usr)
+		else
+			to_chat(usr, span_boldwarning("Unauthorized Access."))
+	if(ls["unlock_console"])
+		if(allowed(usr))
+			unlock_console(usr)
+		else
+			to_chat(usr, span_boldwarning("Unauthorized Access."))
+	if(ls["find_device"])
+		SyncRDevices()
+		say("Resynced with nearby devices.")
+	if(ls["back_screen"])
+		back = text2num(ls["back_screen"])
+	if(ls["build"]) //Causes the Protolathe to build something.
+		if(QDELETED(linked_lathe))
+			say("No Protolathe Linked!")
+			return
+		if(linked_lathe.busy)
+			say("Warning: Protolathe busy!")
+		else
+			linked_lathe.user_try_print_id(ls["build"], ls["amount"])
+	if(ls["imprint"])
+		if(QDELETED(linked_imprinter))
+			say("No Circuit Imprinter Linked!")
+			return
+		if(linked_imprinter.busy)
+			say("Warning: Imprinter busy!")
+		else
+			linked_imprinter.user_try_print_id(ls["imprint"])
+	if(ls["category"])
+		selected_category = ls["category"]
+	if(ls["disconnect"]) //The R&D console disconnects with a specific device.
+		switch(ls["disconnect"])
 			if("destroy")
+				if(QDELETED(linked_destroy))
+					say("No Destructive Analyzer Linked!")
+					return
 				linked_destroy.linked_console = null
 				linked_destroy = null
 			if("lathe")
+				if(QDELETED(linked_lathe))
+					say("No Protolathe Linked!")
+					return
 				linked_lathe.linked_console = null
 				linked_lathe = null
 			if("imprinter")
+				if(QDELETED(linked_imprinter))
+					say("No Circuit Imprinter Linked!")
+					return
 				linked_imprinter.linked_console = null
 				linked_imprinter = null
-	if(href_list["reset"]) //Reset the R&D console's database.
-		griefProtection()
-		var/choice = alert("R&D Console Database Reset", "Are you sure you want to reset the R&D console's database? Data lost cannot be recovered.", "Continue", "Cancel")
-		if(choice == "Continue")
-			log_and_message_admins("reset the R&D console's database")
-			screen = SCREEN_WORKING
-			qdel(files)
-			files = new /datum/research(src)
-			addtimer(CALLBACK(src, PROC_REF(reset_screen)), 2 SECONDS)
-	if(href_list["lock"]) //Lock the console from use by anyone without tox access.
-		if(allowed(usr) || emagged)
-			screen = SCREEN_LOCKED
+	if(ls["eject_design"]) //Eject the design disk.
+		eject_disk("design")
+		screen = RDSCREEN_MENU
+		say("Ejecting Design Disk")
+	if(ls["eject_tech"]) //Eject the technology disk.
+		eject_disk("tech")
+		screen = RDSCREEN_MENU
+		say("Ejecting Technology Disk")
+	if(ls["deconstruct"])
+		if(QDELETED(linked_destroy))
+			say("No Destructive Analyzer Linked!")
+			return
+		if(!linked_destroy.user_try_decon_id(ls["deconstruct"], usr))
+			say("Destructive analysis failed!")
+	//Protolathe Materials
+	if(ls["disposeP"])  //Causes the protolathe to dispose of a single reagent (all of it)
+		if(QDELETED(linked_lathe))
+			say("No Protolathe Linked!")
+			return
+		linked_lathe.reagents.del_reagent(ls["disposeP"])
+	if(ls["disposeallP"]) //Causes the protolathe to dispose of all it's reagents.
+		if(QDELETED(linked_lathe))
+			say("No Protolathe Linked!")
+			return
+		linked_lathe.reagents.clear_reagents()
+	if(ls["ejectsheet"]) //Causes the protolathe to eject a sheet of material
+		if(QDELETED(linked_lathe))
+			say("No Protolathe Linked!")
+			return
+		if(!linked_lathe.materials.mat_container)
+			say("No material storage linked to protolathe!")
+			return
+		linked_lathe.eject_sheets(ls["ejectsheet"], ls["eject_amt"])
+	//Circuit Imprinter Materials
+	if(ls["disposeI"])  //Causes the circuit imprinter to dispose of a single reagent (all of it)
+		if(QDELETED(linked_imprinter))
+			say("No Circuit Imprinter Linked!")
+			return
+		linked_imprinter.reagents.del_reagent(ls["disposeI"])
+	if(ls["disposeallI"]) //Causes the circuit imprinter to dispose of all it's reagents.
+		if(QDELETED(linked_imprinter))
+			say("No Circuit Imprinter Linked!")
+			return
+		linked_imprinter.reagents.clear_reagents()
+	if(ls["imprinter_ejectsheet"]) //Causes the imprinter to eject a sheet of material
+		if(QDELETED(linked_imprinter))
+			say("No Circuit Imprinter Linked!")
+			return
+		if(!linked_imprinter.materials.mat_container)
+			say("No material storage linked to circuit imprinter!")
+			return
+		var/datum/material/M = locate(ls["imprinter_ejectsheet"]) in linked_imprinter.materials.mat_container.materials
+		linked_imprinter.eject_sheets(M, ls["eject_amt"])
+	if(ls["disk_slot"])
+		disk_slot_selected = text2num(ls["disk_slot"])
+	if(ls["research_node"])
+		if(!can_research(usr))
+			to_chat(usr, span_danger("Access Denied."))
+			return
+		if(!research_control)
+			return				//honestly should call them out for href exploiting :^)
+		if(!stored_research.available_nodes[ls["research_node"]])
+			return 			//Nope!
+		research_node(ls["research_node"], usr)
+	if(ls["clear_tech"]) //Erase la on the technology disk.
+		if(QDELETED(t_disk))
+			say("No Technology Disk Inserted!")
+			return
+		qdel(t_disk.stored_research)
+		t_disk.stored_research = new
+		say("Wiping technology disk.")
+	if(ls["copy_tech"]) //Copy some technology la from the research holder to the disk.
+		if(QDELETED(t_disk))
+			say("No Technology Disk Inserted!")
+			return
+		stored_research.copy_research_to(t_disk.stored_research)
+		screen = RDSCREEN_TECHDISK
+		say("Downloading to technology disk.")
+	if(ls["clear_design"]) //Erases la on the design disk.
+		if(QDELETED(d_disk))
+			say("No Design Disk Inserted!")
+			return
+		var/n = text2num(ls["clear_design"])
+		if(!n)
+			for(var/i in 1 to d_disk.max_blueprints)
+				d_disk.blueprints[i] = null
+				say("Wiping design disk.")
 		else
-			to_chat(usr, SPAN_WARNING("Unauthorized access."))
-	if(href_list["unlock"]) // Unlock
-		if(allowed(usr) || emagged)
-			screen = SCREEN_MAIN
+			var/datum/design/D = d_disk.blueprints[n]
+			say("Wiping design [D.name] from design disk.")
+			d_disk.blueprints[n] = null
+	if(ls["search"]) //Search for designs with name matching pattern
+		searchstring = ls["to_search"]
+		searchtype = ls["type"]
+		rescan_views()
+		if(searchtype == "proto")
+			screen = RDSCREEN_PROTOLATHE_SEARCH
 		else
-			to_chat(usr, SPAN_WARNING("Unauthorized access."))
-
-	return TRUE
-
-/obj/machinery/computer/rdconsole/proc/find_devices()
-	SyncRDevices()
-	reset_screen()
-
-/obj/machinery/computer/rdconsole/proc/sync_tech()
-	for(var/obj/machinery/r_n_d/server/S in GLOB.machines)
-		var/server_processed = FALSE
-		if((id in S.id_with_upload) || istype(S, /obj/machinery/r_n_d/server/centcom))
-			S.files.download_from(files)
-			server_processed = TRUE
-		if(((id in S.id_with_download) && !istype(S, /obj/machinery/r_n_d/server/centcom)))
-			files.download_from(S.files)
-			server_processed = TRUE
-		if(!istype(S, /obj/machinery/r_n_d/server/centcom) && server_processed)
-			S.produce_heat(100)
-	reset_screen()
-
-
-/obj/machinery/computer/rdconsole/proc/get_possible_designs_data(obj/machinery/autolathe/rnd/target_machine, category) // Builds the design list for the UI
-	var/list/designs_list = list()
-	for(var/datum/design/D in files.known_designs)
-		if(D.build_type & target_machine.build_type)
-			var/cat = "Unspecified"
-			if(D.category)
-				cat = D.category
-			if((category == cat) || (category == "Search Results" && findtext(D.name, search_text)))
-				var/list/missing_materials = list()
-				var/list/missing_chemicals = list()
-				var/can_build = 50
-				var/can_build_temp
-
-				for(var/material in D.materials)
-					can_build_temp = target_machine.check_craftable_amount_by_material(D, material)
-					if(can_build_temp < 1)
-						missing_materials += material
-					can_build = min(can_build, can_build_temp)
-
-				for(var/chemical in D.chemicals)
-					can_build_temp = target_machine.check_craftable_amount_by_chemical(D, chemical)
-					if(can_build_temp < 1)
-						missing_chemicals += chemical
-					can_build = min(can_build, can_build_temp)
-
-				designs_list += list(list(
-					"data" = D.nano_ui_data(),
-					"id" = "\ref[D]",
-					"can_create" = can_build,
-					"missing_materials" = missing_materials,
-					"missing_chemicals" = missing_chemicals
-				))
-	return designs_list
-
-/obj/machinery/computer/rdconsole/attack_hand(mob/user)
-	if(..())
-		return
-	nano_ui_interact(user)
-
-
-/obj/machinery/computer/rdconsole/nano_ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null) // Here we go again
-	if((screen == SCREEN_PROTO && !linked_lathe) || (screen == SCREEN_IMPRINTER && !linked_imprinter))
-		screen = SCREEN_MAIN // Kick us from protolathe or imprinter screen if they were destroyed
-
-	var/list/data = list()
-	data["screen"] = screen
-	data["sync"] = sync
-	data["has_disk"] = !!disk
-	if(disk)
-		data["disk_size"] = disk.max_capacity
-		data["disk_used"] = disk.used_capacity
-		data["disk_read_only"] = disk.read_only
-
-	// Main screen needs info about tech levels
-	if(!screen || screen == SCREEN_MAIN)
-		data["show_settings"] = show_settings
-		data["show_link_menu"] = show_link_menu
-		data["has_dest_analyzer"] = !!linked_destroy
-		data["has_protolathe"] = !!linked_lathe
-		data["has_circuit_imprinter"] = !!linked_imprinter
-		data["can_research"] = can_research
-
-		var/list/tech_tree_list = list()
-		for(var/tree in files.researched_tech)
-			var/datum/tech/tech_tree = tree
-			if(!tech_tree.shown)
-				continue
-			var/list/tech_tree_data = list(
-				"id" =             tech_tree.type,
-				"name" =           "[tech_tree.name]",
-				"shortname" =      "[tech_tree.shortname]",
-				"level" =          tech_tree.level,
-				"maxlevel" =       tech_tree.max_level,
-			)
-			tech_tree_list += list(tech_tree_data)
-		data[SCREEN_TREES] = tech_tree_list
-
-		if(linked_destroy)
-			if(linked_destroy.loaded_item)
-				// TODO: If you're refactoring origin_tech, remove this shit. Thank you from the past!
-				var/list/tech_names = list(TECH_MATERIAL = "Materials", TECH_ENGINEERING = "Engineering", TECH_PLASMA = "Plasma", TECH_POWER = "Power", TECH_BLUESPACE = "Blue-space", TECH_BIO = "Biotech", TECH_COMBAT = "Combat", TECH_MAGNET = "Electromagnetic", TECH_DATA = "Programming", TECH_COVERT = "Covert")
-
-				var/list/temp_tech = linked_destroy.loaded_item.origin_tech
-				var/list/item_data = list()
-
-				for(var/T in temp_tech)
-					var/tech_name = tech_names[T]
-					if(!tech_name)
-						tech_name = T
-
-					item_data += list(list(
-						"id" =             T,
-						"name" =           tech_name,
-						"level" =          temp_tech[T],
-					))
-
-				// This calculates how much research points we missed because we already researched items with such orig_tech levels
-				var/tech_points_mod = files.experiments.get_object_research_value(linked_destroy.loaded_item) / files.experiments.get_object_research_value(linked_destroy.loaded_item, ignoreRepeat = TRUE)
-
-				var/list/destroy_list = list(
-					"has_item" =              TRUE,
-					"item_name" =             linked_destroy.loaded_item.name,
-					"item_tech_points" =      files.experiments.get_object_research_value(linked_destroy.loaded_item),
-					"item_tech_mod" =         round(tech_points_mod*100),
-				)
-				destroy_list["tech_data"] = item_data
-
-				data["destroy_data"] = destroy_list
+			screen = RDSCREEN_IMPRINTER_SEARCH
+	if(ls["updt_tech"]) //Uple the research holder with information from the technology disk.
+		if(QDELETED(t_disk))
+			say("No Technology Disk Inserted!")
+			return
+		say("Uploading technology disk.")
+		t_disk.stored_research.copy_research_to(stored_research)
+	if(ls["copy_design"]) //Copy design from the research holder to the design disk.
+		if(QDELETED(d_disk))
+			say("No Design Disk Inserted!")
+			return
+		var/slot = text2num(ls["copy_design"])
+		var/datum/design/D = SSresearch.techweb_design_by_id(ls["copy_design_ID"])
+		if(D)
+			var/autolathe_friendly = TRUE
+			if(D.reagents_list.len)
+				autolathe_friendly = FALSE
+				D.category -= "Imported"
 			else
-				var/list/destroy_list = list(
-					"has_item" =             FALSE,
-				)
-				data["destroy_data"] = destroy_list
+				for(var/x in D.materials)
+					if( !(x in list(/datum/material/iron, /datum/material/glass)))
+						autolathe_friendly = FALSE
+						D.category -= "Imported"
 
-	if(screen == SCREEN_DISK_DESIGNS)
-		if(disk)
-			var/list/disk_designs = list()
-			var/list/disk_design_files = disk.find_files_by_type(/datum/computer_file/binary/design)
-			for(var/f in disk_design_files)
-				var/datum/computer_file/binary/design/d_file = f
-				disk_designs += list(list("name" = d_file.design.name, "id" = "\ref[d_file]", "can_download" = !d_file.copy_protected))
-			data["disk_designs"] = disk_designs
-			var/list/known_designs = list()
-			for(var/i in files.known_designs)
-				var/datum/design/D = i
-				if(!(D.starts_unlocked && !(D.build_type & (AUTOLATHE | BIOPRINTER))))
-					// doesn't make much sense to copy starting designs around, unless you can use them in lathes
-					known_designs += list(list("name" = D.name, "id" = "\ref[D]"))
-			data["known_designs"] = known_designs
-	if(screen == SCREEN_DISK_TECH)
-		if(disk)
-			var/list/disk_tech_nodes = list()
-			var/list/disk_technology_files = disk.find_files_by_type(/datum/computer_file/binary/tech)
-			for(var/f in disk_technology_files)
-				var/datum/computer_file/binary/tech/tech_file = f
-				disk_tech_nodes += list(list("name" = tech_file.node.name, "id" = "\ref[tech_file]"))
-			data["disk_tech_nodes"] = disk_tech_nodes
-			var/list/known_nodes = list()
-			for(var/i in files.researched_nodes)
-				var/datum/technology/T = i
-				known_nodes += list(list("name" = T.name, "id" = "\ref[T]"))
-			data["known_nodes"] = known_nodes
-	if(screen == SCREEN_DISK_DATA)
-		if(disk)
-			var/list/disk_research_data = list()
-			var/list/disk_data_files = disk.find_files_by_type(/datum/computer_file/binary)
-			for(var/f in disk_data_files)
-				var/datum/computer_file/binary/data_file = f
-				if(!files.is_research_file_type(f))
-					continue
+			if(D.build_type & (AUTOLATHE|PROTOLATHE|CRAFTLATHE)) // Specifically excludes circuit imprinter and mechfab
+				D.build_type = autolathe_friendly ? (D.build_type | AUTOLATHE) : D.build_type
+				D.category |= "Imported"
+			d_disk.blueprints[slot] = D
+		screen = RDSCREEN_DESIGNDISK
+	if(ls["eject_item"]) //Eject the item inside the destructive analyzer.
+		if(QDELETED(linked_destroy))
+			say("No Destructive Analyzer Linked!")
+			return
+		if(linked_destroy.busy)
+			to_chat(usr, span_danger("The destructive analyzer is busy at the moment."))
+		else if(linked_destroy.loaded_item)
+			linked_destroy.unload_item()
+			screen = RDSCREEN_MENU
+	if(ls["view_node"])
+		selected_node_id = ls["view_node"]
+		screen = RDSCREEN_TECHWEB_NODEVIEW
+	if(ls["move_node"] && do_node_drag)
+		var/datum/techweb_node/node = SSresearch.techweb_node_by_id(ls["move_node"])
+		node.ui_x = round(text2num(ls["ui_x"]),32)
+		node.ui_y = round(text2num(ls["ui_y"]),32)
+	if(ls["view_design"])
+		selected_design_id = ls["view_design"]
+		screen = RDSCREEN_TECHWEB_DESIGNVIEW
+	if(ls["updt_design"]) //Uploads a design from disk to the techweb.
+		if(QDELETED(d_disk))
+			say("No design disk found.")
+			return
+		var/n = text2num(ls["updt_design"])
+		if(!n)
+			for(var/D in d_disk.blueprints)
+				if(D)
+					stored_research.add_design(D, TRUE)
+		else
+			stored_research.add_design(d_disk.blueprints[n], TRUE)
 
-				disk_research_data += list(list("name" = "[data_file.filename].[data_file.filetype]", "id" = "\ref[data_file]", "can_download" = files.can_load_file(data_file)))
-			data["disk_research_data"] = disk_research_data
-	if(screen == SCREEN_PROTO || screen == SCREEN_IMPRINTER)
-		var/obj/machinery/autolathe/rnd/target_device
-		var/list/design_categories
-		var/selected_category
+	updateUsrDialog()
 
-		if(screen == SCREEN_PROTO && linked_lathe)
-			target_device = linked_lathe
-			design_categories = files.design_categories_protolathe
-			selected_category = selected_protolathe_category
-		else if(screen == SCREEN_IMPRINTER && linked_imprinter)
-			target_device = linked_imprinter
-			design_categories = files.design_categories_imprinter
-			selected_category = selected_imprinter_category
+/obj/machinery/computer/rdconsole/ui_interact(mob/user)
+	. = ..()
+	var/datum/browser/popup = new(user, "rndconsole", name, 900, 600)
+	popup.add_stylesheet("techwebs", 'html/browser/techwebs.css')
+	popup.set_content(generate_ui())
+	popup.open()
 
-		if(target_device)
-			data["search_text"] = search_text
-			data["materials_data"] = target_device.materials_data()
+/obj/machinery/computer/rdconsole/proc/tdisk_uple_complete()
+	tdisk_uple = FALSE
+	updateUsrDialog()
 
-			data["all_categories"] = design_categories
-			if(search_text)
-				data["all_categories"] = list("Search Results") + data["all_categories"]
+/obj/machinery/computer/rdconsole/proc/ddisk_uple_complete()
+	ddisk_uple = FALSE
+	updateUsrDialog()
 
-			if((!selected_category || !(selected_category in data["all_categories"])) && design_categories.len)
-				selected_category = design_categories[1]
+/obj/machinery/computer/rdconsole/proc/eject_disk(type)
+	if(type == "design")
+		d_disk.forceMove(get_turf(src))
+		d_disk = null
+	if(type == "tech")
+		t_disk.forceMove(get_turf(src))
+		t_disk = null
 
-			if(selected_category)
-				data["selected_category"] = selected_category
-				data["possible_designs"] = get_possible_designs_data(target_device, selected_category)
+/obj/machinery/computer/rdconsole/proc/rescan_views()
+	var/compare
+	matching_design_ids.Cut()
+	if(searchtype == "proto")
+		compare = PROTOLATHE
+	else if(searchtype == "imprint")
+		compare = IMPRINTER
+	for(var/v in stored_research.researched_designs)
+		var/datum/design/D = SSresearch.techweb_design_by_id(v)
+		if(!(D.build_type & compare))
+			continue
+		if(findtext(D.name,searchstring))
+			matching_design_ids.Add(D.id)
 
-			if(target_device.current_file)
-				data["device_current"] = target_device.current_file.design.name
+/obj/machinery/computer/rdconsole/proc/check_canprint(datum/design/D, buildtype)
+	var/amount = 50
+	if(buildtype == IMPRINTER)
+		if(QDELETED(linked_imprinter))
+			return FALSE
+		for(var/M in D.materials + D.reagents_list)
+			amount = min(amount, linked_imprinter.check_mat(D, M))
+			if(amount < 1)
+				return FALSE
+	else if(buildtype == PROTOLATHE)
+		if(QDELETED(linked_lathe))
+			return FALSE
+		for(var/M in D.materials + D.reagents_list)
+			amount = min(amount, linked_lathe.check_mat(D, M))
+			if(amount < 1)
+				return FALSE
+	else
+		return FALSE
+	return amount
 
-			data["device_error"] = target_device.error
+/obj/machinery/computer/rdconsole/proc/lock_console(mob/user)
+	locked = TRUE
 
-			var/list/queue_list = list()
-			for(var/f in target_device.queue)
-				var/datum/computer_file/binary/design/file = f
-				queue_list += file.design.name
-			data["queue"] = queue_list
-
-	// All the info needed for displaying tech trees
-	if(screen == SCREEN_TREES)
-		var/list/line_list = list()
-
-		var/list/tech_tree_list = list()
-		for(var/tree in files.researched_tech)
-			var/datum/tech/tech_tree = tree
-			if(!tech_tree.shown)
-				continue
-			var/list/tech_tree_data = list(
-				"id" =             "\ref[tech_tree]",
-				"name" =           "[tech_tree.name]",
-				"shortname" =      "[tech_tree.shortname]",
-			)
-			tech_tree_list += list(tech_tree_data)
-
-		data["tech_trees"] = tech_tree_list
-
-		if(!selected_tech_tree)
-			selected_tech_tree = files.researched_tech[1]
-
-		var/list/tech_list = list()
-		if(selected_tech_tree)
-			data["tech_tree_name"] = selected_tech_tree.name
-			data["tech_tree_desc"] = selected_tech_tree.desc
-			data["tech_tree_level"] = selected_tech_tree.level
-
-			for(var/tech in SSresearch.all_tech_trees[selected_tech_tree.type])
-				var/datum/technology/tech_node = tech
-				var/list/tech_data = list(
-					"id" =             "\ref[tech_node]",
-					"name" =           "[tech_node.name]",
-					"x" =              round(tech_node.x*100),
-					"y" =              round(tech_node.y*100),
-					"icon" =           "[tech_node.icon]",
-					"isresearched" =   "[files.IsResearched(tech_node)]",
-					"canresearch" =    "[files.CanResearch(tech_node)]",
-					"description" =		"[tech_node.desc]"
-				)
-				tech_list += list(tech_data)
-
-				for(var/req_tech in tech_node.required_technologies)
-					var/datum/technology/other_tech = locate(req_tech) in SSresearch.all_tech_nodes
-					if(other_tech && other_tech.tech_type == tech_node.tech_type)
-						var/line_x = (min(round(other_tech.x*100), round(tech_node.x*100)))
-						var/line_y = (min(round(other_tech.y*100), round(tech_node.y*100)))
-						var/width = (abs(round(other_tech.x*100) - round(tech_node.x*100)))
-						var/height = (abs(round(other_tech.y*100) - round(tech_node.y*100)))
-
-						var/istop = FALSE
-						if(other_tech.y > tech_node.y)
-							istop = TRUE
-						var/isright = FALSE
-						if(other_tech.x < tech_node.x)
-							isright = TRUE
-
-						var/list/line_data = list(
-							"line_x" =           line_x,
-							"line_y" =           line_y,
-							"width" =            width,
-							"height" =           height,
-							"istop" =            istop,
-							"isright" =          isright,
-						)
-						line_list += list(line_data)
-
-		data["techs"] = tech_list
-		data["lines"] = line_list
-		data["selected_tech_tree"] = "\ref[selected_tech_tree]"
-		data["research_points"] = files.research_points
-
-		data["selected_technology_id"] = ""
-		if(selected_technology)
-			var/datum/technology/tech_node = selected_technology
-			var/list/technology_data = list(
-				"name" =           tech_node.name,
-				"desc" =           tech_node.desc,
-				"id" =             "\ref[tech_node]",
-				"tech_type" =      tech_node.tech_type,
-				"cost" =           tech_node.cost,
-				"isresearched" =   files.IsResearched(tech_node),
-			)
-			data["selected_technology_id"] = "\ref[tech_node]"
-
-			var/list/requirement_list = list()
-			for(var/t in tech_node.required_tech_levels)
-				var/datum/tech/tree = locate(t) in files.researched_tech
-				var/level = tech_node.required_tech_levels[t]
-				var/list/req_data = list(
-					"text" =           "[tree.shortname] level [level]",
-					"isgood" =         (tree.level >= level)
-				)
-				requirement_list += list(req_data)
-			for(var/t in tech_node.required_technologies)
-				var/datum/technology/other_tech = locate(t) in SSresearch.all_tech_nodes
-				var/list/req_data = list(
-					"text" =           "[other_tech.name]",
-					"isgood" =         files.IsResearched(other_tech)
-				)
-				requirement_list += list(req_data)
-			technology_data["requirements"] = requirement_list
-
-			var/list/unlock_list = list()
-			for(var/T in tech_node.unlocks_designs)
-				var/datum/design/D = SSresearch.get_design(T)
-				if(D) // remove?
-					var/list/build_types = list()
-					if(D.build_type & IMPRINTER)
-						build_types += "imprinter"
-					if(D.build_type & PROTOLATHE)
-						build_types += "protolathe"
-					if(D.build_type & AUTOLATHE)
-						build_types += "autolathe"
-					if(D.build_type & BIOPRINTER)
-						build_types += "bioprinter"
-					if(D.build_type & MECHFAB)
-						build_types += "exosuit fabricator"
-					if(D.build_type & ORGAN_GROWER)
-						build_types += "organ grower"
-					var/list/unlock_data = list(
-						"text" =           "[D.name]",
-						"build_types" =		english_list(build_types, "")
-					)
-					unlock_list += list(unlock_data)
-			technology_data["unlocks"] = unlock_list
-
-			data["selected_technology"] = technology_data
-
-	ui = SSnano.try_update_ui(user, src, ui_key, ui, data)
-	if (!ui)
-		ui = new(user, src, ui_key, "rdconsole.tmpl", "R&D Console", 1000, 700)
-
-		ui.set_initial_data(data)
-		ui.open()
-		ui.set_auto_update(1)
+/obj/machinery/computer/rdconsole/proc/unlock_console(mob/user)
+	locked = FALSE
 
 /obj/machinery/computer/rdconsole/robotics
 	name = "Robotics R&D Console"
-	id = 2
-	req_access = list(access_robotics)
+	req_access = null
+	req_access = list(ACCESS_ROBOTICS)
+
+/obj/machinery/computer/rdconsole/robotics/Initialize(mapload)
+	. = ..()
+	if(circuit)
+		circuit.name = "R&D Console - Robotics (Computer Board)"
+		circuit.build_path = /obj/machinery/computer/rdconsole/robotics
 
 /obj/machinery/computer/rdconsole/core
 	name = "Core R&D Console"
-	id = 1
 
-#undef SCREEN_MAIN
-#undef SCREEN_PROTO
-#undef SCREEN_IMPRINTER
-#undef SCREEN_WORKING
-#undef SCREEN_TREES
-#undef SCREEN_LOCKED
+/obj/machinery/computer/rdconsole/experiment
+	name = "E.X.P.E.R.I-MENTOR R&D Console"
+
+/obj/machinery/computer/rdconsole/nolock
+	name = "R&D Console"
+	desc = "A console used to interface with R&D tools. This one seems to not have an access requirement."
+
+	req_access = list()	//lA AND SETTING MANIPULATION REQUIRES SCIENTIST ACCESS.
+
+/obj/machinery/computer/rdconsole/nolock/ruin
+	name = "R&D Console"
+	desc = "A console used to interface with R&D tools. This one seems to run on different research tech and does not have access requirement."
+	circuit = /obj/item/circuitboard/computer/rdconsole/ruin
+
+/obj/machinery/computer/rdconsole/nolock/ruin/Initialize(mapload)
+    . = ..()
+    if(stored_research)
+        stored_research.consoles_accessing -= src
+    stored_research = SSresearch.ruin_tech
+    stored_research.consoles_accessing[src] = TRUE

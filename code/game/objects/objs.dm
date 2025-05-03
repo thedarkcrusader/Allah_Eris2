@@ -1,79 +1,85 @@
+
 /obj
-	//Used to store information about the contents of the object.
-	var/list/matter
-	var/list/matter_reagents
-	var/w_class // Size of the object.
-	var/unacidable = 0 //universal "unacidabliness" var, here so you can use it in any obj.
 	animate_movement = 2
-	var/throwforce = 1
-	var/sharp = FALSE		// whether this object cuts
-	var/edge = FALSE		// whether this object is more likely to dismember
-	var/in_use = 0 // If we have a user using us, this will be set on. We will check if the user has stopped using us, and thus stop updating and LAGGING EVERYTHING!
-	var/damtype = "brute"
-	var/armor_divisor = 1
-	var/corporation
-	var/heat = 0
+	speech_span = SPAN_ROBOT
+	uses_integrity = TRUE
 
+	var/obj_flags = CAN_BE_HIT
+	var/set_obj_flags // ONLY FOR MAPPING: Sets flags from a string list, handled in Initialize. Usage: set_obj_flags = "EMAGGED;!CAN_BE_HIT" to set EMAGGED and clear CAN_BE_HIT.
 
-/obj/proc/is_hot()
-	return heat
+	/// Icon to use as a 32x32 preview in crafting menus and such
+	var/icon_preview
+	var/icon_state_preview
 
-/obj/get_fall_damage(turf/from, turf/dest)
-	return w_class * 2
+	var/damtype = BRUTE
+	var/force = 0
 
-/obj/Destroy()
+	/// How good a given object is at causing wounds on carbons. Higher values equal better shots at creating serious wounds.
+	var/wound_bonus = 0
+	/// If this attacks a human with no wound armor on the affected body part, add this to the wound mod. Some attacks may be significantly worse at wounding if there's even a slight layer of armor to absorb some of it vs bare flesh
+	var/bare_wound_bonus = 0
+	/// Damage multiplier against structures, machines, mechs, and to a lesser extent silicons
+	var/demolition_mod = 1
+	/// How much acid is on this object
+	var/acid_level = 0 
+
+	var/persistence_replacement //have something WAY too amazing to live to the next round? Set a new path here. Overuse of this var will make me upset.
+	var/current_skin //Has the item been reskinned?
+	var/list/unique_reskin //List of options to reskin.
+
+	// Access levels, used in modules\jobs\access.dm
+	var/list/req_access
+	var/req_access_txt = "0"
+	var/list/req_one_access
+	var/req_one_access_txt = "0"
+
+	var/renamedByPlayer = FALSE //set when a player uses a pen on a renamable object
+
+/obj/vv_edit_var(vname, vval)
+	switch(vname)
+		if("anchored")
+			setAnchored(vval)
+			return TRUE
+		if("obj_flags")
+			if ((obj_flags & DANGEROUS_POSSESSION) && !(vval & DANGEROUS_POSSESSION))
+				return FALSE
+		if("control_object")
+			var/obj/O = vval
+			if(istype(O) && (O.obj_flags & DANGEROUS_POSSESSION))
+				return FALSE
+	return ..()
+
+/obj/Initialize(mapload)
+	. = ..()
+	if (set_obj_flags)
+		var/flagslist = splittext(set_obj_flags,";")
+		var/list/string_to_objflag = GLOB.bitfields["obj_flags"]
+		for (var/flag in flagslist)
+			if(flag[1] == "!")
+				flag = copytext(flag, length(flag[1]) + 1) // Get all but the initial !
+				obj_flags &= ~string_to_objflag[flag]
+			else
+				obj_flags |= string_to_objflag[flag]
+	if((obj_flags & ON_BLUEPRINTS) && isturf(loc))
+		var/turf/T = loc
+		T.add_blueprints_preround(src)
+
+/obj/Destroy(force=FALSE)
 	if(!ismachinery(src))
 		STOP_PROCESSING(SSobj, src) // TODO: Have a processing bitflag to reduce on unnecessary loops through the processing lists
-	SSnano.close_uis(src)
+	SStgui.close_uis(src)
 	. = ..()
 
-/obj/Topic(href, href_list, var/datum/nano_topic_state/state = GLOB.default_state)
-	if(..())
-		return 1
+/obj/proc/setAnchored(anchorvalue)
+	SEND_SIGNAL(src, COMSIG_OBJ_SETANCHORED, anchorvalue)
+	anchored = anchorvalue
 
-	// In the far future no checks are made in an overriding Topic() beyond if(..()) return
-	// Instead any such checks are made in CanUseTopic()
-	if(CanUseTopic(usr, state, href_list) == STATUS_INTERACTIVE)
-		CouldUseTopic(usr)
-		return OnTopic(usr, href_list, state)
+/obj/throw_at(atom/target, range, speed, mob/thrower, spin=1, diagonals_first = 0, datum/callback/callback, force, quickstart = TRUE)
+	..()
+	if(obj_flags & FROZEN)
+		visible_message(span_danger("[src] shatters into a million pieces!"))
+		qdel(src)
 
-	CouldNotUseTopic(usr)
-	return 1
-
-/obj/proc/OnTopic(mob/user, href_list, datum/nano_topic_state/state)
-	return TOPIC_NOACTION
-
-/obj/CanUseTopic(mob/user, datum/nano_topic_state/state)
-	if(user.CanUseObjTopic(src))
-		return ..()
-	return STATUS_CLOSE
-
-/mob/living/silicon/CanUseObjTopic(obj/O)
-	var/id = src.GetIdCard()
-	return O.check_access(id)
-
-/mob/proc/CanUseObjTopic()
-	return 1
-
-/obj/proc/CouldUseTopic(mob/user)
-	user.AddTopicPrint(src)
-
-/mob/proc/AddTopicPrint(obj/target)
-	target.add_hiddenprint(src)
-
-/mob/living/AddTopicPrint(obj/target)
-	if(Adjacent(target))
-		target.add_fingerprint(src)
-	else
-		target.add_hiddenprint(src)
-
-/mob/living/silicon/ai/AddTopicPrint(obj/target)
-	target.add_hiddenprint(src)
-
-/obj/proc/CouldNotUseTopic(mob/user)
-	// Nada
-
-/obj/item/proc/is_used_on(obj/O, mob/user)
 
 /obj/assume_air(datum/gas_mixture/giver)
 	if(loc)
@@ -81,184 +87,271 @@
 	else
 		return null
 
+/obj/assume_air_moles(datum/gas_mixture/giver, moles)
+	if(loc)
+		return loc.assume_air_moles(giver, moles)
+	return null
+
+/obj/assume_air_ratio(datum/gas_mixture/giver, ratio)
+	if(loc)
+		return loc.assume_air_ratio(giver, ratio)
+	return null
+/obj/transfer_air(datum/gas_mixture/taker, moles)
+	if(loc)
+		return loc.transfer_air(taker, moles)
+	return null
+
+/obj/transfer_air_ratio(datum/gas_mixture/taker, ratio)
+	if(loc)
+		return loc.transfer_air_ratio(taker, ratio)
+	return null
+
 /obj/remove_air(amount)
 	if(loc)
 		return loc.remove_air(amount)
-	else
-		return null
+	return null
+
+/obj/remove_air_ratio(ratio)
+	if(loc)
+		return loc.remove_air_ratio(ratio)
+	return null
 
 /obj/return_air()
 	if(loc)
 		return loc.return_air()
+	return null
+
+/obj/proc/handle_internal_lifeform(mob/lifeform_inside_me, breath_request)
+	//Return: (NONSTANDARD)
+	//		null if object handles breathing logic for lifeform
+	//		datum/air_group to tell lifeform to process using that breath return
+	//DEFAULT: Take air from turf to give to have mob process
+
+	if(breath_request>0)
+		var/datum/gas_mixture/environment = return_air()
+		return remove_air_ratio(BREATH_VOLUME / environment.return_volume())
 	else
 		return null
 
 /obj/proc/updateUsrDialog()
-	if(in_use)
-		var/is_in_use = 0
+	if((obj_flags & IN_USE) && !(obj_flags & USES_TGUI))
+		var/is_in_use = FALSE
 		var/list/nearby = viewers(1, src)
 		for(var/mob/M in nearby)
 			if ((M.client && M.machine == src))
-				is_in_use = 1
-				src.attack_hand(M)
-		if (isAI(usr) || isrobot(usr))
+				is_in_use = TRUE
+				ui_interact(M)
+		if(issilicon(usr) || IsAdminGhost(usr))
 			if (!(usr in nearby))
 				if (usr.client && usr.machine==src) // && M.machine == src is omitted because if we triggered this by using the dialog, it doesn't matter if our machine changed in between triggering it and this - the dialog is probably still supposed to refresh.
-					is_in_use = 1
-					src.attack_ai(usr)
+					is_in_use = TRUE
+					ui_interact(usr)
 
 		// check for TK users
 
-		if (ishuman(usr))
-			if(istype(usr.l_hand, /obj/item/tk_grab) || istype(usr.r_hand, /obj/item/tk_grab/))
-				if(!(usr in nearby))
-					if(usr.client && usr.machine==src)
-						is_in_use = 1
-						src.attack_hand(usr)
-		in_use = is_in_use
+		if(ishuman(usr))
+			var/mob/living/carbon/human/H = usr
+			if(!(usr in nearby))
+				if(usr.client && usr.machine==src)
+					if(H.dna.check_mutation(TK))
+						is_in_use = TRUE
+						ui_interact(usr)
+		if (is_in_use)
+			obj_flags |= IN_USE
+		else
+			obj_flags &= ~IN_USE
 
-/obj/proc/updateDialog()
+/obj/proc/updateDialog(update_viewers = TRUE,update_ais = TRUE)
 	// Check that people are actually using the machine. If not, don't update anymore.
-	if(in_use)
-		var/list/nearby = viewers(1, src)
-		var/is_in_use = 0
-		for(var/mob/M in nearby)
-			if ((M.client && M.machine == src))
-				is_in_use = 1
-				src.interact(M)
-		var/ai_in_use = AutoUpdateAI(src)
+	if(obj_flags & IN_USE)
+		var/is_in_use = FALSE
+		if(update_viewers)
+			for(var/mob/M in viewers(1, src))
+				if ((M.client && M.machine == src))
+					is_in_use = TRUE
+					src.interact(M)
+		var/ai_in_use = FALSE
+		if(update_ais)
+			ai_in_use = AutoUpdateAI(src)
 
-		if(!ai_in_use && !is_in_use)
-			in_use = 0
+		if(update_viewers && update_ais) //State change is sure only if we check both
+			if(!ai_in_use && !is_in_use)
+				obj_flags &= ~IN_USE
+
 
 /obj/attack_ghost(mob/user)
-	nano_ui_interact(user)
-	..()
+	. = ..()
+	if(.)
+		return
+	ui_interact(user)
+
+/obj/proc/container_resist(mob/living/user)
+	return
 
 /mob/proc/unset_machine()
-	src.machine = null
+	SIGNAL_HANDLER
+	if(!machine)
+		return
+	UnregisterSignal(machine, COMSIG_QDELETING)
+	machine.on_unset_machine(src)
+	machine = null
+
+//called when the user unsets the machine.
+/atom/movable/proc/on_unset_machine(mob/user)
+	return
 
 /mob/proc/set_machine(obj/O)
-	if(src.machine)
+	if(QDELETED(src) || QDELETED(O))
+		return
+	if(machine)
 		unset_machine()
-	src.machine = O
+	machine = O
+	RegisterSignal(O, COMSIG_QDELETING, PROC_REF(unset_machine))
 	if(istype(O))
-		O.in_use = 1
+		O.obj_flags |= IN_USE
 
 /obj/item/proc/updateSelfDialog()
 	var/mob/M = src.loc
 	if(istype(M) && M.client && M.machine == src)
 		src.attack_self(M)
 
-/obj/proc/hide(hide)
-	invisibility = hide ? INVISIBILITY_MAXIMUM : initial(invisibility)
-	SEND_SIGNAL_OLD(src, COMSIG_OBJ_HIDE, hide)
+/obj/singularity_pull(S, current_size)
+	..()
+	if(!anchored || current_size >= STAGE_FIVE)
+		step_towards(src,S)
 
-/obj/proc/hides_under_flooring()
-	return level == BELOW_PLATING_LEVEL
+/obj/get_dumping_location(datum/component/storage/source,mob/user)
+	return get_turf(src)
 
-/obj/proc/hear_talk(mob/M as mob, text, verb, datum/language/speaking, speech_volume)
-	if(talking_atom)
-		talking_atom.catchMessage(text, M)
-/*
-	var/mob/mo = locate(/mob) in src
-	if(mo)
-		var/rendered = "<span class='game say'><span class='name'>[M.name]: </span> <span class='message'>[text]</span></span>"
-		mo.show_message(rendered, 2)
-		*/
+/obj/proc/CanAStarPass()
+	. = !density
+
+/obj/proc/check_uplink_validity()
+	return 1
+
+/obj/vv_get_dropdown()
+	. = ..()
+	VV_DROPDOWN_SEPERATOR
+	VV_DROPDOWN_OPTION(VV_HK_MASS_DEL_TYPE, "Delete all of type")
+	VV_DROPDOWN_OPTION(VV_HK_OSAY, "Object Say")
+	VV_DROPDOWN_OPTION(VV_HK_ARMOR_MOD, "Modify armor values")
+
+/obj/vv_do_topic(list/href_list)
+	if(!(. = ..()))
+		return
+	if(href_list[VV_HK_OSAY])
+		if(check_rights(R_FUN, FALSE))
+			usr.client.object_say(src)
+	if(href_list[VV_HK_ARMOR_MOD])
+		var/list/pickerlist = list()
+		var/list/armorlist = armor.getList()
+
+		for (var/i in armorlist)
+			pickerlist += list(list("value" = armorlist[i], "name" = i))
+
+		var/list/result = presentpicker(usr, "Modify armor", "Modify armor: [src]", Button1="Save", Button2 = "Cancel", Timeout=FALSE, inputtype = "text", values = pickerlist)
+
+		if (islist(result))
+			if (result["button"] != 2) // If the user pressed the cancel button
+				// text2num conveniently returns a null on invalid values
+				armor = armor.setRating(melee = text2num(result["values"][MELEE]),\
+			                  bullet = text2num(result["values"][BULLET]),\
+			                  laser = text2num(result["values"][LASER]),\
+			                  energy = text2num(result["values"][ENERGY]),\
+			                  bomb = text2num(result["values"][BOMB]),\
+			                  bio = text2num(result["values"][BIO]),\
+			                  rad = text2num(result["values"][RAD]),\
+			                  fire = text2num(result["values"][FIRE]),\
+			                  acid = text2num(result["values"][ACID]),\
+							  electric = text2num(result["values"][ELECTRIC]))
+				log_admin("[key_name(usr)] modified the armor on [src] ([type]) to melee: [armor.melee], bullet: [armor.bullet], laser: [armor.laser], energy: [armor.energy], bomb: [armor.bomb], bio: [armor.bio], fire: [armor.fire], acid: [armor.acid], electric: [armor.electric]")
+				message_admins(span_notice("[key_name_admin(usr)] modified the armor on [src] ([type]) to melee: [armor.melee], bullet: [armor.bullet], laser: [armor.laser], energy: [armor.energy], bomb: [armor.bomb], bio: [armor.bio], fire: [armor.fire], acid: [armor.acid], electric: [armor.electric]"))
+	if(href_list[VV_HK_MASS_DEL_TYPE])
+		if(check_rights(R_DEBUG|R_SERVER))
+			var/action_type = tgui_alert(usr, "Strict type ([type]) or type and all subtypes?",,list("Strict type","Type and subtypes","Cancel"))
+			if(action_type == "Cancel" || !action_type)
+				return
+
+			if(tgui_alert(usr, "Are you really sure you want to delete all objects of type [type]?",,list("Yes","No")) != "Yes")
+				return
+
+			if(tgui_alert(usr, "Second confirmation required. Delete?",,list("Yes","No")) != "Yes")
+				return
+
+			var/O_type = type
+			switch(action_type)
+				if("Strict type")
+					var/i = 0
+					for(var/obj/Obj in world)
+						if(Obj.type == O_type)
+							i++
+							qdel(Obj)
+						CHECK_TICK
+					if(!i)
+						to_chat(usr, "No objects of this type exist")
+						return
+					log_admin("[key_name(usr)] deleted all objects of type [O_type] ([i] objects deleted) ")
+					message_admins(span_notice("[key_name(usr)] deleted all objects of type [O_type] ([i] objects deleted) "))
+				if("Type and subtypes")
+					var/i = 0
+					for(var/obj/Obj in world)
+						if(istype(Obj,O_type))
+							i++
+							qdel(Obj)
+						CHECK_TICK
+					if(!i)
+						to_chat(usr, "No objects of this type exist")
+						return
+					log_admin("[key_name(usr)] deleted all objects of type or subtype of [O_type] ([i] objects deleted) ")
+					message_admins(span_notice("[key_name(usr)] deleted all objects of type or subtype of [O_type] ([i] objects deleted) "))
+
+/obj/examine(mob/user)
+	. = ..()
+	if(obj_flags & UNIQUE_RENAME)
+		. += span_notice("Use a pen on it to rename it[obj_flags & UNIQUE_REDESC ? " or change its description" : ""].")
+	else if(obj_flags & UNIQUE_REDESC)
+		. += span_notice("Use a pen on it to change its description.")
+	if(unique_reskin && !current_skin)
+		. += span_notice("Alt-click it to reskin it.")
+
+/obj/AltClick(mob/user)
+	. = ..()
+	if(unique_reskin && !current_skin && user.canUseTopic(src, BE_CLOSE, NO_DEXTERITY))
+		reskin_obj(user)
+
+/obj/proc/reskin_obj(mob/M)
+	if(!LAZYLEN(unique_reskin))
+		return
+	to_chat(M, "<b>Reskin options for [name]:</b>")
+	for(var/V in unique_reskin)
+		var/output = icon2html(src, M, unique_reskin[V])
+		to_chat(M, "[V]: [span_reallybig("[output]")]")
+
+	var/choice = input(M,"Warning, you can only reskin [src] once!","Reskin Object") as null|anything in unique_reskin
+	if(!QDELETED(src) && choice && !current_skin && !M.incapacitated() && in_range(M,src))
+		if(!unique_reskin[choice])
+			return
+		current_skin = choice
+		icon_state = unique_reskin[choice]
+		to_chat(M, "[src] is now skinned as '[choice].'")
+
+/obj/analyzer_act(mob/living/user, obj/item/I)
+	if(atmosanalyzer_scan(user, src))
+		return TRUE
+	return ..()
+
+/obj/proc/plunger_act(obj/item/plunger/P, mob/living/user, reinforced)
 	return
 
-/obj/proc/see_emote(mob/M, text, emote_type)
-	return
-
-/obj/proc/show_message(msg, type, alt, alt_type)//Message, type of message (1 or 2), alternative message, alt message type (1 or 2)
-	return
-
-/obj/proc/add_hearing()
-	InitiateHearerTracking()
-	//GLOB.hearing_objects |= src
-
-/obj/proc/remove_hearing()
-	chunkHearerClearSelf()
-	//GLOB.hearing_objects.Remove(src)
-
-/obj/proc/eject_item(obj/item/I, mob/living/user)
-	if(!I || !user.IsAdvancedToolUser() || user.stat || !user.Adjacent(I))
+/obj/proc/freeze()
+	if(HAS_TRAIT(src, TRAIT_FROZEN))
 		return FALSE
-	user.put_in_hands(I)
-	playsound(src.loc, 'sound/weapons/guns/interact/pistol_magin.ogg', 75, 1)
-	user.visible_message(
-		"[user] removes [I] from [src].",
-		SPAN_NOTICE("You remove [I] from [src].")
-	)
+	if(resistance_flags & FREEZE_PROOF)
+		return FALSE
+
+	AddElement(/datum/element/frozen)
 	return TRUE
 
-/obj/proc/insert_item(obj/item/I, mob/living/user)
-	if(!I || !istype(user) || user.stat || !user.unEquip(I))
-		return FALSE
-	I.forceMove(src)
-	playsound(src.loc, 'sound/weapons/guns/interact/pistol_magout.ogg', 75, 1)
-	to_chat(user, SPAN_NOTICE("You insert [I] into [src]."))
-	return TRUE
-
-/obj/proc/replace_item(obj/item/I_old, obj/item/I_new, mob/living/user)
-	if(!I_old || !I_new || !istype(user) || user.stat || !user.Adjacent(I_new) || !user.Adjacent(I_old) || !user.unEquip(I_new))
-		return FALSE
-	I_new.forceMove(src)
-	user.put_in_hands(I_old)
-	playsound(src.loc, 'sound/weapons/guns/interact/pistol_magout.ogg', 75, 1)
-	spawn(2)
-		playsound(src.loc, 'sound/weapons/guns/interact/pistol_magin.ogg', 75, 1)
-	user.visible_message(
-		"[user] replaces [I_old] with [I_new] in [src].",
-		SPAN_NOTICE("You replace [I_old] with [I_new] in [src]."))
-	return TRUE
-
-//Returns the list of matter in this object
-//You can override it to customise exactly what is returned.
-/atom/proc/get_matter()
-	return list()
-
-/obj/get_matter()
-	return matter ? matter.Copy() : list()
-
-//Drops the materials in matter list on into target location
-//Use for deconstrction
-// Dropper is whoever is handling these materials if any , causes them to leave fingerprints on the sheets.
-/atom/proc/drop_materials(target_loc, mob/living/dropper)
-	var/list/materials = get_matter()
-
-	for(var/mat_name in materials)
-		var/material/material = get_material_by_name(mat_name)
-		if(!material)
-			continue
-
-		material.place_material(target_loc, materials[mat_name], dropper)
-
-//To be called from things that spill objects on the floor.
-//Makes an object move around randomly for a couple of tiles
-/obj/proc/tumble(var/dist = 2)
-	set waitfor = FALSE
-	if (dist >= 1)
-		dist += rand(0,1)
-		for(var/i = 1, i <= dist, i++)
-			if(src)
-				step(src, pick(NORTH,SOUTH,EAST,WEST))
-				sleep(rand(2,4))
-
-
-//Intended for gun projectiles, but defined at this level for various things that aren't of projectile type
-/obj/proc/multiply_projectile_damage(newmult)
-	throwforce = initial(throwforce) * newmult
-
-//Same for AP
-/obj/proc/add_projectile_penetration(newmult)
-	armor_divisor = initial(armor_divisor) + newmult
-
-/obj/proc/multiply_pierce_penetration(newmult)
-
-/obj/proc/multiply_ricochet(newmult)
-
-/obj/proc/multiply_projectile_step_delay(newmult)
-
-/obj/proc/multiply_projectile_halloss(newmult)
+/// Unfreezes this obj if its frozen
+/obj/proc/unfreeze()
+	SEND_SIGNAL(src, COMSIG_OBJ_UNFREEZE)

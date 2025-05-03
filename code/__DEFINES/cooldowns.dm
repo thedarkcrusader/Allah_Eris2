@@ -1,4 +1,4 @@
-//// COOLDOWN SYSTEMS
+ //// COOLDOWN SYSTEMS
 /*
  * We have 2 cooldown systems: timer cooldowns (divided between stoppable and regular) and world.time cooldowns.
  *
@@ -20,6 +20,16 @@
  * * * Either world.time or stoppable timer cooldowns, depending on the other factors. Regular timer cooldowns do not support this.
 */
 
+
+/*
+ * Cooldown system based on an datum-level associative lazylist using timers.
+*/
+
+//INDEXES
+#define COOLDOWN_BORG_SELF_REPAIR	"borg_self_repair"
+
+// item cooldowns
+#define COOLDOWN_SIGNALLER_SEND "cooldown_signaller_send"
 
 //TIMER COOLDOWN MACROS
 
@@ -53,7 +63,7 @@
 
 #define COOLDOWN_DECLARE(cd_index) var/##cd_index = 0
 
-#define COOLDOWN_START(cd_source, cd_index, cd_time) (cd_source.cd_index = world.time + (cd_time))
+#define COOLDOWN_START(cd_source, cd_index, cd_time) (cd_source.cd_index = world.time + cd_time)
 
 //Returns true if the cooldown has run its course, false otherwise
 #define COOLDOWN_FINISHED(cd_source, cd_index) (cd_source.cd_index < world.time)

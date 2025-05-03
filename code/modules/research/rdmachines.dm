@@ -1,74 +1,120 @@
-//Devices that link into the R&D console fall into thise type for easy identification and some shared procs.
-/obj/machinery/r_n_d
+
+//All devices that link into the R&D console fall into thise type for easy identification and some shared procs.
+
+
+/obj/machinery/rnd
 	name = "R&D Device"
 	icon = 'icons/obj/machines/research.dmi'
 	density = TRUE
-	anchored = TRUE
-	layer = BELOW_OBJ_LAYER
 	use_power = IDLE_POWER_USE
+	var/busy = FALSE
+	var/hacked = FALSE
+	var/console_link = TRUE		//allow console link.
+	var/requires_console = TRUE
+	var/disabled = FALSE
 	var/obj/machinery/computer/rdconsole/linked_console
+	var/obj/item/loaded_item = null //the item loaded inside the machine (currently only used by experimentor and destructive analyzer)
 
-/obj/machinery/r_n_d/attack_hand(mob/user)
-	return
+/obj/machinery/rnd/proc/reset_busy()
+	busy = FALSE
 
+/obj/machinery/rnd/Initialize(mapload)
+	. = ..()
+	wires = new /datum/wires/rnd(src)
 
-//All lathe-type devices that link into the R&D console fall into thise type for easy identification and some shared procs
-/obj/machinery/autolathe/rnd
-	queue_max = 16
-
-	have_disk = FALSE
-	have_recycling = FALSE
-	have_design_selector = FALSE
-	low_quality_print = FALSE
-
-	var/obj/machinery/computer/rdconsole/linked_console
-
-/obj/machinery/autolathe/rnd/Destroy()
-	if(linked_console)
-		if(linked_console.linked_lathe == src)
-			linked_console.linked_lathe = null
-		if(linked_console.linked_imprinter == src)
-			linked_console.linked_imprinter = null
-		linked_console = null
+/obj/machinery/rnd/Destroy()
+	QDEL_NULL(wires)
 	return ..()
 
+/obj/machinery/rnd/proc/shock(mob/user, prb)
+	if(stat & (BROKEN|NOPOWER))		// unpowered, no shock
+		return FALSE
+	if(!prob(prb))
+		return FALSE
+	do_sparks(5, TRUE, src)
+	if (electrocute_mob(user, get_area(src), src, 0.7, TRUE))
+		return TRUE
+	else
+		return FALSE
 
-/obj/machinery/autolathe/rnd/protolathe
-	name = "protolathe"
-	desc = "A machine used for construction of advanced prototypes. Operated from an R\&D console."
-	icon_state = "protolathe"
-	circuit = /obj/item/electronics/circuitboard/protolathe
+/obj/machinery/rnd/attackby(obj/item/O, mob/user, params)
+	if (default_deconstruction_screwdriver(user, "[initial(icon_state)]_t", initial(icon_state), O))
+		
+		return
+	if(default_deconstruction_crowbar(O))
+		return
+	if(is_refillable() && O.is_drainable())
+		return FALSE //inserting reagents into the machine
+	if(Insert_Item(O, user))
+		return TRUE
+	else
+		return ..()
 
-	build_type = PROTOLATHE
-	storage_capacity = 120
+/obj/machinery/rnd/crowbar_act(mob/living/user, obj/item/tool)
+	return default_deconstruction_crowbar(tool)
 
+/obj/machinery/rnd/screwdriver_act(mob/living/user, obj/item/tool)
+	var/success = default_deconstruction_screwdriver(user, "[initial(icon_state)]_t", initial(icon_state), tool)
+	if(success && linked_console)
+		disconnect_console()
+	return success
 
-/obj/machinery/autolathe/rnd/imprinter
-	name = "circuit imprinter"
-	desc = "A machine used for printing advanced circuit boards. Operated from an R\&D console."
-	icon_state = "imprinter"
-	circuit = /obj/item/electronics/circuitboard/circuit_imprinter
+/obj/machinery/rnd/multitool_act(mob/living/user, obj/item/tool)
+	if(panel_open)
+		wires.interact(user)
+		return TRUE
 
-	build_type = IMPRINTER
-	storage_capacity = 60
-	speed = 3
+/obj/machinery/rnd/wirecutter_act(mob/living/user, obj/item/tool)
+	if(panel_open)
+		wires.interact(user)
+		return TRUE
 
+//to disconnect the machine from the r&d console it's linked to
+/obj/machinery/rnd/proc/disconnect_console()
+	linked_console = null
 
-// Versions with some materials already loaded, to be used on map spawn
-/obj/machinery/autolathe/rnd/protolathe/loaded
-	stored_material = list(
-		MATERIAL_STEEL = 60,
-		MATERIAL_GLASS = 60,
-		MATERIAL_PLASTIC = 60
-		)
+//proc used to handle inserting items or reagents into rnd machines
+/obj/machinery/rnd/proc/Insert_Item(obj/item/I, mob/user)
+	return
 
+//whether the machine can have an item inserted in its current state.
+/obj/machinery/rnd/proc/is_insertion_ready(mob/user)
+	if(panel_open)
+		to_chat(user, span_warning("You can't load [src] while it's opened!"))
+		return FALSE
+	if(disabled)
+		return FALSE
+	if(requires_console && !linked_console)
+		to_chat(user, span_warning("[src] must be linked to an R&D console first!"))
+		return FALSE
+	if(busy)
+		to_chat(user, span_warning("[src] is busy right now."))
+		return FALSE
+	if(stat & BROKEN)
+		to_chat(user, span_warning("[src] is broken."))
+		return FALSE
+	if(stat & NOPOWER)
+		to_chat(user, span_warning("[src] has no power."))
+		return FALSE
+	if(loaded_item)
+		to_chat(user, span_warning("[src] is already loaded."))
+		return FALSE
+	return TRUE
 
-/obj/machinery/autolathe/rnd/imprinter/loaded
-	stored_material = list(
-		MATERIAL_STEEL = 30,
-		MATERIAL_PLASTIC = 30
-		)
+//we eject the loaded item when deconstructing the machine
+/obj/machinery/rnd/on_deconstruction()
+	if(loaded_item)
+		loaded_item.forceMove(loc)
+	..()
 
-/obj/machinery/autolathe/rnd/imprinter/loaded/Initialize()
-	. = ..()
-	container = new /obj/item/reagent_containers/glass/beaker/silicon(src)
+/obj/machinery/rnd/proc/AfterMaterialInsert(type_inserted, id_inserted, amount_inserted)
+	var/stack_name
+	if(ispath(type_inserted, /obj/item/stack/ore/bluespace_crystal))
+		stack_name = "bluespace"
+		use_power(MINERAL_MATERIAL_AMOUNT / 10)
+	else
+		var/obj/item/stack/S = type_inserted
+		stack_name = initial(S.name)
+		use_power(min(1000, (amount_inserted / 100)))
+	add_overlay("protolathe_[stack_name]")
+	addtimer(CALLBACK(src, /atom/proc/cut_overlay, "protolathe_[stack_name]"), 10)

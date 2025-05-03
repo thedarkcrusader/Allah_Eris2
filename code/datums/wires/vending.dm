@@ -1,159 +1,72 @@
-#define CAT_NORMAL 1
-#define CAT_HIDDEN 2
-#define CAT_COIN   4
-
-#define CUSTOM_VENDOMAT_MODELS list("Generic" = "generic", "Security" = "sec", "Electronics" = "cart", "Research" = "robotics", "Medical" = "med", "Engineering" = "engivend", "Engineering 2" = "engi", "Tools" = "tool", "Shady" = "sovietsoda", "Fridge" = "smartfridge", "Alcohol" = "boozeomat", "Frozen Star" = "weapon", "NeoTheo" = "teomat", "Asters Power Cells" = "powermat", "Asters Disks" = "discomat")
-
 /datum/wires/vending
 	holder_type = /obj/machinery/vending
-	wire_count = 4
-	descriptions = list(
-		new /datum/wire_description(VENDING_WIRE_THROW, "Safety"),
-		new /datum/wire_description(VENDING_WIRE_CONTRABAND, "Contraband"),
-		new /datum/wire_description(VENDING_WIRE_ELECTRIFY, "Shock"),
-		new /datum/wire_description(VENDING_WIRE_IDSCAN, "ID scanner"),
+	proper_name = "Vending Unit"
+
+/datum/wires/vending/New(atom/holder)
+	wires = list(
+		WIRE_THROW, WIRE_SHOCK, WIRE_SPEAKER,
+		WIRE_CONTRABAND, WIRE_IDSCAN
 	)
+	add_duds(1)
+	..()
 
-var/const/VENDING_WIRE_THROW = 1
-var/const/VENDING_WIRE_CONTRABAND = 2
-var/const/VENDING_WIRE_ELECTRIFY = 4
-var/const/VENDING_WIRE_IDSCAN = 8
-
-/datum/wires/vending/CanUse(var/mob/living/L)
+/datum/wires/vending/interact(mob/user)
 	var/obj/machinery/vending/V = holder
-	if(!issilicon(L))
-		if(V.seconds_electrified)
-			if(V.shock(L, 100))
-				return 0
+	if(!issilicon(user) && V.seconds_electrified && V.shock(user, 100)) // Just incase
+		return
+
+	return ..()
+
+/datum/wires/vending/interactable(mob/user)
+	var/obj/machinery/vending/V = holder
+	if(!issilicon(user) && V.seconds_electrified)
+		var/mob/living/carbon/carbon_user = user
+		if (!istype(carbon_user) || carbon_user.should_electrocute(src))
+			return FALSE
 	if(V.panel_open)
-		return 1
-	return 0
+		return TRUE
 
-/datum/wires/vending/GetInteractWindow(mob/living/user)
+/datum/wires/vending/get_status()
 	var/obj/machinery/vending/V = holder
-	. += ..(user)
-	. += "<BR>The orange light is [V.seconds_electrified ? "off" : "on"].<BR>"
-	. += "The red light is [V.shoot_inventory ? "off" : "blinking"].<BR>"
-	. += "The green light is [(V.categories & CAT_HIDDEN) ? "on" : "off"].<BR>"
-	. += "The [V.scan_id ? "purple" : "yellow"] light is on.<BR>"
+	var/list/status = list()
+	status += "The orange light is [V.seconds_electrified ? "on" : "off"]."
+	status += "The red light is [V.shoot_inventory ? "off" : "blinking"]."
+	status += "The green light is [V.extended_inventory ? "on" : "off"]."
+	status += "A [V.scan_id ? "purple" : "yellow"] light is on."
+	status += "A white light is [V.age_restrictions ? "on" : "off"]."
+	status += "The speaker light is [V.shut_up ? "off" : "on"]."
+	return status
 
-/datum/wires/vending/UpdatePulsed(var/index)
+/datum/wires/vending/on_pulse(wire)
 	var/obj/machinery/vending/V = holder
-	switch(index)
-		if(VENDING_WIRE_THROW)
+	switch(wire)
+		if(WIRE_THROW)
 			V.shoot_inventory = !V.shoot_inventory
-		if(VENDING_WIRE_CONTRABAND)
-			V.categories ^= CAT_HIDDEN
-		if(VENDING_WIRE_ELECTRIFY)
-			V.seconds_electrified = 30
-		if(VENDING_WIRE_IDSCAN)
+		if(WIRE_CONTRABAND)
+			V.extended_inventory = !V.extended_inventory
+		if(WIRE_SHOCK)
+			V.seconds_electrified = MACHINE_DEFAULT_ELECTRIFY_TIME
+		if(WIRE_IDSCAN)
 			V.scan_id = !V.scan_id
+		if(WIRE_SPEAKER)
+			V.shut_up = !V.shut_up
+		if(WIRE_AGELIMIT)
+			V.age_restrictions = !V.age_restrictions
 
-/datum/wires/vending/UpdateCut(var/index, var/mended)
+/datum/wires/vending/on_cut(wire, mend)
 	var/obj/machinery/vending/V = holder
-	switch(index)
-		if(VENDING_WIRE_THROW)
-			V.shoot_inventory = !mended
-		if(VENDING_WIRE_CONTRABAND)
-			V.categories &= ~CAT_HIDDEN
-		if(VENDING_WIRE_ELECTRIFY)
-			if(mended)
-				V.seconds_electrified = 0
+	switch(wire)
+		if(WIRE_THROW)
+			V.shoot_inventory = !mend
+		if(WIRE_CONTRABAND)
+			V.extended_inventory = FALSE
+		if(WIRE_SHOCK)
+			if(mend)
+				V.seconds_electrified = MACHINE_NOT_ELECTRIFIED
 			else
-				V.seconds_electrified = -1
-		if(VENDING_WIRE_IDSCAN)
-			V.scan_id = 1
-
-/*
-	The Game (you just lost it):
-		Turn the pink light blue and make the suspicious light blink. Both must be true in order to unlock the hidden items.
-
-	Tip:
-		The power wire makes sparks when cut, but not when pulsed.
-		If you want to reset the hacking game, cut the ground and power, then mend them.
-
-	Robust Tip:
-		Cut wires starting from the top until you cut a wire that turns the pink light blue. That is your signal wire.
-			If the pink light doesn't change, mend all wires and start from the bottom instead.
-
-	Robuster Tip:
-		Level Mec
-
-	Solution:
-		Cut power/ground
-		Cut signal (pink light turns blue)
-		Mend power/ground
-		Pulse suspicious (suspicious light blinks)
-		Mend signal
-*/
-
-var/const/VENDING_INT_WIRE_THROW = 1
-var/const/VENDING_INT_WIRE_ELECTRIFY = 2
-var/const/VENDING_INT_WIRE_IDSCAN = 4
-var/const/VENDING_INT_WIRE_SIGNAL = 8
-var/const/VENDING_INT_WIRE_CONTRABAND = 16
-var/const/VENDING_INT_WIRE_GROUND = 32
-var/const/VENDING_INT_WIRE_POWER = 64
-
-/datum/wires/vending/intermediate
-	wire_count = 7
-	var/is_powered = TRUE
-	var/is_signal_securely_cut = FALSE
-	var/is_contraband_securely_pulsed = FALSE
-	descriptions = list(
-		new /datum/wire_description(VENDING_INT_WIRE_THROW, "Safety"),
-		new /datum/wire_description(VENDING_INT_WIRE_ELECTRIFY, "Shock"),
-		new /datum/wire_description(VENDING_INT_WIRE_IDSCAN, "Access"),
-		new /datum/wire_description(VENDING_INT_WIRE_SIGNAL, "Signal"),
-		new /datum/wire_description(VENDING_INT_WIRE_CONTRABAND, "Suspicious"),
-		new /datum/wire_description(VENDING_INT_WIRE_GROUND, "Ground"),
-		new /datum/wire_description(VENDING_INT_WIRE_POWER, "Power")
-	)
-
-/datum/wires/vending/intermediate/GetInteractWindow(mob/living/user)
-	. += ..(user)
-	. += "The [is_signal_securely_cut ? "blue" : "pink"] light is on.<BR>"
-	. += "The suspicious light is [is_contraband_securely_pulsed ? "blinking" : "on"].<BR>"
-
-/datum/wires/vending/intermediate/UpdatePulsed(var/index)
-	if(is_powered)
-		var/obj/machinery/vending/V = holder
-		switch(index)
-			if(VENDING_INT_WIRE_THROW)
-				V.shoot_inventory = !V.shoot_inventory
-			if(VENDING_INT_WIRE_ELECTRIFY)
-				V.seconds_electrified = 30
-			if(VENDING_INT_WIRE_IDSCAN)
-				V.scan_id = !V.scan_id
-			if(VENDING_INT_WIRE_CONTRABAND)
-				if(is_signal_securely_cut)
-					is_contraband_securely_pulsed = TRUE
-
-		// Pulse the wrong wire and you'll have to properly cut the signal wire again
-		if(!is_contraband_securely_pulsed)
-			is_signal_securely_cut = FALSE
-
-/datum/wires/vending/intermediate/UpdateCut(var/index, var/mended)
-	var/obj/machinery/vending/V = holder
-	switch(index)
-		if(VENDING_INT_WIRE_THROW)
-			if(is_powered)
-				V.shoot_inventory = !mended
-		if(VENDING_INT_WIRE_ELECTRIFY)
-			if(is_powered)
-				V.seconds_electrified = mended ? 0 : -1
-		if(VENDING_INT_WIRE_IDSCAN)
-			if(is_powered)
-				V.scan_id = 1
-		if(VENDING_INT_WIRE_SIGNAL)
-			if(mended && is_powered && is_contraband_securely_pulsed)
-				V.categories ^= CAT_HIDDEN
-			else if(!mended)
-				is_signal_securely_cut = is_powered ? FALSE : TRUE
-		if(VENDING_INT_WIRE_CONTRABAND)
-			if(is_contraband_securely_pulsed)
-				is_contraband_securely_pulsed = FALSE
-		if(VENDING_INT_WIRE_POWER)
-			V.seconds_electrified = mended ? 0 : 30
-
-	is_powered = IsIndexCut(VENDING_INT_WIRE_POWER | VENDING_INT_WIRE_GROUND) ? FALSE : TRUE
+				V.seconds_electrified = MACHINE_ELECTRIFIED_PERMANENT
+				V.shock(usr, 100)
+		if(WIRE_IDSCAN)
+			V.scan_id = mend
+		if(WIRE_SPEAKER)
+			V.shut_up = mend

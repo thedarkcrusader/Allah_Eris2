@@ -1,8 +1,9 @@
-/* Pens!
- * Contains:
+/*	Pens!
+ *	Contains:
  *		Pens
  *		Sleepy Pens
  *		Parapens
+ *		Edaggers
  */
 
 
@@ -10,195 +11,261 @@
  * Pens
  */
 /obj/item/pen
-	desc = "A normal black ink pen."
+	desc = "It's a normal black ink pen."
 	name = "pen"
-	icon = 'icons/obj/bureaucracy.dmi'
+	icon = 'yogstation/icons/obj/bureaucracy.dmi'
 	icon_state = "pen"
 	item_state = "pen"
-	slot_flags = SLOT_BELT | SLOT_EARS
+	slot_flags = ITEM_SLOT_BELT | ITEM_SLOT_EARS
 	throwforce = 0
-	w_class = ITEM_SIZE_TINY
-	throw_speed = 7
-	throw_range = 15
-	matter = list(MATERIAL_STEEL = 1)
-	spawn_tags = SPAWN_TAG_JUNK
-	rarity_value = 6
+	w_class = WEIGHT_CLASS_TINY
+	throw_speed = 3
+	throw_range = 7
+	materials = list(/datum/material/iron=10)
+	pressure_resistance = 2
+	grind_results = list(/datum/reagent/iron = 2, /datum/reagent/iodine = 1)
+	sharpness = SHARP_POINTY
 	var/colour = "black"	//what colour the ink is!
+	var/degrees = 0
+	var/font = PEN_FONT
 
+/obj/item/pen/suicide_act(mob/user)
+	user.visible_message(span_suicide("[user] is scribbling numbers all over [user.p_them()]self with [src]! It looks like [user.p_theyre()] trying to commit sudoku..."))
+	return(BRUTELOSS)
 
 /obj/item/pen/blue
-	desc = "A normal blue ink pen."
+	desc = "It's a normal blue ink pen."
 	icon_state = "pen_blue"
 	colour = "blue"
 
 /obj/item/pen/red
-	desc = "A normal red ink pen."
+	desc = "It's a normal red ink pen."
 	icon_state = "pen_red"
 	colour = "red"
 
-/obj/item/pen/multi
-	desc = "A pen with multiple colors of ink!"
-	var/selectedColor = 1
-	var/colors = list("black","blue","red")
-
-/obj/item/pen/multi/attack_self(mob/user)
-	if(++selectedColor > 3)
-		selectedColor = 1
-
-	colour = colors[selectedColor]
-
-	if(colour == "black")
-		icon_state = "pen"
-	else
-		icon_state = "pen_[colour]"
-
-	to_chat(user, SPAN_NOTICE("Changed color to '[colour].'"))
+/obj/item/pen/green
+	desc = "It's a normal green ink pen"
+	icon_state = "pen_green"
+	colour = "green"
 
 /obj/item/pen/invisible
-	desc = "An invisble pen marker."
+	desc = "It's an invisible pen marker."
 	icon_state = "pen"
 	colour = "white"
 
+/obj/item/pen/fourcolor
+	desc = "It's a fancy four-color ink pen, set to black."
+	name = "four-color pen"
+	icon_state = "pen_4"
 
-/obj/item/pen/attack(mob/M, mob/user)
-	if(!ismob(M))
-		return
-	to_chat(user, SPAN_WARNING("You stab [M] with the pen."))
-//	M << "\red You feel a tiny prick!" //That's a whole lot of meta!
-	M.attack_log += text("\[[time_stamp()]\] <font color='orange'>Has been stabbed with [name]  by [user.name] ([user.ckey])</font>")
-	user.attack_log += text("\[[time_stamp()]\] <font color='red'>Used the [name] to stab [M.name] ([M.ckey])</font>")
-	msg_admin_attack("[user.name] ([user.ckey]) Used the [name] to stab [M.name] ([M.ckey]) (<A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[user.x];Y=[user.y];Z=[user.z]'>JMP</a>)")
-	return
+/obj/item/pen/fourcolor/attack_self(mob/living/carbon/user)
+	switch(colour)
+		if("black")
+			colour = "red"
+		if("red")
+			colour = "green"
+		if("green")
+			colour = "blue"
+		else
+			colour = "black"
+	to_chat(user, span_notice("\The [src] will now write in [colour]."))
+	desc = "It's a fancy four-color ink pen, set to [colour]."
 
-/*
- * Reagent pens
- */
+/obj/item/pen/fountain
+	name = "fountain pen"
+	desc = "It's a common fountain pen, with a faux wood body."
+	icon_state = "pen-fountain"
+	font = FOUNTAIN_PEN_FONT
 
-/obj/item/pen/reagent
-	reagent_flags = REFILLABLE | DRAINABLE
-	slot_flags = SLOT_BELT
-	origin_tech = list(TECH_MATERIAL = 2, TECH_COVERT = 5)
-	spawn_blacklisted = TRUE
+/obj/item/pen/fountain/captain
+	name = "captain's fountain pen"
+	desc = "It's an expensive Oak fountain pen. The nib is quite sharp."
+	icon_state = "pen-fountain-o"
+	force = 5
+	throwforce = 5
+	throw_speed = 4
+	colour = "crimson"
+	materials = list(/datum/material/gold = 750)
+	sharpness = SHARP_POINTY
+	resistance_flags = FIRE_PROOF
+	unique_reskin = list("Oak" = "pen-fountain-o",
+						"Gold" = "pen-fountain-g",
+						"Rosewood" = "pen-fountain-r",
+						"Black and Silver" = "pen-fountain-b",
+						"Command Blue" = "pen-fountain-cb"
+						)
 
-/obj/item/pen/reagent/New()
+/obj/item/pen/fountain/captain/Initialize(mapload)
+	. = ..()
+	AddComponent(/datum/component/butchering, 200, 115) //the pen is mightier than the sword
+
+/obj/item/pen/fountain/captain/reskin_obj(mob/M)
 	..()
-	create_reagents(30)
+	if(current_skin)
+		desc = "It's an expensive [current_skin] fountain pen. The nib is quite sharp."
 
-/obj/item/pen/reagent/attack(mob/living/M, mob/user)
+/obj/item/pen/attack_self(mob/living/carbon/user)
+	var/deg = input(user, "What angle would you like to rotate the pen head to? (1-360)", "Rotate Pen Head") as null|num
+	if(deg && (deg > 0 && deg <= 360))
+		degrees = deg
+		to_chat(user, span_notice("You rotate the top of the pen to [degrees] degrees."))
+		SEND_SIGNAL(src, COMSIG_PEN_ROTATED, deg, user)
 
+/obj/item/pen/attack(mob/living/M, mob/user,stealth)
 	if(!istype(M))
 		return
 
+	if(!force)
+		if(M.can_inject(user, 1))
+			to_chat(user, span_warning("You stab [M] with the pen."))
+			if(!stealth)
+				to_chat(M, span_danger("You feel a tiny prick!"))
+			. = 1
+
+		log_combat(user, M, "stabbed", src)
+
+	else
+		. = ..()
+
+/obj/item/pen/afterattack(obj/O, mob/living/user, proximity)
 	. = ..()
+	//Changing Name/Description of items. Only works if they have the 'unique_rename' flag set
+	if(isobj(O) && proximity && ((O.obj_flags & UNIQUE_RENAME) || (O.obj_flags & UNIQUE_REDESC)))
+		var/penchoice
+		if((O.obj_flags & UNIQUE_RENAME) && (O.obj_flags & UNIQUE_REDESC))
+			penchoice = input(user, "What would you like to edit?", "Rename or change description?") as null|anything in list("Rename","Change description")
+		else if(O.obj_flags & UNIQUE_RENAME)
+			penchoice = "Rename"
+		else
+			penchoice = "Change description"
 
-	if(M.can_inject(user,1))
-		if(reagents.total_volume)
-			if(M.reagents)
-				var/contained_reagents = reagents.log_list()
-				var/trans = reagents.trans_to_mob(M, 30, CHEM_BLOOD)
-				admin_inject_log(user, M, src, contained_reagents, trans)
-
-/*
- * Sleepy Pens
- */
-/obj/item/pen/reagent/sleepy
-	desc = "A black ink pen with a sharp point and \"Waffle Co.\" engraved on the side."
-	origin_tech = list(TECH_MATERIAL = 2, TECH_COVERT = 5)
-
-/obj/item/pen/reagent/sleepy/New()
-	..()
-	reagents.add_reagent("chloralhydrate", 22)	//Used to be 100 sleep toxin//30 Chloral seems to be fatal, reducing it to 22./N
-
-
-/*
- * Parapens
- */
-/obj/item/pen/reagent/paralysis
-	origin_tech = "materials=2;syndicate=5"
-
-/obj/item/pen/reagent/paralysis/New()
-	..()
-	reagents.add_reagent("zombiepowder", 10)
-	reagents.add_reagent("cryptobiolin", 15)
-
-/*
- * Chameleon pen
- */
-/obj/item/pen/chameleon
-	var/signature = ""
-	spawn_blacklisted = TRUE
-
-/obj/item/pen/chameleon/attack_self(mob/user)
-	/*
-	// Limit signatures to official crew members
-	var/personnel_list[] = list()
-	for(var/datum/data/record/t in data_core.locked) //Look in data core locked.
-		personnel_list.Add(t.fields["name"])
-	personnel_list.Add("Anonymous")
-
-	var/new_signature = input("Enter new signature pattern.", "New Signature") as null|anything in personnel_list
-	if(new_signature)
-		signature = new_signature
-	*/
-	signature = sanitize(input("Enter new signature. Leave blank for 'Anonymous'", "New Signature", signature))
-
-/obj/item/pen/proc/get_signature(var/mob/user)
-	return (user && user.real_name) ? user.real_name : "Anonymous"
-
-/obj/item/pen/chameleon/get_signature(var/mob/user)
-	return signature ? signature : "Anonymous"
-
-/obj/item/pen/chameleon/verb/set_colour()
-	set name = "Change Pen Colour"
-	set category = "Object"
-
-	var/list/possible_colours = list ("Yellow", "Green", "Pink", "Blue", "Orange", "Cyan", "Red", "Invisible", "Black")
-	var/selected_type = input("Pick new colour.", "Pen Colour", null, null) as null|anything in possible_colours
-
-	if(selected_type)
-		switch(selected_type)
-			if("Yellow")
-				colour = COLOR_YELLOW
-			if("Green")
-				colour = COLOR_LIME
-			if("Pink")
-				colour = COLOR_PINK
-			if("Blue")
-				colour = COLOR_BLUE
-			if("Orange")
-				colour = COLOR_ORANGE
-			if("Cyan")
-				colour = COLOR_CYAN
-			if("Red")
-				colour = COLOR_RED
-			if("Invisible")
-				colour = COLOR_WHITE
+		if(QDELETED(O) || !user.canUseTopic(O, BE_CLOSE))
+			return
+		if(penchoice == "Rename")
+			var/input = stripped_input(user,"What do you want to name \the [O.name]?", ,"", MAX_NAME_LEN)
+			var/oldname = O.name
+			if(QDELETED(O) || !user.canUseTopic(O, BE_CLOSE))
+				return
+			if(oldname == input)
+				to_chat(user, "You changed \the [O.name] to... well... \the [O.name].")
 			else
-				colour = COLOR_BLACK
-		to_chat(usr, "<span class='info'>You select the [lowertext(selected_type)] ink container.</span>")
+				O.name = input
+				to_chat(user, "\The [oldname] has been successfully been renamed to \the [input].")
+				O.renamedByPlayer = TRUE
 
+		if(penchoice == "Change description")
+			var/input = stripped_input(user,"Describe \the [O.name] here", ,"", 200)
+			if(QDELETED(O) || !user.canUseTopic(O, BE_CLOSE))
+				return
+			O.desc = input
+			to_chat(user, "You have successfully changed \the [O.name]'s description.")
 
 /*
- * Crayons
+ * Sleepypens
  */
 
-/obj/item/pen/crayon
-	name = "crayon"
-	desc = "A colourful crayon. Please refrain from eating it or putting it in your nose."
-	icon = 'icons/obj/crayons.dmi'
-	icon_state = "crayonred"
-	w_class = ITEM_SIZE_TINY
-	attack_verb = list("attacked", "coloured")
-	colour = "#FF0000" //RGB
-	var/shadeColour = "#220000" //RGB
-	var/uses = 30 //0 for unlimited uses
-	var/instant = 0
-	var/colourName = "red" //for updateIcon purposes
-	var/grindable = TRUE //normal crayons are grindable, rainbow and mime aren't
+/obj/item/pen/blue/sleepy/attack(mob/living/M, mob/user)
+	if(!is_syndicate(user)) // if non syndicate , it is just a regular pen as they don't know how to activate hidden payload.
+		. = ..()
+		return
+	if(!istype(M))
+		return
+	if(!..())
+		return
+	if(!reagents.total_volume || !M.reagents)
+		return
 
-	New()
-		name = "[colourName] crayon"
-		if(grindable)
-			create_reagents(20)
-			reagents.add_reagent("crayon_dust_[colourName]", 20)
-		..()
+	to_chat(user, span_warning("You begin to inject [src]'s contents into [M]"))
+	if(!do_after(user, 0.5 SECONDS, M))
+		return
+	reagents.reaction(M, INJECT, reagents.total_volume)
+	reagents.trans_to(M, reagents.total_volume, transfered_by = user)
+
+
+
+/obj/item/pen/blue/sleepy/Initialize(mapload)
+	. = ..()
+	create_reagents(75)
+	reagents.add_reagent(/datum/reagent/toxin/chloralhydrate, 20)
+	reagents.add_reagent(/datum/reagent/toxin/mutetoxin, 15)
+	reagents.add_reagent(/datum/reagent/toxin/staminatoxin, 10)
+	reagents.add_reagent(/datum/reagent/toxin/sodium_thiopental, 30)
+
+/*
+ * (Alan) Edaggers
+ */
+/obj/item/pen/red/edagger
+	attack_verb = list("slashed", "stabbed", "sliced", "torn", "ripped", "diced", "cut") //these wont show up if the pen is off
+	sharpness = SHARP_EDGED
+	var/on = FALSE
+
+/obj/item/pen/red/edagger/Initialize(mapload)
+	. = ..()
+	AddComponent(/datum/component/butchering, 60, 100, 0, 'sound/weapons/blade1.ogg', TRUE)
+
+/obj/item/pen/red/edagger/suicide_act(mob/user)
+	. = BRUTELOSS
+	if(on)
+		user.visible_message(span_suicide("[user] forcefully rams the pen into their mouth!"))
+	else
+		user.visible_message(span_suicide("[user] is holding a pen up to their mouth! It looks like [user.p_theyre()] trying to commit suicide!"))
+		attack_self(user)
+
+/obj/item/pen/red/edagger/attack_self(mob/living/user)
+	if(on)
+		on = FALSE
+		force = initial(force)
+		throw_speed = initial(throw_speed)
+		w_class = initial(w_class)
+		name = initial(name)
+		hitsound = initial(hitsound)
+		embedding = embedding.setRating(embed_chance = EMBED_CHANCE)
+		throwforce = initial(throwforce)
+		playsound(user, 'sound/weapons/saberoff.ogg', 5, 1)
+		to_chat(user, span_warning("[src] can now be concealed."))
+	else
+		if(!is_syndicate(user)) // this is just a normal pen to non syndicates as they don't know how to switch it on.
+			. = ..()
+			return
+		on = TRUE
+		force = 18
+		throw_speed = 4
+		w_class = WEIGHT_CLASS_NORMAL
+		name = "energy dagger"
+		hitsound = 'sound/weapons/blade1.ogg'
+		embedding = embedding.setRating(embed_chance = 100) //rule of cool
+		throwforce = 35
+		playsound(user, 'sound/weapons/saberon.ogg', 5, 1)
+		to_chat(user, span_warning("[src] is now active."))
+	var/datum/component/butchering/butchering = src.GetComponent(/datum/component/butchering)
+	butchering.butchering_enabled = on
+	update_appearance(UPDATE_ICON)
+
+/obj/item/pen/red/edagger/update_icon(updates=ALL)
+	. = ..()
+	if(on)
+		icon_state = "edagger"
+		item_state = "edagger"
+		lefthand_file = 'icons/mob/inhands/weapons/swords_lefthand.dmi'
+		righthand_file = 'icons/mob/inhands/weapons/swords_righthand.dmi'
+	else
+		icon_state = initial(icon_state) //looks like a normal pen when off.
+		item_state = initial(item_state)
+		lefthand_file = initial(lefthand_file)
+		righthand_file = initial(righthand_file)
+
+/obj/item/pen/charcoal
+	name = "charcoal stylus"
+	desc = "It's just a wooden stick with some compressed ash on the end. At least it can write."
+	icon = 'icons/obj/bureaucracy.dmi'
+	icon_state = "pen-charcoal"
+	colour = "dimgray"
+	font = CHARCOAL_FONT
+	grind_results = list(/datum/reagent/ash = 5)
+
+/datum/crafting_recipe/charcoal_stylus
+	name = "Charcoal Stylus"
+	result = /obj/item/pen/charcoal
+	reqs = list(/obj/item/stack/sheet/mineral/wood = 1, /datum/reagent/ash = 30)
+	time = 3 SECONDS
+	category = CAT_PRIMAL

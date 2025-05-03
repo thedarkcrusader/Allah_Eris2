@@ -1,57 +1,94 @@
 /obj/machinery/computer/prisoner
 	name = "prisoner management console"
-	icon = 'icons/obj/computer.dmi'
-	icon_keyboard = "security_key"
+	desc = "Used to manage tracking implants placed inside criminals."
 	icon_screen = "explosive"
-	light_color = COLOR_LIGHTING_SCI_BRIGHT
-	req_access = list(access_armory)
-	circuit = /obj/item/electronics/circuitboard/prisoner
-	var/locked = TRUE
+	icon_keyboard = "security_key"
+	req_access = list(ACCESS_BRIG)
+	var/id = 0
+	var/temp = null
+	var/status = 0
+	var/timeleft = 60
+	var/stop = 0
+	var/screen = 0 // 0 - No Access Denied, 1 - Access allowed
+	var/obj/item/card/id/prisoner/inserted_id
+	circuit = /obj/item/circuitboard/computer/prisoner
 
+	light_color = LIGHT_COLOR_RED
 
-/obj/machinery/computer/prisoner/attack_hand(var/mob/user as mob)
-	if(..())
-		return
-	user.set_machine(src)
-	var/dat
-	dat += "<B>Prisoner Implant Manager System</B><BR>"
-	if(locked)
-		dat += "<HR><A href='?src=\ref[src];lock=1'>Unlock Console</A>"
-	else
+/obj/machinery/computer/prisoner/ui_interact(mob/user)
+	. = ..()
+	var/dat = ""
+	if(screen == 0)
+		dat += "<HR><A href='byond://?src=[REF(src)];lock=1'>Unlock Console</A>"
+	else if(screen == 1)
+		dat += "<H3>Prisoner ID Management</H3>"
+		if(inserted_id)
+			dat += text("<A href='byond://?src=[REF(src)];id=eject'>[inserted_id]</A><br>")
+			dat += text("Collected Points: [inserted_id.points]. <A href='byond://?src=[REF(src)];id=reset'>Reset.</A><br>")
+			dat += text("Card goal: [inserted_id.goal].  <A href='byond://?src=[REF(src)];id=setgoal'>Set </A><br>")
+			dat += text("Space Law recommends quotas of 100 points per minute they would normally serve in the brig.<BR>")
+		else
+			dat += text("<A href='byond://?src=[REF(src)];id=insert'>Insert Prisoner ID.</A><br>")
+		dat += "<H3>Prisoner Implant Management</H3>"
 		dat += "<HR>Chemical Implants<BR>"
 		var/turf/Tr = null
-		for(var/obj/item/implant/chem/C in world)
+		for(var/obj/item/implant/chem/C in GLOB.tracked_chem_implants)
 			Tr = get_turf(C)
-			if((Tr) && isNotStationLevel(Tr.z)) continue //Out of range
-			if(!C.implanted) continue
-			dat += "[C.wearer.name] | Remaining Units: [C.reagents.total_volume] | Inject: "
-			dat += "<A href='?src=\ref[src];inject=\ref[C];amount=1'>(<font color=red>(1)</font>)</A>"
-			dat += "<A href='?src=\ref[src];inject=\ref[C];amount=5'>(<font color=red>(5)</font>)</A>"
-			dat += "<A href='?src=\ref[src];inject=\ref[C];amount=10'>(<font color=red>(10)</font>)</A><BR>"
+			if((Tr) && (Tr.z != src.z))
+				continue//Out of range
+			if(!C.imp_in)
+				continue
+			dat += "ID: [C.imp_in.name] | Remaining Units: [C.reagents.total_volume] <BR>"
+			dat += "| Inject: "
+			dat += "<A href='byond://?src=[REF(src)];inject1=[REF(C)]'>(<font class='bad'>(1)</font>)</A>"
+			dat += "<A href='byond://?src=[REF(src)];inject5=[REF(C)]'>(<font class='bad'>(5)</font>)</A>"
+			dat += "<A href='byond://?src=[REF(src)];inject10=[REF(C)]'>(<font class='bad'>(10)</font>)</A><BR>"
 			dat += "********************************<BR>"
 		dat += "<HR>Tracking Implants<BR>"
-		for(var/obj/item/implant/tracking/T in world)
+		for(var/obj/item/implant/tracking/T in GLOB.tracked_implants)
+			if(!isliving(T.imp_in))
+				continue
 			Tr = get_turf(T)
-			if((Tr) && isNotStationLevel(Tr.z)) continue //Out of range
-			if(!T.implanted) continue
+			if((Tr) && (Tr.z != src.z))
+				continue//Out of range
+
 			var/loc_display = "Unknown"
-			var/mob/living/carbon/M = T.wearer
-			if(isStationLevel(M.z) && !istype(M.loc, /turf/space))
+			var/mob/living/M = T.imp_in
+			if(is_station_level(Tr.z) && !isspaceturf(M.loc))
 				var/turf/mob_loc = get_turf(M)
 				loc_display = mob_loc.loc
-			if(T.malfunction)
-				loc_display = pick(SSmapping.teleportlocs)
-			dat += "ID: [T.gps.serial_number] | Location: [loc_display]<BR>"
-			dat += "<A href='?src=\ref[src];warn=\ref[T]'>(<font color=red><i>Message Holder</i></font>)</A> |<BR>"
-			dat += "********************************<BR>"
-		dat += "<HR><A href='?src=\ref[src];lock=1'>Lock Console</A>"
 
-	user << browse(dat, "window=computer;size=400x500")
-	onclose(user, "computer")
+			dat += "ID: [T.imp_in.name] | Location: [loc_display]<BR>"
+			dat += "<A href='byond://?src=[REF(src)];warn=[REF(T)]'>(<font class='bad'><i>Message Holder</i></font>)</A> |<BR>"
+			dat += "********************************<BR>"
+		dat += "<HR>Anti-Magic Collars<BR>"
+		for(var/obj/item/clothing/neck/anti_magic_collar/collar in GLOB.tracked_collars)
+			Tr = get_turf(collar)
+			if((Tr) && (Tr.z != src.z))
+				continue//Out of range
+
+			var/loc_display = "Unknown"
+			var/mob/living/M = collar
+			if(is_station_level(Tr.z) && !isspaceturf(M.loc))
+				var/turf/mob_loc = get_turf(M)
+				loc_display = mob_loc.loc
+
+			dat += "ID: [collar.inmate_name] | Location: [loc_display]<BR>"
+			dat += "<A href='byond://?src=[REF(src)];UNLOCK=[REF(collar)]'>(<font class='bad'><i>UNLOCK</i></font>)</A> |<BR>"
+			dat += "********************************<BR>"
+		dat += "<HR><A href='byond://?src=[REF(src)];lock=1'>Lock Console</A>"
+	var/datum/browser/popup = new(user, "computer", "Prisoner Management Console", 400, 500)
+	popup.set_content(dat)
+	popup.open()
 	return
 
+/obj/machinery/computer/prisoner/attackby(obj/item/I, mob/user, params)
+	if(istype(I, /obj/item/card/id))
+		return attack_hand(user)
+	else
+		return ..()
 
-/obj/machinery/computer/prisoner/Process()
+/obj/machinery/computer/prisoner/process()
 	if(!..())
 		src.updateDialog()
 	return
@@ -60,28 +97,66 @@
 /obj/machinery/computer/prisoner/Topic(href, href_list)
 	if(..())
 		return
-	usr.set_machine(src)
+	if(usr.contents.Find(src) || (in_range(src, usr) && isturf(loc)) || issilicon(usr))
+		usr.set_machine(src)
 
-	if(href_list["inject"])
-		var/obj/item/implant/I = locate(href_list["inject"])
-		var/amount = text2num(href_list["amount"])
-		if(I && amount)
-			I.activate(amount)
+		if(href_list["id"])
+			if(href_list["id"] =="insert" && !inserted_id)
+				var/obj/item/card/id/prisoner/I = usr.is_holding_item_of_type(/obj/item/card/id/prisoner)
+				if(I)
+					if(!usr.transferItemToLoc(I, src))
+						return
+					inserted_id = I
+				else
+					to_chat(usr, span_danger("No valid ID."))
+			else if(inserted_id)
+				switch(href_list["id"])
+					if("eject")
+						inserted_id.forceMove(drop_location())
+						inserted_id.verb_pickup()
+						inserted_id = null
+					if("reset")
+						inserted_id.points = 0
+					if("setgoal")
+						var/num = round(input(usr, "Choose prisoner's goal:", "Input an Integer", null) as num|null)
+						if(num >= 0)
+							num = min(num,1000) //Cap the quota to the equivilent of 10 minutes.
+							inserted_id.goal = num
+		else if(href_list["inject1"])
+			var/obj/item/implant/I = locate(href_list["inject1"]) in GLOB.tracked_chem_implants
+			if(I && istype(I))
+				I.activate(1)
+		else if(href_list["inject5"])
+			var/obj/item/implant/I = locate(href_list["inject5"]) in GLOB.tracked_chem_implants
+			if(I && istype(I))
+				I.activate(5)
 
-	else if(href_list["lock"])
-		if(src.allowed(usr))
-			locked = !locked
-		else
-			to_chat(usr, "Unauthorized Access.")
+		else if(href_list["inject10"])
+			var/obj/item/implant/I = locate(href_list["inject10"]) in GLOB.tracked_chem_implants
+			if(I && istype(I))
+				I.activate(10)
 
-	else if(href_list["warn"])
-		var/warning = sanitize(input(usr,"Message:","Enter your message here!",""))
-		if(!warning) return
-		var/obj/item/implant/I = locate(href_list["warn"])
-		if(I && I.wearer)
-			var/mob/living/carbon/R = I.wearer
-			to_chat(R, SPAN_NOTICE("You hear a voice in your head saying: '[warning]'"))
+		else if(href_list["lock"])
+			if(src.allowed(usr))
+				screen = !screen
+			else
+				to_chat(usr, "Unauthorized Access.")
 
-	src.add_fingerprint(usr)
+		else if(href_list["warn"])
+			var/warning = stripped_input(usr, "Message:", "Enter your message here!", "", MAX_MESSAGE_LEN)
+			if(!warning)
+				return
+			var/obj/item/implant/I = locate(href_list["warn"]) in GLOB.tracked_implants
+			if(I && istype(I) && I.imp_in)
+				var/mob/living/R = I.imp_in
+				to_chat(R, span_italics("You hear a voice in your head saying: '[warning]'"))
+				log_directed_talk(usr, R, warning, LOG_SAY, "implant message")
+		
+		else if(href_list["UNLOCK"])
+			var/obj/item/clothing/neck/anti_magic_collar/C = locate(href_list["UNLOCK"]) in GLOB.tracked_collars
+			if(C && istype(C))
+				C.unlock()
+
+		src.add_fingerprint(usr)
 	src.updateUsrDialog()
 	return

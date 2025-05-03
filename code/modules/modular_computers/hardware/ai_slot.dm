@@ -1,41 +1,69 @@
-// A wrapper that allows the computer to contain an inteliCard.
 /obj/item/computer_hardware/ai_slot
-	name = "inteliCard slot"
-	desc = "An IIS interlink with connection uplinks that allow the device to interface with most common inteliCard models. Too large to fit into tablets. Uses a lot of power when active."
-	icon_state = "aislot"
-	hardware_size = 1
-	power_usage = 100
-	origin_tech = list(TECH_POWER = 2, TECH_DATA = 3)
-	price_tag = 100
-	var/obj/item/device/aicard/stored_card
-	var/power_usage_idle = 100
-	var/power_usage_occupied = 2 KILOWATTS
+	name = "intelliCard interface slot"
+	desc = "A module allowing this computer to interface with most common intelliCard modules. Necessary for some programs to run properly."
+	power_usage = 100 //W
+	icon_state = "card_mini"
+	w_class = WEIGHT_CLASS_NORMAL
+	device_type = MC_AI
+	expansion_hw = TRUE
 
-/obj/item/computer_hardware/ai_slot/proc/update_power_usage()
-	if(!stored_card || !stored_card.carded_ai)
-		power_usage = power_usage_idle
-		return
-	power_usage = power_usage_occupied
+	var/obj/item/aicard/stored_card
+	var/locked = FALSE
 
-/obj/item/computer_hardware/ai_slot/attackby(obj/item/W, mob/user)
-	if(..())
-		return 1
-	if(istype(W, /obj/item/device/aicard))
-		if(stored_card)
-			to_chat(user, "\The [src] is already occupied.")
-			return
-		if(!user.unEquip(W, src))
-			return
-		stored_card = W
-		update_power_usage()
-	if(QUALITY_SCREW_DRIVING in W.tool_qualities)
-		if(W.use_tool(user, src, WORKTIME_FAST, QUALITY_SCREW_DRIVING, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
-			to_chat(user, "You manually remove \the [stored_card] from \the [src].")
-			stored_card.forceMove(drop_location())
-			stored_card = null
-			update_power_usage()
-
-/obj/item/computer_hardware/ai_slot/Destroy()
-	if(stored_card)
-		stored_card.forceMove(drop_location())
+///What happens when the intellicard is removed (or deleted) from the module, through try_eject() or not.
+/obj/item/computer_hardware/ai_slot/Exited(atom/A, atom/newloc)
+	if(A == stored_card)
+		stored_card = null
 	return ..()
+
+/obj/item/computer_hardware/ai_slot/examine(mob/user)
+	. = ..()
+	if(stored_card)
+		. += "There appears to be an intelliCard loaded. There appears to be a pinhole protecting a manual eject button. A screwdriver could probably press it."
+
+/obj/item/computer_hardware/ai_slot/try_insert(obj/item/I, mob/living/user = null)
+	if(!holder)
+		return FALSE
+
+	if(!istype(I, /obj/item/aicard))
+		return FALSE
+
+	if(stored_card)
+		to_chat(user, span_warning("You try to insert \the [I] into \the [src], but the slot is occupied."))
+		return FALSE
+	if(user && !user.transferItemToLoc(I, src))
+		return FALSE
+
+	stored_card = I
+	to_chat(user, span_notice("You insert \the [I] into \the [src]."))
+
+	return TRUE
+
+
+/obj/item/computer_hardware/ai_slot/try_eject(mob/living/user = null,forced = FALSE)
+	if(!stored_card)
+		to_chat(user, span_warning("There is no card in \the [src]."))
+		return FALSE
+
+	if(locked && !forced)
+		to_chat(user, span_warning("Safeties prevent you from removing the card until reconstruction is complete..."))
+		return FALSE
+
+	if(stored_card)
+		to_chat(user, span_notice("You remove [stored_card] from [src]."))
+		locked = FALSE
+		if(user)
+			user.put_in_hands(stored_card)
+		else
+			stored_card.forceMove(drop_location())
+
+		return TRUE
+	return FALSE
+
+/obj/item/computer_hardware/ai_slot/attackby(obj/item/I, mob/living/user)
+	if(..())
+		return
+	if(I.tool_behaviour == TOOL_SCREWDRIVER)
+		to_chat(user, span_notice("You press down on the manual eject button with \the [I]."))
+		try_eject(,user,1)
+		return

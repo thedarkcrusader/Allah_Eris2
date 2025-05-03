@@ -1,95 +1,78 @@
-/obj/structure/catwalk
-	layer = TURF_LAYER + 0.5
-	icon = 'icons/turf/catwalks.dmi'
-	icon_state = "catwalk"
+/obj/structure/lattice/catwalk
 	name = "catwalk"
-	desc = "Cats really don't like these things."
-	density = FALSE
-	anchored = TRUE
+	desc = "A catwalk for easier EVA maneuvering and cable placement."
+	icon = 'icons/obj/smooth_structures/catwalk.dmi'
+	icon_state = "catwalk-0"
+	base_icon_state = "catwalk"
+	number_of_rods = 2
+	smoothing_flags = SMOOTH_BITMASK
+	smoothing_groups = SMOOTH_GROUP_CATWALK + SMOOTH_GROUP_LATTICE + SMOOTH_GROUP_OPEN_FLOOR
+	canSmoothWith = SMOOTH_GROUP_CATWALK
+	obj_flags = CAN_BE_HIT | BLOCK_Z_OUT_DOWN | BLOCK_Z_IN_UP
 
-
-/obj/structure/catwalk/New()
-	..()
-	if (istype(loc, /turf/open))
-		var/turf/open/T = loc
-		T.updateFallability()
-	spawn(4)
-		if(src)
-			for(var/obj/structure/catwalk/C in get_turf(src))
-				if(C != src)
-					qdel(C)
-			update_icon()
-			redraw_nearby_catwalks()
-
-/obj/structure/catwalk/Initialize()
-	..()
-	return INITIALIZE_HINT_LATELOAD
-
-/obj/structure/catwalk/LateInitialize()
-	..()
-	update_icon()
-	redraw_nearby_catwalks()
-
-/obj/structure/catwalk/Destroy()
-	if (istype(loc, /turf/open))
-		var/turf/open/T = loc
-		T.updateFallability(src)
-	redraw_nearby_catwalks()
+/obj/structure/lattice/catwalk/Initialize(mapload)
 	. = ..()
+	AddElement(/datum/element/footstep_override, footstep = FOOTSTEP_CATWALK)
 
-/obj/structure/catwalk/proc/redraw_nearby_catwalks()
-	for(var/direction in alldirs)
-		if(locate(/obj/structure/catwalk, get_step(src, direction)))
-			var/obj/structure/catwalk/L = locate(/obj/structure/catwalk, get_step(src, direction))
-			L.update_icon() //so siding get updated properly
+/obj/structure/lattice/catwalk/over
+	layer = CATWALK_LAYER
+	plane = GAME_PLANE
 
-/obj/structure/catwalk/proc/test_connect(turf/T)
-	if(locate(/obj/structure/catwalk, T))
-		return TRUE
-	if(T && T.is_wall)
-		return TRUE
-	if(istype(T, /turf/floor))
-		var/turf/floor/F = T
-		if(!F.flooring?.is_plating || istype(F.flooring, /decl/flooring/reinforced/plating/hull)) //Caution stripes go where elevation would change, eg, stepping down onto underplating
+/obj/structure/lattice/catwalk/deconstruction_hints(mob/user)
+	to_chat(user, span_notice("The supporting rods look like they could be <b>sliced</b>."))
+
+/obj/structure/lattice/attackby(obj/item/C, mob/user, params)
+	if(resistance_flags & INDESTRUCTIBLE)
+		return
+	if(C.tool_behaviour == TOOL_WELDER)
+		if(!C.tool_start_check(user, amount=0))
+			return FALSE
+		to_chat(user, "<span class='notice'>You begin slicing through the outer plating...</span>")
+		if(C.use_tool(src, user, 25, volume=100))
+			to_chat(user, "<span class='notice'>You slice off [src]</span>")
+			deconstruct()
 			return TRUE
 
-/obj/structure/catwalk/update_icon()
-	var/connectdir = 0
-	for(var/direction in cardinal)
-		if(test_connect(get_step(src, direction)))
-			connectdir |= direction
+/obj/structure/lattice/catwalk/ratvar_act()
+	new /obj/structure/lattice/catwalk/clockwork(loc)
 
-	//Check the diagonal connections for corners, where you have, for example, connections both north and east. In this case it checks for a north-east connection to determine whether to add a corner marker or not.
-	var/diagonalconnect = 0 //1 = NE; 2 = SE; 4 = NW; 8 = SW
-	//NORTHEAST
-	if(connectdir & NORTH && connectdir & EAST)
-		if(test_connect(get_step(src, NORTHEAST)))
-			diagonalconnect |= 1
-	//SOUTHEAST
-	if(connectdir & SOUTH && connectdir & EAST)
-		if(test_connect(get_step(src, SOUTHEAST)))
-			diagonalconnect |= 2
-	//NORTHWEST
-	if(connectdir & NORTH && connectdir & WEST)
-		if(test_connect(get_step(src, NORTHWEST)))
-			diagonalconnect |= 4
-	//SOUTHWEST
-	if(connectdir & SOUTH && connectdir & WEST)
-		if(test_connect(get_step(src, SOUTHWEST)))
-			diagonalconnect |= 8
+/obj/structure/lattice/catwalk/Move()
+	var/turf/T = loc
+	for(var/obj/structure/cable/C in T)
+		C.deconstruct()
+	..()
 
-	icon_state = "catwalk[connectdir]-[diagonalconnect]"
+/obj/structure/lattice/catwalk/deconstruct()
+	var/turf/T = loc
+	for(var/obj/structure/cable/C in T)
+		C.deconstruct()
+	..()
 
-/obj/structure/catwalk/attackby(obj/item/I, mob/user)
-	if(QUALITY_WELDING in I.tool_qualities)
-		if(I.use_tool(user, src, WORKTIME_FAST, QUALITY_WELDING, FAILCHANCE_EASY, required_stat = STAT_MEC))
-			to_chat(user, "\blue Slicing lattice joints ...")
-			new /obj/item/stack/rods(get_turf(user))
-			new /obj/item/stack/rods(get_turf(user))
-			new /obj/structure/lattice/(src.loc)
-			qdel(src)
-	return
+/obj/structure/lattice/catwalk/clockwork
+	name = "clockwork catwalk"
+	icon = 'icons/obj/smooth_structures/catwalk_clockwork.dmi'
+	icon_state = "catwalk_clockwork-0"
+	base_icon_state = "catwalk_clockwork"
+	smoothing_flags = NONE
+	smoothing_groups = SMOOTH_GROUP_CATWALK + SMOOTH_GROUP_LATTICE + SMOOTH_GROUP_OPEN_FLOOR
+	canSmoothWith = SMOOTH_GROUP_CATWALK
 
+/obj/structure/lattice/catwalk/clockwork/Initialize(mapload)
+	. = ..()
+	ratvar_act()
+	if(!mapload)
+		new /obj/effect/temp_visual/ratvar/floor/catwalk(loc)
+		new /obj/effect/temp_visual/ratvar/beam/catwalk(loc)
+	if(is_reebe(z))
+		resistance_flags |= INDESTRUCTIBLE
 
-/obj/structure/catwalk/can_prevent_fall(above)
-	return above ? FALSE : TRUE
+/obj/structure/lattice/catwalk/clockwork/ratvar_act()
+	if(ISODD(x+y))
+		icon = 'icons/obj/smooth_structures/catwalk_clockwork_large.dmi'
+		pixel_x = -9
+		pixel_y = -9
+	else
+		icon = 'icons/obj/smooth_structures/catwalk_clockwork.dmi'
+		pixel_x = 0
+		pixel_y = 0
+	return TRUE

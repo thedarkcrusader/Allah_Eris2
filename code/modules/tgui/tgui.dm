@@ -11,7 +11,7 @@
 	var/mob/user
 	/// The object which owns the UI.
 	var/datum/src_object
-	/// The title of te UI.
+	/// The title of the UI.
 	var/title
 	/// The window_id for browse() and onclose().
 	var/datum/tgui_window/window
@@ -56,7 +56,7 @@
  */
 /datum/tgui/New(mob/user, datum/src_object, interface, title, ui_x, ui_y)
 	log_tgui(user,
-		"new [interface] fancy [user?.client?.get_preference_value(/datum/client_preference/tgui_fancy)]",
+		"new [interface] fancy [user?.client?.prefs.read_preference(/datum/preference/toggle/tgui_fancy)]",
 		src_object = src_object)
 	src.user = user
 	src.src_object = src_object
@@ -97,7 +97,7 @@
 	if(!window.is_ready())
 		window.initialize(
 			strict_mode = TRUE,
-			fancy = user.client.get_preference_value(/datum/client_preference/tgui_fancy),
+			fancy = user.client.prefs.read_preference(/datum/preference/toggle/tgui_fancy),
 			assets = list(
 				get_asset_datum(/datum/asset/simple/tgui),
 			))
@@ -246,8 +246,8 @@
 		"window" = list(
 			"key" = window_key,
 			"size" = window_size,
-			"fancy" = user.client.get_preference_value(/datum/client_preference/tgui_fancy),
-			"locked" = user.client.get_preference_value(/datum/client_preference/tgui_lock),
+			"fancy" = user.client.prefs.read_preference(/datum/preference/toggle/tgui_fancy),
+			"locked" = user.client.prefs.read_preference(/datum/preference/toggle/tgui_lock),
 		),
 		"client" = list(
 			"ckey" = user.client.ckey,
@@ -275,7 +275,7 @@
  * Run an update cycle for this UI. Called internally by SStgui
  * every second or so.
  */
-/datum/tgui/Process(delta_time, force = FALSE)
+/datum/tgui/process(delta_time, force = FALSE)
 	if(closing)
 		return
 	var/datum/host = src_object.ui_host(user)
@@ -325,7 +325,8 @@
 			window = window,
 			src_object = src_object)
 		process_status()
-		DEFAULT_QUEUE_OR_CALL_VERB(VERB_CALLBACK(src, PROC_REF(on_act_message), act_type, payload, state))
+		if(src_object.ui_act(act_type, payload, src, state))
+			SStgui.update_uis(src_object)
 		return FALSE
 	switch(type)
 		if("ready")
@@ -333,7 +334,7 @@
 			if(initialized)
 				send_full_update()
 			initialized = TRUE
-		if("ping/reply")
+		if("pingReply")
 			initialized = TRUE
 		if("suspend")
 			close(can_be_suspended = TRUE)
@@ -348,10 +349,3 @@
 			LAZYINITLIST(src_object.tgui_shared_states)
 			src_object.tgui_shared_states[href_list["key"]] = href_list["value"]
 			SStgui.update_uis(src_object)
-
-/// Wrapper for behavior to potentially wait until the next tick if the server is overloaded
-/datum/tgui/proc/on_act_message(act_type, payload, state)
-	if(QDELETED(src) || QDELETED(src_object))
-		return
-	if(src_object.ui_act(act_type, payload, src, state))
-		SStgui.update_uis(src_object)

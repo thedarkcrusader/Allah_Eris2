@@ -1,15 +1,8 @@
-
 /mob/living/silicon/ai/Logout()
-	if(old_client)
-		QDEL_NULL(old_client.CH)
-	old_client = null
 	..()
-	for(var/obj/machinery/ai_status_display/O in world) //change status
+	for(var/each in GLOB.ai_status_displays) //change status
+		var/obj/machinery/status_display/ai/O = each
 		O.mode = 0
-	if(!isturf(loc))
-		if (client)
-			client.eye = loc
-			client.perspective = EYE_PERSPECTIVE
-
+		O.update()
+	set_eyeobj_visible(FALSE)
 	view_core()
-	return

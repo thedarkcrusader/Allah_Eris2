@@ -1,4 +1,4 @@
-/*!
+/**
  * Base state and helpers for states. Just does some sanity checks,
  * implement a proper state for in-depth checks.
  *
@@ -24,7 +24,7 @@
 
 	if(isobserver(user))
 		// If they turn on ghost AI control, admins can always interact.
-		if(isghost(user) && is_admin(user))
+		if(IsAdminGhost(user))
 			. = max(., UI_INTERACTIVE)
 
 		// Regular ghosts can always at least view if in range.
@@ -61,26 +61,25 @@
  */
 /mob/proc/shared_ui_interaction(src_object)
 	// Close UIs if mindless.
-	if(!client) // && !HAS_TRAIT(src, TRAIT_PRESERVE_UI_WITHOUT_CLIENT))
+	if(!client)
 		return UI_CLOSE
-	// Disable UIs if unconcious.
+	// Disable UIs if unconscious.
 	else if(stat)
 		return UI_DISABLED
-	// Update UIs if incapicitated but concious.
+	// Update UIs if incapicitated but conscious.
 	else if(incapacitated())
 		return UI_UPDATE
 	return UI_INTERACTIVE
 
 /mob/living/shared_ui_interaction(src_object)
 	. = ..()
-	// downgrade from UI_INTERACTIVE to UI_UPDATE when lying or resting.
-	if((lying || resting) && . == UI_INTERACTIVE)
+	if(!(mobility_flags & MOBILITY_UI) && . == UI_INTERACTIVE)
 		return UI_UPDATE
 
 /mob/living/silicon/ai/shared_ui_interaction(src_object)
 	// Disable UIs if the AI is unpowered.
-	// if(apc_override == src_object) //allows AI to (eventually) use the interface for their own APC even when out of power
-	// 	return UI_INTERACTIVE
+	if(apc_override == src_object) //allows AI to (eventually) use the interface for their own APC even when out of power
+		return UI_INTERACTIVE
 	if(lacks_power())
 		return UI_DISABLED
 	return ..()
@@ -91,6 +90,22 @@
 	if((istype(device) && device.loc != src) && (!cell || cell.charge <= 0 || lockcharge))
 		return UI_DISABLED
 	return ..()
+
+/**
+ * public
+ *
+ * Check the distance for a living mob.
+ * Really only used for checks outside the context of a mob.
+ * Otherwise, use shared_living_ui_distance().
+ *
+ * required src_object The object which owns the UI.
+ * required user mob The mob who opened/is using the UI.
+ *
+ * return UI_state The state of the UI.
+ */
+/atom/proc/contents_ui_distance(src_object, mob/living/user)
+	// Just call this mob's check.
+	return user.shared_living_ui_distance(src_object)
 
 /**
  * public
@@ -119,6 +134,6 @@
 	return UI_CLOSE
 
 /mob/living/carbon/human/shared_living_ui_distance(atom/movable/src_object, viewcheck = TRUE, allow_tk = TRUE)
-	if(allow_tk && get_dist(src, src_object) > tk_maxrange)
+	if(allow_tk && dna.check_mutation(TK) && tkMaxRangeCheck(src, src_object))
 		return UI_INTERACTIVE
 	return ..()

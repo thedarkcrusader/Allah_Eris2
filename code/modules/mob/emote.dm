@@ -1,82 +1,126 @@
-// All mobs should have custom emote, really..
-//m_type == 1 --> visual.
-//m_type == 2 --> audible
-/mob/proc/custom_emote(var/m_type=1,var/message = null)
-	if(usr && stat || !use_me && usr == src)
-		to_chat(src, "You are unable to emote.")
-		return
+///How confused a carbon must be before they will vomit
+#define BEYBLADE_PUKE_THRESHOLD 30
+///How must nutrition is lost when a carbon pukes
+#define BEYBLADE_PUKE_NUTRIENT_LOSS 60
+///How often a carbon becomes penalized
+#define BEYBLADE_DIZZINESS_PROBABILITY 20
+///How long the screenshake lasts
+#define BEYBLADE_DIZZINESS_DURATION 20
+///How much confusion a carbon gets every time they are penalized
+#define BEYBLADE_CONFUSION_INCREMENT 10
+///A max for how much confusion a carbon will be for beyblading
+#define BEYBLADE_CONFUSION_LIMIT 40
 
-	var/muzzled = istype(src.wear_mask, /obj/item/clothing/mask/muzzle) || istype(src.wear_mask, /obj/item/grenade)
-	if(m_type == 2 && muzzled) return
+//The code execution of the emote datum is located at code/datums/emotes.dm
+/mob/proc/emote(act, m_type = null, message = null, intentional = FALSE, is_keybind = FALSE)
+	act = lowertext(act)
+	var/param = message
+	var/custom_param = findchar(act, " ")
+	if(custom_param)
+		param = copytext(act, custom_param + length(act[custom_param]))
+		act = copytext(act, 1, custom_param)
 
-	var/input
-	if(!message)
-		input = sanitize(input(src,"Choose an emote to display.") as text|null)
-	else
-		input = message
-	if(input)
-		message = "<B>[src]</B> [input]"
-	else
-		return
+	var/list/key_emotes = GLOB.emote_list[act]
 
-
-	if (message)
-		log_emote("[name]/[key] : [message]")
-
-		send_emote(message, m_type)
-
-/mob/proc/emote_dead(var/message)
-
-	if(client.prefs.muted & MUTE_DEADCHAT)
-		to_chat(src, SPAN_DANGER("You cannot send deadchat emotes (muted)."))
-		return
-
-	if(get_preference_value(/datum/client_preference/show_dsay) == GLOB.PREF_HIDE)
-		to_chat(src, SPAN_DANGER("You have deadchat muted."))
-		return
-
-	if(!src.client.holder)
-		if(!config.dsay_allowed)
-			to_chat(src, SPAN_DANGER("Deadchat is globally muted."))
-			return
-
-
-	var/input
-	if(!message)
-		input = sanitize(input(src, "Choose an emote to display.") as text|null)
-	else
-		input = message
-
-	if(input)
-		log_emote("Ghost/[src.key] : [input]")
-		say_dead_direct(input, src)
-
-//This is a central proc that all emotes are run through. This handles sending the messages to living mobs
-/mob/proc/send_emote(var/message, var/type)
-	var/list/messageturfs = list()//List of turfs we broadcast to.
-	var/list/messagemobs = list()//List of living mobs nearby who can hear it, and distant ghosts who've chosen to hear it
-	var/list/messagemobs_neardead = list()//List of nearby ghosts who can hear it. Those that qualify ONLY go in this list
-	for (var/turf in view(world.view, get_turf(src)))
-		messageturfs += turf
-
-	for(var/mob/M in GLOB.player_list)
-		if (!M.client || istype(M, /mob/new_player))
+	if(!length(key_emotes))
+		if(intentional)
+			to_chat(src, span_notice("'[act]' emote does not exist. Say *help for a list."))
+		return FALSE
+	var/silenced = FALSE
+	for(var/datum/emote/P in key_emotes)
+		if(!P.check_cooldown(src, intentional, is_keybind=is_keybind))
+			silenced = TRUE
 			continue
-		if(get_turf(M) in messageturfs)
-			if (istype(M, /mob/observer))
-				messagemobs_neardead += M
-				continue
-			else if (istype(M, /mob/living) && !(type == 2 && (get_active_mutation(M, MUTATION_DEAF) || ear_deaf)))
-				messagemobs += M
-		else if(src.client)
-			if  (M.stat == DEAD && (M.get_preference_value(/datum/client_preference/ghost_ears) == GLOB.PREF_ALL_SPEECH))
-				messagemobs += M
-				continue
+		if(P.run_emote(src, param, m_type, intentional))
+			SEND_SIGNAL(src, COMSIG_MOB_EMOTE, P, act, m_type, message, intentional)
+			SEND_SIGNAL(src, COMSIG_MOB_EMOTED(P.key))
+			return TRUE
+	if(intentional && !silenced)
+		to_chat(src, span_notice("Unusable emote '[act]'. Say *help for a list."))
+	return FALSE
 
-	for (var/mob/N in messagemobs)
-		N.show_message(message, type)
+/datum/emote/flip
+	key = "flip"
+	key_third_person = "flips"
+	hands_use_check = TRUE
+	mob_type_allowed_typecache = list(/mob/living, /mob/dead/observer)
+	mob_type_ignore_stat_typecache = list(/mob/dead/observer)
+	cooldown = 0 SECONDS
 
-	message = "<B>[message]</B>"
+/datum/emote/flip/run_emote(mob/user, params , type_override, intentional)
+	. = ..()
+	if(.)
+		user.SpinAnimation(7,1)
 
-	for (var/mob/O in messagemobs_neardead)
-		O.show_message(message, type)
+/datum/emote/flip/check_cooldown(mob/user, intentional, update=TRUE, is_keybind = FALSE)
+	. = ..()
+	if (!is_keybind)
+		return
+	if(!can_run_emote(user, intentional=intentional))
+		return
+	if(!.)
+		if(isliving(user)) // Spammers get punished!
+			var/mob/living/flippy_mcgee = user
+			if(prob(40))
+				flippy_mcgee.Knockdown(1 SECONDS)
+				flippy_mcgee.visible_message(
+					span_notice("[flippy_mcgee] attempts to do a flip and falls over, what a doofus!"),
+					span_notice("You attempt to do a flip while still off balance from the last flip and fall down!")
+				)
+				if(prob(75))
+					flippy_mcgee.adjustBruteLoss(1)
+			else
+				flippy_mcgee.visible_message(
+					span_notice("[flippy_mcgee] stumbles a bit after their flip."),
+					span_notice("You stumble a bit from still being off balance from your last flip.")
+				)
+		return
+
+/datum/emote/spin
+	key = "spin"
+	key_third_person = "spins"
+	hands_use_check = TRUE
+	mob_type_allowed_typecache = list(/mob/living, /mob/dead/observer)
+	mob_type_ignore_stat_typecache = list(/mob/dead/observer)
+	cooldown = 0 SECONDS
+
+/datum/emote/spin/run_emote(mob/user, params ,type_override, intentional)
+	. = ..()
+	if(.)
+		if(iscyborg(user) && user.has_buckled_mobs())
+			var/mob/living/silicon/robot/R = user
+			var/datum/component/riding/riding_datum = R.GetComponent(/datum/component/riding)
+			if(riding_datum)
+				for(var/mob/M in R.buckled_mobs)
+					riding_datum.force_dismount(M)
+			else
+				R.unbuckle_all_mobs()
+		else
+			//we want to hold off on doing the spin if they are a cyborg and have someone buckled to them
+			user.spin(20,1)
+
+/datum/emote/spin/check_cooldown(mob/living/carbon/user, intentional, update=TRUE, is_keybind = FALSE)
+	. = ..()
+	if(!.)
+		return
+	if (!is_keybind)
+		return
+	if(!can_run_emote(user, intentional=intentional))
+		return
+	if(!iscarbon(user))
+		return
+	if(user.get_timed_status_effect_duration(/datum/status_effect/confusion) > BEYBLADE_PUKE_THRESHOLD)
+		user.vomit(BEYBLADE_PUKE_NUTRIENT_LOSS, distance = 0)
+		return
+
+	if(prob(BEYBLADE_DIZZINESS_PROBABILITY))
+		to_chat(user, span_warning("You feel woozy from spinning."))
+		user.set_dizzy_if_lower(BEYBLADE_DIZZINESS_DURATION)
+		user.adjust_confusion_up_to(BEYBLADE_CONFUSION_INCREMENT, BEYBLADE_CONFUSION_LIMIT)
+
+#undef BEYBLADE_PUKE_THRESHOLD
+#undef BEYBLADE_PUKE_NUTRIENT_LOSS
+#undef BEYBLADE_DIZZINESS_PROBABILITY
+#undef BEYBLADE_DIZZINESS_DURATION
+#undef BEYBLADE_CONFUSION_INCREMENT
+#undef BEYBLADE_CONFUSION_LIMIT

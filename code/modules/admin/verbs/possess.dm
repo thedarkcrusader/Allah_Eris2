@@ -1,38 +1,58 @@
-/proc/possess(obj/O as obj)
+/proc/possess(obj/O in world)
 	set name = "Possess Obj"
 	set category = "Object"
 
-	if(istype(O,/obj/singularity))
-		if(config.forbid_singulo_possession)
-			to_chat(usr, "It is forbidden to possess singularities.")
-			return
+	if((O.obj_flags & DANGEROUS_POSSESSION) && CONFIG_GET(flag/forbid_singulo_possession))
+		to_chat(usr, "[O] is too powerful for you to possess.", confidential=TRUE)
+		return
 
-	log_and_message_admins("has possessed [O]")
+	var/turf/T = get_turf(O)
+
+	if(T)
+		log_admin("[key_name(usr)] has possessed [O] ([O.type]) at [AREACOORD(T)]")
+		message_admins("[key_name(usr)] has possessed [O] ([O.type]) at [AREACOORD(T)]")
+	else
+		log_admin("[key_name(usr)] has possessed [O] ([O.type]) at an unknown location")
+		message_admins("[key_name(usr)] has possessed [O] ([O.type]) at an unknown location")
 
 	if(!usr.control_object) //If you're not already possessing something...
 		usr.name_archive = usr.real_name
 
-	usr.forceMove(O)
+	usr.loc = O
 	usr.real_name = O.name
-	usr.SetName(O.name)
-	usr.client.eye = O
+	usr.name = O.name
+	usr.reset_perspective(O)
 	usr.control_object = O
-	usr.ReplaceMovementHandler(/datum/movement_handler/mob/admin_possess)
+	SSblackbox.record_feedback("tally", "admin_verb", 1, "Possess Object") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
 
-/proc/release(obj/O)
+/proc/release(obj/O in world) //yogs - fixed release object
 	set name = "Release Obj"
 	set category = "Object"
 	//usr.loc = get_turf(usr)
 
+//Yogs start - fixed release object
+	if(!usr.control_object)
+		to_chat(usr, "You need to possess an object first!", confidential=TRUE)
+		return
+//Yogs end
+
 	if(usr.control_object && usr.name_archive) //if you have a name archived and if you are actually relassing an object
-		usr.RemoveMovementHandler(/datum/movement_handler/mob/admin_possess)
 		usr.real_name = usr.name_archive
-		usr.SetName(usr.real_name)
+		usr.name_archive = ""
+		usr.name = usr.real_name
 		if(ishuman(usr))
 			var/mob/living/carbon/human/H = usr
-			H.SetName(H.get_visible_name())
-//		usr.regenerate_icons() //So the name is updated properly
+			H.name = H.get_visible_name()
 
-	usr.forceMove(O.loc) // Appear where the object you were controlling is -- TLE
-	usr.client.eye = usr
+	usr.loc = get_turf(usr.control_object)
+	usr.reset_perspective()
 	usr.control_object = null
+	SSblackbox.record_feedback("tally", "admin_verb", 1, "Release Object") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+
+/proc/givetestverbs(mob/M in GLOB.mob_list)
+	set desc = "Give this guy possess/release verbs"
+	set category = "Misc.Server Debug"
+	set name = "Give Possessing Verbs"
+	add_verb(M, /proc/possess)
+	add_verb(M, /proc/release)
+	SSblackbox.record_feedback("tally", "admin_verb", 1, "Give Possessing Verbs") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!

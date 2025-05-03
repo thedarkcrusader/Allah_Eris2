@@ -1,380 +1,170 @@
-//This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:33
+/*Composed of 7 parts :
 
-/*Composed of 7 parts
-3 Particle emitters
-proc
-emit_particle()
+ 3 Particle Emitters
+ 1 Power Box
+ 1 Fuel Chamber
+ 1 End Cap
+ 1 Control computer
 
-1 power box
-the only part of this thing that uses power, can hack to mess with the pa/make it better.
-Lies, only the control computer draws power.
+ Setup map
 
-1 fuel chamber
-contains procs for mixing gas and whatever other fuel it uses
-mix_gas()
-
-1 gas holder WIP
-acts like a tank valve on the ground that you wrench gas tanks onto
-proc
-extract_gas()
-return_gas()
-attach_tank()
-remove_tank()
-get_available_mix()
-
-1 End Cap
-
-1 Control computer
-interface for the pa, acts like a computer with an html menu for diff parts and a status report
-all other parts contain only a ref to this
-a /machine/, tells the others to do work
-contains ref for all parts
-proc
-process()
-check_build()
-
-Setup map
-  |EC|
-CC|FC|
-  |PB|
-PE|PE|PE
-
-
-Icon Addemdum
-Icon system is much more robust, and the icons are all variable based.
-Each part has a reference string, powered, strength, and contruction values.
-Using this the update_icon() proc is simplified a bit (using for absolutely was problematic with naming),
-so the icon_state comes out be:
-"[reference][strength]", with a switch controlling construction_states and ensuring that it doesn't
-power on while being contructed, and all these variables are set by the computer through it's scan list
-Essential order of the icons:
-Standard - [reference]
-Wrenched - [reference]
-Wired    - [reference]w
-Closed   - [reference]c
-Powered  - [reference]p[strength]
-Strength being set by the computer and a null strength (Computer is powered off or inactive) returns a 'null', counting as empty
-So, hopefully this is helpful if any more icons are to be added/changed/wondering what the hell is going on here
+   |EC|
+ CC|FC|
+   |PB|
+ PE|PE|PE
 
 */
+#define PA_CONSTRUCTION_UNSECURED  0
+#define PA_CONSTRUCTION_UNWIRED    1
+#define PA_CONSTRUCTION_PANEL_OPEN 2
+#define PA_CONSTRUCTION_COMPLETE   3
 
 /obj/structure/particle_accelerator
 	name = "Particle Accelerator"
-	desc = "A large component of an even larger particle accelerator."
-	icon = 'icons/obj/machines/particle_accelerator2.dmi'
+	desc = "Part of a Particle Accelerator."
+	icon = 'yogstation/icons/obj/machines/particle_accelerator.dmi'//Yogs PA Sprites
 	icon_state = "none"
 	anchored = FALSE
 	density = TRUE
+	max_integrity = 500
+	armor = list(MELEE = 30, BULLET = 20, LASER = 20, ENERGY = 0, BOMB = 0, BIO = 0, RAD = 0, FIRE = 90, ACID = 80)
+
 	var/obj/machinery/particle_accelerator/control_box/master = null
-	var/construction_state = 0
+	var/construction_state = PA_CONSTRUCTION_UNSECURED
 	var/reference = null
 	var/powered = 0
 	var/strength = null
-	var/desc_holder = null
 
-/obj/structure/particle_accelerator/Destroy()
-	construction_state = 0
-	if(master)
-		master.part_scan()
+/obj/structure/particle_accelerator/examine(mob/user)
 	. = ..()
 
-/obj/structure/particle_accelerator/end_cap
-	name = "Alpha Particle Generation Array"
-	desc_holder = "This is where Alpha particles are generated from the \[REDACTED\] via a carefully designed \[REDACTED\]."
-	icon_state = "end_cap"
-	reference = "end_cap"
+	switch(construction_state)
+		if(PA_CONSTRUCTION_UNSECURED)
+			. += "Looks like it's not attached to the flooring."
+		if(PA_CONSTRUCTION_UNWIRED)
+			. += "It is missing some cables."
+		if(PA_CONSTRUCTION_PANEL_OPEN)
+			. += "The panel is open."
 
-/obj/structure/particle_accelerator/update_icon()
-	..()
-	return
+/obj/structure/particle_accelerator/Initialize(mapload)
+	. = ..()
+	AddComponent(/datum/component/simple_rotation, ROTATION_ALTCLICK | ROTATION_CLOCKWISE | ROTATION_COUNTERCLOCKWISE | ROTATION_VERBS )
 
+/obj/structure/particle_accelerator/Destroy()
+	construction_state = PA_CONSTRUCTION_UNSECURED
+	if(master)
+		master.connected_parts -= src
+		master.assembled = 0
+		master = null
+	return ..()
 
-/obj/structure/particle_accelerator/verb/rotate()
-	set name = "Rotate Clockwise"
-	set category = "Object"
-	set src in oview(1)
-
-	if (src.anchored || usr:stat)
-		to_chat(usr, "It is fastened to the floor!")
-		return 0
-	src.set_dir(turn(src.dir, 270))
-	return 1
-
-/obj/structure/particle_accelerator/verb/rotateccw()
-	set name = "Rotate Counter Clockwise"
-	set category = "Object"
-	set src in oview(1)
-
-	if (src.anchored || usr:stat)
-		to_chat(usr, "It is fastened to the floor!")
-		return 0
-	src.set_dir(turn(src.dir, 90))
-	return 1
-
-/obj/structure/particle_accelerator/examine(mob/user, extra_description = "")
-	switch(src.construction_state)
-		if(0)
-			src.desc = text("A [name]. It's not attached to the floor.")
-		if(1)
-			src.desc = text("A [name]. It's missing some cables.")
-		if(2)
-			src.desc = text("A [name]. The panel is open.")
-		if(3)
-			src.desc = text("The [name] is assembled.")
-			if(powered)
-				src.desc = src.desc_holder
-	..(user, extra_description)
-
-/obj/structure/particle_accelerator/attackby(obj/item/I, mob/user)
-
-	var/list/usable_qualities = list()
-	if(construction_state == 0 || construction_state == 1)
-		usable_qualities.Add(QUALITY_BOLT_TURNING)
-	if(construction_state == 2)
-		usable_qualities.Add(QUALITY_WIRE_CUTTING)
-	if(construction_state == 2 || construction_state == 3)
-		usable_qualities.Add(QUALITY_SCREW_DRIVING)
-
-	var/tool_type = I.get_tool_type(user, usable_qualities, src)
-	switch(tool_type)
-
-		if(QUALITY_BOLT_TURNING)
-			if(construction_state == 0)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					user.visible_message("[user.name] secures the [src.name] to the floor.", \
+/obj/structure/particle_accelerator/attackby(obj/item/W, mob/living/user, params)
+	if(user.combat_mode)
+		return ..()
+	switch(construction_state)
+		if(PA_CONSTRUCTION_UNSECURED)
+			if(W.tool_behaviour == TOOL_WRENCH && !isinspace())
+				if(W.use_tool(src, user, 0.8 SECONDS, volume = 75))
+					anchored = TRUE
+					user.visible_message("[user.name] secures the [name] to the floor.", \
 						"You secure the external bolts.")
-					construction_state = 1
-					src.anchored = TRUE
-					update_icon()
-					return
-			if(construction_state == 1)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					user.visible_message("[user.name] secures the [src.name] to the floor.", \
-						"You secure the external bolts.")
-					construction_state = 0
+					construction_state = PA_CONSTRUCTION_UNWIRED
+
+		if(PA_CONSTRUCTION_UNWIRED)
+			if(W.tool_behaviour == TOOL_WRENCH)
+				if(W.use_tool(src, user, 0.8 SECONDS, volume = 75))
 					anchored = FALSE
-					update_icon()
-					return
-			return
+					user.visible_message("[user.name] detaches the [name] from the floor.", \
+						"You remove the external bolts.")
+					construction_state = PA_CONSTRUCTION_UNSECURED
 
-		if(QUALITY_WIRE_CUTTING)
-			if(construction_state == 2)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					user.visible_message("[user.name] removes some wires from the [src.name].", \
+			else if(istype(W, /obj/item/stack/cable_coil))
+				if(!W.tool_start_check(user, amount = 1))
+					return
+				to_chat(user, span_notice("You start to add cables to the frame..."))
+				if(W.use_tool(src, user, 0.8 SECONDS, volume = 50, amount = 1))
+					user.visible_message("[user.name] adds wires to the [name].", \
+						"You add some wires.")
+					construction_state = PA_CONSTRUCTION_PANEL_OPEN
+
+		if(PA_CONSTRUCTION_PANEL_OPEN)
+			if(W.tool_behaviour == TOOL_WIRECUTTER)
+				if(W.use_tool(src, user, 0.4 SECONDS, volume = 75))
+					user.visible_message("[user.name] removes some wires from the [name].", \
 						"You remove some wires.")
-					construction_state = 1
-					update_icon()
-					return
-			return
+					construction_state = PA_CONSTRUCTION_UNWIRED
 
-		if(QUALITY_SCREW_DRIVING)
-			if(construction_state == 2)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					user.visible_message("[user.name] closes the [src.name]'s access panel.", \
-						"You close the access panel.")
-					construction_state = 3
-					update_icon()
-					return
-			if(construction_state == 3)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					user.visible_message("[user.name] closes the [src.name]'s access panel.", \
-						"You close the access panel.")
-					construction_state = 2
-					update_state()
-					update_icon()
-					return
-			return
+			else if(W.tool_behaviour == TOOL_SCREWDRIVER)
+				user.visible_message("[user.name] closes the [name]'s access panel.", \
+					"You close the access panel.")
+				construction_state = PA_CONSTRUCTION_COMPLETE
 
-		if(ABORT_CHECK)
-			return
+		if(PA_CONSTRUCTION_COMPLETE)
+			if(W.tool_behaviour == TOOL_SCREWDRIVER)
+				user.visible_message("[user.name] opens the [name]'s access panel.", \
+					"You open the access panel.")
+				construction_state = PA_CONSTRUCTION_PANEL_OPEN
 
-	if(istype(I, /obj/item/stack/cable_coil))
-		var/obj/item/stack/cable_coil/coil = I
-		if(coil:use(1))
-			user.visible_message("[user.name] adds wires to the [src.name].", \
-				"You add some wires.")
-			construction_state = 2
-
-	..()
-	return
+	update_state()
+	update_appearance(UPDATE_ICON)
 
 
-/obj/structure/particle_accelerator/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
+/obj/structure/particle_accelerator/deconstruct(disassembled = TRUE)
+	if(!(flags_1 & NODECONSTRUCT_1))
+		new /obj/item/stack/sheet/metal (loc, 5)
+	qdel(src)
+
+/obj/structure/particle_accelerator/Move()
 	. = ..()
 	if(master && master.active)
 		master.toggle_power()
-		investigate_log("was moved whilst active; it <font color='red'>powered down</font>.","singulo")
+		investigate_log("was moved whilst active; it <font color='red'>powered down</font>.", INVESTIGATE_SINGULO)
 
-/obj/structure/particle_accelerator/update_icon()
+
+/obj/structure/particle_accelerator/update_icon_state()
+	. = ..()
 	switch(construction_state)
-		if(0,1)
+		if(PA_CONSTRUCTION_UNSECURED,PA_CONSTRUCTION_UNWIRED)
 			icon_state="[reference]"
-		if(2)
+		if(PA_CONSTRUCTION_PANEL_OPEN)
 			icon_state="[reference]w"
-		if(3)
+		if(PA_CONSTRUCTION_COMPLETE)
 			if(powered)
 				icon_state="[reference]p[strength]"
 			else
 				icon_state="[reference]c"
-	return
 
 /obj/structure/particle_accelerator/proc/update_state()
 	if(master)
 		master.update_state()
-		return 0
 
-
-/obj/structure/particle_accelerator/proc/report_ready(var/obj/O)
-	if(O && (O == master))
-		if(construction_state >= 3)
-			return 1
+/obj/structure/particle_accelerator/proc/connect_master(obj/O)
+	if(O.dir == dir)
+		master = O
+		return 1
 	return 0
 
-
-/obj/structure/particle_accelerator/proc/report_master()
-	if(master)
-		return master
-	return 0
+///////////
+// PARTS //
+///////////
 
 
-/obj/structure/particle_accelerator/proc/connect_master(var/obj/O)
-	if(O && istype(O,/obj/machinery/particle_accelerator/control_box))
-		if(O.dir == src.dir)
-			master = O
-			return 1
-	return 0
+/obj/structure/particle_accelerator/end_cap
+	name = "Alpha Particle Generation Array"
+	desc = "This is where Alpha particles are generated from \[REDACTED\]."
+	icon_state = "end_cap"
+	reference = "end_cap"
 
-/obj/machinery/particle_accelerator
-	name = "Particle Accelerator"
-	desc = "A large component of an even larger particle accelerator."
-	icon = 'icons/obj/machines/particle_accelerator2.dmi'
-	icon_state = "none"
-	anchored = FALSE
-	density = TRUE
-	use_power = NO_POWER_USE
-	idle_power_usage = 0
-	active_power_usage = 0
-	var/construction_state = 0
-	var/active = 0
-	var/reference = null
-	var/powered = null
-	var/strength = 0
-	var/desc_holder = null
+/obj/structure/particle_accelerator/power_box
+	name = "Particle Focusing EM Lens"
+	desc = "This uses electromagnetic waves to focus the Alpha particles."
+	icon = 'yogstation/icons/obj/machines/particle_accelerator.dmi'//Yogs PA Sprites
+	icon_state = "power_box"
+	reference = "power_box"
 
-
-/obj/machinery/particle_accelerator/verb/rotate()
-	set name = "Rotate Clockwise"
-	set category = "Object"
-	set src in oview(1)
-
-	if (src.anchored || usr:stat)
-		to_chat(usr, "It is fastened to the floor!")
-		return 0
-	src.set_dir(turn(src.dir, 270))
-	return 1
-
-/obj/machinery/particle_accelerator/verb/rotateccw()
-	set name = "Rotate Counter-Clockwise"
-	set category = "Object"
-	set src in oview(1)
-
-	if (src.anchored || usr:stat)
-		to_chat(usr, "It is fastened to the floor!")
-		return 0
-	src.set_dir(turn(src.dir, 90))
-	return 1
-
-/obj/machinery/particle_accelerator/update_icon()
-	return
-
-/obj/machinery/particle_accelerator/examine(mob/user, extra_description = "")
-	switch(src.construction_state)
-		if(0)
-			src.desc = text("A [name], looks like it's not attached to the flooring")
-		if(1)
-			src.desc = text("A [name], it is missing some cables")
-		if(2)
-			src.desc = text("A [name], the panel is open")
-		if(3)
-			src.desc = text("The [name] is assembled")
-			if(powered)
-				src.desc = src.desc_holder
-	..(user, extra_description)
-
-/obj/machinery/particle_accelerator/attackby(obj/item/I, mob/user)
-
-	var/list/usable_qualities = list()
-	if(construction_state == 0 || construction_state == 1)
-		usable_qualities.Add(QUALITY_BOLT_TURNING)
-	if(construction_state == 2)
-		usable_qualities.Add(QUALITY_WIRE_CUTTING)
-	if(construction_state == 2 || construction_state == 3)
-		usable_qualities.Add(QUALITY_SCREW_DRIVING)
-
-	var/tool_type = I.get_tool_type(user, usable_qualities, src)
-	switch(tool_type)
-
-		if(QUALITY_BOLT_TURNING)
-			if(construction_state == 0)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					user.visible_message("[user.name] secures the [src.name] to the floor.", \
-						"You secure the external bolts.")
-					construction_state = 1
-					src.anchored = TRUE
-					update_icon()
-					return
-			if(construction_state == 1)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					user.visible_message("[user.name] secures the [src.name] to the floor.", \
-						"You secure the external bolts.")
-					construction_state = 0
-					anchored = FALSE
-					update_icon()
-					return
-			return
-
-		if(QUALITY_WIRE_CUTTING)
-			if(construction_state == 2)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					user.visible_message("[user.name] removes some wires from the [src.name].", \
-						"You remove some wires.")
-					construction_state = 1
-					update_icon()
-					return
-			return
-
-		if(QUALITY_SCREW_DRIVING)
-			if(construction_state == 2)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					user.visible_message("[user.name] closes the [src.name]'s access panel.", \
-						"You close the access panel.")
-					construction_state = 3
-					set_power_use(IDLE_POWER_USE)
-					update_icon()
-					return
-			if(construction_state == 3)
-				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
-					user.visible_message("[user.name] closes the [src.name]'s access panel.", \
-						"You close the access panel.")
-					construction_state = 2
-					set_power_use(NO_POWER_USE)
-					update_state()
-					update_icon()
-					return
-			return
-
-		if(ABORT_CHECK)
-			return
-
-	if(istype(I, /obj/item/stack/cable_coil))
-		var/obj/item/stack/cable_coil/coil = I
-		if(coil:use(1))
-			user.visible_message("[user.name] adds wires to the [src.name].", \
-				"You add some wires.")
-			construction_state = 2
-
-	..()
-	return
-
-/obj/machinery/particle_accelerator/proc/update_state()
-	return 0
+/obj/structure/particle_accelerator/fuel_chamber
+	name = "EM Acceleration Chamber"
+	desc = "This is where the Alpha particles are accelerated to <b><i>radical speeds</i></b>."
+	icon = 'yogstation/icons/obj/machines/particle_accelerator.dmi'//Yogs PA Sprites
+	icon_state = "fuel_chamber"
+	reference = "fuel_chamber"

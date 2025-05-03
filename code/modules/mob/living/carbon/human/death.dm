@@ -1,107 +1,110 @@
-/mob/living/carbon/human/gib(max_range=3, keep_only_robotics=FALSE)
+/mob/living/carbon/human/gib_animation()
+	switch(dna.species.species_gibs)
+		if("human")
+			new /obj/effect/temp_visual/gib_animation(loc, "gibbed-h")
+		if("robotic")
+			new /obj/effect/temp_visual/gib_animation(loc, "gibbed-r")
+		if("plasma")
+			new /obj/effect/temp_visual/gib_animation(loc, "gibbed-h") //This will have more use in the near future
+		if("polysmorph")
+			new /obj/effect/temp_visual/gib_animation(loc, "gibbed-a")
 
-	var/on_turf = istype(loc, /turf)
+/mob/living/carbon/human/dust(just_ash, drop_items, force)
+	if(drop_items)
+		unequip_everything()
 
-	for(var/obj/item/organ/I in internal_organs)
-		if (!(keep_only_robotics && !(I.nature == MODIFICATION_SILICON)))
-			I.removed()
-			if(on_turf)
-				I.throw_at(get_edge_target_turf(src,pick(alldirs)),rand(1,max_range),30)
+	if(buckled)
+		buckled.unbuckle_mob(src, force = TRUE)
 
-	for(var/obj/item/organ/external/E in src.organs)
-		if (!(keep_only_robotics && !(E.nature == MODIFICATION_SILICON)))
-			E.droplimb(TRUE, DROPLIMB_EDGE, 1)
-			if(on_turf)
-				E.throw_at(get_edge_target_turf(src,pick(alldirs)),rand(1,max_range),30)
+	Stun(100, TRUE, TRUE)//hold them still as they get deleted so they don't fuck up the animation
+	notransform = TRUE
+	dust_animation()
+	spawn_dust(just_ash)
+	QDEL_IN(src, 20) // since this is sometimes called in
 
-	for(var/obj/item/D in src)
-		if (keep_only_robotics && istype(D, /obj/item/organ))
-			continue
-		else
-			drop_from_inventory(D)
-			D.throw_at(get_edge_target_turf(src,pick(alldirs)), rand(1,max_range), round(30/D.w_class))
+/mob/living/carbon/human/dust_animation()
+	var/obj/effect/dusting_anim/dust_effect = new(loc, ref(src))
+	filters += filter(type = "displace", size = 256, render_source = "*snap[ref(src)]")
+	animate(src, alpha = 0, time = 20, easing = (EASE_IN | SINE_EASING))
 
-	..(species.gibbed_anim)
-	gibs(loc, src, null, species.flesh_color, species.blood_color)
+	QDEL_IN(dust_effect, 20)
 
-/mob/living/carbon/human/dust()
-	if(species)
-		..(species.dusted_anim, species.remains_type)
+/mob/living/carbon/human/spawn_gibs(with_bodyparts)
+	if(with_bodyparts)
+		switch(dna.species.species_gibs)
+			if("human")
+				new /obj/effect/gibspawner/human(get_turf(src), src, get_static_viruses())
+			if("robotic")
+				new /obj/effect/gibspawner/robot(get_turf(src))
+			if("plasma")
+				new /obj/effect/gibspawner/human(get_turf(src), src, get_static_viruses())
+			if("polysmorph")
+				new /obj/effect/gibspawner/xeno(get_turf(src), src, get_static_viruses())
 	else
-		..()
+		switch(dna.species.species_gibs)
+			if("human")
+				new /obj/effect/gibspawner/human(get_turf(src), src, get_static_viruses())
+			if("robotic")
+				new /obj/effect/gibspawner/robot(get_turf(src))
+			if("plasma")
+				new /obj/effect/gibspawner/human(get_turf(src), src, get_static_viruses())
+			if("polysmorph")
+				new /obj/effect/gibspawner/xeno(get_turf(src), src, get_static_viruses())
+
+/mob/living/carbon/human/spawn_dust(just_ash = FALSE)
+	if(just_ash)
+		new /obj/effect/decal/cleanable/ash(loc)
+	else
+		switch(dna.species.species_gibs)
+			if("human")
+				new /obj/effect/decal/remains/human(loc)
+			if("robotic")
+				new /obj/effect/decal/remains/robot(loc)
+			if("plasma")
+				new /obj/effect/decal/remains/plasma(loc)
+			if("polysmorph")
+				new /obj/effect/decal/remains/xeno(loc)
+				
 
 /mob/living/carbon/human/death(gibbed)
-	if(stat == DEAD) return
+	if(stat == DEAD)
+		return
+	stop_sound_channel(CHANNEL_HEARTBEAT)
+	var/obj/item/organ/heart/H = getorganslot(ORGAN_SLOT_HEART)
+	if(H)
+		H.beat = BEAT_NONE
 
-	BITSET(hud_updateflag, HEALTH_HUD)
-	BITSET(hud_updateflag, STATUS_HUD)
-	BITSET(hud_updateflag, LIFE_HUD)
+	. = ..()
 
-	//Handle species-specific deaths.
-	species.handle_death(src)
+	if(ismecha(loc))
+		var/obj/mecha/M = loc
+		if(M.occupant == src)
+			M.go_out()
 
-	callHook("death", list(src, gibbed))
+	dna.species.spec_death(gibbed, src)
 
-	if(wearing_rig)
-		wearing_rig.notify_ai(
-			SPAN_DANGER("Warning: user death event. Mobility control passed to integrated intelligence system.")
-		)
-	var/message = species.death_message
-	if(stats.getPerk(PERK_TERRIBLE_FATE))
-		message = "their inert body emits a strange sensation and a cold invades your body. Their screams before dying recount in your mind."
-	. = ..(gibbed,message)
-	if(!gibbed)
-		dizziness = 0
-		jitteriness = 0
-		handle_organs()
-		dead_HUD()
-		if(species.death_sound)
-			mob_playsound(loc, species.death_sound, 80, 1, 1)
-	handle_hud_list()
+	if(SSticker.HasRoundStarted())
+		SSblackbox.ReportDeath(src)
+		log_game("[key_name(src)] has died (BRUTE: [src.getBruteLoss()], BURN: [src.getFireLoss()], TOX: [src.getToxLoss()], OXY: [src.getOxyLoss()], CLONE: [src.getCloneLoss()]) ([AREACOORD(src)])")
+	if(IS_DEVIL(src))
+		INVOKE_ASYNC(IS_DEVIL(src), TYPE_PROC_REF(/datum/antagonist/devil, beginResurrectionCheck), src)
 
-	var/obj/item/implant/core_implant/cruciform/C = get_core_implant(/obj/item/implant/core_implant/cruciform)
-	if(C && C.active)
-		lost_cruciforms |= C
-		var/obj/item/cruciform_upgrade/upgrade = C.upgrade
-		if(upgrade && upgrade.active && istype(upgrade, CUPGRADE_MARTYR_GIFT))
-			var/obj/item/cruciform_upgrade/martyr_gift/martyr = upgrade
-			visible_message(SPAN_DANGER("The [C] emit a massive light!"))
-			var/burn_damage_done
-			for(var/mob/living/L in oviewers(6, src))
-				if(ishuman(L))
-					var/mob/living/carbon/human/H = L
-					if(H in disciples)
-						continue
-					else if (H.random_organ_by_process(BP_SPCORE) || H.active_mutations.len)
-						burn_damage_done = (martyr.burn_damage / get_dist(src, H)) * 2
-						H.adjustFireLoss(burn_damage_done)
-					else
-						burn_damage_done = martyr.burn_damage / get_dist(src, H)
-						H.adjustFireLoss(burn_damage_done)
-					to_chat(H, SPAN_DANGER("You are get hurt by holy light!"))
-				else
-					burn_damage_done = martyr.burn_damage / get_dist(src, L)
-					L.damage_through_armor(burn_damage_done, BURN)
+	if(client)
+		SSachievements.unlock_achievement(/datum/achievement/death, client)
 
-			qdel(martyr)
-			C.upgrade = null
+/mob/living/carbon/human/proc/makeSkeleton()
+	ADD_TRAIT(src, TRAIT_DISFIGURED, TRAIT_GENERIC)
+	set_species(/datum/species/skeleton)
+	return TRUE
 
 
-/mob/living/carbon/human/proc/ChangeToHusk()
-//	if(HUSK in mutations)	return
-
-	if(f_style)
-		f_style = "Shaved"	//we only change the icon_state of the hair datum, so it doesn't mess up their UI/UE
-	if(h_style)
-		h_style = "Bald"
-	update_hair(0)
-
-//	mutations.Add(HUSK)
-	status_flags |= DISFIGURED	//makes them unknown without fucking up other stuff like admintools
-	update_body(1)
-	return
-
-/mob/living/carbon/human/proc/Drain()
-	ChangeToHusk()
-	return
-
+/mob/living/carbon/proc/Drain()
+	become_husk(CHANGELING_DRAIN)
+	ADD_TRAIT(src, TRAIT_BADDNA, CHANGELING_DRAIN)
+	blood_volume = 0
+	return TRUE
+	
+/mob/living/carbon/proc/makeUncloneable()
+	ADD_TRAIT(src, TRAIT_BADDNA, MADE_UNCLONEABLE)
+	blood_volume = 0
+	return TRUE

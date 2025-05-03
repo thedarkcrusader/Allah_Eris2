@@ -1,54 +1,56 @@
 /obj/item/gun/energy/taser
-	name = "NT SP \"Counselor\""
-	desc = "The NT SP \"Counselor\" is a taser gun used for non-lethal takedowns. Used by Nanotrasen security forces before Corporation Wars."
-	icon = 'icons/obj/guns/energy/taser.dmi'
+	name = "taser gun"
+	desc = "A low-capacity, energy-based stun gun used by security teams to subdue targets at range."
 	icon_state = "taser"
 	item_state = null	//so the human update icon uses the icon_state instead.
-	matter = list(MATERIAL_PLASTEEL = 12, MATERIAL_PLASTIC = 6, MATERIAL_SILVER = 3)
-	price_tag = 2000
-	fire_sound = 'sound/weapons/Taser.ogg'
-	can_dual = TRUE
-	projectile_type = /obj/item/projectile/beam/stun
-	wield_delay = 0.3 SECOND
-	wield_delay_factor = 0.2 // 20 vig
-	init_recoil = HANDGUN_RECOIL(1)
-	serial_type = "NT"
+	ammo_type = list(/obj/item/ammo_casing/energy/electrode)
+	ammo_x_offset = 3
 
-/obj/item/gun/energy/taser/mounted
-	name = "mounted taser gun"
-	self_recharge = TRUE
-	use_external_power = TRUE
-	safety = FALSE
-	restrict_safety = TRUE
-	spawn_tags = null
-	bad_type = /obj/item/gun/energy/taser/mounted
+/obj/item/gun/energy/tesla_revolver
+	name = "tesla gun"
+	desc = "An experimental gun based on an experimental engine, it's about as likely to kill its operator as it is the target."
+	icon_state = "tesla"
+	item_state = "tesla"
+	ammo_type = list(/obj/item/ammo_casing/energy/tesla_revolver)
+	can_flashlight = FALSE
+	pin = null
+	shaded_charge = 1
 
-/obj/item/gun/energy/taser/mounted/cyborg
-	name = "taser gun"
-	recharge_time = 10 //Time it takes for shots to recharge (in ticks)
-	bad_type = /obj/item/gun/energy/taser/mounted/cyborg
+/obj/item/gun/energy/e_gun/advtaser
+	name = "hybrid taser"
+	desc = "A dual-mode taser designed to fire both short-range high-power electrodes and long-range disabler beams."
+	icon_state = "advtaser"
+	ammo_type = list(/obj/item/ammo_casing/energy/electrode, /obj/item/ammo_casing/energy/disabler)
+	ammo_x_offset = 2
 
-/obj/item/gun/energy/stunrevolver
-	name = "NT SP \"Zeus\""
-	desc = "Also know as stunrevolver. Older and less precise Nanotrasen solution for non-lethal takedowns. This gun has smaller capacity in exchange for S-cells use."
-	icon = 'icons/obj/guns/energy/stunrevolver.dmi'
-	icon_state = "stunrevolver"
-	item_state = "stunrevolver"
-	fire_sound = 'sound/weapons/Gunshot.ogg'
-	can_dual = TRUE
-	origin_tech = list(TECH_COMBAT = 3, TECH_MATERIAL = 3, TECH_POWER = 2)
-	charge_cost = 50
-	matter = list(MATERIAL_PLASTEEL = 12, MATERIAL_WOOD = 6, MATERIAL_SILVER = 2)
-	price_tag = 1500
-	suitable_cell = /obj/item/cell/small
-	cell_type = /obj/item/cell/small
-	projectile_type = /obj/item/projectile/energy/electrode
-	init_recoil = HANDGUN_RECOIL(1)
-	serial_type = "NT"
+/obj/item/gun/energy/e_gun/advtaser/cyborg
+	name = "cyborg taser"
+	desc = "An integrated hybrid taser that draws directly from a cyborg's power cell. The weapon contains a limiter to prevent the cyborg's power cell from overheating."
+	can_flashlight = FALSE
+	can_charge = FALSE
+	use_cyborg_cell = TRUE
 
-/obj/item/gun/energy/stunrevolver/moebius
-	name = "ML SP \"Suez\""	//Ersatz name
-	desc = "Also know as stunrevolver. A Moebius copy of the older and less precise Nanotrasen solution for non-lethal takedowns. This gun has smaller capacity in exchange for S-cells use."
-	icon = 'icons/obj/guns/energy/stunrevolver_moebius.dmi'
-	matter = list(MATERIAL_PLASTEEL = 12, MATERIAL_STEEL = 6, MATERIAL_SILVER = 2, MATERIAL_PLASTIC = 5)
-	serial_type = "ML"
+/obj/item/gun/energy/disabler
+	name = "disabler"
+	desc = "The NT-D2 is a self-defense weapon that exhausts organic targets, weakening them until they collapse."
+	icon_state = "disabler"
+	item_state = null
+	ammo_type = list(/obj/item/ammo_casing/energy/disabler)
+	ammo_x_offset = 2
+	can_flashlight = TRUE
+	flight_x_offset = 15
+	flight_y_offset = 10
+
+/obj/item/gun/energy/disabler/attack_self(mob/living/user)
+	. = ..()
+	toggle_gunlight()
+
+
+/obj/item/gun/energy/disabler/cyborg
+	name = "cyborg disabler"
+	desc = "A cyborg-integrated disabler that self charges."
+	charge_delay = 5
+	can_charge = FALSE
+	selfcharge = TRUE
+	charge_amount = 3
+	ammo_type = list(/obj/item/ammo_casing/energy/disabler/cyborg)

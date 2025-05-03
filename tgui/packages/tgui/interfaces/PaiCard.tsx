@@ -1,228 +1,126 @@
-import { decodeHtmlEntities } from 'common/string';
-import { BooleanLike } from '../../common/react';
-import { useBackend } from '../backend';
-import {
-  BlockQuote,
-  Box,
-  Button,
-  LabeledList,
-  NoticeBox,
-  Section,
-  Stack,
-} from '../components';
+import { useBackend, useLocalState } from '../backend';
+import { Section, Stack, Button, BlockQuote, Box } from '../components';
 import { Window } from '../layouts';
 
-type Data = {
-  candidates: ReadonlyArray<Candidate>;
-  pai: Pai;
-};
+type Module = {
+  module_name: string;
+  title: string;
+  cost: number;
+}
 
-type Candidate = Readonly<{
-  comments: string;
-  ckey: string;
+type Candidate = {
+  name: string;
   description: string;
-  name: string;
-}>;
+  prefrole: string;
+  ooccomments: string;
+}
 
-type Pai = {
-  can_holo: BooleanLike;
-  dna: string;
-  emagged: BooleanLike;
-  laws: string;
-  master: string;
+type Data = {
+  pai: boolean;
+  screen: number;
+  candidates: Candidate[];
   name: string;
-  transmit: BooleanLike;
-  receive: BooleanLike;
-};
+  master: string;
+  masterdna: string;
+  laws_zeroth: string;
+  laws: string[];
+  transmit: boolean;
+  receive: boolean;
+  holomatrix: boolean;
+  modules: Module[];
+  ram: number;
+}
 
 export const PaiCard = (props, context) => {
-  const { data } = useBackend<Data>(context);
-  const { pai } = data;
-
-  return (
-    <Window width={400} height={400} title="pAI Options Menu">
-      <Window.Content scrollable>
-        {!pai ? <PaiDownload /> : <PaiOptions />}
-      </Window.Content>
-    </Window>
-  );
-};
-
-/** Gives a list of candidates as cards */
-const PaiDownload = (props, context) => {
   const { act, data } = useBackend<Data>(context);
-  const { candidates = [] } = data;
-
-  return (
-    <Stack fill vertical>
-      <Stack.Item>
-        <NoticeBox info>
-          <Stack fill>
-            <Stack.Item grow fontSize="16px">
-              pAI Candidates
-            </Stack.Item>
-            <Stack.Item>
-              <Button
-                color="good"
-                icon="bell"
-                onClick={() => act('request')}
-                tooltip="Request more candidates from beyond."
-              >
-                Request
-              </Button>
-            </Stack.Item>
-          </Stack>
-        </NoticeBox>
-      </Stack.Item>
-      {candidates.map((candidate, index) => {
-        return (
-          <Stack.Item key={index}>
-            <CandidateDisplay candidate={candidate} index={index + 1} />
-          </Stack.Item>
-        );
-      })}
-    </Stack>
-  );
+  const { pai, screen, candidates } = data;
+  if(pai) {
+    return (
+      <Window>
+        <PaiManagement />
+      </Window>
+    );
+  } else {
+    return (
+      <Window width={450} height={500}>
+        {!screen && (
+          <Section title="No personality installed">
+            <Stack.Item>Searching for a personality...</Stack.Item>
+            <Stack.Item>Press view available personalities to notify potential candidates.</Stack.Item>
+            <Button onClick={() => act("request")}>View available personalities</Button>
+          </Section>
+        )}
+        {!!screen && (
+          <Section title="Requesting AI personalities from central database...">
+            <BlockQuote color="white">If there are no entries, or if a suitable entry is not listed, check again later as more personalities may be added.</BlockQuote>
+            {candidates.map(candidate => (
+              <BlockQuote key="">
+                <Stack.Item>Name: {candidate.name}</Stack.Item>
+                <Stack.Item>Description: {candidate.description}</Stack.Item>
+                <Stack.Item>Preferred role: {candidate.prefrole}</Stack.Item>
+                <Stack.Item>OOC comments: {candidate.ooccomments}</Stack.Item>
+                <Button onClick={() => act("download", { candidate_name: candidate.name })}>Download {candidate.name}</Button>
+              </BlockQuote>
+            ))}
+            <Button icon="chevron-left" onClick={() => act("return")}>Back</Button>
+          </Section>
+        )}
+      </Window>
+    );
+  }
 };
 
-/**
- * Renders a custom section that displays a candidate.
- */
-const CandidateDisplay = (
-  props: { candidate: Candidate; index: number },
-  context,
-) => {
-  const { act } = useBackend<Data>(context);
-  const {
-    candidate: { comments, ckey, description, name },
-    index,
-  } = props;
-
+export const PaiManagement = (props, context) => {
+  const { act, data } = useBackend<Data>(context);
+  const { name, master, masterdna } = data;
+  const { laws_zeroth, laws } = data;
+  const { transmit, receive, holomatrix, modules, ram } = data;
   return (
-    <Section
-      buttons={
-        <Button icon="save" onClick={() => act('download', { ckey })}>
-          Download
-        </Button>
-      }
-      overflow="hidden"
-      title={`Candidate ${index}`}
-    >
+    <Section title={name+"'s configuration interface"}>
       <Stack vertical>
-        <Stack.Item>
-          <Box color="label" mb={1}>
-            Name:
-          </Box>
-          {name ? (
-            <Box color="green">{name}</Box>
-          ) : (
-            'None provided - name will be randomized.'
-          )}
-        </Stack.Item>
-        {!!description && (
-          <>
-            <Stack.Divider />
-            <Stack.Item>
-              <Box color="label" mb={1}>
-                IC Description:
-              </Box>
-              {description}
-            </Stack.Item>
-          </>
-        )}
-        {!!comments && (
-          <>
-            <Stack.Divider />
-            <Stack.Item>
-              <Box color="label" mb={1}>
-                OOC Notes:
-              </Box>
-              {comments}
-            </Stack.Item>
-          </>
-        )}
-      </Stack>
-    </Section>
-  );
-};
-
-/** Once a pAI has been loaded, you can alter its settings here */
-const PaiOptions = (props, context) => {
-  const { act, data } = useBackend<Data>(context);
-  const {
-    pai: { can_holo, dna, emagged, laws, master, name, transmit, receive },
-  } = data;
-  const suppliedLaws = laws[0] ? decodeHtmlEntities(laws[0]) : 'None';
-
-  return (
-    <Section fill scrollable title={`Settings: ${name.toUpperCase()}`}>
-      <LabeledList>
-        <LabeledList.Item label="Master">
-          {master || (
-            <Button icon="dna" onClick={() => act('set_dna')}>
-              Imprint
-            </Button>
-          )}
-        </LabeledList.Item>
+        <Box bold={1}>Master:</Box>
         {!!master && (
-          <LabeledList.Item color="red" label="DNA">
-            {dna}
-          </LabeledList.Item>
+          <Box>{master} ({masterdna})</Box>
         )}
-        <LabeledList.Item label="Laws">
-          <BlockQuote>{suppliedLaws}</BlockQuote>
-        </LabeledList.Item>
-        <LabeledList.Item label="Holoform">
-          <Button
-            icon={can_holo ? 'toggle-on' : 'toggle-off'}
-            onClick={() => act('toggle_holo')}
-            selected={can_holo}
-          >
-            Toggle
-          </Button>
-        </LabeledList.Item>
-        <LabeledList.Item label="Transmit">
-          <Button
-            icon={transmit ? 'toggle-on' : 'toggle-off'}
-            onClick={() => act('toggle_radio', { option: 'transmit' })}
-            selected={transmit}
-          >
-            Toggle
-          </Button>
-        </LabeledList.Item>
-        <LabeledList.Item label="Receive">
-          <Button
-            icon={receive ? 'toggle-on' : 'toggle-off'}
-            onClick={() => act('toggle_radio', { option: 'receive' })}
-            selected={receive}
-          >
-            Toggle
-          </Button>
-        </LabeledList.Item>
-        <LabeledList.Item label="Troubleshoot">
-          <Button icon="comment" onClick={() => act('fix_speech')}>
-            Fix Speech
-          </Button>
-          <Button icon="edit" onClick={() => act('set_laws')}>
-            Set Laws
-          </Button>
-        </LabeledList.Item>
-        <LabeledList.Item label="Personality">
-          <Button icon="trash" onClick={() => act('wipe_pai')}>
-            Erase
-          </Button>
-        </LabeledList.Item>
-      </LabeledList>
-      {!!emagged && (
-        <Button
-          color="bad"
-          icon="bug"
-          mt={1}
-          onClick={() => act('reset_software')}
-        >
-          Malicious Software Detected
-        </Button>
-      )}
+        {!master && (
+          <Box>
+            <Stack.Item>None</Stack.Item>
+            <Stack.Item><Button onClick={() => act("setdna")}>Imprint Master DNA</Button></Stack.Item>
+          </Box>
+        )}
+        <Stack.Item>
+          <Box bold={1}>Prime Directive:</Box>
+          {laws_zeroth}
+        </Stack.Item>
+        <Stack.Item>
+          <Box bold={1}>Additional directives:</Box>
+          {laws.map(data => data)}
+        </Stack.Item>
+        <Box><Button onClick={() => act("setlaws")}>Configure directives</Button></Box> {/* Without the box, Stack will make this button fluid for some reason */}
+        <Stack.Item>
+          <Box bold={1}>Radio Uplink:</Box>
+          <Button.Checkbox icon="arrow-up" onClick={() => act("radio", { radio: 1 })} checked={transmit}>Transmit</Button.Checkbox>
+          <Button.Checkbox icon="arrow-down" onClick={() => act("radio", { radio: 0 })} checked={receive}>Receive</Button.Checkbox>
+        </Stack.Item>
+        <Stack.Item>
+          <Box bold={1}>Other:</Box>
+          <Button.Checkbox onClick={() => act("holomatrix")} checked={holomatrix}>Holomatrix projectors</Button.Checkbox>
+          <Box><Button onClick={() => act("wipe")}>Wipe current pAI personality</Button></Box>
+        </Stack.Item>
+        <Stack.Item>
+          <Box bold={1}>Downloaded modules: ({ram} GQ)</Box>
+          {modules.length === 0 && (
+            <Stack.Item>
+              No downloaded modules.
+            </Stack.Item>
+          )}
+          {modules.length !== 0 && modules.map(module => (
+            <Stack.Item key="">
+              {module}
+            </Stack.Item>
+          ))}
+        </Stack.Item>
+      </Stack>
     </Section>
   );
 };

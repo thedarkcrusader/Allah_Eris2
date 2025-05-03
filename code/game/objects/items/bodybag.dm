@@ -1,180 +1,152 @@
-//Also contains /obj/structure/closet/body_bag because I doubt anyone would think to look for bodybags in /object/structures
 
 /obj/item/bodybag
 	name = "body bag"
 	desc = "A folded bag designed for the storage and transportation of cadavers."
 	icon = 'icons/obj/bodybag.dmi'
 	icon_state = "bodybag_folded"
-	w_class = ITEM_SIZE_SMALL
-	price_tag = 10
-	rarity_value = 10
-	spawn_tags = SPAWN_TAG_MEDICAL
+	var/unfoldedbag_path = /obj/structure/closet/body_bag
+	w_class = WEIGHT_CLASS_SMALL
 
-	attack_self(mob/user)
-		var/obj/structure/closet/body_bag/R = new /obj/structure/closet/body_bag(user.loc)
+/obj/item/bodybag/attack_self(mob/user)
+	deploy_bodybag(user, user.loc)
+
+/obj/item/bodybag/afterattack(atom/target, mob/user, proximity)
+	. = ..()
+	if(proximity)
+		if(isopenturf(target))
+			deploy_bodybag(user, target)
+
+/obj/item/bodybag/proc/deploy_bodybag(mob/user, atom/location)
+	var/obj/structure/closet/body_bag/R = new unfoldedbag_path(location)
+	R.open(user)
+	R.add_fingerprint(user)
+	R.foldedbag_instance = src
+	moveToNullspace()
+
+/obj/item/bodybag/suicide_act(mob/user)
+	if(isopenturf(user.loc))
+		user.visible_message(span_suicide("[user] is crawling into [src]! It looks like [user.p_theyre()] trying to commit suicide!"))
+		var/obj/structure/closet/body_bag/R = new unfoldedbag_path(user.loc)
 		R.add_fingerprint(user)
 		qdel(src)
+		user.forceMove(R)
+		playsound(src, 'sound/items/zip.ogg', 15, 1, -3)
+		return (OXYLOSS)
+	..()
 
+// Bluespace bodybag
 
-/obj/structure/closet/body_bag
-	name = "body bag"
-	desc = "A plastic bag designed for the storage and transportation of cadavers."
+/obj/item/bodybag/bluespace
+	name = "bluespace body bag"
+	desc = "A folded bluespace body bag designed for the storage and transportation of cadavers."
 	icon = 'icons/obj/bodybag.dmi'
-	icon_state = "bodybag"
-	open_sound = 'sound/items/zip.ogg'
-	close_sound = 'sound/items/zip.ogg'
-	var/item_path = /obj/item/bodybag
-	density = FALSE
-	storage_capacity = (MOB_MEDIUM * 2) - 1
-	var/contains_body = 0
-	layer = LOW_OBJ_LAYER+0.01
+	icon_state = "bluebodybag_folded"
+	unfoldedbag_path = /obj/structure/closet/body_bag/bluespace
+	w_class = WEIGHT_CLASS_SMALL
+	item_flags = NO_MAT_REDEMPTION
 
-/obj/structure/closet/body_bag/attackby(W as obj, mob/user)
-	if (istype(W, /obj/item/pen))
-		var/t = input(user, "What would you like the label to be?", text("[]", src.name), null)  as text
-		if (user.get_active_hand() != W)
-			return
-		if (!in_range(src, user) && src.loc != user)
-			return
-		t = sanitizeSafe(t, MAX_NAME_LEN)
-		if (t)
-			src.name = "body bag - "
-			src.name += t
-			src.overlays += image(src.icon, "bodybag_label")
-		else
-			src.name = "body bag"
-	//..() //Doesn't need to run the parent. Since when can fucking bodybags be welded shut? -Agouri
-		return
-	else if(istype(W, /obj/item/tool/wirecutters))
-		to_chat(user, "You cut the tag off the bodybag.")
-		src.name = "body bag"
-		src.overlays.Cut()
-		return
+/obj/item/bodybag/bluespace/Initialize(mapload)
+	. = ..()
+	RegisterSignal(src, COMSIG_ATOM_CANREACH, PROC_REF(CanReachReact))
 
-/obj/structure/closet/body_bag/store_mobs(var/stored_units)
-	contains_body = ..()
-	return contains_body
+/obj/item/bodybag/bluespace/examine(mob/user)
+	. = ..()
+	if(contents.len)
+		var/s = contents.len == 1 ? "" : "s"
+		. += span_notice("You can make out the shape[s] of [contents.len] object[s] through the fabric.")
 
-/obj/structure/closet/body_bag/close()
-	if(..())
-		density = FALSE
-		return 1
-	return 0
-
-/obj/structure/closet/body_bag/MouseDrop(over_object, src_location, over_location)
-	..()
-	if((over_object == usr && (in_range(src, usr) || usr.contents.Find(src))))
-		if(!ishuman(usr))	return
-		if(opened)	return 0
-		if(contents.len)	return 0
-		visible_message("[usr] folds up the [src.name]")
-		new item_path(get_turf(src))
-		spawn(0)
-			qdel(src)
-		return
-
-/obj/structure/closet/body_bag/update_icon()
-    if(opened)
-        icon_state = "bodybag_open"
-    else
-        if(contains_body > 0)
-            icon_state = "bodybag_full"
-        else
-            icon_state = "bodybag_closed"
-
-/obj/item/bodybag/expanded
-	name = "body bag"
-	desc = "A folded bag designed for the storage and transportation of cadavers. This one is extra large."
-	w_class = ITEM_SIZE_NORMAL
-	spawn_blacklisted = TRUE
-
-/obj/item/bodybag/expanded/attack_self(mob/user)
-	var/obj/structure/closet/body_bag/expanded/R = new /obj/structure/closet/body_bag/expanded(user.loc)
-	R.add_fingerprint(user)
-	qdel(src)
-
-/obj/structure/closet/body_bag/expanded
-	name = "expanded body bag"
-	desc = "A plastic bag designed for the storage and transportation of cadavers. This one is extra large."
-	item_path = /obj/item/bodybag/expanded
-	storage_capacity = (MOB_LARGE)
-
-/obj/item/bodybag/cryobag
-	name = "stasis bag"
-	desc = "A folded, non-reusable bag designed to prevent additional damage to an occupant. Especially useful if short on time or in \
-	a hostile enviroment."
-	description_info = "You can scan the patient inside by clicking the bag with an health analyzer"
-	icon = 'icons/obj/cryobag.dmi'
-	icon_state = "bodybag_folded"
-	origin_tech = list(TECH_BIO = 4)
-	matter = list(MATERIAL_STEEL = 10, MATERIAL_PLASTIC = 6, MATERIAL_SILVER = 2)
-	matter_reagents = list("coolant" = 40)
-	price_tag = 250
-
-/obj/item/bodybag/cryobag/attack_self(mob/user)
-	var/obj/structure/closet/body_bag/cryobag/R = new /obj/structure/closet/body_bag/cryobag(user.loc)
-	R.add_fingerprint(user)
-	qdel(src)
-
-/obj/structure/closet/body_bag/cryobag
-	name = "stasis bag"
-	desc = "A non-reusable plastic bag designed to prevent additional damage to an occupant. Especially useful if short on time or in \
-	a hostile enviroment. This one features a much more advanced design that preserves its occupant in cryostasis."
-	icon = 'icons/obj/cryobag.dmi'
-	item_path = /obj/item/bodybag/cryobag
-	store_misc = 0
-	store_items = 0
-	rarity_value = 20
-	var/used = 0
-	var/obj/item/tank/tank
-
-/obj/structure/closet/body_bag/cryobag/New()
-	tank = new /obj/item/tank/emergency_oxygen(null) //It's in nullspace to prevent ejection when the bag is opened.
-	..()
-
-/obj/structure/closet/body_bag/cryobag/Destroy()
-	qdel(tank)
-	tank = null
+/obj/item/bodybag/bluespace/Destroy()
+	for(var/atom/movable/A in contents)
+		A.forceMove(get_turf(src))
+		if(isliving(A))
+			to_chat(A, span_notice("You suddenly feel the space around you torn apart! You're free!"))
 	return ..()
 
-/obj/structure/closet/body_bag/cryobag/open()
+/obj/item/bodybag/bluespace/proc/CanReachReact(atom/movable/source, list/next)
+	return COMPONENT_BLOCK_REACH
+
+/obj/item/bodybag/bluespace/deploy_bodybag(mob/user, atom/location)
+	var/obj/structure/closet/body_bag/R = new unfoldedbag_path(location)
+	for(var/atom/movable/A in contents)
+		A.forceMove(R)
+		if(isliving(A))
+			to_chat(A, span_notice("You suddenly feel air around you! You're free!"))
+	R.open(user)
+	R.add_fingerprint(user)
+	R.foldedbag_instance = src
+	moveToNullspace()
+
+/obj/item/bodybag/bluespace/container_resist(mob/living/user)
+	if(user.incapacitated())
+		to_chat(user, span_warning("You can't get out while you're restrained like this!"))
+		return
+	user.changeNext_move(CLICK_CD_BREAKOUT)
+	user.last_special = world.time + CLICK_CD_BREAKOUT
+	to_chat(user, span_notice("You claw at the fabric of [src], trying to tear it open..."))
+	to_chat(loc, span_warning("Someone starts trying to break free of [src]!"))
+	if(!do_after(user, 5 SECONDS, src, timed_action_flags = IGNORE_USER_LOC_CHANGE))
+		to_chat(loc, span_warning("The pressure subsides. It seems that they've stopped resisting..."))
+		return
+	loc.visible_message(span_warning("[user] suddenly appears in front of [loc]!"), span_userdanger("[user] breaks free of [src]!"))
+	qdel(src)
+
+/obj/item/bodybag/environmental
+	name = "environmental protection bag"
+	desc = "A folded, reinforced bag designed to protect against exoplanetary environmental storms."
+	icon = 'icons/obj/bodybag.dmi'
+	icon_state = "envirobag_folded"
+	unfoldedbag_path = /obj/structure/closet/body_bag/environmental
+	w_class = WEIGHT_CLASS_NORMAL //It's reinforced and insulated, like a beefed-up sleeping bag, so it has a higher bulkiness than regular bodybag
+	resistance_flags = ACID_PROOF | FIRE_PROOF | FREEZE_PROOF
+
+/obj/item/bodybag/environmental/nanotrasen
+	name = "elite environmental protection bag"
+	desc = "A folded, heavily reinforced, and insulated bag, capable of fully isolating its contents from external factors."
+	icon_state = "ntenvirobag_folded"
+	unfoldedbag_path = /obj/structure/closet/body_bag/environmental/nanotrasen
+	resistance_flags = ACID_PROOF | FIRE_PROOF | FREEZE_PROOF | LAVA_PROOF
+
+/obj/item/bodybag/environmental/prisoner
+	name = "prisoner transport bag"
+	desc = "Intended for transport of prisoners through hazardous environments, this folded environmental protection bag comes with straps to keep an occupant secure."
+	icon = 'icons/obj/bodybag.dmi'
+	icon_state = "prisonerenvirobag_folded"
+	unfoldedbag_path = /obj/structure/closet/body_bag/environmental/prisoner
+
+/obj/item/bodybag/environmental/prisoner/syndicate
+	name = "syndicate prisoner transport bag"
+	desc = "An alteration of Nanotrasen's environmental protection bag which has been used in several high-profile kidnappings. Designed to keep a victim unconscious, alive, and secured until they are transported to a required location."
+	icon = 'icons/obj/bodybag.dmi'
+	icon_state = "syndieenvirobag_folded"
+	unfoldedbag_path = /obj/structure/closet/body_bag/environmental/prisoner/syndicate
+	resistance_flags = ACID_PROOF | FIRE_PROOF | FREEZE_PROOF | LAVA_PROOF
+	var/killing = FALSE
+	var/obj/structure/closet/body_bag/environmental/prisoner/syndicate/deployed_bag
+
+/obj/item/bodybag/environmental/prisoner/syndicate/deploy_bodybag(mob/user, atom/location)
+	deployed_bag = new unfoldedbag_path(location)
+	deployed_bag.open(user)
+	deployed_bag.add_fingerprint(user)
+	deployed_bag.foldedbag_instance = src
+	moveToNullspace()
+
+/obj/item/syndicate_prisoner_remote
+	name = "syndicate prisoner remote"
+	desc = "A wireless remote that will toggle the lethality of a linked syndicate prisoner transport bag."
+	icon = 'icons/obj/device.dmi'
+	icon_state = "gangtool-red"
+	item_state = "electronic"
+	lefthand_file = 'icons/mob/inhands/misc/devices_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/misc/devices_righthand.dmi'
+	var/obj/item/bodybag/environmental/prisoner/syndicate/bag
+
+/obj/item/syndicate_prisoner_remote/attack_self(mob/user)
 	. = ..()
-	if(used)
-		var/obj/item/O = new/obj/item(src.loc)
-		O.name = "used stasis bag"
-		O.icon = src.icon
-		O.icon_state = "bodybag_used"
-		O.desc = "A used bodybag. It's nothing but trash now."
-		O.matter = list(MATERIAL_STEEL = 5, MATERIAL_PLASTIC = 3, MATERIAL_SILVER = 1)
-		O.matter_reagents = list("coolant" = 20)
-		qdel(src)
-
-/obj/structure/closet/body_bag/cryobag/Entered(atom/movable/AM)
-	if(ishuman(AM))
-		var/mob/living/carbon/human/H = AM
-		H.EnterStasis()
-		src.used = 1
-	..()
-
-/obj/structure/closet/body_bag/cryobag/Exited(atom/movable/AM)
-	if(ishuman(AM))
-		var/mob/living/carbon/human/H = AM
-		H.ExitStasis()
-	..()
-
-/obj/structure/closet/body_bag/cryobag/return_air() //Used to make stasis bags protect from vacuum.
-	if(tank)
-		return tank.air_contents
-	..()
-
-/obj/structure/closet/body_bag/cryobag/examine(mob/user, extra_description = "")
-	if(Adjacent(user)) //The bag's rather thick and opaque from a distance.
-		extra_description += "<span class='info'>You peer into \the [src].</span>"
-		..(user, extra_description)
-		for(var/mob/living/L in contents)
-			L.examine(user)
-	else
-		..(user, extra_description)
-
-/obj/structure/closet/body_bag/attackby(obj/item/W, mob/user)
-	..() // Allows to use health analyzer on the mob inside
+	if(!bag)
+		to_chat(user, span_warning("The link to the bag has been broken!"))
+		return
+	
+	bag.killing = !bag.killing
+	if(bag.deployed_bag)
+		bag.deployed_bag.update_appearance(UPDATE_ICON)
+	to_chat(user, span_notice("\The [bag] is now set to [bag.killing ? "LETHAL" : "NON-LETHAL"]."))

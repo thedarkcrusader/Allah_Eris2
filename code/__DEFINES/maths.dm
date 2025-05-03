@@ -4,40 +4,47 @@
 
 #define NUM_E 2.71828183
 
-#define M_PI						3.1416
-#define INFINITY				1e31	//closer then enough
+#define PI 3.1416
+#define SQRT_2 1.414214
+#define INFINITY 1e31 //closer then enough
 
 #define SHORT_REAL_LIMIT 16777216
 
-#define SQRTWO 1.414
+//"fancy" math for calculating time in ms from tick_usage percentage and the length of ticks
+//percent_of_tick_used * (ticklag * 100(to convert to ms)) / 100(percent ratio)
+//collapsed to percent_of_tick_used * tick_lag
+#define TICK_DELTA_TO_MS(percent_of_tick_used) ((percent_of_tick_used) * world.tick_lag)
+#define TICK_USAGE_TO_MS(starting_tickusage) (TICK_DELTA_TO_MS(TICK_USAGE_REAL - starting_tickusage))
 
 #define PERCENT(val) (round((val)*100, 0.1))
-#define CLAMP01(x) (CLAMP(x, 0, 1))
+#define CLAMP01(x) (clamp(x, 0, 1))
 
-#define SIGN(x) ( x < 0 ? -1  : 1 )
+//time of day but automatically adjusts to the server going into the next day within the same round.
+//for when you need a reliable time number that doesn't depend on byond time.
+#define REALTIMEOFDAY (world.timeofday + (MIDNIGHT_ROLLOVER * MIDNIGHT_ROLLOVER_CHECK))
+#define MIDNIGHT_ROLLOVER_CHECK ( GLOB.rollovercheck_last_timeofday != world.timeofday ? update_midnight_rollover() : GLOB.midnight_rollovers )
+
+/// Gets the sign of x, returns -1 if negative, 0 if 0, 1 if positive
+#define SIGN(x) ( ((x) > 0) - ((x) < 0) )
 
 #define CEILING(x, y) ( -round(-(x) / (y)) * (y) )
 
-#define DIST_EUCLIDIAN(x1,y1,x2,y2) (sqrt((x1-x2)**2 + (y1-y2)**2))
+#define ROUND_UP(x) ( -round(-(x)))
 
 // round() acts like floor(x, 1) by default but can't handle other values
 #define FLOOR(x, y) ( round((x) / (y)) * (y) )
 
-#define QUANTIZE(variable) (round(variable, 0.0001))
-
-#define CLAMP(CLVALUE,CLMIN,CLMAX) ( max( (CLMIN), min((CLVALUE), (CLMAX)) ) )
-
 // Similar to clamp but the bottom rolls around to the top and vice versa. min is inclusive, max is exclusive
 #define WRAP(val, min, max) ( min == max ? min : (val) - (round(((val) - (min))/((max) - (min))) * ((max) - (min))) )
+
+/// Increments a value and wraps it if it exceeds some value. Can be used to circularly iterate through a list through `idx = WRAP_UP(idx, length_of_list)`.
+#define WRAP_UP(val, max) (((val) % (max)) + 1)
 
 // Real modulus that handles decimals
 #define MODULUS(x, y) ( (x) - (y) * round((x) / (y)) )
 
-// Tangent
-#define TAN(x) (sin(x) / cos(x))
-
 // Cotangent
-#define COT(x) (1 / TAN(x))
+#define COT(x) (1 / tan(x))
 
 // Secant
 #define SEC(x) (1 / cos(x))
@@ -59,28 +66,11 @@
 // Used for calculating the radioactive strength falloff
 #define INVERSE_SQUARE(initial_strength,cur_distance,initial_distance) ( (initial_strength)*((initial_distance)**2/(cur_distance)**2) )
 
-// Vector algebra.
-#define SQUAREDNORM(x, y) (x**2 + y**)
-
-#define NORM(x, y) (sqrt(SQUAREDNORM(x, y)))
-
-#define ISPOWEROFTWO(val) ((val & (val-1)) == 0)
-
-#define ROUNDUPTOPOWEROFTWO(val) (2 ** -round(-log(2, val)))
-
 #define ISABOUTEQUAL(a, b, deviation) (deviation ? abs((a) - (b)) <= deviation : abs((a) - (b)) <= 0.1)
 
 #define ISEVEN(x) (x % 2 == 0)
 
 #define ISODD(x) (x % 2 != 0)
-
-//Probability based rounding that makes whole numbers out of decimals based on luck.
-//The decimal value is the probability to be rounded up.
-//Eg a value of 1.37 has a 37% chance to become 2, otherwise it is 1
-//Useful for game balance matters where the gulf caused by consistent rounding is too much
-#define ROUND_PROB(val) (val - (val % 1) + prob((val % 1) * 100))
-
-#define RAND_DECIMAL(lower, upper) (rand(0, upper - lower) + lower)
 
 // Returns true if val is from min to max, inclusive.
 #define ISINRANGE(val, min, max) (min <= val && val <= max)
@@ -100,6 +90,11 @@
 // Returns the nth root of x.
 #define ROOT(n, x) ((x) ** (1 / (n)))
 
+/// Low-pass filter a value to smooth out high frequent peaks. This can be thought of as a moving average filter as well.
+/// delta_time is how many seconds since we last ran this command. RC is the filter constant, high RC means more smoothing
+/// See https://en.wikipedia.org/wiki/Low-pass_filter#Simple_infinite_impulse_response_filter for the maths
+#define LPFILTER(memory, signal, delta_time, RC) (delta_time / (RC + delta_time)) * signal + (1 - delta_time / (RC + delta_time)) * memory
+
 // The quadratic formula. Returns a list with the solutions, or an empty list
 // if they are imaginary.
 /proc/SolveQuadratic(a, b, c)
@@ -118,6 +113,10 @@
 #define TODEGREES(radians) ((radians) * 57.2957795)
 
 #define TORADIANS(degrees) ((degrees) * 0.0174532925)
+
+/// Gets shift x that would be required the bitflag (1<<x)
+/// We need the round because log has floating-point inaccuracy, and if we undershoot at all on list indexing we'll get the wrong index.
+#define TOBITSHIFT(bit) ( round(log(2, bit), 1) )
 
 // Will filter out extra rotations and negative rotations
 // E.g: 540 becomes 180. -180 becomes 180.
@@ -153,7 +152,9 @@
 #define ACCURACY 10000
 /proc/gaussian(mean, stddev)
 	var/static/gaussian_next
-	var/R1;var/R2;var/working
+	var/R1
+	var/R2
+	var/working
 	if(gaussian_next != null)
 		R1 = gaussian_next
 		gaussian_next = null
@@ -169,7 +170,7 @@
 	return (mean + stddev * R1)
 #undef ACCURACY
 
-/proc/get_turf_in_angle(angle, turf/starting, increments)
+/proc/get_turf_in_angle(angle, turf/starting, increments = 1)
 	var/pixel_x = 0
 	var/pixel_y = 0
 	for(var/i in 1 to increments)
@@ -189,8 +190,8 @@
 	while(pixel_y < -16)
 		pixel_y += 32
 		new_y--
-	new_x = CLAMP(new_x, 0, world.maxx)
-	new_y = CLAMP(new_y, 0, world.maxy)
+	new_x = clamp(new_x, 1, world.maxx)
+	new_y = clamp(new_y, 1, world.maxy)
 	return locate(new_x, new_y, starting.z)
 
 // Returns a list where [1] is all x values and [2] is all y values that overlap between the given pair of rectangles
@@ -212,59 +213,38 @@
 		region_y2["[i]"] = TRUE
 
 	return list(region_x1 & region_x2, region_y1 & region_y2)
+	
+#define EXP_DISTRIBUTION(desired_mean) ( -(1/(1/desired_mean)) * log(rand(1, 1000) * 0.001) )
 
-/proc/Mean(...)
-	var/sum = 0
-	for(var/val in args)
-		sum += val
-	return sum / args.len
+#define LORENTZ_DISTRIBUTION(x, s) ( s*tan(TODEGREES(PI*(rand()-0.5))) + x )
+#define LORENTZ_CUMULATIVE_DISTRIBUTION(x, y, s) ( (1/PI)*TORADIANS(arctan((x-y)/s)) + 1/2 )
 
+#define RULE_OF_THREE(a, b, x) ((a*x)/b)
+
+/// Converts a probability/second chance to probability/delta_time chance
+/// For example, if you want an event to happen with a 10% per second chance, but your proc only runs every 5 seconds, do `if(prob(100*DT_PROB_RATE(0.1, 5)))`
+#define DT_PROB_RATE(prob_per_second, delta_time) (1 - (1 - prob_per_second) ** delta_time)
+
+/// Like DT_PROB_RATE but easier to use, simply put `if(DT_PROB(10, 5))`
+#define DT_PROB(prob_per_second_percent, delta_time) (prob(100*DT_PROB_RATE(prob_per_second_percent/100, delta_time)))
 // )
 
-// Round up
-proc/n_ceil(var/num)
-	if(isnum(num))
-		return round(num)+1
+/// Taxicab distance--gets you the **actual** time it takes to get from one turf to another due to how we calculate diagonal movement
+#define MANHATTAN_DISTANCE(a, b) (abs(a.x - b.x) + abs(a.y - b.y))
+// )
 
-// Find leftmost bit using bitshifting
-proc/leftmost_bit(num)
-	var/pos = 0
-	if(num)
-		while(num > 0)
-			num >>= 1
-			pos++
-	return pos
+/// A function that exponentially approaches a maximum value of L
+/// k is the rate at which is approaches L, x_0 is the point where the function = 0
+#define LOGISTIC_FUNCTION(L,k,x,x_0) (L/(1+(NUM_E**(-k*(x-x_0)))))
 
-proc/get_vector(dir) // Accepts a directional string and returns a list containing an actual vector
-    switch(dir)
-        if(NORTH)
-            return list(0, 1)
-        if(NORTHEAST)
-            return list(1, 1)
-        if(EAST)
-            return list(1, 0)
-        if(SOUTHEAST)
-            return list(1, -1)
-        if(SOUTH)
-            return list(0, -1)
-        if(SOUTHWEST)
-            return list(-1, -1)
-        if(WEST)
-            return list(-1, 0)
-        if(NORTHWEST)
-            return list(-1, 1)
-        else if(!dir)
-            return list(1, 0)
+// )
+/// Make sure something is a boolean TRUE/FALSE 1/0 value, since things like bitfield & bitflag doesn't always give 1s and 0s.
+#define FORCE_BOOLEAN(x) ((x)? TRUE : FALSE)
 
-proc/get_vector_angle(vec1, vec2) // Calculates the angle between two vectors, then returns the angle. Uses degrees instead of radians because BYOND expects trig functions to be called with degrees.
-    var/dot = vec1[1] * vec2[1] + vec1[2] * vec2[2] // Calculate the dot product
-    var/mag1 = sqrt((vec1[1] ** 2) + (vec1[2] ** 2)) // Calculate the magnitudes of the vectors
-    var/mag2 = sqrt((vec2[1] ** 2) + (vec2[2] ** 2))
-    var/angle = arccos(dot / (mag1 * mag2)) // Calculate the angle based on the dot product and magnitudes of the vectors
-    return angle
+// )
+/// Gives the number of pixels in an orthogonal line of tiles.
+#define TILES_TO_PIXELS(tiles)			(tiles * PIXELS)
+// )
 
-#define T100C 373.15 //  100.0 degrees celsius
-
-
-
-#define CELSIUS + T0C
+/// The number of cells in a taxicab circle (rasterized diamond) of radius X.
+#define DIAMOND_AREA(X) (1 + 2*(X)*((X)+1))

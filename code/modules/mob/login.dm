@@ -1,56 +1,62 @@
-//handles setting lastKnownIP and computer_id for use by the ban systems as well as checking for multikeying
-/mob/proc/update_Login_details()
-	//Multikey checks and logging
-	lastKnownIP	= client.address
-	computer_id	= client.computer_id
-	log_access("Login: [key_name(src)] from [lastKnownIP ? lastKnownIP : "localhost"]-[computer_id] || BYOND v[client.byond_version]")
-	if(config.log_access)
-		var/is_multikeying = 0
-		for(var/mob/M in GLOB.player_list)
-			if(M == src)	continue
-			if( M.key && (M.key != key) )
-				var/matches
-				if( (M.lastKnownIP == client.address) )
-					matches += "IP ([client.address])"
-				if( (client.connection != "web") && (M.computer_id == client.computer_id) )
-					if(matches)	matches += " and "
-					matches += "ID ([client.computer_id])"
-					is_multikeying = 1
-				if(matches)
-					if(M.client)
-						message_admins("<font color='red'><B>Notice: </B></font><font color='blue'><A href='?src=\ref[usr];priv_msg=\ref[src]'>[key_name_admin(src)]</A> has the same [matches] as <A href='?src=\ref[usr];priv_msg=\ref[M]'>[key_name_admin(M)]</A>.</font>", 1)
-						log_access("Notice: [key_name(src)] has the same [matches] as [key_name(M)].")
-					else
-						message_admins("<font color='red'><B>Notice: </B></font><font color='blue'><A href='?src=\ref[usr];priv_msg=\ref[src]'>[key_name_admin(src)]</A> has the same [matches] as [key_name_admin(M)] (no longer logged in). </font>", 1)
-						log_access("Notice: [key_name(src)] has the same [matches] as [key_name(M)] (no longer logged in).")
-		if(is_multikeying && !client.warned_about_multikeying)
-			client.warned_about_multikeying = 1
-			spawn(1 SECONDS)
-				to_chat(src, "<b>WARNING:</b> It would seem that you are sharing connection or computer with another player. If you haven't done so already, please contact the staff via the Adminhelp verb to resolve this situation. Failure to do so may result in administrative action. You have been warned.")
-
+/**
+  * Run when a client is put in this mob or reconnets to byond and their client was on this mob
+  *
+  * Things it does:
+  * * Adds player to player_list
+  * * sets lastKnownIP
+  * * sets computer_id
+  * * logs the login
+  * * tells the world to update it's status (for player count)
+  * * create mob huds for the mob if needed
+  * * reset next_move to 1
+  * * parent call
+  * * if the client exists set the perspective to the mob loc
+  * * call on_log on the loc (sigh)
+  * * reload the huds for the mob
+  * * reload all full screen huds attached to this mob
+  * * load any global alternate apperances
+  * * sync the mind datum via sync_mind()
+  * * call any client login callbacks that exist
+  * * grant any actions the mob has to the client
+  * * calls [auto_deadmin_on_login](mob.html#proc/auto_deadmin_on_login)
+  * * send signal COMSIG_MOB_CLIENT_LOGIN
+  */
 /mob/Login()
 	if(!client)
 		return FALSE
-	GLOB.player_list |= src
-	update_Login_details()
+	
+	canon_client = client
+	add_to_player_list()
+	lastKnownIP	= client.address
+	computer_id	= client.computer_id
+	log_access("Mob Login: [key_name(src)] was assigned to a [type]")
 	world.update_status()
-
-	client.images = list()				//remove the images such as AIs being unable to see runes
 	client.screen = list()				//remove hud items just in case
+	client.images = list()
+	client.set_right_click_menu_mode(shift_to_open_context_menu)
+
+	if(!hud_used)
+		create_mob_hud() // creating a hud will add it to the client's screen, which can process a disconnect
+		if(!client)
+			return FALSE
+
 	if(hud_used)
-		qdel(hud_used)		//remove the hud objects
-	hud_used = new /datum/hud(src)
+		hud_used.show_hud(hud_used.hud_version) // see above, this can process a disconnect
+		if(!client)
+			return FALSE
+		hud_used.update_ui_style(ui_style2icon(client.prefs?.read_preference(/datum/preference/choiced/ui_style)))
 
 	next_move = 1
-	sight |= SEE_SELF
 
-	// YES, this is expensive
-	// YES, this calls 200k Move() calls
-	// however eris paralax is so bad that removing this breaks it
+	client.statobj = src
+	
+	SSdemo.write_event_line("setmob [client.ckey] \ref[src]")
 
+	// DO NOT CALL PARENT HERE
 	// BYOND's internal implementation of login does two things
 	// 1: Set statobj to the mob being logged into (We got this covered)
 	// 2: And I quote "If the mob has no location, place it near (1,1,1) if possible"
+	// 3: Yog: handle the mob client in replays
 	// See, near is doing an agressive amount of legwork there
 	// What it actually does is takes the area that (1,1,1) is in, and loops through all those turfs
 	// If you successfully move into one, it stops
@@ -58,39 +64,73 @@
 	// We don't allow moves from nullspace -> somewhere. This means the loop has to iterate all the turfs in (1,1,1)'s area
 	// For us, (1,1,1) is a space tile. This means roughly 200,000! calls to Move()
 	// You do not want this
-	..()
 
 	if(!client)
 		return FALSE
 
-	SEND_SIGNAL_OLD(src, COMSIG_MOB_LOGIN)
-	// the datum fires first than actual login. Do actual login first before triggering login events
-	GLOB.logged_in_event.raise_event(src)
+	SEND_SIGNAL(src, COMSIG_MOB_LOGIN)
 
-	if (key != client.key)
+	if (client && key != client.key)
 		key = client.key
+	reset_perspective(loc)
 
-	if(loc && !isturf(loc))
-		client.eye = loc
-		client.perspective = EYE_PERSPECTIVE
-	else
-		client.eye = src
-		client.perspective = MOB_PERSPECTIVE
+	if(loc)
+		loc.on_log(TRUE)
 
-	// This is located here instead of under /mob/living/silicon/robot/Login() to make sure that player looses "robot" macro in all cases when they stop being a robot
-	winset(src, null, "mainwindow.macro=[isrobot(src) ? "robot" : "default"]")
+	//readd this mob's HUDs (antag, med, etc)
+	reload_huds()
 
+	reload_fullscreen() // Reload any fullscreen overlays this mob has.
+
+	add_click_catcher()
+
+	sync_mind()
+
+	//Reload alternate appearances
+	for(var/v in GLOB.active_alternate_appearances)
+		if(!v)
+			continue
+		var/datum/atom_hud/alternate_appearance/AA = v
+		AA.onNewMob(src)
+
+	update_client_colour()
+	update_mouse_pointer()
 	if(client)
-		if(client.UI)
-			client.UI.show()
-		else
-			client.create_UI(src.type)
+		client.change_view(getScreenSize(client.prefs.read_preference(/datum/preference/toggle/widescreen)))
+		if(client.player_details.player_actions.len)
+			for(var/datum/action/A in client.player_details.player_actions)
+				A.Grant(src)
 
-		add_click_catcher()
-		update_action_buttons()
+		for(var/foo in client.player_details.post_login_callbacks)
+			var/datum/callback/CB = foo
+			CB.Invoke()
+		log_played_names(client.ckey,name,real_name)
+		auto_deadmin_on_login()
 
-		client.CAN_MOVE_DIAGONALLY = FALSE
+	log_message("Client [key_name(src)] has taken ownership of mob [src]([src.type])", LOG_OWNERSHIP)
+	SEND_SIGNAL(src, COMSIG_MOB_CLIENT_LOGIN, client)
+	SEND_SIGNAL(client, COMSIG_CLIENT_MOB_LOGIN, src)
 
-	update_client_colour(0)
-
+	SEND_GLOBAL_SIGNAL(COMSIG_GLOB_MOB_LOGGED_IN, src)
 	return TRUE
+
+/**
+  * Checks if the attached client is an admin and may deadmin them
+  *
+  * Configs:
+  * * flag/auto_deadmin_players
+  * * client.prefs?.toggles & DEADMIN_ALWAYS
+  * * User is antag and flag/auto_deadmin_antagonists or client.prefs?.toggles & DEADMIN_ANTAGONIST
+  * * or if their job demands a deadminning SSjob.handle_auto_deadmin_roles()
+  *
+  * Called from [login](mob.html#proc/Login)
+  */
+/mob/proc/auto_deadmin_on_login() //return true if they're not an admin at the end.
+	if(!client?.holder)
+		return TRUE
+	if(CONFIG_GET(flag/auto_deadmin_players) || (client.prefs?.toggles & DEADMIN_ALWAYS))
+		return client.holder.auto_deadmin()
+	if(mind.has_antag_datum(/datum/antagonist) && (CONFIG_GET(flag/auto_deadmin_antagonists) || client.prefs?.toggles & DEADMIN_ANTAGONIST))
+		return client.holder.auto_deadmin()
+	if(job)
+		return SSjob.handle_auto_deadmin_roles(client, job)

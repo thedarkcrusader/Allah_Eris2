@@ -1,95 +1,79 @@
 /datum/computer_file/program/revelation
 	filename = "revelation"
 	filedesc = "Revelation"
+	category = PROGRAM_CATEGORY_EQUIPMENT
 	program_icon_state = "hostile"
-	program_key_state = "security_key"
-	program_menu_icon = "home"
-	extended_desc = "This virus can destroy the hard drive of a system it is executed on. It may be obfuscated to look like another non-malicious program. Once armed, it will destroy the system upon the next execution."
+	extended_desc = "This virus can destroy hard drive of system it is executed on. It may be obfuscated to look like another non-malicious program. Once armed, it will destroy the system upon next execution."
 	size = 13
-	requires_ntnet = 0
+	requires_ntnet = FALSE
 	available_on_ntnet = FALSE
 	available_on_syndinet = TRUE
-	nanomodule_path = /datum/nano_module/program/revelation/
-	var/armed = FALSE
+	tgui_id = "NtosRevelation"
+	program_icon = "magnet"
+
+	var/armed = 0
 
 /datum/computer_file/program/revelation/run_program(mob/living/user)
-	if(!..())
-		return FALSE
-
+	. = ..(user)
 	if(armed)
 		activate()
-		return FALSE
-
-	return TRUE
 
 /datum/computer_file/program/revelation/proc/activate()
-	if(!computer)
-		return
-
-	computer.visible_message("<span class='notice'>\The [computer]'s screen brightly flashes and loud electrical buzzing is heard.</span>")
-	computer.enabled = 0
-	computer.update_icon()
-	var/datum/effect/effect/system/spark_spread/s = new /datum/effect/effect/system/spark_spread
-	s.set_up(10, 1, computer.loc)
-	s.start()
-
-	if(computer.hard_drive)
-		computer.hard_drive.damage = 100
-		computer.hard_drive.stored_files.Cut()
-
-	if(computer.cell && prob(25))
-		computer.cell.charge = 0
-
-	if(computer.tesla_link && prob(50))
-		computer.tesla_link.damage = 100
-
-/datum/computer_file/program/revelation/Topic(href, href_list)
-	if(..())
-		return 1
-	else if(href_list["PRG_arm"])
-		armed = !armed
-	else if(href_list["PRG_activate"])
-		activate()
-	else if(href_list["PRG_obfuscate"])
-		var/mob/living/user = usr
-		var/newname = sanitize(input(user, "Enter new program name: "))
-		if(!newname)
+	if(computer)
+		if(istype(computer, /obj/item/modular_computer/tablet/integrated)) //If this is a borg's integrated tablet
+			var/obj/item/modular_computer/tablet/integrated/modularInterface = computer
+			to_chat(modularInterface.borgo,"<span class='userdanger'>SYSTEM PURGE DETECTED/</span>")
+			addtimer(CALLBACK(modularInterface.borgo, TYPE_PROC_REF(/mob/living/silicon/robot, death)), 2 SECONDS, TIMER_UNIQUE)
 			return
-		filedesc = newname
-		for(var/datum/computer_file/program/P in ntnet_global.available_station_software + ntnet_global.available_antag_software)
-			if(filedesc == P.filedesc)
-				program_menu_icon = P.program_menu_icon
-				break
-	return 1
+
+		computer.visible_message(span_notice("\The [computer]'s screen brightly flashes and loud electrical buzzing is heard."))
+		computer.enabled = FALSE
+		computer.update_appearance(UPDATE_ICON)
+		var/obj/item/computer_hardware/hard_drive/hard_drive = computer.all_components[MC_HDD]
+		var/obj/item/computer_hardware/battery/battery_module = computer.all_components[MC_CELL]
+		var/obj/item/computer_hardware/recharger/recharger = computer.all_components[MC_CHARGE]
+		qdel(hard_drive)
+		computer.take_damage(25, BRUTE, 0, 0)
+		if(battery_module && prob(25))
+			qdel(battery_module)
+			computer.visible_message(span_notice("\The [computer]'s battery explodes in rain of sparks."))
+			var/datum/effect_system/spark_spread/spark_system = new /datum/effect_system/spark_spread
+			spark_system.start()
+
+		if(recharger && prob(50))
+			qdel(recharger)
+			computer.visible_message(span_notice("\The [computer]'s recharger explodes in rain of sparks."))
+			var/datum/effect_system/spark_spread/spark_system = new /datum/effect_system/spark_spread
+			spark_system.start()
+
+
+/datum/computer_file/program/revelation/ui_act(action, params)
+	if(..())
+		return
+	computer.play_interact_sound()
+	switch(action)
+		if("PRG_arm")
+			armed = !armed
+			return TRUE
+		if("PRG_activate")
+			activate()
+			return TRUE
+		if("PRG_obfuscate")
+			var/newname = params["new_name"]
+			if(!newname)
+				return
+			filedesc = newname
+			return TRUE
+
 
 /datum/computer_file/program/revelation/clone()
 	var/datum/computer_file/program/revelation/temp = ..()
 	temp.armed = armed
 	return temp
 
-/datum/nano_module/program/revelation
-	name = "Revelation Virus"
+/datum/computer_file/program/revelation/ui_data(mob/user)
+	var/list/data = get_header_data()
 
-/datum/nano_module/program/revelation/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state = GLOB.default_state)
-	var/list/data = list()
-	var/datum/computer_file/program/revelation/PRG = program
-	if(!istype(PRG))
-		return
+	data["armed"] = armed
 
-	data = PRG.get_header_data()
-
-	data["armed"] = PRG.armed
-
-	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
-	if (!ui)
-		ui = new(user, src, ui_key, "revelation.tmpl", "Revelation Virus", 400, 250, state = state)
-		ui.auto_update_layout = 1
-		ui.set_initial_data(data)
-		ui.open()
-		ui.set_auto_update(1)
-
-/datum/computer_file/program/revelation/primed
-	filename = "clickme"
-	filedesc = "Click me!"
-	available_on_syndinet = FALSE // No duplicate downloads from hacked repository
-	armed = TRUE
+	return data

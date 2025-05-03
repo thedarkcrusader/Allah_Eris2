@@ -1,4 +1,4 @@
-/*!
+/**
  * External tgui definitions, such as src_object APIs.
  *
  * Copyright (c) 2020 Aleksej Komarov
@@ -65,31 +65,18 @@
 /**
  * public
  *
- * Will force an update on static data for all viewers.
- * Should be done manually whenever something happens to
- * change static data.
- */
-/datum/proc/update_static_data_for_all_viewers()
-	for (var/datum/tgui/window as anything in SStgui.open_uis_by_src[REF(src)])
-		window.send_full_update()
-
-/**
- * public
- *
  * Called on a UI when the UI receieves a href.
  * Think of this as Topic().
  *
  * required action string The action/button that has been invoked by the user.
  * required params list A list of parameters attached to the button.
  *
- * return bool If the user's input has been handled and the UI should update.
+ * return bool If the UI should be updated or not.
  */
 /datum/proc/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
-	SHOULD_CALL_PARENT(TRUE)
-	SEND_SIGNAL_OLD(src, COMSIG_UI_ACT, usr, action)
 	// If UI is not interactive or usr calling Topic is not the UI user, bail.
 	if(!ui || ui.status != UI_INTERACTIVE)
-		return TRUE
+		return 1
 
 /**
  * public
@@ -157,7 +144,6 @@
  * client/verb/uiclose(), which closes the ui window
  */
 /datum/proc/ui_close(mob/user)
-	SIGNAL_HANDLER
 
 /**
  * verb
@@ -171,7 +157,7 @@
 	// Name the verb, and hide it from the user panel.
 	set name = "uiclose"
 	set hidden = TRUE
-	var/mob/user = src?.mob
+	var/mob/user = src && src.mob
 	if(!user)
 		return
 	// Close all tgui datums based on window_id.
@@ -218,18 +204,10 @@
 				context = window_id)
 			SStgui.force_close_window(usr, window_id)
 			return TRUE
-
 	// Decode payload
 	var/payload
 	if(href_list["payload"])
-		var/payload_text = href_list["payload"]
-
-		if (!rustg_json_is_valid(payload_text))
-			log_tgui(usr, "Error: Invalid JSON")
-			return TRUE
-
-		payload = json_decode(payload_text)
-
+		payload = json_decode(href_list["payload"])
 	// Pass message to window
 	if(window)
 		window.on_message(type, payload, href_list)

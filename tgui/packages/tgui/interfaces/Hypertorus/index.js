@@ -46,6 +46,7 @@ const HypertorusMainControls = (props, context) => {
           onRecipe={(id) => act('fuel', { mode: id })}
           selectableFuels={data.selectable_fuel}
           selectedFuelID={data.selected}
+          gasData={data.gas_data}
         />
       </Collapsible>
     </Section>
@@ -84,7 +85,7 @@ const HypertorusLayout = () => {
 export const Hypertorus = (props, context) => {
   // The HFR has a ridiculous amount of knobs and information.
   // Ideally we'd display a large window for it all...
-  const idealWidth = 850,
+  const idealWidth = 860,
     idealHeight = 980;
 
   // ...but we should check for small screens, to play nicely with eg laptops.
@@ -99,8 +100,7 @@ export const Hypertorus = (props, context) => {
     <Window
       title="Hypertorus Fusion Reactor control panel"
       width={width}
-      height={height}
-    >
+      height={height}>
       <Window.Content scrollable>
         <HypertorusLayout />
       </Window.Content>

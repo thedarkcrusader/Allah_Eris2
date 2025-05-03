@@ -1,261 +1,254 @@
 /mob/living/simple_animal/spiderbot
-
-	min_oxy = 0
-	max_tox = 0
-	max_co2 = 0
-	minbodytemp = 0
-	maxbodytemp = 500
-	mob_size = MOB_SMALL
-
-	var/obj/item/device/radio/borg/radio = null
-	var/mob/living/silicon/ai/connected_ai = null
-	var/obj/item/cell/large/cell
-	var/obj/machinery/camera/camera = null
-	var/obj/item/device/mmi/mmi = null
-	var/list/req_access = list(access_robotics) //Access needed to pop out the brain.
-	var/positronic
-
-	name = "spider-bot"
-	desc = "A skittering robotic friend!"
+	name = "Spider bot"
+	desc = "Unlike drones, spiderbots are actually smart and make good friends!"
 	icon = 'icons/mob/robots.dmi'
 	icon_state = "spiderbot-chassis"
+	icon_living = "spiderbot-chassis"
 	icon_dead = "spiderbot-smashed"
-
-	wander = 0
-
+	initial_language_holder = /datum/language_holder/spiderbot
+	atmos_requirements = list("min_oxy" = 0, "max_oxy" = 0, "min_tox" = 0, "max_tox" = 1, "min_co2" = 0, "max_co2" = 0, "min_n2" = 0, "max_n2" = 0)
+	minbodytemp = 0
+	maxbodytemp = 500
+	wander = FALSE
 	health = 10
 	maxHealth = 10
-	hunger_enabled = 0
-
-	attacktext = "shocked"
-	melee_damage_lower = 1
-	melee_damage_upper = 3
-
+	attacktext = "shocks"
+	melee_damage_type = BURN
+	melee_damage_lower = 2
+	melee_damage_upper = 2
 	response_help  = "pets"
 	response_disarm = "shoos"
 	response_harm   = "stomps on"
-
-	var/emagged = 0
-	var/obj/item/held_item = null //Storage for single item they can hold.
-	speed = -1                    //Spiderbots gotta go fast.
-	pass_flags = PASSTABLE
+	density = FALSE
+	speed = -1  //Spiderbots gotta go fast.
+	pass_flags = PASSTABLE | PASSGRILLE | PASSMOB
+	ventcrawler = VENTCRAWLER_ALWAYS
+	mob_size = MOB_SIZE_TINY
 	speak_emote = list("beeps","clicks","chirps")
-	can_burrow = TRUE
 
-/mob/living/simple_animal/spiderbot/New()
-	..()
-	add_language(LANGUAGE_COMMON)
-	default_language = all_languages[LANGUAGE_COMMON]
-	add_verb(src, /mob/living/proc/ventcrawl)
-	add_verb(src, /mob/living/proc/hide)
+	var/obj/item/radio/borg/radio = null
+	var/obj/machinery/camera/camera = null
+	var/obj/item/mmi/mmi = null
+	var/req_access = ACCESS_ROBO_CONTROL //Access needed to pop out the brain.
+	var/emagged = FALSE
+	var/obj/item/held_item = null //Storage for single item they can hold.
 
-/mob/living/simple_animal/spiderbot/attackby(var/obj/item/O as obj, var/mob/user as mob)
-
-	if(istype(O, /obj/item/device/mmi))
-		var/obj/item/device/mmi/B = O
-		if(src.mmi)
-			to_chat(user, SPAN_WARNING("There's already a brain in [src]!"))
+/mob/living/simple_animal/spiderbot/attackby(obj/item/O, mob/user)
+	if(istype(O, /obj/item/mmi))
+		var/obj/item/mmi/M = O
+		if(mmi) //There's already a brain in it.
+			to_chat(user, span_warning("There's already a brain in [src]!"))
 			return
-		if(!B.brainmob)
-			to_chat(user, SPAN_WARNING("Sticking an empty MMI into the frame would sort of defeat the purpose."))
+		if(!M.brainmob)
+			to_chat(user, span_warning("Sticking an empty MMI into the frame would sort of defeat the purpose."))
 			return
-		if(!B.brainmob.key)
-			var/ghost_can_reenter = 0
-			if(B.brainmob.mind)
-				for(var/mob/observer/ghost/G in GLOB.player_list)
-					if(G.can_reenter_corpse && G.mind == B.brainmob.mind)
-						ghost_can_reenter = 1
-						break
-			if(!ghost_can_reenter)
-				to_chat(user, SPAN_NOTICE("[O] is completely unresponsive; there's no point."))
-				return
-
-		if(B.brainmob.stat == DEAD)
-			to_chat(user, SPAN_WARNING("[O] is dead. Sticking it into the frame would sort of defeat the purpose."))
+		var/mob/living/brain/BM = M.brainmob
+		if(!BM.key || !BM.mind)
+			to_chat(user, span_warning("The MMI indicates that their mind is completely unresponsive; there's no point!"))
 			return
 
-		if(jobban_isbanned(B.brainmob, "Robot"))
-			to_chat(user, SPAN_WARNING("\The [O] does not seem to fit."))
+		if(!BM.client) //braindead
+			to_chat(user, span_warning("The MMI indicates that their mind is currently inactive; it might change!"))
 			return
 
-		to_chat(user, SPAN_NOTICE("You install \the [O] in \the [src]!"))
+		if(BM.stat == DEAD || BM.suiciding || (M.brain && (M.brain.brain_death || M.brain.suicided)))
+			to_chat(user, span_warning("Sticking a dead brain into the frame would sort of defeat the purpose!"))
+			return
 
-		if(istype(O, /obj/item/device/mmi/digital))
-			positronic = 1
-			add_language(LANGUAGE_ROBOT)
+		if(is_banned_from(BM.ckey, "Cyborg") || QDELETED(src) || QDELETED(BM) || QDELETED(user) || QDELETED(M) || !Adjacent(user))
+			if(!QDELETED(M))
+				to_chat(user, span_warning("This [M.name] does not seem to fit!"))
+			return
 
-		user.drop_item()
-		src.mmi = O
-		src.transfer_personality(O)
-
-		O.loc = src
-		src.update_icon()
+		if(!user.temporarilyRemoveItemFromInventory(M))
+			return
+		to_chat(user, span_notice("You install [M] in [src]!"))
+		mmi = M
+		transfer_personality(M)
+		update_appearance(UPDATE_ICON)
 		return 1
 
-	if(QUALITY_WELDING in O.tool_qualities)
-		if(health < maxHealth)
-			if(O.use_tool(user, src, WORKTIME_FAST, QUALITY_WELDING, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
-				health += pick(1,1,1,2,2,3)
-				if(health > maxHealth)
-					health = maxHealth
-				add_fingerprint(user)
-				src.visible_message(SPAN_NOTICE("\The [user] has spot-welded some of the damage to \the [src]!"))
-		else
-			to_chat(user, SPAN_WARNING("\The [src] is undamaged!"))
+	else if(O.tool_behaviour == TOOL_WELDER && (!user.combat_mode || user == src)) ///Removed needless self repair part
+		user.changeNext_move(CLICK_CD_MELEE)
+		if (!getBruteLoss())
+			to_chat(user, span_warning("[src] is already in good condition!"))
+			return
+		if (!O.tool_start_check(user, amount=0))
+			return
+		adjustBruteLoss(-10)
+		updatehealth()
+		add_fingerprint(user)
+		visible_message(span_notice("[user] has fixed some of the dents on [src]."))
 		return
 
-	else if(istype(O, /obj/item/card/id)||istype(O, /obj/item/modular_computer/pda))
+	else if(istype(O, /obj/item/card/id) || istype(O, /obj/item/modular_computer))
 		if (!mmi)
-			to_chat(user, SPAN_DANGER("There's no reason to swipe your ID - \the [src] has no brain to remove."))
+			to_chat(user, span_warning("There's no reason to swipe your ID - the spiderbot has no brain to remove."))
 			return 0
 
 		var/obj/item/card/id/id_card
-
 		if(istype(O, /obj/item/card/id))
 			id_card = O
 		else
-			id_card = O.GetIdCard()
+			var/obj/item/modular_computer/pda = O
+			id_card = pda.GetID()
 
-		if(access_robotics in id_card.access)
-			to_chat(user, SPAN_NOTICE("You swipe your access card and pop the brain out of \the [src]."))
+		if(req_access in id_card.GetAccess())
+			to_chat(user, span_notice("You swipe your access card and pop the brain out of [src]."))
 			eject_brain()
 			if(held_item)
 				held_item.loc = src.loc
 				held_item = null
 			return 1
 		else
-			to_chat(user, SPAN_DANGER("You swipe your card with no effect."))
+			to_chat(user, span_warning("You swipe your card, with no effect."))
 			return 0
+	return ..()
 
-	else
-		O.attack(src, user, user.targeted_organ)
+/mob/living/simple_animal/spiderbot/proc/transfer_personality(obj/item/mmi/M)
+	M.brainmob.mind.transfer_to(src)
+	M.forceMove(src)
+	job = "Spider Bot"
 
-/mob/living/simple_animal/spiderbot/emag_act(var/remaining_charges, var/mob/user)
-	if (emagged)
-		to_chat(user, SPAN_WARNING("[src] is already overloaded - better run."))
-		return 0
-	else
-		to_chat(user, SPAN_NOTICE("You short out the security protocols and overload [src]'s cell, priming it to explode in a short time."))
-		spawn(100)	to_chat(src, SPAN_DANGER("Your cell seems to be outputting a lot of power..."))
-		spawn(200)	to_chat(src, SPAN_DANGER("Internal heat sensors are spiking! Something is badly wrong with your cell!"))
-		spawn(300)	src.explode()
+/mob/living/simple_animal/spiderbot/emag_act(mob/user, obj/item/card/emag/emag_card)
+	if(emagged)
+		to_chat(user, span_warning("[src] is already overloaded - better run."))
+		return FALSE
+	emagged = 1
+	to_chat(user, span_notice("You short out the security protocols and overload [src]'s cell, priming it to explode in a short time."))
+	addtimer(CALLBACK(src, PROC_REF(finish_emag_act), 1), 10 SECONDS)
+	return TRUE
 
-/mob/living/simple_animal/spiderbot/proc/transfer_personality(var/obj/item/device/mmi/M as obj)
-
-		src.mind = M.brainmob.mind
-		src.mind.key = M.brainmob.key
-		src.ckey = M.brainmob.ckey
-		src.name = "spider-bot ([M.brainmob.name])"
+/mob/living/simple_animal/spiderbot/proc/finish_emag_act(progress)
+	if(QDELETED(src))
+		return
+	if(progress)
+		switch(progress)
+			if(1)
+				to_chat(src, span_warning("Your cell seems to be outputting a lot of power..."))
+				addtimer(CALLBACK(src, PROC_REF(finish_emag_act), 2), 10 SECONDS)
+			if(2)
+				to_chat(src, span_warning("Internal heat sensors are spiking! Something is badly wrong with your cell!"))
+				addtimer(CALLBACK(src, PROC_REF(finish_emag_act), 3), 10 SECONDS)
+			if(3)
+				explode()
 
 /mob/living/simple_animal/spiderbot/proc/explode() //When emagged.
-	src.visible_message(SPAN_DANGER("\The [src] makes an odd warbling noise, fizzles, and explodes!"))
-	explosion(get_turf(src), 300, 60)
-	eject_brain()
-	death()
+	visible_message(span_warning("[src] makes an odd warbling noise, fizzles, and explodes."))
+	explosion(get_turf(src), -1, 0, 2, 3, 0, flame_range = 2) ///Explodes like a fireball
+	if(!QDELETED(src) && stat != DEAD)
+		death()
 
-/mob/living/simple_animal/spiderbot/update_icon()
+/mob/living/simple_animal/spiderbot/update_icon_state()
 	. = ..()
 	if(mmi)
-		if(positronic)
+		if(istype(mmi, /obj/item/mmi/posibrain))
 			icon_state = "spiderbot-chassis-posi"
 			icon_living = "spiderbot-chassis-posi"
 		else
 			icon_state = "spiderbot-chassis-mmi"
 			icon_living = "spiderbot-chassis-mmi"
-	else
-		icon_state = "spiderbot-chassis"
-		icon_living = "spiderbot-chassis"
+		return
+	icon_state = "spiderbot-chassis"
+	icon_living = "spiderbot-chassis"
 
 /mob/living/simple_animal/spiderbot/proc/eject_brain()
 	if(mmi)
-		var/turf/T = get_turf(loc)
-		if(T)
-			mmi.loc = T
-		if(mind)	mind.transfer_to(mmi.brainmob)
+		if(mind)	
+			mind.transfer_to(mmi.brainmob)
+		else if(key)
+			mmi.brainmob.key = key
+		mmi.forceMove(loc)
+		mmi.update_appearance(UPDATE_ICON)
 		mmi = null
-		real_name = initial(real_name)
-		name = real_name
-		update_icon()
-	remove_language(LANGUAGE_ROBOT)
-	positronic = null
+		name = initial(name)
+	update_appearance(UPDATE_ICON)
+
+/mob/living/simple_animal/spiderbot/gib(no_brain, no_organs, no_bodyparts, no_items)
+	eject_brain()
+	new /obj/effect/decal/remains/robot(loc)
+	qdel(src)
 
 /mob/living/simple_animal/spiderbot/Destroy()
 	eject_brain()
+	return ..()
+
+/mob/living/simple_animal/spiderbot/Initialize(mapload)
+	. = ..()
+	radio = new /obj/item/radio/borg(src)
+	camera = new /obj/machinery/camera(src)
+	camera.c_tag = name
+	add_verb(src, list(/mob/living/simple_animal/spiderbot/proc/hide, \
+			  /mob/living/simple_animal/spiderbot/proc/drop_held_item, \
+			  /mob/living/simple_animal/spiderbot/proc/get_item))
+	RegisterSignal(src, COMSIG_GLOB_MOB_DEATH, PROC_REF(on_death))
+
+/mob/living/simple_animal/spiderbot/proc/on_death()
+	UnregisterSignal(src, COMSIG_GLOB_MOB_DEATH)
+	gib()
+
+/mob/living/simple_animal/spiderbot/Destroy()
+	if(radio)
+		qdel(radio)
+		radio = null
+	if(camera)
+		qdel(camera)
+		camera = null
+	if(held_item)
+		held_item.forceMove(loc)
+		held_item = null
+	if(mmi)
+		mmi.forceMove(loc)
+		mmi = null
+	UnregisterSignal(src, COMSIG_GLOB_MOB_DEATH)
 	. = ..()
 
-/mob/living/simple_animal/spiderbot/New()
+/mob/living/simple_animal/spiderbot/proc/hide()
+	set name = "Hide"
+	set desc = "Allows to hide beneath tables or certain items. Toggled on or off."
+	set category = "Spiderbot"
 
-	radio = new /obj/item/device/radio/borg(src)
-	camera = new /obj/machinery/camera(src)
-	camera.c_tag = "spiderbot-[real_name]"
-	camera.replace_networks(list("SS13"))
+	if(stat != CONSCIOUS)
+		return
 
-	..()
+	if (layer != ABOVE_NORMAL_TURF_LAYER)
+		layer = ABOVE_NORMAL_TURF_LAYER
+		to_chat(src, span_notice("You are now hiding."))
+	else
+		layer = MOB_LAYER
+		to_chat(src, span_notice("You have stopped hiding."))
 
-/mob/living/simple_animal/spiderbot/death()
-
-	GLOB.living_mob_list -= src
-	GLOB.dead_mob_list += src
-
-	if(camera)
-		camera.status = 0
-
-	if (held_item) // if the spiderbot is holding an item
-		held_item.loc = src.loc
-		held_item = null
-
-	gibs(loc, null, null, /obj/effect/gibspawner/robot) //TODO: use gib() or refactor spiderbots into synthetics.
-	qdel(src)
-	return
-
-//Cannibalized from the parrot mob. ~Zuhayr
-/mob/living/simple_animal/spiderbot/verb/drop_held_item()
+/mob/living/simple_animal/spiderbot/proc/drop_held_item()
 	set name = "Drop held item"
 	set category = "Spiderbot"
 	set desc = "Drop the item you're holding."
-
-	if(stat)
+	if(stat != CONSCIOUS)
 		return
-
 	if(!held_item)
-		to_chat(usr, "\red You have nothing to drop!")
+		to_chat(usr, span_warning(">You have nothing to drop!"))
 		return 0
 
-	if(istype(held_item, /obj/item/grenade))
-		visible_message(SPAN_DANGER("\The [src] launches \the [held_item]!"), \
-			SPAN_DANGER("You launch \the [held_item]!"), \
-			"You hear a skittering noise and a thump!")
-		var/obj/item/grenade/G = held_item
-		G.loc = src.loc
-		G.prime()
-		held_item = null
-		return 1
-
-	visible_message(SPAN_NOTICE("\The [src] drops \the [held_item]."), \
-		SPAN_NOTICE("You drop \the [held_item]."), \
-		"You hear a skittering noise and a soft thump.")
-
-	held_item.loc = src.loc
+	visible_message(span_notice("[src] drops \the [held_item]!"), span_notice("You drop \the [held_item]!"), span_hear("You hear a skittering noise and a soft thump."))
+	held_item.forceMove(loc)
 	held_item = null
-	return 1
+	return
 
-/mob/living/simple_animal/spiderbot/verb/get_item()
+/mob/living/simple_animal/spiderbot/proc/get_item()
 	set name = "Pick up item"
 	set category = "Spiderbot"
 	set desc = "Allows you to take a nearby small item."
 
-	if(stat)
-		return -1
-
+	if(stat != CONSCIOUS)
+		return
 	if(held_item)
-		to_chat(src, SPAN_WARNING("You are already holding \the [held_item]"))
-		return 1
+		to_chat(src, span_warning("You are already holding \the [held_item]"))
+		return
 
 	var/list/items = list()
 	for(var/obj/item/I in view(1,src))
-		if(I.loc != src && I.w_class <= ITEM_SIZE_SMALL && I.Adjacent(src) )
-			items.Add(I)
-
+		//Make sure we're not already holding it and it's small enough
+		if(I.loc != src && I.w_class <= WEIGHT_CLASS_SMALL)
+			items |= I
 	var/obj/selection = input("Select an item.", "Pickup") in items
 
 	if(selection)
@@ -263,23 +256,17 @@
 			if(selection == I)
 				held_item = selection
 				selection.loc = src
-				visible_message(SPAN_NOTICE("\The [src] scoops up \the [held_item]."), \
-					SPAN_NOTICE("You grab \the [held_item]."), \
-					"You hear a skittering noise and a clink.")
+				visible_message(span_notice("[src] scoops up \the [held_item]!"), span_notice("You grab \the [held_item]!"), span_hear("You hear a skittering noise and a clink."))
 				return held_item
-		to_chat(src, SPAN_WARNING("\The [selection] is too far away."))
+		to_chat(src, span_warning("\The [selection] is too far away."))
 		return 0
 
-	to_chat(src, SPAN_WARNING("There is nothing of interest to take."))
+	to_chat(src, span_warning("There is nothing of interest to take."))
 	return 0
 
-/mob/living/simple_animal/spiderbot/examine(mob/user, extra_description = "")
-	if(held_item)
-		extra_description += "\nIt is carrying \icon[src.held_item] \a [src.held_item]."
-	..(user, extra_description)
-
-/mob/living/simple_animal/spiderbot/cannot_use_vents()
-	return
-
-/mob/living/simple_animal/spiderbot/binarycheck()
-	return positronic
+/mob/living/simple_animal/spiderbot/examine(mob/user)
+	. = ..()
+	if(health < maxHealth)
+		. += "This [src] looks a bit dented"
+	if(src.held_item)
+		to_chat(user, "It is carrying \a [src.held_item] [icon2html(src.held_item, src)].")

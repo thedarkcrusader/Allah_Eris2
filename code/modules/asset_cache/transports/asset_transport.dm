@@ -12,17 +12,17 @@
 
 /// Called when the transport is loaded by the config controller, not called on the default transport unless it gets loaded by a config change.
 /datum/asset_transport/proc/Load()
-	// if (CONFIG_GET(flag/asset_simple_preload))
-	for(var/client/C in clients)
-		addtimer(CALLBACK(src, PROC_REF(send_assets_slow), C, preload), 1 SECONDS)
+	if (CONFIG_GET(flag/asset_simple_preload))
+		for(var/client/C in GLOB.clients)
+			addtimer(CALLBACK(src, PROC_REF(send_assets_slow), C, preload), 1 SECONDS)
 
 /// Initialize - Called when SSassets initializes.
 /datum/asset_transport/proc/Initialize(list/assets)
 	preload = assets.Copy()
-	// if (!CONFIG_GET(flag/asset_simple_preload))
-	// 	return
-	// for(var/client/C in GLOB.clients)
-	// 	addtimer(CALLBACK(src, PROC_REF(send_assets_slow), C, preload), 1 SECONDS)
+	if (!CONFIG_GET(flag/asset_simple_preload))
+		return
+	for(var/client/C in GLOB.clients)
+		addtimer(CALLBACK(src, PROC_REF(send_assets_slow), C, preload), 1 SECONDS)
 
 
 /// Register a browser asset with the asset cache system
@@ -42,10 +42,9 @@
 		OACI.namespace_parent = ACI.namespace_parent = (ACI.namespace_parent | OACI.namespace_parent)
 		OACI.namespace = OACI.namespace || ACI.namespace
 		if (OACI.hash != ACI.hash)
-			/*var/error_msg = "ERROR: new asset added to the asset cache with the same name as another asset: [asset_name] existing asset hash: [OACI.hash] new asset hash:[ACI.hash]" // commented out because 800 MB logs crash PCs
+			var/error_msg = "ERROR: new asset added to the asset cache with the same name as another asset: [asset_name] existing asset hash: [OACI.hash] new asset hash:[ACI.hash]"
 			stack_trace(error_msg)
-			log_asset(error_msg) */
-			return TRUE
+			log_asset(error_msg)
 		else
 			if (length(ACI.namespace))
 				return ACI
@@ -61,8 +60,6 @@
 /datum/asset_transport/proc/get_asset_url(asset_name, datum/asset_cache_item/asset_cache_item)
 	if (!istype(asset_cache_item))
 		asset_cache_item = SSassets.cache[asset_name]
-	if(!asset_cache_item)
-		return url_encode(asset_name)
 	// To ensure code that breaks on cdns breaks in local testing, we only
 	// use the normal filename on legacy assets and name space assets.
 	var/keep_local_name = dont_mutate_filenames \
@@ -86,8 +83,8 @@
 				client = M.client
 			else //no stacktrace because this will mainly happen because the client went away
 				return
-		else // No stack trace, happens when client changes mobs
-			return
+		else
+			CRASH("Invalid argument: client: `[client]`")
 	if (!islist(asset_list))
 		asset_list = list(asset_list)
 	var/list/unreceived = list()
@@ -111,14 +108,14 @@
 		if (!keep_local_name)
 			new_asset_name = "asset.[ACI.hash][ACI.ext]"
 		if (client.sent_assets[new_asset_name] == asset_hash)
-			if (Debug2)
+			if (GLOB.Debug2)
 				log_asset("DEBUG: Skipping send of `[asset_name]` (as `[new_asset_name]`) for `[client]` because it already exists in the client's sent_assets list")
 			continue
 		unreceived[asset_name] = ACI
 
 	if (unreceived.len)
 		if (unreceived.len >= ASSET_CACHE_TELL_CLIENT_AMOUNT)
-			to_chat(client, "<span class='infoplain'>Sending Resources...</span>")
+			to_chat(client, "Sending Resources...")
 
 		for (var/asset_name in unreceived)
 			var/new_asset_name = asset_name
@@ -129,18 +126,18 @@
 				|| (ACI.namespace && !ACI.namespace_parent)
 			if (!keep_local_name)
 				new_asset_name = "asset.[ACI.hash][ACI.ext]"
-			// log_asset("Sending asset `[asset_name]` to client `[client]` as `[new_asset_name]`") // commented out because this caused 800 MB log files
+			log_asset("Sending asset `[asset_name]` to client `[client]` as `[new_asset_name]`")
 			client << browse_rsc(ACI.resource, new_asset_name)
 
 			client.sent_assets[new_asset_name] = ACI.hash
 
-		addtimer(CALLBACK(client, TYPE_PROC_REF(/client, asset_cache_update_json)), 1 SECONDS, TIMER_UNIQUE|TIMER_OVERRIDE)
+		addtimer(CALLBACK(client, /client/proc/asset_cache_update_json), 1 SECONDS, TIMER_UNIQUE|TIMER_OVERRIDE)
 		return TRUE
 	return FALSE
 
 
 /// Precache files without clogging up the browse() queue, used for passively sending files on connection start.
-/datum/asset_transport/proc/send_assets_slow(client/client, list/files, filerate = 3)
+/datum/asset_transport/proc/send_assets_slow(client/client, list/files, filerate = 6)
 	var/startingfilerate = filerate
 	for (var/file in files)
 		if (!client)

@@ -13,7 +13,7 @@ Configuration:
 
 Usage:
 - Define mouse event procs on your (probably HUD) object and simply call the show and hide procs respectively:
-	/obj/screen/hud
+	/atom/movable/screen/hud
 		MouseEntered(location, control, params)
 			usr.client.tooltip.show(params, title = src.name, content = src.desc)
 
@@ -34,7 +34,7 @@ Notes:
 /datum/tooltip
 	var/client/owner
 	var/control = "mainwindow.tooltip"
-	var/showing = FALSE
+	var/showing = 0
 	var/queueHide = 0
 	var/init = 0
 
@@ -42,20 +42,22 @@ Notes:
 /datum/tooltip/New(client/C)
 	if (C)
 		owner = C
+		var/datum/asset/stuff = get_asset_datum(/datum/asset/simple/jquery)
+		stuff.send(owner)
 		owner << browse(file2text('code/modules/tooltip/tooltip.html'), "window=[control]")
 
 	..()
 
 
-/datum/tooltip/proc/show(atom/movable/thing, params = null, title = null, content = null, theme = "midnight", special = "none")
+/datum/tooltip/proc/show(atom/movable/thing, params = null, title = null, content = null, theme = "default", special = "none")
 	if (!thing || !params || (!title && !content) || !owner || !isnum(world.icon_size))
-		return FALSE
+		return 0
 	if (!init)
 		//Initialize some vars
 		init = 1
 		owner << output(list2params(list(world.icon_size, control)), "[control]:tooltip.init")
 
-	showing = TRUE
+	showing = 1
 
 	if (title && content)
 		title = "<h1>[title]</h1>"
@@ -77,20 +79,20 @@ Notes:
 	owner << output(list2params(list(params, view_size[1] , view_size[2], "[title][content]", theme, special)), "[control]:tooltip.update")
 
 	//If a hide() was hit while we were showing, run hide() again to avoid stuck tooltips
-	showing = FALSE
+	showing = 0
 	if (queueHide)
 		hide()
 
-	return TRUE
+	return 1
 
 
 /datum/tooltip/proc/hide()
+	queueHide = showing ? TRUE : FALSE
+
 	if (queueHide)
 		addtimer(CALLBACK(src, PROC_REF(do_hide)), 1)
 	else
 		do_hide()
-
-	queueHide = showing ? TRUE : FALSE
 
 	return TRUE
 
@@ -106,7 +108,12 @@ Notes:
 /proc/openToolTip(mob/user = null, atom/movable/tip_src = null, params = null,title = "",content = "",theme = "")
 	if(istype(user))
 		if(user.client && user.client.tooltips)
-			user.client.tooltips.show(tip_src, params,title,content)
+			var/ui_style = user.client?.prefs?.read_preference(/datum/preference/choiced/ui_style)
+			if(!theme && ui_style)
+				theme = lowertext(ui_style)
+			if(!theme)
+				theme = "default"
+			user.client.tooltips.show(tip_src, params,title,content,theme)
 
 
 //Arbitrarily close a user's tooltip

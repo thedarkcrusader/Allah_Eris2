@@ -1,11 +1,18 @@
-* text=auto
+
+*.dmm eol=crlf
+*.md eol=crlf
+*.txt eol=crlf
+*.html eol=crlf
+#this breaks if its in crlf
+code/__DEFINES/rust_g.dm eol=lf
+
 
 ## Enforce text mode and LF line breaks
 *.bat text eol=lf
 *.cjs text eol=lf
 *.css text eol=lf
-#*.dm text eol=lf
-# *.dme text eol=lf
+*.dm text eol=lf
+*.dme text eol=lf
 *.dmf text eol=lf
 *.htm text eol=lf
 *.html text eol=lf
@@ -35,9 +42,10 @@
 *.png binary
 *.so binary
 
-## Merger hooks, run tools/hooks/install.bat or install.sh to set up
-*.dmm text eol=lf merge=dmm
-*.dmi binary merge=dmi
 
-## Force tab indents on dm files
-*.dm whitespace=indent-with-non-tab
+# merger hooks, run tools/hooks/install.bat or install.sh to set up
+*.dmm merge=dmm
+*.dmi merge=dmi
+
+# force changelog merging to use union
+html/changelog.html merge=union

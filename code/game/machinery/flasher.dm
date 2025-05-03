@@ -1,157 +1,217 @@
 // It is a gizmo that flashes a small area
 
 /obj/machinery/flasher
-	name = "Mounted flash"
+	name = "mounted flash"
 	desc = "A wall-mounted flashbulb device."
 	icon = 'icons/obj/stationobjs.dmi'
 	icon_state = "mflash1"
+	max_integrity = 250
+	integrity_failure = 100
+	var/obj/item/assembly/flash/handheld/bulb
 	var/id = null
-	var/range = 2 //this is roughly the size of brig cell
-	var/disable = 0
+	/// How far this flash reaches. Affects both proximity distance and the actual stun effect.
+	var/flash_range = 2 //this is roughly the size of a brig cell.
 	var/last_flash = 0 //Don't want it getting spammed like regular flashes
-	var/strength = 10 //How weakened targets are when flashed.
+	/// How strong Paralyze()'d targets are when flashed.
+	var/strength = 10 SECONDS
 	var/base_state = "mflash"
-	anchored = TRUE
-	use_power = IDLE_POWER_USE
-	idle_power_usage = 2
-	flags = PROXMOVE
-	var/_wifi_id
-	var/datum/wifi/receiver/button/flasher/wifi_receiver
 
 /obj/machinery/flasher/portable //Portable version of the flasher. Only flashes when anchored
 	name = "portable flasher"
 	desc = "A portable flashing device. Wrench to activate and deactivate. Cannot detect slow movements."
-	description_info = "Will flash people that run"
-	icon_state = "pflash1"
-	strength = 8
+	icon_state = "pflash1-p"
+	strength = 80
 	anchored = FALSE
 	base_state = "pflash"
 	density = TRUE
-	range = 3 //the eris' hallways are wider than other maps
 
-/obj/machinery/flasher/Initialize()
-	. = ..()
-	if(_wifi_id)
-		wifi_receiver = new(_wifi_id, src)
+/obj/machinery/flasher/Initialize(mapload, ndir = 0, built = 0)
+	. = ..() // ..() is EXTREMELY IMPORTANT, never forget to add it
+	if(built)
+		setDir(ndir)
+		pixel_x = (dir & 3)? 0 : (dir == 4 ? -28 : 28)
+		pixel_y = (dir & 3)? (dir ==1 ? -28 : 28) : 0
+	else
+		bulb = new(src)
+
+/obj/machinery/flasher/connect_to_shuttle(mapload, obj/docking_port/mobile/port, obj/docking_port/stationary/dock)
+	id = "[port.shuttle_id]_[id]"
 
 /obj/machinery/flasher/Destroy()
-	qdel(wifi_receiver)
-	wifi_receiver = null
+	QDEL_NULL(bulb)
 	return ..()
 
-/obj/machinery/flasher/power_change()
-	..()
-	if ( !(stat & NOPOWER) )
-		icon_state = "[base_state]1"
-//		src.sd_SetLuminosity(2)
-	else
+/obj/machinery/flasher/powered()
+	if(!anchored || !bulb)
+		return FALSE
+	return ..()
+
+/obj/machinery/flasher/update_icon_state()
+	. = ..()
+	if(!powered())
 		icon_state = "[base_state]1-p"
-//		src.sd_SetLuminosity(0)
+		return
+	if(bulb.burnt_out)
+		icon_state = "[base_state]1-p"
+	else
+		icon_state = "[base_state]1"
 
 //Don't want to render prison breaks impossible
-/obj/machinery/flasher/attackby(obj/item/W as obj, mob/user as mob)
-	if (istype(W, /obj/item/tool/wirecutters))
-		add_fingerprint(user)
-		src.disable = !src.disable
-		if (src.disable)
-			user.visible_message(SPAN_WARNING("[user] has disconnected the [src]'s flashbulb!"), SPAN_WARNING("You disconnect the [src]'s flashbulb!"))
-		if (!src.disable)
-			user.visible_message(SPAN_WARNING("[user] has connected the [src]'s flashbulb!"), SPAN_WARNING("You connect the [src]'s flashbulb!"))
+/obj/machinery/flasher/attackby(obj/item/W, mob/user, params)
+	add_fingerprint(user)
+	if (W.tool_behaviour == TOOL_WIRECUTTER)
+		if (bulb)
+			user.visible_message("[user] begins to disconnect [src]'s flashbulb.", span_notice("You begin to disconnect [src]'s flashbulb..."))
+			if(W.use_tool(src, user, 30, volume=50) && bulb)
+				user.visible_message("[user] has disconnected [src]'s flashbulb!", span_notice("You disconnect [src]'s flashbulb."))
+				bulb.forceMove(loc)
+				bulb = null
+				power_change()
+
+	else if (istype(W, /obj/item/assembly/flash/handheld))
+		if (!bulb)
+			if(!user.transferItemToLoc(W, src))
+				return
+			user.visible_message("[user] installs [W] into [src].", span_notice("You install [W] into [src]."))
+			bulb = W
+			power_change()
+		else
+			to_chat(user, span_warning("A flashbulb is already installed in [src]!"))
+
+	else if (W.tool_behaviour == TOOL_WRENCH)
+		if(!bulb)
+			to_chat(user, span_notice("You start unsecuring the flasher frame..."))
+			if(W.use_tool(src, user, 40, volume=50))
+				to_chat(user, span_notice("You unsecure the flasher frame."))
+				deconstruct(TRUE)
+		else
+			to_chat(user, span_warning("Remove a flashbulb from [src] first!"))
+	else
+		return ..()
 
 //Let the AI trigger them directly.
 /obj/machinery/flasher/attack_ai()
-	if (src.anchored)
-		return src.flash()
-	else
-		return
+	if (anchored)
+		return flash()
+
+/obj/machinery/flasher/run_atom_armor(damage_amount, damage_type, damage_flag = 0, attack_dir)
+	if(damage_flag == MELEE && damage_amount < 10) //any melee attack below 10 dmg does nothing
+		return 0
+	. = ..()
 
 /obj/machinery/flasher/proc/flash()
-	if (!(powered()))
+	if (!powered() || !bulb)
 		return
 
-	if ((src.disable) || (src.last_flash && world.time < src.last_flash + 150))
+	if (bulb.burnt_out || (last_flash && world.time < src.last_flash + 150))
+		return
+
+	if(!bulb.flash_recharge(30)) //Bulb can burn out if it's used too often too fast
+		power_change()
 		return
 
 	playsound(src.loc, 'sound/weapons/flash.ogg', 100, 1)
 	flick("[base_state]_flash", src)
-	src.last_flash = world.time
-	use_power(1500)
+	set_light_on(TRUE)
+	addtimer(CALLBACK(src, PROC_REF(flash_end)), FLASH_LIGHT_DURATION, TIMER_OVERRIDE|TIMER_UNIQUE)
 
-	for (var/mob/living/O in viewers(src, null))
-		if (get_dist(src, O) > src.range)
+	last_flash = world.time
+	use_power(1000)
+
+	var/flashed = FALSE
+	for (var/mob/living/L in viewers(src, null))
+		if (get_dist(src, L) > flash_range)
 			continue
 
-		var/flash_time = strength
-		if (ishuman(O))
-			var/mob/living/carbon/human/H = O
-			if(!H.eyecheck() <= 0)
-				continue
-			O.flash(strength, FALSE , TRUE , TRUE , 10)
-		else
-			if(isrobot(O))
-				var/mob/living/silicon/robot/robo = O
-				robo.flash(strength, FALSE, FALSE , FALSE)
-				continue
-			else
-				if (istype(O,/mob/living/silicon/ai))
-					return
-				O.flash(strength , FALSE, FALSE ,FALSE)
-			O.Weaken(flash_time)
+		if(L.flash_act(affect_silicon = 1))
+			if(iscarbon(L))
+				bulb.flash_carbon(L, src, strength / 10, TRUE)
+			else if(iscyborg(L) && bulb.borgstun)
+				bulb.flash_borg(L, src)
+			flashed = TRUE
 
+	if(flashed)
+		bulb.times_used++
+
+	return 1
+
+/obj/machinery/flasher/proc/flash_end()
+	set_light_on(FALSE)
 
 /obj/machinery/flasher/emp_act(severity)
-	if(stat & (BROKEN|NOPOWER))
-		..(severity)
-		return
-	if(prob(75/severity))
-		flash()
-	..(severity)
+	. = ..()
+	if(!(stat & (BROKEN|NOPOWER)) && !(. & EMP_PROTECT_SELF))
+		if(bulb && prob(8 * severity))
+			flash()
+			bulb.burn_out()
+			power_change()
 
-/obj/machinery/flasher/portable/HasProximity(atom/movable/AM as mob|obj)
-	if ((src.disable) || (src.last_flash && world.time < src.last_flash + 150))
+/obj/machinery/flasher/atom_break(damage_flag)
+	. = ..()
+	if(. && bulb)
+		bulb.burn_out()
+		power_change()
+
+/obj/machinery/flasher/deconstruct(disassembled = TRUE)
+	if(!(flags_1 & NODECONSTRUCT_1))
+		if(bulb)
+			bulb.forceMove(loc)
+			bulb = null
+		if(disassembled)
+			var/obj/item/wallframe/flasher/F = new(get_turf(src))
+			transfer_fingerprints_to(F)
+			F.id = id
+			playsound(loc, 'sound/items/deconstruct.ogg', 50, 1)
+		else
+			new /obj/item/stack/sheet/metal (loc, 2)
+	qdel(src)
+
+/obj/machinery/flasher/portable/Initialize(mapload)
+	. = ..()
+	proximity_monitor = new(src, 0)
+
+/obj/machinery/flasher/portable/HasProximity(atom/movable/AM)
+	if (last_flash && world.time < last_flash + 150)
 		return
 
-	if(iscarbon(AM))
+	if(istype(AM, /mob/living/carbon))
 		var/mob/living/carbon/M = AM
-		if ((MOVING_DELIBERATELY(M)) && (src.anchored))
-			return
-		else if (src.anchored)
-			src.flash()
+		if (M.m_intent != MOVE_INTENT_WALK && anchored)
+			flash()
 
-/obj/machinery/flasher/portable/attackby(obj/item/W as obj, mob/user as mob)
-	if (istype(W, /obj/item/tool/wrench))
-		add_fingerprint(user)
-		src.anchored = !src.anchored
+/obj/machinery/flasher/portable/attackby(obj/item/W, mob/user, params)
+	if (W.tool_behaviour == TOOL_WRENCH)
+		W.play_tool_sound(src, 100)
 
-		if (!src.anchored)
-			user.show_message(text(SPAN_WARNING("[src] can now be moved.")))
-			src.overlays.Cut()
+		if (!anchored && !isinspace())
+			to_chat(user, span_notice("[src] is now secured."))
+			add_overlay("[base_state]-s")
+			setAnchored(TRUE)
+			power_change()
+			proximity_monitor.SetRange(flash_range)
+		else
+			to_chat(user, span_notice("[src] can now be moved."))
+			cut_overlays()
+			setAnchored(FALSE)
+			power_change()
+			proximity_monitor.SetRange(0)
 
-		else if (src.anchored)
-			user.show_message(text(SPAN_WARNING("[src] is now secured.")))
-			src.overlays += "[base_state]-s"
+	else
+		return ..()
 
-/obj/machinery/button/flasher
-	name = "flasher button"
-	desc = "A remote control switch for a mounted flasher."
+/obj/item/wallframe/flasher
+	name = "mounted flash frame"
+	desc = "Used for building wall-mounted flashers."
+	icon = 'icons/obj/stationobjs.dmi'
+	icon_state = "mflash_frame"
+	result_path = /obj/machinery/flasher
+	var/id = null
 
-/obj/machinery/button/flasher/attack_hand(mob/user as mob)
+/obj/item/wallframe/flasher/examine(mob/user)
+	. = ..()
+	. += span_notice("Its channel ID is '[id]'.")
 
-	if(..())
-		return
-
-	use_power(5)
-
-	active = 1
-	icon_state = "launcher1"
-
-	for(var/obj/machinery/flasher/M in GLOB.machines)
-		if(M.id == src.id)
-			M.flash()
-
-	sleep(50)
-
-	icon_state = "launcher0"
-	active = 0
-
-	return
+/obj/item/wallframe/flasher/after_attach(obj/O)
+	..()
+	var/obj/machinery/flasher/F = O
+	F.id = id

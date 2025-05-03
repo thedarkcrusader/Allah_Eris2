@@ -1,54 +1,80 @@
 //Regular syndicate space suit
-/obj/item/clothing/head/space/syndicate
+/obj/item/clothing/head/helmet/space/syndicate
 	name = "red space helmet"
 	icon_state = "syndicate"
-	item_state = "syndi_helm"	//not sure why this isn't working, will try to fix before merge, but looks like a deep issue
-	desc = "A clasic crimson helmet sporting clean lines and durable plating."
-	light_overlay = "helmet_light_syndi_soft"
-	armor = list(
-		melee = 8,
-		bullet = 9,
-		energy = 8,
-		bomb = 150,
-		bio = 100,
-		rad = 50
-	)
-	siemens_coefficient = 0.4
-	spawn_blacklisted = TRUE
+	item_state = "syndicate"
+	desc = "Has a tag on it: Totally not property of an enemy corporation, honest!"
+	armor = list(MELEE = 40, BULLET = 50, LASER = 30,ENERGY = 25, BOMB = 30, BIO = 30, RAD = 30, FIRE = 80, ACID = 85)
 
 /obj/item/clothing/suit/space/syndicate
 	name = "red space suit"
 	icon_state = "syndicate"
 	item_state = "space_suit_syndicate"
-	desc = "A clasic crimson spacesuit sporting clean lines and durable plating."
-	w_class = ITEM_SIZE_NORMAL
-	armor = list(
-		melee = 8,
-		bullet = 9,
-		energy = 8,
-		bomb = 150,
-		bio = 100,
-		rad = 50
-	)
-	siemens_coefficient = 0.4
-	can_breach = FALSE
-	supporting_limbs = list()
-	spawn_blacklisted = TRUE
-	accompanying_object = /obj/item/clothing/head/space/syndicate
-	slowdown = LIGHT_SLOWDOWN
+	desc = "Has a tag on it: Totally not property of an enemy corporation, honest!"
+	w_class = WEIGHT_CLASS_NORMAL
+	allowed = list(/obj/item/gun, /obj/item/ammo_box, /obj/item/ammo_casing, /obj/item/melee/baton, /obj/item/melee/transforming/energy/sword/saber, /obj/item/restraints/handcuffs, /obj/item/tank/internals)
+	armor = list(MELEE = 40, BULLET = 50, LASER = 30,ENERGY = 25, BOMB = 30, BIO = 30, RAD = 30, FIRE = 80, ACID = 85)
+	item_flags = NONE
 
-///////////////////////Black Market//////////////////////////////
+//Black syndicate space suit
+/obj/item/clothing/head/helmet/space/syndicate/black
+	name = "black space helmet"
+	icon_state = "syndicate-helm-black"
+	item_state = "syndicate-helm-black"
 
-/obj/item/clothing/head/space/syndicate/uplink
-	name = "tan space helmet"
-	icon_state = "syndicate_tan"
-	item_state = "syndi_helm_tan"
-	desc = "A knockoff tan helmet sporting clean lines and durable plating."
+/obj/item/clothing/suit/space/syndicate/black
+	name = "black space suit"
+	icon_state = "syndicate-black"
+	item_state = "syndicate-black"
 
-/obj/item/clothing/suit/space/syndicate/uplink
-	name = "tan space suit"
-	icon_state = "syndicate_tan"
-	item_state = "space_suit_syndicate_tan"
-	desc = "A knockoff tan spacesuit sporting clean lines and durable plating."
-	accompanying_object = /obj/item/clothing/head/space/syndicate/uplink
 
+//Black medical syndicate space suit
+/obj/item/clothing/head/helmet/space/syndicate/black/med
+	name = "black medical space helmet"
+	icon_state = "syndicate-helm-black-med"
+	item_state = "syndicate-helm-black-med"
+
+/obj/item/clothing/suit/space/syndicate/black/med
+	name = "black medical space suit"
+	icon_state = "syndicate-black-med"
+	item_state = "syndicate-black-med"
+
+
+//Black-red syndicate space suit
+/obj/item/clothing/head/helmet/space/syndicate/black/red
+	name = "black and red space helmet"
+	icon_state = "syndicate-helm-black-red"
+	item_state = "syndicate-helm-black-red"
+
+/obj/item/clothing/suit/space/syndicate/black/red
+	name = "black and red space suit"
+	icon_state = "syndicate-black-red"
+	item_state = "syndicate-black-red"
+
+//Black-red syndicate contract varient
+/obj/item/clothing/head/helmet/space/syndicate/contract
+	name = "contractor space helmet"
+	desc = "A specialised black and red helmet that's quicker, and more compact than its standard Syndicate counterpart. Can be ultra-compressed into even the tightest of spaces."
+	slowdown = 0.55
+	w_class = WEIGHT_CLASS_SMALL
+	icon_state = "syndicate-contract-helm"
+	item_state = "syndicate-contract-helm"
+
+/obj/item/clothing/suit/space/syndicate/contract
+	name = "contractor space suit"
+	desc = "A specialised black and red space suit that's quicker, and more compact than its standard Syndicate counterpart. Can be ultra-compressed into even the tightest of spaces."
+	slowdown = 0.55
+	w_class = WEIGHT_CLASS_SMALL
+	icon_state = "syndicate-contract"
+	item_state = "syndicate-contract"
+
+//Black with yellow/red engineering syndicate space suit
+/obj/item/clothing/head/helmet/space/syndicate/black/engie
+	name = "black engineering space helmet"
+	icon_state = "syndicate-helm-black-engie"
+	item_state = "syndicate-helm-black-engie"
+
+/obj/item/clothing/suit/space/syndicate/black/engie
+	name = "black engineering space suit"
+	icon_state = "syndicate-black-engie"
+	item_state = "syndicate-black-engie"

@@ -75,27 +75,20 @@ const setupApp = () => {
   Byond.subscribe((type, payload) => store.dispatch({ type, payload }));
 
   // Unhide the panel
-  Byond.winset('output', {
-    'is-visible': false,
-  });
-  Byond.winset('browseroutput', {
-    'is-visible': true,
-    'is-disabled': false,
-    pos: '0x0',
-    size: '0x0',
+  Byond.winset('legacy_output_selector', {
+    left: 'output_browser',
   });
 
   // Resize the panel to match the non-browser output
-  Byond.winget('output').then((output) => {
+  Byond.winget('output').then(output => {
     Byond.winset('browseroutput', {
-      size: output.size,
+      'size': output.size,
     });
   });
 
   // Enable hot module reloading
   if (module.hot) {
     setupHotReloading();
-    // prettier-ignore
     module.hot.accept([
       './audio',
       './chat',

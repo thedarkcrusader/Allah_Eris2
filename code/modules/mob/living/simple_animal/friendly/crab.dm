@@ -1,33 +1,38 @@
 //Look Sir, free crabs!
 /mob/living/simple_animal/crab
 	name = "crab"
-	desc = "A hard-shelled crustacean. Seems quite content to lounge around all the time."
+	desc = "Free crabs!"
 	icon_state = "crab"
-	mob_size = MOB_SMALL
+	icon_living = "crab"
+	icon_dead = "crab_dead"
 	speak_emote = list("clicks")
-	emote_see = list("clacks")
+	emote_hear = list("clicks.")
+	emote_see = list("clacks.")
 	speak_chance = 1
 	turns_per_move = 5
-	meat_type = /obj/item/reagent_containers/food/snacks/meat
+	butcher_results = list(/obj/item/reagent_containers/food/snacks/meat/slab = 1)
 	response_help  = "pets"
 	response_disarm = "gently pushes aside"
 	response_harm   = "stomps"
+	attack_vis_effect = ATTACK_EFFECT_BITE
 	stop_automated_movement = 1
 	friendly = "pinches"
-	mob_size = 5
+	ventcrawler = VENTCRAWLER_ALWAYS
 	var/obj/item/inventory_head
 	var/obj/item/inventory_mask
-	possession_candidate = 1
+	gold_core_spawnable = FRIENDLY_SPAWN
 
-/mob/living/simple_animal/crab/Life()
+/mob/living/simple_animal/crab/Life(seconds_per_tick = SSMOBS_DT, times_fired)
 	..()
 	//CRAB movement
 	if(!ckey && !stat)
-		if(isturf(src.loc) && !resting && !buckled)		//This is so it only moves if it's not inside a closet, gentics machine, etc.
+		if(isturf(loc) && !resting && !buckled)		//This is so it only moves if it's not inside a closet, gentics machine, etc.
 			turns_since_move++
 			if(turns_since_move >= turns_per_move)
-				step_glide(src,pick(4,8), DELAY2GLIDESIZE(0.5 SECONDS))
-				turns_since_move = 0
+				var/east_vs_west = pick(4,8)
+				if(Process_Spacemove(east_vs_west))
+					Move(get_step(src,east_vs_west), east_vs_west)
+					turns_since_move = 0
 	regenerate_icons()
 
 //COFFEE! SQUEEEEEEEEE!
@@ -35,6 +40,40 @@
 	name = "Coffee"
 	real_name = "Coffee"
 	desc = "It's Coffee, the other pet!"
+	gender = FEMALE
 	response_help  = "pets"
 	response_disarm = "gently pushes aside"
 	response_harm   = "stomps"
+	gold_core_spawnable = NO_SPAWN
+
+/mob/living/simple_animal/crab/evil
+	name = "Evil Crab"
+	real_name = "Evil Crab"
+	desc = "Unnerving, isn't it? It has to be planning something nefarious..."
+	icon_state = "evilcrab"
+	icon_living = "evilcrab"
+	icon_dead = "evilcrab_dead"
+	response_help = "pokes"
+	response_disarm = "shoves"
+	response_harm = "stomps"
+	gold_core_spawnable = HOSTILE_SPAWN
+
+/mob/living/simple_animal/crab/kreb
+	name = "Kreb"
+	desc = "This is a real crab. The other crabs are simply gubbucks in disguise!"
+	real_name = "Kreb"
+	icon_state = "kreb"
+	icon_living = "kreb"
+	icon_dead = "kreb_dead"
+	response_help  = "pets"
+	response_disarm = "gently pushes aside"
+	response_harm   = "stomps"
+	gold_core_spawnable = NO_SPAWN
+
+/mob/living/simple_animal/crab/evil/kreb
+	name = "Evil Kreb"
+	real_name = "Evil Kreb"
+	icon_state = "evilkreb"
+	icon_living = "evilkreb"
+	icon_dead = "evilkreb_dead"
+	gold_core_spawnable = NO_SPAWN

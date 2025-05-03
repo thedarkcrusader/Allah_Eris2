@@ -1,283 +1,258 @@
 /obj/effect/decal/cleanable/generic
 	name = "clutter"
 	desc = "Someone should clean that up."
-	gender = PLURAL
-	density = FALSE
-	anchored = TRUE
 	icon = 'icons/obj/objects.dmi'
 	icon_state = "shards"
 
 /obj/effect/decal/cleanable/ash
 	name = "ashes"
 	desc = "Ashes to ashes, dust to dust, and into space."
-	gender = PLURAL
 	icon = 'icons/obj/objects.dmi'
 	icon_state = "ash"
-	anchored = TRUE
+	mergeable_decal = FALSE
 
-/obj/effect/decal/cleanable/ash/attack_hand(mob/user as mob)
-	to_chat(user, SPAN_NOTICE("[src] sifts through your fingers."))
+/obj/effect/decal/cleanable/ash/Initialize(mapload)
+	. = ..()
+	reagents.add_reagent(/datum/reagent/ash, 30)
+	pixel_x = rand(-5, 5)
+	pixel_y = rand(-5, 5)
+
+/obj/effect/decal/cleanable/ash/crematorium
+//crematoriums need their own ash cause default ash deletes itself if created in an obj
+	turf_loc_check = FALSE
+
+/obj/effect/decal/cleanable/ash/large
+	name = "large pile of ashes"
+	icon_state = "big_ash"
+
+/obj/effect/decal/cleanable/ash/large/Initialize(mapload)
+	. = ..()
+	reagents.add_reagent(/datum/reagent/ash, 30) //double the amount of ash.
+
+/obj/effect/decal/cleanable/glass
+	name = "tiny shards"
+	desc = "Back to sand."
+	icon = 'icons/obj/shards.dmi'
+	icon_state = "tiny"
+
+/obj/effect/decal/cleanable/glass/Initialize(mapload)
+	. = ..()
+	setDir(pick(GLOB.cardinals))
+
+/obj/effect/decal/cleanable/glass/ex_act()
 	qdel(src)
 
+/obj/effect/decal/cleanable/glass/plasma
+	icon_state = "plasmatiny"
 
 /obj/effect/decal/cleanable/dirt
 	name = "dirt"
 	desc = "Someone should clean that up."
-	gender = PLURAL
-	density = FALSE
-	anchored = TRUE
-	icon = 'icons/effects/effects.dmi'
-	icon_state = "dirt"
-	mouse_opacity = 0
+	icon = 'icons/effects/dirt.dmi'
+	icon_state = "dirt-flat-0"
+	base_icon_state = "dirt"
+	mouse_opacity = MOUSE_OPACITY_TRANSPARENT
+	smoothing_flags = NONE
+	smoothing_groups = SMOOTH_GROUP_CLEANABLE_DIRT
+	canSmoothWith = SMOOTH_GROUP_CLEANABLE_DIRT + SMOOTH_GROUP_WALLS
 
-/obj/effect/decal/cleanable/reagents
-	desc = "Someone should clean that up."
-	gender = PLURAL
-	density = FALSE
-	anchored = TRUE
-	icon = 'icons/obj/reagentfillings.dmi'
-	mouse_opacity = 0
-	random_rotation = FALSE
-	bad_type = /obj/effect/decal/cleanable/reagents
-	spawn_tags = null
-
-/obj/effect/decal/cleanable/reagents/proc/add_reagents(var/datum/reagents/reagents_to_add)
-	if(!reagents)
-		create_reagents(reagents_to_add.total_volume)
-
-	reagents_to_add.trans_to_holder(reagents, reagents_to_add.total_volume)
-
-/obj/effect/decal/cleanable/reagents/New(var/datum/reagents/reagents_to_add = null)
+/obj/effect/decal/cleanable/dirt/Initialize(mapload)
 	. = ..()
-	if(reagents_to_add && reagents_to_add.total_volume)
-		reagents = reagents_to_add
-		color = reagents.get_color()
-
-/obj/effect/decal/cleanable/reagents/splashed
-	name = "splashed liquid"
-	icon_state = "splashed"
-
-/obj/effect/decal/cleanable/reagents/splashed/New(var/datum/reagents/reagents_to_add = null)
-	. = ..()
-	if(reagents)
-		alpha = min(reagents.total_volume * 30, 255)
-		START_PROCESSING(SSobj, src)
-
-/obj/effect/decal/cleanable/reagents/splashed/add_reagents(var/datum/reagents/reagents_to_add)
-	alpha = min(alpha + reagents_to_add.total_volume * 30, 255)
-	color = BlendRGB(color, reagents_to_add.get_color(), 0.6)
-	..()
-
-/obj/effect/decal/cleanable/reagents/splashed/Process()
-	if(!reagents.total_volume)
-		STOP_PROCESSING(SSobj, src)
+	icon_state = pick("dirt-flat-0","dirt-flat-1","dirt-flat-2","dirt-flat-3")
+	var/obj/structure/fluff/broken_flooring/broken_flooring = locate(/obj/structure/fluff/broken_flooring) in loc
+	if(!isnull(broken_flooring))
 		return
-	reagents.remove_any(0.05)
+	var/turf/T = get_turf(src)
+	if(T.tiled_dirt)
+		smoothing_flags = SMOOTH_BITMASK
+		QUEUE_SMOOTH(src)
+	if(smoothing_flags & (SMOOTH_CORNERS|SMOOTH_BITMASK))
+		QUEUE_SMOOTH_NEIGHBORS(src)
 
-/obj/effect/decal/cleanable/reagents/piled
-	name = "powder pile"
-	icon_state = "powderpile"
+/obj/effect/decal/cleanable/dirt/Destroy()
+	if(smoothing_flags & (SMOOTH_CORNERS|SMOOTH_BITMASK))
+		QUEUE_SMOOTH_NEIGHBORS(src)
+	return ..()
 
-/obj/effect/decal/cleanable/reagents/piled/add_reagents(var/datum/reagents/reagents_to_add)
-	color = BlendRGB(color, reagents_to_add.get_color(), 0.8)
-	..()
+/obj/effect/decal/cleanable/dirt/dust
+	name = "dust"
+	desc = "A thin layer of dust coating the floor."
 
-/obj/effect/decal/cleanable/flour
-	name = "flour"
-	desc = "It's still good. Four second rule!"
-	gender = PLURAL
-	density = FALSE
-	anchored = TRUE
-	icon = 'icons/effects/effects.dmi'
-	icon_state = "flour"
+/obj/effect/decal/cleanable/dirt/dust/Initialize(mapload)
+	. = ..()
+	icon_state = base_icon_state
 
 /obj/effect/decal/cleanable/greenglow
 	name = "glowing goo"
 	desc = "Jeez. I hope that's not for lunch."
-	gender = PLURAL
-	density = FALSE
-	anchored = TRUE
-	light_range = 2
-	icon = 'icons/effects/effects.dmi'
 	icon_state = "greenglow"
-	spawn_frequency = 0
+	light_power = 1
+	light_range = 2
+	light_color = LIGHT_COLOR_GREEN
+	rad_insulation = RAD_NO_INSULATION
 
-/obj/effect/decal/cleanable/greenglow/Initialize(mapload, ...)
-	. = ..()
-	START_PROCESSING(SSobj, src)
-	set_light(1.5 ,1, "#00FF7F")
-	addtimer(CALLBACK(GLOBAL_PROC, GLOBAL_PROC_REF(qdel), src), 120 SECONDS)
+/obj/effect/decal/cleanable/greenglow/ex_act()
+	return
 
-/obj/effect/decal/cleanable/greenglow/Process()
+/obj/effect/decal/cleanable/greenglow/Initialize(mapload)
 	. = ..()
-	for(var/mob/living/carbon/l in range(4))
-		if(prob(2))
-			to_chat(l, SPAN_WARNING("Your skin itches."))
-		l.apply_effect(2, IRRADIATE)
+	AddComponent(/datum/component/radioactive, 15, src, 0, FALSE)
+	addtimer(CALLBACK(src, PROC_REF(Decay)), 24 SECONDS)
 
-/obj/effect/decal/cleanable/greenglow/Destroy()
-	STOP_PROCESSING(SSobj, src)
+/obj/effect/decal/cleanable/greenglow/proc/Decay()
+	var/datum/component/radioactive/R = GetComponent(/datum/component/radioactive)
+	name = "dried goo"
+	light_power = 0
+	light_range = 0
+	update_light()
+	if(R)
+		qdel(R)
+
+/obj/effect/decal/cleanable/greenglow/filled/Initialize(mapload)
 	. = ..()
+	reagents.add_reagent(pick(/datum/reagent/uranium, /datum/reagent/uranium/radium), 5)
 
 /obj/effect/decal/cleanable/cobweb
 	name = "cobweb"
 	desc = "Somebody should remove that."
-	density = FALSE
-	anchored = TRUE
+	gender = NEUTER
 	layer = WALL_OBJ_LAYER
-	icon = 'icons/effects/effects.dmi'
 	icon_state = "cobweb1"
+	resistance_flags = FLAMMABLE
+	clean_type = CLEAN_TYPE_HARD_DECAL
 
-/obj/effect/decal/cleanable/molten_item
+/obj/effect/decal/cleanable/cobweb/cobweb2
+	icon_state = "cobweb2"
+
+/obj/effect/decal/cleanable/molten_object
 	name = "gooey grey mass"
 	desc = "It looks like a melted... something."
-	density = FALSE
-	anchored = TRUE
-	layer = OBJ_LAYER
-	icon = 'icons/obj/chemical.dmi'
-	icon_state = "molten"
-
-/obj/effect/decal/cleanable/cobweb2
-	name = "cobweb"
-	desc = "Somebody should remove that."
-	density = FALSE
-	anchored = TRUE
-	layer = ABOVE_OBJ_LAYER
+	gender = NEUTER
 	icon = 'icons/effects/effects.dmi'
-	icon_state = "cobweb2"
+	icon_state = "molten"
+	mergeable_decal = FALSE
+	clean_type = CLEAN_TYPE_HARD_DECAL
+
+/obj/effect/decal/cleanable/molten_object/large
+	name = "big gooey grey mass"
+	icon_state = "big_molten"
 
 //Vomit (sorry)
 /obj/effect/decal/cleanable/vomit
 	name = "vomit"
 	desc = "Gosh, how unpleasant."
-	gender = PLURAL
-	density = FALSE
-	anchored = TRUE
 	icon = 'icons/effects/blood.dmi'
 	icon_state = "vomit_1"
 	random_icon_states = list("vomit_1", "vomit_2", "vomit_3", "vomit_4")
-	sanity_damage = 1
-	var/list/viruses = list()
 
-	Destroy()
-		. = ..()
+/obj/effect/decal/cleanable/vomit/Initialize(mapload, list/datum/disease/diseases)
+	. = ..()
+	GLOB.vomit_spots += src
 
-/obj/effect/decal/cleanable/tomato_smudge
-	name = "tomato smudge"
-	desc = "It's red."
-	density = FALSE
-	anchored = TRUE
-	icon = 'icons/effects/tomatodecal.dmi'
-	random_icon_states = list("tomato_floor1", "tomato_floor2", "tomato_floor3")
+/obj/effect/decal/cleanable/vomit/Destroy(force)
+	GLOB.vomit_spots -= src
+	. = ..()
 
-/obj/effect/decal/cleanable/egg_smudge
-	name = "smashed egg"
-	desc = "Seems like this one won't hatch."
-	density = FALSE
-	anchored = TRUE
-	icon = 'icons/effects/tomatodecal.dmi'
-	random_icon_states = list("smashed_egg1", "smashed_egg2", "smashed_egg3")
+/obj/effect/decal/cleanable/vomit/attack_hand(mob/user)
+	. = ..()
+	if(.)
+		return
+	if(ishuman(user))
+		var/mob/living/carbon/human/H = user
+		if(isflyperson(H))
+			playsound(get_turf(src), 'sound/items/drink.ogg', 50, 1) //slurp
+			H.visible_message(span_alert("[H] extends a small proboscis into the vomit pool, sucking it with a slurping sound."))
+			if(reagents)
+				for(var/datum/reagent/R in reagents.reagent_list)
+					if (istype(R, /datum/reagent/consumable))
+						var/datum/reagent/consumable/nutri_check = R
+						if(nutri_check.nutriment_factor >0)
+							H.adjust_nutrition(nutri_check.nutriment_factor * nutri_check.volume)
+							reagents.remove_reagent(nutri_check.type,nutri_check.volume)
+			reagents.trans_to(H, reagents.total_volume, transfered_by = user)
+			qdel(src)
 
-/obj/effect/decal/cleanable/pie_smudge //honk
-	name = "smashed pie"
-	desc = "It's pie cream from a cream pie."
-	density = FALSE
-	anchored = TRUE
-	icon = 'icons/effects/tomatodecal.dmi'
-	random_icon_states = list("smashed_pie")
+/obj/effect/decal/cleanable/vomit/old
+	name = "crusty dried vomit"
+	desc = "You try not to look at the chunks, and fail."
 
-/obj/effect/decal/cleanable/fruit_smudge
-	name = "smudge"
-	desc = "Some kind of fruit smear."
-	density = FALSE
-	anchored = TRUE
+/obj/effect/decal/cleanable/vomit/old/Initialize(mapload, list/datum/disease/diseases)
+	. = ..()
+	icon_state += "-old"
+
+/obj/effect/decal/cleanable/chem_pile
+	name = "chemical pile"
+	desc = "A pile of chemicals. You can't quite tell what's inside it."
+	gender = NEUTER
+	icon = 'icons/obj/objects.dmi'
+	icon_state = "ash"
+
+/obj/effect/decal/cleanable/shreds
+	name = "shreds"
+	desc = "The shredded remains of what appears to be clothing."
+	icon_state = "shreds"
+	gender = PLURAL
+	mergeable_decal = FALSE
+
+/obj/effect/decal/cleanable/shreds/ex_act(severity, target)
+	if(severity == 1) //so shreds created during an explosion aren't deleted by the explosion.
+		qdel(src)
+
+/obj/effect/decal/cleanable/shreds/Initialize(mapload)
+	pixel_x = rand(-10, 10)
+	pixel_y = rand(-10, 10)
+	. = ..()
+
+/obj/effect/decal/cleanable/glitter
+	name = "generic glitter pile"
+	desc = "The herpes of arts and crafts."
+	icon = 'icons/effects/atmospherics.dmi'
+	icon_state = "plasma_old"
+	gender = NEUTER
+	mouse_opacity = MOUSE_OPACITY_TRANSPARENT
+
+/obj/effect/decal/cleanable/glitter/pink
+	name = "pink glitter"
+	icon_state = "plasma"
+
+/obj/effect/decal/cleanable/glitter/white
+	name = "white glitter"
+	icon_state = "nitrous_oxide"
+
+/obj/effect/decal/cleanable/glitter/blue
+	name = "blue glitter"
+	icon_state = "freon"
+
+/obj/effect/decal/cleanable/plasma
+	name = "stabilized plasma"
+	desc = "A puddle of stabilized plasma."
+	icon_state = "molten"
+	icon = 'icons/effects/effects.dmi'
+	color = "#C8A5DC"
+
+/obj/effect/decal/cleanable/insectguts
+	name = "insect guts"
+	desc = "One bug squashed. Four more will rise in its place."
 	icon = 'icons/effects/blood.dmi'
-	icon_state = "mfloor1"
-	random_icon_states = list("mfloor1", "mfloor2", "mfloor3", "mfloor4", "mfloor5", "mfloor6", "mfloor7")
+	icon_state = "xfloor1"
+	random_icon_states = list("xfloor1", "xfloor2", "xfloor3", "xfloor4", "xfloor5", "xfloor6", "xfloor7")
 
+/obj/effect/decal/cleanable/insectguts/Initialize(mapload, list/datum/disease/diseases)
+	. = ..()
+	GLOB.vomit_spots += src
 
+/obj/effect/decal/cleanable/insectguts/Destroy(force)
+	GLOB.vomit_spots -= src
+	. = ..()
 
-/obj/effect/decal/cleanable/rubble
-	name = "rubble"
-	desc = "Dirt, soil, loose stones, and residue from some kind of digging. Clean it up!"
-	density = FALSE
-	anchored = TRUE
-	icon = 'icons/obj/burrows.dmi'
-	icon_state = "asteroid0"
-	random_rotation = 2
-	random_icon_states = list("asteroid0", "asteroid1", "asteroid2", "asteroid3", "asteroid4", "asteroid5", "asteroid6","asteroid7","asteroid8")
+/obj/effect/decal/cleanable/dirt_siding
+	name = "dirt siding"
+	icon = 'icons/turf/decals.dmi'
+	icon_state = "dirt_side"
 
-/obj/effect/decal/cleanable/graffiti
-	name = "graffiti"
-	desc = "A graffiti."
-	density = FALSE
-	anchored = TRUE
-	plane = -1
-	icon = 'icons/effects/wall_graffiti.dmi'
-	icon_state = "kot"
-	random_rotation = 0
+/obj/effect/decal/cleanable/dirt_siding/corner
+	name = "dirt corner"
+	icon_state = "dirt_side_corner"
 
-/obj/effect/decal/cleanable/graffiti/graffiti_kot
-	desc = "A graffiti of a very happy cat."
-	icon_state = "kot"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_onestar
-	desc = "A graffiti of one star's eye."
-	icon_state = "onestar"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_carrion
-	desc = "Consume the flesh."
-	icon_state = "carrion"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_doodle
-	desc = "A vagabond beaten by IH, this is mercenary brutality."
-	icon_state = "doodle"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_piss
-	desc = "A graffiti of, well."
-	icon_state = "piss"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_clown
-	desc = "A graffiti of a clown."
-	icon_state = "clown"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_skull
-	desc = "A graffiti of a skull."
-	icon_state = "skull"
-
-
-/obj/effect/decal/cleanable/graffiti/graffiti_heart
-	desc = "A graffiti of a heart."
-	icon_state = "heart"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_excelsior
-	desc = "Ever Upwards!"
-	icon_state = "excelsior"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_ironhammer
-	desc = "The best of the best."
-	icon_state = "ironhammer"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_moebius
-	desc = "Science never stops."
-	icon_state = "moebius"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_neotheo
-	desc = "Mutants not welcomed."
-	icon_state = "neotheo"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_techno
-	desc = "Kickstart the Engine."
-	icon_state = "techno"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_aster
-	desc = "Blood is the oldest currency."
-	icon_state = "aster"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_ancapyes
-	desc = "The great Capital approves."
-	icon_state = "ancapyes"
-
-/obj/effect/decal/cleanable/graffiti/graffiti_ancapno
-	desc = "The free market isn't happy."
-	icon_state = "ancapno"
+/obj/effect/decal/cleanable/dirt_siding/end
+	icon_state = "dirt_side_end"

@@ -1,3 +1,29 @@
+//! Defines for subsystems and overlays
+//!
+//! Lots of important stuff in here, make sure you have your brain switched on
+//! when editing this file
+
+//! ## DB defines
+/**
+  * DB major schema version
+  *
+  * Update this whenever the db schema changes
+  *
+  * make sure you add an update to the schema_version stable in the db changelog
+  */
+#define DB_MAJOR_VERSION 5
+
+/**
+  * DB minor schema version
+  *
+  * Update this whenever the db schema changes
+  *
+  * make sure you add an update to the schema_version stable in the db changelog
+  */
+
+#define DB_MINOR_VERSION 14
+#define DB_BOUND_CREDENTIALS_FLAG_BYPASS_BANS "bypass_bans"
+#define DB_BOUND_CREDENTIALS_FLAG_ALLOW_PROXIES "allow_proxies"
 
 //! ## Timing subsystem
 /**
@@ -39,10 +65,6 @@
 ///Empty ID define
 #define TIMER_ID_NULL -1
 
-//For servers that can't do with any additional lag, set this to none in flightpacks.dm in subsystem/processing.
-#define FLIGHTSUIT_PROCESSING_NONE 0
-#define FLIGHTSUIT_PROCESSING_FULL 1
-
 //! ## Initialization subsystem
 
 ///New should not call Initialize
@@ -68,13 +90,10 @@
 ///Call qdel on the atom after intialization
 #define INITIALIZE_HINT_QDEL 2
 
-///Call qdel with a force of TRUE after initialization
-#define INITIALIZE_HINT_QDEL_FORCE 3
-
 ///type and all subtypes should always immediately call Initialize in New()
 #define INITIALIZE_IMMEDIATE(X) ##X/New(loc, ...){\
 	..();\
-	if(!initialized) {\
+	if(!(flags_1 & INITIALIZED_1)) {\
 		var/previous_initialized_value = SSatoms.initialized;\
 		SSatoms.initialized = INITIALIZATION_INNEW_MAPLOAD;\
 		args[1] = TRUE;\
@@ -83,90 +102,192 @@
 	}\
 }
 
+//! ### SS initialization hints
+/**
+ * Negative values incidate a failure or warning of some kind, positive are good.
+ * 0 and 1 are unused so that TRUE and FALSE are guarenteed to be invalid values.
+ */
+
+/// Subsystem failed to initialize entirely. Print a warning, log, and disable firing.
+#define SS_INIT_FAILURE -2
+
+/// The default return value which must be overriden. Will succeed with a warning.
+#define SS_INIT_NONE -1
+
+/// Subsystem initialized sucessfully.
+#define SS_INIT_SUCCESS 2
+
+/// Successful, but don't print anything. Useful if subsystem was disabled.
+#define SS_INIT_NO_NEED 3
+
+/// Succesfully initialized, BUT do not announce it to players (generally to hide game mechanics it would otherwise spoil)
+#define SS_INIT_NO_MESSAGE 4
+
+//! ### SS initialization load orders
 // Subsystem init_order, from highest priority to lowest priority
 // Subsystems shutdown in the reverse of the order they initialize in
 // The numbers just define the ordering, they are meaningless otherwise.
 
-#define INIT_ORDER_GARBAGE 99
-#define INIT_ORDER_CHUNKS 98
-#define INIT_ORDER_EXPLOSIONS 97
-#define INIT_ORDER_STATPANELS 96
-#define INIT_ORDER_SKYBOX 20
-#define INIT_ORDER_DBCORE 19
-#define INIT_ORDER_BLACKBOX 18
-#define INIT_ORDER_SERVER_MAINT 17
-#define INIT_ORDER_JOBS 16
-#define INIT_ORDER_EVENTS 15
-#define INIT_ORDER_TICKER 14
-#define INIT_ORDER_SPAWN_DATA 13
-#define INIT_ORDER_MAPPING 12
-#define INIT_ORDER_LANGUAGE 11
-#define INIT_ORDER_INVENTORY 10
-#define INIT_ORDER_CHAR_SETUP 9
-#define INIT_ORDER_ATOMS 8
-#define INIT_ORDER_MACHINES 7
-#define INIT_ORDER_TIMER 1
-#define INIT_ORDER_DEFAULT 0
-#define INIT_ORDER_AIR -1
-#define INIT_ORDER_ALARM -2
-#define INIT_ORDER_MINIMAP -3
-#define INIT_ORDER_HOLOMAPS -4
-#define INIT_ORDER_CRAFT -4 // DO NOT INIT THIS AFTER ASSETS
-#define INIT_ORDER_ASSETS -5
-#define INIT_ORDER_ICON_SMOOTHING -6
-#define INIT_ORDER_OVERLAY -7
-#define INIT_ORDER_XKEYSCORE -10
-#define INIT_ORDER_STICKY_BAN -10
-#define INIT_ORDER_TICKETS -10
-#define INIT_ORDER_LIGHTING -20
-#define INIT_ORDER_SHUTTLE -21
-#define INIT_ORDER_JAMMING -22
-#define INIT_OPEN_SPACE -150
-#define INIT_ORDER_LATELOAD -180
-#define INIT_ORDER_CHAT	-185
+#define INIT_ORDER_PROFILER			101
+#define INIT_ORDER_TITLE			100
+#define INIT_ORDER_GARBAGE			99
+#define INIT_ORDER_DBCORE			95
+#define INIT_ORDER_BLACKBOX			94
+#define INIT_ORDER_SERVER_MAINT		93
+#define INIT_ORDER_INPUT			85
+#define INIT_ORDER_SOUNDS			83
+#define INIT_ORDER_INSTRUMENTS		82
+#define INIT_ORDER_GREYSCALE 81
+#define INIT_ORDER_VIS				80
+#define INIT_ORDER_SECURITY_LEVEL	79
+#define INIT_ORDER_MATERIALS		76
+#define INIT_ORDER_STATION			75
+#define INIT_ORDER_RESEARCH			74
+#define INIT_ORDER_QUIRKS 			73
+#define INIT_ORDER_JOBS				65
+#define INIT_ORDER_PATH				61
+#define INIT_ORDER_TICKER			55
+#define INIT_ORDER_MAPPING			50
+#define INIT_ORDER_EARLY_ASSETS 	48
+#define INIT_ORDER_ECONOMY			40
+#define INIT_ORDER_OUTPUTS			35
+#define INIT_ORDER_ATOMS			30
+#define INIT_ORDER_LANGUAGE			25
+#define INIT_ORDER_MACHINES			20
+#define INIT_ORDER_CIRCUIT			15
+#define INIT_ORDER_TIMER			1
+#define INIT_ORDER_DEFAULT			0
+#define INIT_ORDER_AIR_MACHINERY	-0.5
+#define INIT_ORDER_AIR				-1
+#define INIT_ORDER_PERSISTENCE 		-2
+#define INIT_ORDER_PERSISTENT_PAINTINGS -3 // Assets relies on this
+#define INIT_ORDER_VOTE -4 // Needs to be after persistence so that recent maps are not loaded. (yogs: technically not, since we don't have map blocking like tg does)
+#define INIT_ORDER_ASSETS			-5
+#define INIT_ORDER_ICON_SMOOTHING	-6
+#define INIT_ORDER_OVERLAY			-7
+#define INIT_ORDER_XKEYSCORE		-10
+#define INIT_ORDER_STICKY_BAN		-10
+#define INIT_ORDER_ECHELON			-10
+#define INIT_ORDER_LIGHTING			-20
+#define INIT_ORDER_SHUTTLE			-21
+#define INIT_ORDER_BACKROOMS		-30 // relies on basically everything to be initialized first
+#define INIT_ORDER_MINOR_MAPPING	-40
+#define INIT_ORDER_BLUESPACE_LOCKER -45
+#define INIT_ORDER_DISCORD			-60
+#define INIT_ORDER_EXPLOSIONS		-69
+#define INIT_ORDER_STATPANELS 		-97
+#define INIT_ORDER_INIT_PROFILER 	-98 //Near the end, logs the costs of initialize
+#define INIT_ORDER_DEMO				-99 // To avoid a bunch of changes related to initialization being written, do this last
+#define INIT_ORDER_CHAT				-100 //Should be last to ensure chat remains smooth during init.
 
+// Subsystem fire priority, from lowest to highest priority
+// If the subsystem isn't listed here it's either DEFAULT or PROCESS (if it's a processing subsystem child)
+
+#define FIRE_PRIORITY_AMBIENCE		10
+#define FIRE_PRIORITY_IDLE_NPC		10
+#define FIRE_PRIORITY_SERVER_MAINT	10
+#define FIRE_PRIORITY_RESEARCH		10
+#define FIRE_PRIORITY_VIS			10
+#define FIRE_PRIORITY_GARBAGE		15
+#define FIRE_PRIORITY_ECHOLOCATION  15
+#define FIRE_PRIORITY_WET_FLOORS	20
+#define FIRE_PRIORITY_FLUIDS		20
+#define FIRE_PRIORITY_AIR			20
+#define FIRE_PRIORITY_NPC			20
+#define FIRE_PRIORITY_PROCESS		25
+#define FIRE_PRIORITY_THROWING		25
+#define FIRE_PRIORITY_SPACEDRIFT	30
+#define FIRE_PRIORITY_FIELDS		30
+#define FIRE_PRIORITY_SMOOTHING 	35
+#define FIRE_PRIORITY_OBJ			40
+#define FIRE_PRIORITY_MECHA			40
+#define FIRE_PRIORITY_ACID			40
+#define FIRE_PRIORITY_BURNING		40
+#define FIRE_PRIORITY_DEFAULT		50
+#define FIRE_PRIORITY_PARALLAX		65
+#define FIRE_PRIORITY_INSTRUMENTS	80
+#define FIRE_PRIORITY_CALLBACKS		90
+#define FIRE_PRIORITY_MOBS			100
+#define FIRE_PRIORITY_ASSETS 		105
+#define FIRE_PRIORITY_TGUI			110
+#define FIRE_PRIORITY_TICKER		200
+#define FIRE_PRIORITY_ATMOS_ADJACENCY	300
+#define FIRE_PRIORITY_CHAT			400
+#define FIRE_PRIORITY_RUNECHAT		410
+#define FIRE_PRIORITY_OVERLAYS		500
+#define FIRE_PRIORITY_EXPLOSIONS	666
+#define FIRE_PRIORITY_TIMER         700
+#define FIRE_PRIORITY_INPUT			1000 // This must always always be the max highest priority. Player input must never be lost.
 
 // SS runlevels
 
-#define RUNLEVEL_INIT 0
-#define RUNLEVEL_LOBBY 1
-#define RUNLEVEL_SETUP 2
-#define RUNLEVEL_GAME 4
-#define RUNLEVEL_POSTGAME 8
+#define RUNLEVEL_LOBBY (1<<0)
+#define RUNLEVEL_SETUP (1<<1)
+#define RUNLEVEL_GAME (1<<2)
+#define RUNLEVEL_POSTGAME (1<<3)
 
 #define RUNLEVELS_DEFAULT (RUNLEVEL_SETUP | RUNLEVEL_GAME | RUNLEVEL_POSTGAME)
 
-#define START_PROCESSING_IN_LIST(Datum, List) \
-if (Datum.is_processing) {\
-	if(Datum.is_processing != "SSmachines.[#List]")\
-	{\
-		CRASH("Failed to start processing. [log_info_line(Datum)] is already being processed by [Datum.is_processing] but queue attempt occured on SSmachines.[#List]."); \
+//SSticker.current_state values
+/// Game is loading
+#define GAME_STATE_STARTUP 0
+/// Game is loaded and in pregame lobby
+#define GAME_STATE_PREGAME 1
+/// Game is attempting to start the round
+#define GAME_STATE_SETTING_UP 2
+/// Game has round in progress
+#define GAME_STATE_PLAYING 3
+/// Game has round finished
+#define GAME_STATE_FINISHED 4
+
+// Used for SSticker.force_ending
+/// Default, round is not being forced to end.
+#define END_ROUND_AS_NORMAL 0
+/// End the round now as normal
+#define FORCE_END_ROUND 1
+/// For admin forcing roundend, can be used to distinguish the two
+#define ADMIN_FORCE_END_ROUND 2
+
+// SSair run section
+#define SSAIR_PIPENETS 1
+#define SSAIR_ATMOSMACHINERY 2
+#define SSAIR_EXCITEDGROUPS 3
+#define SSAIR_HIGHPRESSURE 4
+#define SSAIR_HOTSPOTS 5
+#define SSAIR_TURF_CONDUCTION 6
+#define SSAIR_REBUILD_PIPENETS 7
+#define SSAIR_EQUALIZE 8
+#define SSAIR_ACTIVETURFS 9
+#define SSAIR_TURF_POST_PROCESS 10
+#define SSAIR_FINALIZE_TURFS 11
+#define SSAIR_ATMOSMACHINERY_AIR 12
+#define SSAIR_DEFERRED_AIRS 13
+
+//Pipeline rebuild helper defines, these suck but it'll do for now //Fools you actually merged it
+#define SSAIR_REBUILD_PIPELINE 1
+#define SSAIR_REBUILD_QUEUE 2
+
+// Truly disgusting, TG. Truly disgusting.
+//! ## Overlays subsystem
+
+#define POST_OVERLAY_CHANGE(changed_on) \
+	if(length(changed_on.overlays) >= MAX_ATOM_OVERLAYS) { \
+		var/text_lays = overlays2text(changed_on.overlays); \
+		stack_trace("Too many overlays on [changed_on.type] - [length(changed_on.overlays)], refusing to update and cutting.\
+			\n What follows is a printout of all existing overlays at the time of the overflow \n[text_lays]"); \
+		changed_on.overlays.Cut(); \
+		changed_on.add_overlay(mutable_appearance('icons/Testing/greyscale_error.dmi')); \
+	} \
+	if(alternate_appearances) { \
+		for(var/I in changed_on.alternate_appearances){\
+			var/datum/atom_hud/alternate_appearance/AA = changed_on.alternate_appearances[I];\
+			if(AA.transfer_overlays){\
+				AA.copy_overlays(changed_on, TRUE);\
+			}\
+		} \
 	}\
-} else {\
-	Datum.is_processing = "SSmachines.[#List]";\
-	SSmachines.List += Datum;\
-}
-
-#define STOP_PROCESSING_IN_LIST(Datum, List) \
-if(Datum.is_processing) {\
-	if(SSmachines.List.Remove(Datum)) {\
-		Datum.is_processing = null;\
-	} else {\
-		CRASH("Failed to stop processing. [log_info_line(Datum)] is being processed by [is_processing] and not found in SSmachines.[#List]"); \
-	}\
-}
-
-#define START_PROCESSING_PIPENET(Datum) START_PROCESSING_IN_LIST(Datum, pipenets)
-#define STOP_PROCESSING_PIPENET(Datum) STOP_PROCESSING_IN_LIST(Datum, pipenets)
-
-#define START_PROCESSING_POWERNET(Datum) START_PROCESSING_IN_LIST(Datum, powernets)
-#define STOP_PROCESSING_POWERNET(Datum) STOP_PROCESSING_IN_LIST(Datum, powernets)
-
-#define START_PROCESSING_POWER_OBJECT(Datum) START_PROCESSING_IN_LIST(Datum, power_objects)
-#define STOP_PROCESSING_POWER_OBJECT(Datum) STOP_PROCESSING_IN_LIST(Datum, power_objects)
-
-/// The timer key used to know how long subsystem initialization takes
-#define SS_INIT_TIMER_KEY "ss_init"
+	if(isturf(changed_on)){SSdemo.mark_turf(changed_on);}\
+	if(isobj(changed_on) || ismob(changed_on)){SSdemo.mark_dirty(changed_on);}\
 
 /**
 	Create a new timer and add it to the queue.
@@ -177,3 +298,54 @@ if(Datum.is_processing) {\
 	* * timer_subsystem the subsystem to insert this timer into
 */
 #define addtimer(args...) _addtimer(args, file = __FILE__, line = __LINE__)
+
+// Explosion Subsystem subtasks
+#define SSEXPLOSIONS_MOVABLES 1
+#define SSEXPLOSIONS_TURFS 2
+#define SSEXPLOSIONS_THROWS 3
+
+// Subsystem delta times or tickrates, in seconds. I.e, how many seconds in between each process() call for objects being processed by that subsystem.
+// Only use these defines if you want to access some other objects processing delta_time, otherwise use the delta_time that is sent as a parameter to process()
+#define SSFLUIDS_DT (SSplumbing.wait/10)
+#define SSMACHINES_DT (SSmachines.wait/10)
+#define SSMOBS_DT (SSmobs.wait/10)
+#define SSOBJ_DT (SSobj.wait/10)
+
+/// The timer key used to know how long subsystem initialization takes
+#define SS_INIT_TIMER_KEY "ss_init"
+
+
+// Wardrobe subsystem tasks
+#define SSWARDROBE_STOCK 1
+#define SSWARDROBE_INSPECT 2
+
+//Wardrobe cache metadata indexes
+#define WARDROBE_CACHE_COUNT 1
+#define WARDROBE_CACHE_LAST_INSPECT 2
+#define WARDROBE_CACHE_CALL_INSERT 3
+#define WARDROBE_CACHE_CALL_REMOVAL 4
+
+//Wardrobe preloaded stock indexes
+#define WARDROBE_STOCK_CONTENTS 1
+#define WARDROBE_STOCK_CALL_INSERT 2
+#define WARDROBE_STOCK_CALL_REMOVAL 3
+
+//Wardrobe callback master list indexes
+#define WARDROBE_CALLBACK_INSERT 1
+#define WARDROBE_CALLBACK_REMOVE 2
+
+// Vote subsystem counting methods
+/// First past the post. One selection per person, and the selection with the most votes wins.
+#define VOTE_COUNT_METHOD_SINGLE 1
+/// Approval voting. Any number of selections per person, and the selection with the most votes wins.
+#define VOTE_COUNT_METHOD_MULTI 2
+
+///liquid defines
+#define SSLIQUIDS_RUN_TYPE_TURFS 1
+#define SSLIQUIDS_RUN_TYPE_GROUPS 2
+#define SSLIQUIDS_RUN_TYPE_IMMUTABLES 3
+#define SSLIQUIDS_RUN_TYPE_EVAPORATION 4
+#define SSLIQUIDS_RUN_TYPE_FIRE 5
+#define SSLIQUIDS_RUN_TYPE_OCEAN 6
+#define SSLIQUIDS_RUN_TYPE_TEMPERATURE 7
+#define SSLIQUIDS_RUN_TYPE_CACHED_EDGES 8

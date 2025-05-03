@@ -1,87 +1,18 @@
-//Material stacks names defines
+/// Gets the reference for the material type that was given
+#define getmaterialref(A) (SSmaterials.materials[A])
 
-#define MATERIAL_STEEL "steel"
-#define MATERIAL_GLASS "glass"
-#define MATERIAL_RGLASS "reinf_glass"
-#define MATERIAL_PLASMAGLASS "plasma_glass"
-#define MATERIAL_RPLASMAGLASS "plasma_reinf_glass"
-#define MATERIAL_SILVER "silver"
-#define MATERIAL_GOLD "gold"
-#define MATERIAL_PLASMA "plasma"
-#define MATERIAL_URANIUM "uranium"
-#define MATERIAL_DIAMOND "diamond"
-#define MATERIAL_PLASTIC "plastic"
-#define MATERIAL_IRON "iron"
-#define MATERIAL_CARDBOARD "cardboard"
-#define MATERIAL_CLOTH "cloth"
-#define MATERIAL_LEATHER "leather"
-#define MATERIAL_MARBLE "marble"
-#define MATERIAL_MHYDROGEN "mhydrogen"
-#define MATERIAL_OSMIUM "osmium"
-#define MATERIAL_PLASTEEL "plasteel"
-#define MATERIAL_TITANIUM "titanium"
-#define MATERIAL_PLATINUM "platinum"
-#define MATERIAL_SANDSTONE "sandstone"
-#define MATERIAL_TRITIUM "tritium"
-#define MATERIAL_WOOD "wood"
-#define MATERIAL_VOXALLOY "voxalloy"
-#define MATERIAL_CARPET "carpet"
-#define MATERIAL_BIOMATTER "biomatter"
-#define MATERIAL_COMPRESSED "compressed matter"
+/// Whether a material's mechanical effects should apply to the atom. This is necessary for other flags to work.
+#define MATERIAL_EFFECTS (1<<0)
+/// Applies the material color to the atom's color. Deprecated, use MATERIAL_GREYSCALE instead
+#define MATERIAL_COLOR (1<<1)
+/// Whether a prefix describing the material should be added to the name
+#define MATERIAL_ADD_PREFIX (1<<2)
+/// Whether a material should affect the stats of the atom
+#define MATERIAL_AFFECT_STATISTICS (1<<3)
+/// Applies the material greyscale color to the atom's greyscale color.
+#define MATERIAL_GREYSCALE (1<<4)
 
-#define MATERIAL_LIST list(\
-	MATERIAL_STEEL,\
-	MATERIAL_GLASS,\
-	MATERIAL_RGLASS,\
-	MATERIAL_PLASMAGLASS,\
-	MATERIAL_RPLASMAGLASS,\
-	MATERIAL_SILVER,\
-	MATERIAL_GOLD,\
-	MATERIAL_PLASMA,\
-	MATERIAL_URANIUM,\
-	MATERIAL_DIAMOND,\
-	MATERIAL_PLASTIC,\
-	MATERIAL_IRON,\
-	MATERIAL_CARDBOARD,\
-	MATERIAL_CLOTH,\
-	MATERIAL_LEATHER,\
-	MATERIAL_MARBLE,\
-	MATERIAL_MHYDROGEN,\
-	MATERIAL_OSMIUM,\
-	MATERIAL_PLASTEEL,\
-	MATERIAL_TITANIUM,\
-	MATERIAL_PLATINUM,\
-	MATERIAL_SANDSTONE,\
-	MATERIAL_TRITIUM,\
-	MATERIAL_WOOD,\
-	MATERIAL_VOXALLOY,\
-	MATERIAL_CARPET,\
-	MATERIAL_BIOMATTER,\
-	MATERIAL_COMPRESSED)
+/// Wrapper for fetching material references. Exists exclusively so that people don't need to wrap everything in a list every time.
+#define GET_MATERIAL_REF(arguments...) SSmaterials._GetMaterialRef(list(##arguments))
 
-#define PLASTEEL_COLOUR "#8e9799"
-//Color to exactly match concept art #b0bcbe
-//I made it slightly darker than that, because the original color was too bright and causes eyestrain imo
-
-
-#define ORE_CARBON "o_carbon"
-#define ORE_IRON "o_hematite"
-#define ORE_PLASMA "o_plasma"
-#define ORE_SAND "o_sand"
-#define ORE_URANIUM "o_pitchblende"
-#define ORE_DIAMOND "o_diamond"
-#define ORE_SILVER "o_silver"
-#define ORE_GOLD "o_gold"
-#define ORE_PLATINUM "o_platinum"
-#define ORE_HYDROGEN "o_hydrogen"
-
-#define ORE_LIST list(\
-	ORE_CARBON,\
-	ORE_IRON,\
-	ORE_PLASMA,\
-	ORE_SAND,\
-	ORE_URANIUM,\
-	ORE_DIAMOND,\
-	ORE_SILVER,\
-	ORE_GOLD,\
-	ORE_PLATINUM)
+#define MATERIAL_SOURCE(mat) "[mat.name]_material"

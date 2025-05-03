@@ -1,231 +1,162 @@
-/obj/item/device/assembly_holder
+/obj/item/assembly_holder
 	name = "Assembly"
 	icon = 'icons/obj/assemblies/new_assemblies.dmi'
 	icon_state = "holder"
 	item_state = "assembly"
-	flags = CONDUCT | PROXMOVE
+	lefthand_file = 'icons/mob/inhands/misc/devices_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/misc/devices_righthand.dmi'
+	flags_1 = CONDUCT_1
 	throwforce = 5
-	w_class = ITEM_SIZE_SMALL
-	throw_speed = 3
-	throw_range = 10
+	w_class = WEIGHT_CLASS_SMALL
+	throw_speed = 2
+	throw_range = 7
 
-	var/secured = FALSE
-	var/obj/item/device/assembly/left_assembly
-	var/obj/item/device/assembly/right_assembly
+	var/obj/item/assembly/a_left = null
+	var/obj/item/assembly/a_right = null
 
-/obj/item/device/assembly_holder/LateInitialize()
+/obj/item/assembly_holder/Initialize(mapload)
 	. = ..()
-	add_hearing()
+	var/static/rotation_flags = ROTATION_ALTCLICK | ROTATION_CLOCKWISE | ROTATION_COUNTERCLOCKWISE | ROTATION_FLIP | ROTATION_VERBS
+	AddComponent(/datum/component/simple_rotation, rotation_flags)
 
-/obj/item/device/assembly_holder/Destroy()
-	remove_hearing()
+/obj/item/assembly_holder/proc/assemble(obj/item/assembly/A, obj/item/assembly/A2, mob/user)
+	attach(A,user)
+	attach(A2,user)
+	name = "[A.name]-[A2.name] assembly"
+	update_appearance(UPDATE_ICON)
+	SSblackbox.record_feedback("tally", "assembly_made", 1, "[initial(A.name)]-[initial(A2.name)]")
+
+/obj/item/assembly_holder/proc/attach(obj/item/assembly/A, mob/user)
+	if(!A.remove_item_from_storage(src))
+		if(user)
+			user.transferItemToLoc(A, src)
+		else
+			A.forceMove(src)
+	A.holder = src
+	A.toggle_secure()
+	if(!a_left)
+		a_left = A
+	else
+		a_right = A
+	A.holder_movement()
+
+/obj/item/assembly_holder/update_overlays()
 	. = ..()
+	if(a_left)
+		. += "[a_left.icon_state]_left"
+		for(var/O in a_left.attached_overlays)
+			// yogs start - signaller colors
+			if(istext(O))
+				. += "[O]_l"
+			else
+				var/mutable_appearance/A = new(O)
+				A.icon_state = "[A.icon_state]_l"
+				. += A
+			// yogs end
 
-/obj/item/device/assembly_holder/proc/attach(var/obj/item/device/D, var/obj/item/device/D2, var/mob/user)
-	return
+	if(a_right)
+		if(a_right.is_position_sensitive)
+			. += "[a_right.icon_state]_right"
+			for(var/O in a_right.attached_overlays)
+				// yogs start - signaller colors
+				if(istext(O))
+					. += "[O]_r"
+				else
+					var/mutable_appearance/A = new(O)
+					A.icon_state = "[A.icon_state]_r"
+					. += A
+				// yogs end
+		else
+			var/mutable_appearance/right = mutable_appearance(icon, "[a_right.icon_state]_left")
+			right.transform = matrix(-1, 0, 0, 0, 1, 0)
+			for(var/O in a_right.attached_overlays)
+				// yogs start - signaller colors
+				if(istext(O))
+					right.add_overlay("[O]_l")
+				else
+					var/mutable_appearance/A = new(O)
+					A.icon_state = "[A.icon_state]_l"
+					right.add_overlay(A)
+				// yogs end
+			. += right
 
-/obj/item/device/assembly_holder/proc/process_activation(var/obj/item/device/D)
-	return
+	if(master)
+		master.update_appearance(UPDATE_ICON)
 
-/obj/item/device/assembly_holder/proc/detached()
-	return
+/obj/item/assembly_holder/Crossed(atom/movable/AM as mob|obj)
+	. = ..()
+	if(a_left)
+		a_left.Crossed(AM)
+	if(a_right)
+		a_right.Crossed(AM)
 
-/obj/item/device/assembly_holder/attach(var/obj/item/device/assembly/D, var/obj/item/device/assembly/D2, var/mob/user)
-	if(!(D.is_attachable() || D.is_attachable()))
-		return FALSE
-	user.remove_from_mob(D)
-	user.remove_from_mob(D2)
-	D.holder = src
-	D2.holder = src
-	D.loc = src
-	D2.loc = src
-	left_assembly = D
-	right_assembly = D2
-	name = "[D.name]-[D2.name] assembly"
-	update_icon()
-	user.put_in_hands(src)
+/obj/item/assembly_holder/on_found(mob/finder)
+	if(a_left)
+		a_left.on_found(finder)
+	if(a_right)
+		a_right.on_found(finder)
+
+/obj/item/assembly_holder/setDir()
+	. = ..()
+	if(a_left)
+		a_left.holder_movement()
+	if(a_right)
+		a_right.holder_movement()
+
+/obj/item/assembly_holder/dropped(mob/user)
+	. = ..()
+	if(a_left)
+		a_left.dropped(user)
+	if(a_right)
+		a_right.dropped(user)
+
+/obj/item/assembly_holder/attack_hand(mob/living/user, modifiers)//Perhapse this should be a holder_pickup proc instead, can add if needbe I guess
+	. = ..()
+	if(.)
+		return
+	if(a_left)
+		a_left.attack_hand(user, modifiers)
+	if(a_right)
+		a_right.attack_hand(user, modifiers)
+
+/obj/item/assembly_holder/screwdriver_act(mob/user, obj/item/tool)
+	if(..())
+		return TRUE
+	to_chat(user, span_notice("You disassemble [src]!"))
+	if(a_left)
+		a_left.on_detach()
+		a_left = null
+	if(a_right)
+		a_right.on_detach()
+		a_right = null
+	qdel(src)
 	return TRUE
 
-
-/obj/item/device/assembly_holder/update_icon()
-	overlays.Cut()
-	if(left_assembly)
-		overlays += "[left_assembly.icon_state]_left"
-		for(var/O in left_assembly.attached_overlays)
-			overlays += "[O]_l"
-	if(right_assembly)
-		src.overlays += "[right_assembly.icon_state]_right"
-		for(var/O in right_assembly.attached_overlays)
-			overlays += "[O]_r"
-	if(master)
-		master.update_icon()
-
-
-/obj/item/device/assembly_holder/examine(mob/user, extra_description = "")
-	if(get_dist(user, src) < 2)
-		if(secured)
-			extra_description += SPAN_NOTICE("\The [src] is ready!")
-		else
-			extra_description += SPAN_NOTICE("\The [src] can be attached!")
-	..(user, extra_description)
-
-
-/obj/item/device/assembly_holder/HasProximity(atom/movable/AM as mob|obj)
-	if(left_assembly)
-		left_assembly.HasProximity(AM)
-	if(right_assembly)
-		right_assembly.HasProximity(AM)
-
-
-/obj/item/device/assembly_holder/Crossed(atom/movable/AM as mob|obj)
-	if(left_assembly)
-		left_assembly.Crossed(AM)
-	if(right_assembly)
-		right_assembly.Crossed(AM)
-
-
-/obj/item/device/assembly_holder/on_found(mob/finder as mob)
-	if(left_assembly)
-		left_assembly.on_found(finder)
-	if(right_assembly)
-		right_assembly.on_found(finder)
-
-
-/obj/item/device/assembly_holder/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
-	. = ..()
-	if(left_assembly && right_assembly)
-		left_assembly.holder_movement()
-		right_assembly.holder_movement()
-
-/obj/item/device/assembly_holder/attack_hand()//Perhapse this should be a holder_pickup proc instead, can add if needbe I guess
-	if(left_assembly && right_assembly)
-		left_assembly.holder_movement()
-		right_assembly.holder_movement()
-	..()
-
-
-/obj/item/device/assembly_holder/attackby(obj/item/I, mob/user)
-	if(QUALITY_SCREW_DRIVING in I.tool_qualities)
-		if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, QUALITY_SCREW_DRIVING, FAILCHANCE_EASY, required_stat = STAT_COG))
-			if(!left_assembly || !right_assembly)
-				to_chat(user, SPAN_WARNING("Assembly part missing!"))
-				return
-			left_assembly.toggle_secure()
-			right_assembly.toggle_secure()
-			secured = !secured
-			if(secured)
-				to_chat(user, SPAN_NOTICE("\The [src] is ready!"))
-			else
-				to_chat(user, SPAN_NOTICE("\The [src] can now be taken apart!"))
-			update_icon()
-			return
-	..()
-
-
-/obj/item/device/assembly_holder/attack_self(mob/user as mob)
+/obj/item/assembly_holder/attack_self(mob/user)
 	src.add_fingerprint(user)
-	if(src.secured)
-		if(!left_assembly || !right_assembly)
-			to_chat(user, SPAN_WARNING("Assembly part missing!"))
-			return
-		if(istype(left_assembly,right_assembly.type))//If they are the same type it causes issues due to window code
-			switch(alert("Which side would you like to use?",,"Left","Right"))
-				if("Left")	left_assembly.attack_self(user)
-				if("Right")	right_assembly.attack_self(user)
-			return
-		else
-			if(!istype(left_assembly,/obj/item/device/assembly/igniter))
-				left_assembly.attack_self(user)
-			if(!istype(right_assembly,/obj/item/device/assembly/igniter))
-				right_assembly.attack_self(user)
+	if(!a_left || !a_right)
+		to_chat(user, span_danger("Assembly part missing!"))
+		return
+	if(istype(a_left,a_right.type))//If they are the same type it causes issues due to window code
+		switch(tgui_alert(usr,"Which side would you like to use?",,list("Left","Right")))
+			if("Left")
+				a_left.attack_self(user)
+			if("Right")
+				a_right.attack_self(user)
+		return
 	else
-		var/turf/T = get_turf(src)
-		if(!T)	return 0
-		if(left_assembly)
-			left_assembly:holder = null
-			left_assembly.loc = T
-		if(right_assembly)
-			right_assembly:holder = null
-			right_assembly.loc = T
-		spawn(0)
-			qdel(src)
-	return
+		a_left.attack_self(user)
+		a_right.attack_self(user)
 
 
-/obj/item/device/assembly_holder/process_activation(var/obj/D, var/normal = 1, var/special = 1)
-	if(!D)	return 0
-	if(!secured)
-		visible_message("\icon[src] *beep* *beep*", "*beep* *beep*")
-	if(normal && right_assembly && left_assembly)
-		if(right_assembly != D)
-			right_assembly.pulsed(0)
-		if(left_assembly != D)
-			left_assembly.pulsed(0)
+/obj/item/assembly_holder/proc/process_activation(obj/D, normal = 1, special = 1)
+	if(!D)
+		return FALSE
+	if((normal) && (a_right) && (a_left))
+		if(a_right != D)
+			a_right.pulsed(FALSE)
+		if(a_left != D)
+			a_left.pulsed(FALSE)
 	if(master)
 		master.receive_signal()
-
-
-/obj/item/device/assembly_holder/hear_talk(mob/living/M as mob, msg, verb, datum/language/speaking, speech_volume)
-	if(right_assembly)
-		right_assembly.hear_talk(M, msg, verb, speaking, speech_volume)
-	if(left_assembly)
-		left_assembly.hear_talk(M, msg, verb, speaking, speech_volume)
-
-
-
-
-/obj/item/device/assembly_holder/timer_igniter
-	name = "timer-igniter assembly"
-
-/obj/item/device/assembly_holder/timer_igniter/New()
-	..()
-
-	var/obj/item/device/assembly/igniter/ign = new(src)
-	ign.secured = 1
-	ign.holder = src
-	var/obj/item/device/assembly/timer/tmr = new(src)
-	tmr.time=5
-	tmr.secured = 1
-	tmr.holder = src
-	START_PROCESSING(SSobj, tmr)
-	left_assembly = tmr
-	right_assembly = ign
-	secured = 1
-	update_icon()
-	name = initial(name) + " ([tmr.time] secs)"
-
-	loc.verbs += /obj/item/device/assembly_holder/timer_igniter/verb/configure
-
-/obj/item/device/assembly_holder/timer_igniter/detached()
-	loc.verbs -= /obj/item/device/assembly_holder/timer_igniter/verb/configure
-	..()
-
-/obj/item/device/assembly_holder/timer_igniter/verb/configure()
-	set name = "Set Timer"
-	set category = "Object"
-	set src in usr
-
-	if ( !(usr.stat || usr.restrained()) )
-		var/obj/item/device/assembly_holder/holder
-		if(istype(src,/obj/item/grenade/chem_grenade))
-			var/obj/item/grenade/chem_grenade/gren = src
-			holder=gren.detonator
-		var/obj/item/device/assembly/timer/tmr = holder.left_assembly
-		if(!istype(tmr,/obj/item/device/assembly/timer))
-			tmr = holder.right_assembly
-		if(!istype(tmr,/obj/item/device/assembly/timer))
-			to_chat(usr, SPAN_NOTICE("This detonator has no timer."))
-			return
-
-		if(tmr.timing)
-			to_chat(usr, SPAN_NOTICE("Clock is ticking already."))
-		else
-			var/ntime = input("Enter desired time in seconds", "Time", "5") as num
-			if (ntime>0 && ntime<1000)
-				tmr.time = ntime
-				name = initial(name) + "([tmr.time] secs)"
-				to_chat(usr, SPAN_NOTICE("Timer set to [tmr.time] seconds."))
-			else
-				to_chat(usr, "<span class='notice'>Timer can't be [ntime<=0?"negative":"more than 1000 seconds"].</span>")
-	else
-		to_chat(usr, "<span class='notice'>You cannot do this while [usr.stat?"unconscious/dead":"restrained"].</span>")
+	return TRUE

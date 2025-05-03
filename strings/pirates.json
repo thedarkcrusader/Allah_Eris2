@@ -1,0 +1,44 @@
+{
+	"beginnings": [
+		"Star",
+		"Oort",
+		"Comet",
+		"Pulsar",
+		"Plasma",
+		"Void",
+		"Space",
+		"Solar",
+		"Laser",
+		"Ion"
+	],
+	"endings": [
+		"keel",
+		"beard",
+		"bilge",
+		"hull",
+		"hook",
+		"flag",
+		"deck",
+		"salt",
+		"knot",
+		"fish",
+		"helm"
+	],
+	"ship_name_start": [
+		"Space Queen's",
+		"Syndicate",
+		"Void",
+		"Star",
+		"Black",
+		"Golden"
+	],
+	"ship_name_end": [
+		"Revenge",
+		"Privateer",
+		"Pearl",
+		"Carp",
+		"Marauder",
+		"Buccaneer",
+		"Scourge"
+	]
+}

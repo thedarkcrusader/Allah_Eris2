@@ -1,6 +1,7 @@
 // Clickable stat() button.
 /obj/effect/statclick
 	name = "Initializing..."
+	blocks_emissive = EMISSIVE_BLOCK_NONE
 	var/target
 
 INITIALIZE_IMMEDIATE(/obj/effect/statclick)
@@ -9,8 +10,8 @@ INITIALIZE_IMMEDIATE(/obj/effect/statclick)
 	. = ..()
 	name = text
 	src.target = target
-	if(istype(target, /datum)) //Harddel man bad
-		RegisterSignal(target, COMSIG_PARENT_QDELETING, PROC_REF(cleanup))
+	if(isdatum(target)) //Harddel man bad
+		RegisterSignal(target, COMSIG_QDELETING, PROC_REF(cleanup))
 
 /obj/effect/statclick/Destroy()
 	target = null
@@ -35,7 +36,7 @@ INITIALIZE_IMMEDIATE(/obj/effect/statclick)
 			class = "subsystem"
 		else if(istype(target, /datum/controller))
 			class = "controller"
-		else if(istype(target, /datum))
+		else if(isdatum(target))
 			class = "datum"
 		else
 			class = "unknown"
@@ -43,9 +44,10 @@ INITIALIZE_IMMEDIATE(/obj/effect/statclick)
 	usr.client.debug_variables(target)
 	message_admins("Admin [key_name_admin(usr)] is debugging the [target] [class].")
 
+
 // Debug verbs.
 /client/proc/restart_controller(controller in list("Master", "Failsafe"))
-	set category = "Debug"
+	set category = "Misc.Server Debug"
 	set name = "Restart Controller"
 	set desc = "Restart one of the various periodic loop controllers for the game (be careful!)"
 
@@ -54,14 +56,15 @@ INITIALIZE_IMMEDIATE(/obj/effect/statclick)
 	switch(controller)
 		if("Master")
 			Recreate_MC()
+			SSblackbox.record_feedback("tally", "admin_verb", 1, "Restart Master Controller")
 		if("Failsafe")
 			new /datum/controller/failsafe()
+			SSblackbox.record_feedback("tally", "admin_verb", 1, "Restart Failsafe Controller")
 
 	message_admins("Admin [key_name_admin(usr)] has restarted the [controller] controller.")
 
-
 /client/proc/debug_controller()
-	set category = "Debug"
+	set category = "Misc.Server Debug"
 	set name = "Debug Controller"
 	set desc = "Debug the various periodic loop controllers for the game (be careful!)"
 
@@ -84,4 +87,5 @@ INITIALIZE_IMMEDIATE(/obj/effect/statclick)
 		return
 	debug_variables(controller)
 
+	//SSblackbox.record_feedback("tally", "admin_verb", 1, "Restart Failsafe Controller")
 	message_admins("Admin [key_name_admin(usr)] is debugging the [controller] controller.")

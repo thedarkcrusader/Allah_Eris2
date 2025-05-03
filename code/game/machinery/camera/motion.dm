@@ -1,69 +1,118 @@
 /obj/machinery/camera
-	var/list/motion_targets = list()
-	var/detect_time = 0
-	var/area/ai_monitored/area_motion = null
-	var/alarm_delay = 100 // Don't forget, there's another 10 seconds in queueAlarm()
-	flags = PROXMOVE
 
-/obj/machinery/camera/internal_process()
+	var/list/datum/weakref/localMotionTargets = list()
+	var/detectTime = 0
+	var/area/ai_monitored/area_motion = null
+	var/alarm_delay = 30 // Don't forget, there's another 3 seconds in queueAlarm()
+
+/obj/machinery/camera/process()
 	// motion camera event loop
-	if(stat & (EMPED|NOPOWER))
-		return
 	if(!isMotion())
 		. = PROCESS_KILL
 		return
-	if(detect_time > 0)
-		var/elapsed = world.time - detect_time
-		if(elapsed > alarm_delay)
+	if(stat & EMPED)
+		return
+	if (detectTime > 0)
+		var/elapsed = world.time - detectTime
+		if (elapsed > alarm_delay)
 			triggerAlarm()
-	else if(detect_time == -1)
-		for(var/mob/target in motion_targets)
-			if(target.stat == 2)
-				lostTarget(target)
-			// If not detecting with motion camera...
-			if(!area_motion)
-				// See if the camera is still in range
-				if(!in_range(src, target))
-					// If they aren't in range, lose the target.
-					lostTarget(target)
+	else if (detectTime == -1)
+		for (var/datum/weakref/targetref in getTargetList())
+			var/mob/target = targetref.resolve()
+			if(QDELETED(target) || target.stat == DEAD || (!area_motion && !in_range(src, target)))
+				//If not part of a monitored area and the camera is not in range or the target is dead
+				lostTargetRef(targetref)
+
+/obj/machinery/camera/proc/getTargetList()
+	if(area_motion)
+		return area_motion.motionTargets
+	return localMotionTargets
 
 /obj/machinery/camera/proc/newTarget(mob/target)
 	if(isAI(target))
-		return
-	if(detect_time == 0)
-		detect_time = world.time // start the clock
-	if(!(target in motion_targets))
-		RegisterSignal(target, COMSIG_NULL_TARGET, PROC_REF(lostTarget), TRUE)
-		motion_targets += target
+		return FALSE
+	if (detectTime == 0)
+		detectTime = world.time // start the clock
+	var/list/targets = getTargetList()
+	targets |= WEAKREF(target)
 	return TRUE
 
-/obj/machinery/camera/proc/lostTarget(mob/target)
-	if(target in motion_targets)
-		UnregisterSignal(target, COMSIG_NULL_TARGET)
-		motion_targets -= target
-	if(motion_targets.len == 0)
+/obj/machinery/camera/Destroy()
+	var/area/ai_monitored/A = get_area(src)
+	localMotionTargets = null
+	if(istype(A))
+		A.motioncameras -= src
+	cancelAlarm()
+	return ..()
+
+/obj/machinery/camera/proc/lostTargetRef(datum/weakref/R)
+	var/list/targets = getTargetList()
+	targets -= R
+	if (targets.len == 0)
 		cancelAlarm()
 
 /obj/machinery/camera/proc/cancelAlarm()
-	if(!status || (stat & NOPOWER))
-		return
-	if(detect_time == -1)
-		motion_alarm.clearAlarm(loc, src)
-	detect_time = 0
+	if (detectTime == -1)
+		for (var/i in GLOB.silicon_mobs)
+			var/mob/living/silicon/aiPlayer = i
+			if (status)
+				aiPlayer.cancelAlarm("Motion", get_area(src), src)
+	detectTime = 0
 	return TRUE
 
 /obj/machinery/camera/proc/triggerAlarm()
-	if(!status || (stat & NOPOWER))
-		return
-	if(!detect_time)
-		return
-	motion_alarm.triggerAlarm(loc, src)
-	detect_time = -1
+	if (!detectTime)
+		return FALSE
+	for (var/mob/living/silicon/aiPlayer in GLOB.player_list)
+		if (status)
+			aiPlayer.triggerAlarm("Motion", get_area(src), list(src), src)
+	visible_message(span_warning("A red light flashes on the [src]!"))
+	if(armory)
+		alertradio.talk_into(src, "ALERT: Motion detected in the Armory.")
+
+	detectTime = -1
 	return TRUE
 
-/obj/machinery/camera/HasProximity(atom/movable/AM)
+/obj/machinery/camera/HasProximity(atom/movable/AM as mob|obj)
 	// Motion cameras outside of an "ai monitored" area will use this to detect stuff.
-	if(!area_motion)
+	if (!area_motion)
 		if(isliving(AM))
 			newTarget(AM)
 
+/obj/machinery/camera/motion/armory
+	armory = TRUE
+
+/obj/machinery/camera/motion/thunderdome
+	name = "entertainment camera"
+	network = list("thunder")
+	c_tag = "Arena"
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | ACID_PROOF | FREEZE_PROOF
+
+/obj/machinery/camera/motion/thunderdome/Initialize(mapload)
+	. = ..()
+	proximity_monitor.SetRange(7)
+
+/obj/machinery/camera/motion/thunderdome/HasProximity(atom/movable/AM as mob|obj)
+	if (!isliving(AM) || get_area(AM) != get_area(src))
+		return
+	localMotionTargets |= WEAKREF(AM)
+	if (!detectTime)
+		for(var/obj/machinery/computer/security/telescreen/entertainment/TV in GLOB.machines)
+			TV.notify(TRUE)
+	detectTime = world.time + 30 SECONDS
+
+/obj/machinery/camera/motion/thunderdome/process()
+	if (!detectTime)
+		return
+
+	for (var/datum/weakref/targetref in localMotionTargets)
+		var/mob/target = targetref.resolve()
+		if(QDELETED(target) || target.stat == DEAD || get_dist(src, target) > 7 || get_area(src) != get_area(target))
+			localMotionTargets -= targetref
+
+	if (localMotionTargets.len)
+		detectTime = world.time + 30 SECONDS
+	else if (world.time > detectTime)
+		detectTime = 0
+		for(var/obj/machinery/computer/security/telescreen/entertainment/TV in GLOB.machines)
+			TV.notify(FALSE)

@@ -6,41 +6,35 @@
 	icon = 'icons/obj/machines/mining_machines.dmi'
 	icon_state = "unloader"
 	density = TRUE
-	anchored = TRUE
-	var/unload_amt = 20
-	var/input_dir = null
-	var/output_dir = null
+	input_dir = WEST
+	output_dir = EAST
+	speed_process = TRUE
 
-
-/obj/machinery/mineral/unloading_machine/New()
-	..()
-	spawn()
-		//Locate our output and input machinery.
-		var/obj/marker = null
-		marker = locate(/obj/landmark/machinery/input) in range(1, loc)
-		if(marker)
-			input_dir = get_dir(src, marker)
-		marker = locate(/obj/landmark/machinery/output) in range(1, loc)
-		if(marker)
-			output_dir = get_dir(src, marker)
-
-/obj/machinery/mineral/unloading_machine/Process()
-	if(output_dir && input_dir)
-		var/turf/input = get_step(src, input_dir)
-		var/obj/structure/ore_box/BOX = locate() in input
-		if(BOX)
-			var/turf/output = get_step(src, output_dir)
-			var/i = 0
-			for(var/obj/item/ore/O in BOX.contents)
-				O.forceMove(output)
-				if(++i>=unload_amt)
+/obj/machinery/mineral/unloading_machine/process()
+	var/turf/T = get_step(src,input_dir)
+	if(T)
+		var/limit
+		for(var/obj/structure/ore_box/B in T)
+			for (var/obj/item/stack/ore/O in B)
+				B.contents -= O
+				unload_mineral(O)
+				limit++
+				if (limit>=10)
 					return
-
-		if(locate(/obj/item/ore) in input)
-			var/obj/item/ore/O
-			for(var/i = 0; i<unload_amt; i++)
-				O = locate(/obj/item/ore) in input
-				if(O)
-					O.forceMove(get_step(src, output_dir))
-				else
-					break
+				CHECK_TICK
+			CHECK_TICK
+		for(var/obj/item/storage/bag/ore/OB in T)
+			for (var/obj/item/stack/ore/O in OB)
+				OB.contents -= O
+				unload_mineral(O)
+				limit++
+				if (limit>=10)
+					return
+				CHECK_TICK
+			CHECK_TICK
+		for(var/obj/item/I in T)
+			unload_mineral(I)
+			limit++
+			if (limit>=10)
+				return
+			CHECK_TICK

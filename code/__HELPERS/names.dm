@@ -1,39 +1,174 @@
-var/command_name
+/proc/lizard_name(gender)
+	if(gender == MALE)
+		return "[pick(GLOB.lizard_names_male)]-[pick(GLOB.lizard_names_clan)]"
+	return "[pick(GLOB.lizard_names_female)]-[pick(GLOB.lizard_names_clan)]"
+
+/proc/pod_name(gender)
+	var/randname
+	switch(rand(1,4))
+		if(1) //Human
+			if(gender == MALE)
+				randname = pick(GLOB.first_names_male)
+			else
+				randname = pick(GLOB.first_names_female)
+			randname += " [pick(GLOB.last_names)]"
+			return randname
+		if(2) //Lizard
+			return lizard_name(gender)
+		if(3) //Moth
+			return moth_name()
+		if(4) //Plant
+			randname = pick(GLOB.plant_names)
+			if(prob(25))
+				randname += " [pick(GLOB.last_names)]"
+			return randname
+
+/proc/preternis_name(gender)
+	switch(rand(1,3))
+		if(1) //Adj + Noun
+			return "[pick(GLOB.adjectives)] [pick(GLOB.forge_name)]"
+		if(2) //Vxtrin name
+			switch(rand(1,4)) 
+				if(1) //Name
+					return pick(GLOB.preternis_names)
+				if(2) //Caste + Name
+					return "[pick(GLOB.preternis_class)]'[pick(GLOB.preternis_names)]"
+				if(3) //Caste + Name + Home
+					return "[pick(GLOB.preternis_class)]'[pick(GLOB.preternis_names)]-[capitalize(pick(GLOB.preternis_home))]"
+				if(4) //Name + Home
+					return "[pick(GLOB.preternis_names)]-[capitalize(pick(GLOB.preternis_home))]"
+		if(3) //Robotic name
+			return ipc_name()
+
+/proc/polysmorph_name()
+	return pick(GLOB.polysmorph_names)
+
+/proc/ethereal_name()
+	if(prob(66))
+		return "[pick(GLOB.constellations)] \Roman[rand(1,99)]"
+	return "[pick(GLOB.ethereal_names)]"
+
+/proc/plasmaman_name()
+	return "[pick(GLOB.plasmaman_names)] \Roman[rand(1,99)]"
+
+/proc/moth_name()
+	return "[pick(GLOB.moth_first)] [pick(GLOB.moth_last)]"
+
+/proc/ipc_name()
+	return "[pick(GLOB.posibrain_names)]-[rand(100, 999)]"
+
+/proc/nightmare_name() //they have one segment to the name because they're shells of what a vxtrin once was
+	switch(rand(1,3))
+		if(1) //space and capital last name
+			return "[pick(GLOB.preternis_class)]"
+		if(2) //dash and lowercase last name
+			return "[pick(GLOB.preternis_names)]"
+		if(3) //apostrophe and lowercase last name
+			return "[pick(GLOB.preternis_home)]"
+
+/proc/darkspawn_name() //they have three segments to their name, but have lost sane ordering
+	var/list/order = list("name", "class", "home")
+	var/name = ""
+	for(var/i in 1 to 3)
+		var/selection = pick_n_take(order)
+		switch(selection)
+			if("name")
+				name += "[capitalize(pick(GLOB.preternis_names))]"
+			if("class")
+				name += "[capitalize(pick(GLOB.preternis_class))]"
+			if("home")
+				name += "[capitalize(pick(GLOB.preternis_home))]"
+		switch(i)
+			if(1) //apostrophe after the first name
+				name += "'"
+			if(2) //dash after the second
+				name = capitalize(name)
+				name += "-"
+	return name
+
+GLOBAL_VAR(command_name)
 /proc/command_name()
-	if (command_name)
-		return command_name
+	if (GLOB.command_name)
+		return GLOB.command_name
 
-	var/name = "[boss_name]"
+	var/name = "Central Command"
 
-	command_name = name
+	GLOB.command_name = name
 	return name
 
-/proc/change_command_name(var/name)
+/proc/change_command_name(name)
 
-	command_name = name
+	GLOB.command_name = name
 
 	return name
 
-/proc/system_name()
-	return "Nyx"
+/proc/station_name()
+	if(!GLOB.station_name)
+		var/newname
+		var/config_station_name = CONFIG_GET(string/stationname)
+		if(config_station_name)
+			newname = config_station_name
+		else
+			newname = new_station_name()
 
+		set_station_name(newname)
 
-/proc/world_name(var/name)
+	return GLOB.station_name
 
-	station_name = name
+/proc/set_station_name(newname)
+	GLOB.station_name = newname
 
-	if (config && config.server_name)
-		world.name = "[config.server_name]: [name]"
+	var/config_server_name = CONFIG_GET(string/servername)
+	if(config_server_name)
+		world.name = "[config_server_name][config_server_name == GLOB.station_name ? "" : ": [GLOB.station_name]"]"
 	else
-		world.name = name
+		world.name = GLOB.station_name
 
-	return name
 
-var/syndicate_name = null
+/proc/new_station_name()
+	var/random = rand(1,5)
+	var/name = ""
+	var/new_station_name = ""
+
+	//Rare: Pre-Prefix
+	if (prob(10))
+		name = pick(GLOB.station_prefixes)
+		new_station_name = name + " "
+		name = ""
+
+	// Prefix
+	for(var/holiday_name in SSgamemode.holidays)
+		if(holiday_name == "Friday the 13th")
+			random = 13
+		var/datum/holiday/holiday = SSgamemode.holidays[holiday_name]
+		name = holiday.getStationPrefix()
+		//get normal name
+	if(!name)
+		name = pick(GLOB.station_names)
+	if(name)
+		new_station_name += name + " "
+
+	// Suffix
+	name = pick(GLOB.station_suffixes)
+	new_station_name += name + " "
+
+	// ID Number
+	switch(random)
+		if(1)
+			new_station_name += "[rand(1, 99)]"
+		if(2)
+			new_station_name += pick(GLOB.greek_letters)
+		if(3)
+			new_station_name += "\Roman[rand(1,99)]"
+		if(4)
+			new_station_name += pick(GLOB.phonetic_alphabet)
+		if(5)
+			new_station_name += pick(GLOB.numbers_as_words)
+		if(13)
+			new_station_name += pick("13","XIII","Thirteen")
+	return new_station_name
+
 /proc/syndicate_name()
-	if (syndicate_name)
-		return syndicate_name
-
 	var/name = ""
 
 	// Prefix
@@ -56,31 +191,38 @@ var/syndicate_name = null
 		name += pick("-", "*", "")
 		name += pick("Tech", "Sun", "Co", "Tek", "X", "Inc", "Gen", "Star", "Dyne", "Code", "Hive")
 
-	syndicate_name = name
 	return name
 
 
-//Contractors and contractor silicons will get these. Revs will not.
-var/syndicate_code_phrase//Code phrase for contractors.
-var/syndicate_code_response//Code response for contractors.
+//Traitors and traitor silicons will get these. Revs will not.
+GLOBAL_VAR(syndicate_code_phrase) //Code phrase for traitors.
+GLOBAL_VAR(syndicate_code_response) //Code response for traitors.
+
+//Cached regex search - for checking if codewords are used.
+GLOBAL_DATUM(syndicate_code_phrase_regex, /regex)
+GLOBAL_DATUM(syndicate_code_response_regex, /regex)
 
 	/*
 	Should be expanded.
 	How this works:
-	Instead of "I'm looking for James Smith, " the contractor would say "James Smith" as part of a conversation.
-	Another contractor may then respond with: "They enjoy running through the void-filled vacuum of the derelict."
+	Instead of "I'm looking for James Smith," the traitor would say "James Smith" as part of a conversation.
+	Another traitor may then respond with: "They enjoy running through the void-filled vacuum of the derelict."
 	The phrase should then have the words: James Smith.
 	The response should then have the words: run, void, and derelict.
 	This way assures that the code is suited to the conversation and is unpredicatable.
 	Obviously, some people will be better at this than others but in theory, everyone should be able to do it and it only enhances roleplay.
 	Can probably be done through "{ }" but I don't really see the practical benefit.
 	One example of an earlier system is commented below.
-	-N
+	/N
 	*/
 
-/proc/generate_code_phrase()//Proc is used for phrase and response in ticker.dm
+/proc/generate_code_phrase(return_list=FALSE)//Proc is used for phrase and response in master_controller.dm
 
-	var/code_phrase = ""//What is returned when the proc finishes.
+	if(!return_list)
+		. = ""
+	else
+		. = list()
+
 	var/words = pick(//How many words there will be. Minimum of two. 2, 4 and 5 have a lesser chance of being selected. 3 is the most likely.
 		50; 2,
 		200; 3,
@@ -88,60 +230,99 @@ var/syndicate_code_response//Code response for contractors.
 		25; 5
 	)
 
-	var/safety[] = list(1, 2, 3)//Tells the proc which options to remove later on.
-	var/nouns[] = list("love", "hate", "anger", "peace", "pride", "sympathy", "bravery", "loyalty", "honesty", "integrity", "compassion", "charity", "success", "courage", "deceit", "skill", "beauty", "brilliance", "pain", "misery", "beliefs", "dreams", "justice", "truth", "faith", "liberty", "knowledge", "thought", "information", "culture", "trust", "dedication", "progress", "education", "hospitality", "leisure", "trouble", "friendships", "relaxation")
-	var/drinks[] = list("vodka and tonic", "gin fizz", "bahama mama", "manhattan", "black Russian", "whiskey soda", "long island tea", "margarita", "Irish coffee", " manly dwarf", "Irish cream", "doctor's delight", "Beepksy Smash", "tequilla sunrise", "brave bull", "gargle blaster", "bloody mary", "whiskey cola", "white Russian", "vodka martini", "martini", "Cuba libre", "kahlua", "vodka", "wine", "moonshine")
-	var/locations[] = SSmapping.teleportlocs.len ? SSmapping.teleportlocs : drinks//if null, defaults to drinks instead.
+	var/list/safety = list(1,2,3)//Tells the proc which options to remove later on.
+	var/nouns = strings(ION_FILE, "ionabstract")
+	var/objects = strings(ION_FILE, "ionobjects")
+	var/adjectives = strings(ION_FILE, "ionadjectives")
+	var/threats = strings(ION_FILE, "ionthreats")
+	var/foods = strings(ION_FILE, "ionfood")
+	var/drinks = strings(ION_FILE, "iondrinks")
+	var/list/locations = GLOB.teleportlocs.len ? GLOB.teleportlocs : drinks //if null, defaults to drinks instead.
 
-	var/names[] = list()
-	for(var/datum/data/record/t in data_core.general)//Picks from crew manifest.
+	var/list/names = list()
+	for(var/datum/data/record/t in GLOB.data_core.general)//Picks from crew manifest.
 		names += t.fields["name"]
 
 	var/maxwords = words//Extra var to check for duplicates.
 
-	for(words, words>0, words--)//Randomly picks from one of the choices below.
+	for(words,words>0,words--)//Randomly picks from one of the choices below.
 
 		if(words==1&&(1 in safety)&&(2 in safety))//If there is only one word remaining and choice 1 or 2 have not been selected.
-			safety = list(pick(1, 2))//Select choice 1 or 2.
+			safety = list(pick(1,2))//Select choice 1 or 2.
 		else if(words==1&&maxwords==2)//Else if there is only one word remaining (and there were two originally), and 1 or 2 were chosen,
 			safety = list(3)//Default to list 3
 
 		switch(pick(safety))//Chance based on the safety list.
 			if(1)//1 and 2 can only be selected once each to prevent more than two specific names/places/etc.
-				switch(rand(1, 2))//Mainly to add more options later.
+				switch(rand(1,2))//Mainly to add more options later.
 					if(1)
 						if(names.len&&prob(70))
-							code_phrase += pick(names)
+							. += pick(names)
 						else
-							code_phrase += pick(pick(GLOB.first_names_male, GLOB.first_names_female))
-							code_phrase += " "
-							code_phrase += pick(GLOB.last_names)
+							if(prob(10))
+								. += pick(lizard_name(MALE),lizard_name(FEMALE))
+							else
+								var/new_name = pick(pick(GLOB.first_names_male,GLOB.first_names_female))
+								new_name += " "
+								new_name += pick(GLOB.last_names)
+								. += new_name
 					if(2)
-						code_phrase += pick(GLOB.joblist)//Returns a job.
+						. += pick(get_all_jobs())//Returns a job.
 				safety -= 1
 			if(2)
-				switch(rand(1, 2))//Places or things.
+				switch(rand(1,3))//Food, drinks, or things. Only selectable once.
 					if(1)
-						code_phrase += pick(drinks)
+						. += lowertext(pick(drinks))
 					if(2)
-						code_phrase += pick(locations)
+						. += lowertext(pick(foods))
+					if(3)
+						. += lowertext(pick(locations))
 				safety -= 2
 			if(3)
-				switch(rand(1, 3))//Nouns, adjectives, verbs. Can be selected more than once.
+				switch(rand(1,4))//Abstract nouns, objects, adjectives, threats. Can be selected more than once.
 					if(1)
-						code_phrase += pick(nouns)
+						. += lowertext(pick(nouns))
 					if(2)
-						code_phrase += pick(GLOB.adjectives)
+						. += lowertext(pick(objects))
 					if(3)
-						code_phrase += pick(GLOB.verb_names)
-		if(words==1)
-			code_phrase += "."
-		else
-			code_phrase += ", "
+						. += lowertext(pick(adjectives))
+					if(4)
+						. += lowertext(pick(threats))
+		if(!return_list)
+			if(words==1)
+				. += "."
+			else
+				. += ", "
 
-	return code_phrase
+/**
+ * Generate a name devices
+ *
+ * Creates a randomly generated tag or name for devices or anything really
+ * it keeps track of a special list that makes sure no name is used more than
+ * once
+ *
+ * args:
+ * * len (int)(Optional) Default=5 The length of the name
+ * * prefix (string)(Optional) static text in front of the random name
+ * * postfix (string)(Optional) static text in back of the random name
+ * Returns (string) The generated name
+ */
+/proc/assign_random_name(len=5, prefix="", postfix="")
+	//DO NOT REMOVE NAMES HERE UNLESS YOU KNOW WHAT YOU'RE DOING
+	//All names already used
+	var/static/list/used_names = list()
 
-
-
-/proc/generate_planet_name()
-	return "[capitalize(pick(GLOB.last_names))]-[pick(GLOB.greek_letters)]"
+	var/static/valid_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	var/list/new_name = list()
+	var/text
+	// machine id's should be fun random chars hinting at a larger world
+	do
+		new_name.Cut()
+		new_name += prefix
+		for(var/i = 1 to len)
+			new_name += valid_chars[rand(1,length(valid_chars))]
+		new_name += postfix
+		text = new_name.Join()
+	while(used_names[text])
+	used_names[text] = TRUE
+	return text

@@ -1,31 +1,15 @@
-var/global/ntnet_card_uid = 1
-
 /obj/item/computer_hardware/network_card
-	name = "basic network card"
-	desc = "A basic network card for usage with standard NTNet frequencies."
-	power_usage = 10
-	origin_tech = list(TECH_DATA = 2, TECH_ENGINEERING = 1)
-	matter_reagents = list("silicon" = 20)
-	icon_state = "netcard"
-	hardware_size = 1
-	rarity_value = 8.33
-	var/identification_id			// Identification ID. Technically MAC address of this device. Can't be changed by user.
-	var/identification_string = ""	// Identification string, technically nickname seen in the network. Can be set by user.
-	var/long_range = FALSE
-	var/ethernet = FALSE	// Hard-wired, therefore always on, ignores NTNet wireless checks.
-	var/datum/radio_frequency/radio_connection	// Used by signaller code
-	var/frequency = 1457
+	name = "network card"
+	desc = "A basic wireless network card for usage with standard NTNet frequencies."
+	power_usage = 50
+	icon_state = "radio_mini"
+	var/identification_id = null	// Identification ID. Technically MAC address of this device. Can't be changed by user.
+	var/identification_string = "" 	// Identification string, technically nickname seen in the network. Can be set by user.
+	var/long_range = 0
+	var/ethernet = 0 // Hard-wired, therefore always on, ignores NTNet wireless checks.
 	malfunction_probability = 1
-
-/obj/item/computer_hardware/network_card/Initialize()
-	. = ..()
-	identification_id = ntnet_card_uid
-	ntnet_card_uid++
-	set_frequency(frequency)
-
-/obj/item/computer_hardware/network_card/Destroy()
-	SSradio.remove_object(src, frequency)
-	return ..()
+	device_type = MC_NET
+	var/global/ntnet_card_uid = 1
 
 /obj/item/computer_hardware/network_card/diagnostics(mob/user)
 	..()
@@ -38,98 +22,80 @@ var/global/ntnet_card_uid = 1
 	if(ethernet)
 		to_chat(user, "OpenEth (Physical Connection) - Physical network connection port")
 
-/obj/item/computer_hardware/network_card/proc/set_frequency(new_frequency)
-	if(ethernet || !new_frequency || !frequency)
-		return
-
-	if(radio_connection && new_frequency == frequency)
-		return
-
-	SSradio.remove_object(src, frequency)
-	frequency = sanitize_frequency(new_frequency, RADIO_LOW_FREQ, RADIO_HIGH_FREQ)
-	radio_connection = SSradio.add_object(src, frequency, RADIO_CHAT)
-
-/obj/item/computer_hardware/network_card/proc/signal(new_frequency, code)
-	if(!radio_connection || !check_functionality())
-		return
-
-	set_frequency(new_frequency)
-
-	var/datum/signal/signal = new
-	signal.source = src
-	signal.encryption = CLAMP(code, 1, 100)
-	signal.data["message"] = "ACTIVATE"
-	spawn(0)
-		radio_connection.post_signal(src, signal)
-
-/obj/item/computer_hardware/network_card/receive_signal(datum/signal/signal)
-	if(!check_functionality() || !holder2 || !holder2.enabled)
-		return
-
-	for(var/datum/computer_file/program/signaller/S in holder2.all_threads)
-		S.receive_signal(signal)
-
-
-
-/obj/item/computer_hardware/network_card/advanced
-	name = "advanced network card"
-	desc = "An advanced network card for usage with standard frequencies. It's transmitter is strong enough to connect even when far away."
-	long_range = TRUE
-	matter = list(MATERIAL_STEEL = 1, MATERIAL_PLASTIC = 1, MATERIAL_SILVER = 2)
-	origin_tech = list(TECH_DATA = 4, TECH_ENGINEERING = 2)
-	power_usage = 30 // Better range but higher power usage.
-	icon_state = "netcard_adv"
-	hardware_size = 1
-	price_tag = 100
-	rarity_value = 16.66
-
-/obj/item/computer_hardware/network_card/wired
-	name = "wired network card"
-	desc = "An advanced network card for usage with standard frequencies. This one supports wired connection."
-	ethernet = TRUE
-	origin_tech = list(TECH_DATA = 5, TECH_ENGINEERING = 3)
-	power_usage = 100 // Better range but higher power usage.
-	icon_state = "netcard_ethernet"
-	hardware_size = 3
-
+/obj/item/computer_hardware/network_card/New(l)
+	..()
+	identification_id = ntnet_card_uid++
 
 // Returns a string identifier of this network card
 /obj/item/computer_hardware/network_card/proc/get_network_tag()
 	return "[identification_string] (NID [identification_id])"
 
-/obj/item/computer_hardware/network_card/proc/is_banned()
-	return ntnet_global.check_banned(identification_id)
-
 // 0 - No signal, 1 - Low signal, 2 - High signal. 3 - Wired Connection
 /obj/item/computer_hardware/network_card/proc/get_signal(specific_action = 0)
-	if(!holder2) // Hardware is not installed in anything. No signal. How did this even get called?
-		return 0
+	if(!holder) // Hardware is not installed in anything. No signal. How did this even get called?
+		return NTNET_NO_SIGNAL
 
-	if(!enabled)
-		return 0
-
-	if(!check_functionality() || !ntnet_global || is_banned())
-		return 0
-
-	if(!ntnet_global.check_function(specific_action)) // NTNet is down and we are not connected via wired connection. No signal.
-		if(!ethernet || specific_action) // Wired connection ensures a basic connection to NTNet, however no usage of disabled network services.
-			return 0
+	if(!check_functionality())
+		return NTNET_NO_SIGNAL
 
 	if(ethernet) // Computer is connected via wired connection.
-		return 3
+		return NTNET_ETHERNET_SIGNAL
 
-	if(holder2)
-		var/turf/T = get_turf(holder2)
-		if(!istype(T)) //no reception in nullspace
-			return 0
-		if(T.z in GLOB.maps_data.station_levels)
+	if(!SSmodular_computers || !SSmodular_computers.check_function(specific_action)) // NTNet is down and we are not connected via wired connection. No signal.
+		return NTNET_NO_SIGNAL
+
+	if(holder)
+
+		var/turf/T = get_turf(holder)
+		if((T && istype(T)) && (is_station_level(T.z) || is_mining_level(T.z)))
 			// Computer is on station. Low/High signal depending on what type of network card you have
 			if(long_range)
-				return 2
+				return NTNET_GOOD_SIGNAL
 			else
-				return 1
-		if(T.z in GLOB.maps_data.contact_levels) //not on station, but close enough for radio signal to travel
-			if(long_range) // Computer is not on station, but it has upgraded network card. Low signal.
-				return 1
+				return NTNET_LOW_SIGNAL
 
-	return 0 // Computer is not on station and does not have upgraded network card. No signal.
+	if(long_range) // Computer is not on station, but it has upgraded network card. Low signal.
+		return NTNET_LOW_SIGNAL
+
+	return NTNET_NO_SIGNAL // Computer is not on station and does not have upgraded network card. No signal.
+
+
+/obj/item/computer_hardware/network_card/advanced
+	name = "advanced network card"
+	desc = "An advanced network card for usage with standard NTNet frequencies. Its transmitter is strong enough to connect even off-station."
+	long_range = 1
+	power_usage = 100 // Better range but higher power usage.
+	icon_state = "radio"
+	lefthand_file = 'icons/mob/inhands/misc/devices_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/misc/devices_righthand.dmi'
+	w_class = WEIGHT_CLASS_SMALL
+
+/obj/item/computer_hardware/network_card/wired
+	name = "wired network card"
+	desc = "An advanced network card for usage with standard NTNet frequencies. This one also supports wired connection."
+	ethernet = 1
+	power_usage = 100 // Better range but higher power usage.
+	icon_state = "net_wired"
+	w_class = WEIGHT_CLASS_NORMAL
+
+/obj/item/computer_hardware/network_card/integrated //Borg tablet version, only works while the borg has power and is not locked
+	name = "cyborg data link"
+
+/obj/item/computer_hardware/network_card/integrated/get_signal(specific_action = 0)
+	var/obj/item/modular_computer/tablet/integrated/modularInterface = holder
+
+	if(!modularInterface || !istype(modularInterface))
+		return FALSE //wrong type of tablet
+
+	if(istype(modularInterface.borgo, /mob/living/silicon/robot))
+		var/mob/living/silicon/robot/R = modularInterface.borgo
+		if(!R)
+			return FALSE //No borg found
+
+		if(R.lockcharge)
+			return FALSE //lockdown restricts borg networking
+
+		if(!R.cell || R.cell.charge == 0)
+			return FALSE //borg cell dying restricts borg networking
+
+	return ..()

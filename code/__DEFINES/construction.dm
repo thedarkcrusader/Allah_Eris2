@@ -1,52 +1,90 @@
-/*CONTENTS
-Buildable pipes
-Buildable meters
-*/
-#define PIPE_SIMPLE_STRAIGHT	0
-#define PIPE_SIMPLE_BENT		1
-#define PIPE_HE_STRAIGHT		2
-#define PIPE_HE_BENT			3
-#define PIPE_CONNECTOR			4
-#define PIPE_MANIFOLD			5
-#define PIPE_JUNCTION			6
-#define PIPE_UVENT				7
-#define PIPE_MVALVE				8
-#define PIPE_PUMP				9
-#define PIPE_SCRUBBER			10
-#define PIPE_INSULATED_STRAIGHT	11
-#define PIPE_INSULATED_BENT		12
-#define PIPE_GAS_FILTER			13
-#define PIPE_GAS_MIXER			14
-#define PIPE_PASSIVE_GATE       15
-#define PIPE_VOLUME_PUMP        16
-#define PIPE_HEAT_EXCHANGE      17
-#define PIPE_MTVALVE			18
-#define PIPE_MANIFOLD4W			19
-#define PIPE_CAP				20
-///// Z-Level stuff
-#define PIPE_UP					21
-#define PIPE_DOWN				22
-///// Z-Level stuff
-#define PIPE_GAS_FILTER_M		23
-#define PIPE_GAS_MIXER_T		24
-#define PIPE_GAS_MIXER_M		25
-#define PIPE_OMNI_MIXER			26
-#define PIPE_OMNI_FILTER		27
-///// Supply, scrubbers and universal pipes
-#define PIPE_UNIVERSAL				28
-#define PIPE_SUPPLY_STRAIGHT		29
-#define PIPE_SUPPLY_BENT			30
-#define PIPE_SCRUBBERS_STRAIGHT		31
-#define PIPE_SCRUBBERS_BENT			32
-#define PIPE_SUPPLY_MANIFOLD		33
-#define PIPE_SCRUBBERS_MANIFOLD		34
-#define PIPE_SUPPLY_MANIFOLD4W		35
-#define PIPE_SCRUBBERS_MANIFOLD4W	36
-#define PIPE_SUPPLY_UP				37
-#define PIPE_SCRUBBERS_UP			38
-#define PIPE_SUPPLY_DOWN			39
-#define PIPE_SCRUBBERS_DOWN			40
-#define PIPE_SUPPLY_CAP				41
-#define PIPE_SCRUBBERS_CAP			42
-///// Mirrored T-valve ~ because I couldn't be bothered re-sorting all of the defines
-#define PIPE_MTVALVEM				43
+
+//other construction-related things
+
+//windows affected by Nar'sie turn this color.
+#define NARSIE_WINDOW_COLOUR "#7D1919"
+
+//let's just pretend fulltile windows being children of border windows is fine
+#define FULLTILE_WINDOW_DIR NORTHEAST
+
+//The amount of materials you get from a sheet of mineral like iron/diamond/glass etc
+#define MINERAL_MATERIAL_AMOUNT 2000
+
+// Crafting defines.
+// When adding new defines, please make sure to also add them to the encompassing list.
+#define CAT_WEAPON_RANGED "Weapons: Ranged"
+#define CAT_WEAPON_MELEE "Weapons: Melee"
+#define CAT_WEAPON_AMMO "Weapon Ammo"
+#define CAT_TOOLS "Tools"
+#define CAT_ROBOT "Robotics"
+#define CAT_CLOTHING "Clothing"
+#define CAT_ARMOR "Armor"
+#define CAT_EQUIPMENT "Equipment"
+#define CAT_STRUCTURES "Structures"
+#define CAT_PRIMAL "Tribal"
+#define CAT_BAIT "Fishing Bait"
+#define CAT_MEDICAL "Medical"
+#define CAT_MISC "Misc"
+
+GLOBAL_LIST_INIT(crafting_category, list(
+	CAT_WEAPON_RANGED,
+	CAT_WEAPON_MELEE,
+	CAT_WEAPON_AMMO,
+	CAT_TOOLS,
+	CAT_ROBOT,
+	CAT_CLOTHING,
+	CAT_ARMOR,
+	CAT_STRUCTURES,
+	CAT_EQUIPMENT,
+	CAT_PRIMAL,
+	CAT_BAIT,
+	CAT_MEDICAL,
+	CAT_MISC
+))
+
+// Food/Drink crafting defines.
+// When adding new defines, please make sure to also add them to the encompassing list.
+#define CAT_FOOD	"Foods"
+#define CAT_BREAD	"Breads"
+#define CAT_BURGER	"Burgers"
+#define CAT_CAKE	"Cakes"
+#define CAT_EGG	"Egg-Based Food"
+#define CAT_MEAT	"Meats"
+#define CAT_MISCFOOD	"Misc. Food"
+#define CAT_PASTRY	"Pastries"
+#define CAT_PIE	"Pies"
+#define CAT_PIZZA	"Pizzas"
+#define CAT_SALAD	"Salads"
+#define CAT_SANDWICH	"Sandwiches"
+#define CAT_SOUP	"Soups"
+#define CAT_SPAGHETTI	"Spaghettis"
+#define CAT_ICE	"Frozen"
+#define CAT_DRINK   "Drinks"
+#define CAT_SEAFOOD   "Seafood"
+
+GLOBAL_LIST_INIT(crafting_category_food, list(
+	CAT_FOOD,
+	CAT_BREAD,
+	CAT_BURGER,
+	CAT_CAKE,
+	CAT_EGG,
+	CAT_MEAT,
+	CAT_SEAFOOD,
+	CAT_MISCFOOD,
+	CAT_PASTRY,
+	CAT_PIE,
+	CAT_PIZZA,
+	CAT_SALAD,
+	CAT_SANDWICH,
+	CAT_SOUP,
+	CAT_SPAGHETTI,
+	CAT_ICE,
+	CAT_DRINK,
+))
+
+
+
+#define RCD_WINDOW_FULLTILE "full tile"
+#define RCD_WINDOW_DIRECTIONAL "directional"
+#define RCD_WINDOW_NORMAL "glass"
+#define RCD_WINDOW_REINFORCED "reinforced glass"

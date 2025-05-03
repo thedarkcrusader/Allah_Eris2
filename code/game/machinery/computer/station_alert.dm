@@ -1,63 +1,90 @@
-
 /obj/machinery/computer/station_alert
 	name = "station alert console"
 	desc = "Used to access the station's automated alert system."
-	icon_keyboard = "tech_key"
 	icon_screen = "alert:0"
-	light_color = COLOR_LIGHTING_CYAN_MACHINERY
-	circuit = /obj/item/electronics/circuitboard/stationalert
-	var/datum/nano_module/alarm_monitor/alarm_monitor
-	var/monitor_type = /datum/nano_module/alarm_monitor
+	icon_keyboard = "atmos_key"
+	circuit = /obj/item/circuitboard/computer/stationalert
 
-/obj/machinery/computer/station_alert/engineering
-	monitor_type = /datum/nano_module/alarm_monitor/engineering
+	light_color = LIGHT_COLOR_CYAN
 
-/obj/machinery/computer/station_alert/security
-	monitor_type = /datum/nano_module/alarm_monitor/security
-
-/obj/machinery/computer/station_alert/all
-	monitor_type = /datum/nano_module/alarm_monitor/all
-
-/obj/machinery/computer/station_alert/Initialize()
-	alarm_monitor = new monitor_type(src)
-	alarm_monitor.register_alarm(src, TYPE_PROC_REF(/atom, update_icon))
+/obj/machinery/computer/station_alert/Initialize(mapload)
 	. = ..()
-	if(monitor_type)
-		register_monitor(new monitor_type(src))
+	GLOB.alert_consoles += src
 
 /obj/machinery/computer/station_alert/Destroy()
+	GLOB.alert_consoles -= src
+	return ..()
+
+/obj/machinery/computer/station_alert/ui_interact(mob/user, datum/tgui/ui)
+	ui = SStgui.try_update_ui(user, src, ui)
+	if(!ui)
+		ui = new(user, src, "StationAlertConsole", name)
+		ui.open()
+
+/obj/machinery/computer/station_alert/ui_data(mob/user)
+	var/list/data = list()
+
+	data["alarms"] = list()
+	for(var/class in GLOB.alarms)
+		data["alarms"][class] = list()
+		for(var/area in GLOB.alarms[class])
+			data["alarms"][class] += area
+
+	return data
+
+/obj/machinery/computer/station_alert/proc/triggerAlarm(class, area/A, O, obj/source)
+	if(source.z != z)
+		return
+	if(stat & (BROKEN))
+		return
+
+	var/list/L = GLOB.alarms[class]
+	for(var/I in L)
+		if (I == A.name)
+			var/list/alarm = L[I]
+			var/list/sources = alarm[3]
+			if (!(source in sources))
+				sources += source
+			update_appearance(UPDATE_ICON)
+			return 1
+	var/obj/machinery/camera/C = null
+	var/list/CL = null
+	if(O && islist(O))
+		CL = O
+		if (CL.len == 1)
+			C = CL[1]
+	else if(O && istype(O, /obj/machinery/camera))
+		C = O
+	L[A.name] = list(A, (C ? C : O), list(source))
+	update_appearance(UPDATE_ICON)
+	return 1
+
+
+/obj/machinery/computer/station_alert/proc/cancelAlarm(class, area/A, obj/origin)
+	if(stat & (BROKEN))
+		return
+	var/list/L = GLOB.alarms[class]
+	var/cleared = 0
+	for (var/I in L)
+		if (I == A.name)
+			var/list/alarm = L[I]
+			var/list/srcs  = alarm[3]
+			if (origin in srcs)
+				srcs -= origin
+			if (srcs.len == 0)
+				cleared = 1
+				L -= I
+	update_appearance(UPDATE_ICON)
+	return !cleared
+
+/obj/machinery/computer/station_alert/update_overlays()
 	. = ..()
-	unregister_monitor()
-
-/obj/machinery/computer/station_alert/proc/register_monitor(var/datum/nano_module/alarm_monitor/monitor)
-	if(monitor.host != src)
+	if(stat & (NOPOWER|BROKEN))
 		return
-
-	alarm_monitor = monitor
-	alarm_monitor.register_alarm(src, TYPE_PROC_REF(/atom, update_icon))
-
-/obj/machinery/computer/station_alert/proc/unregister_monitor()
-	if(alarm_monitor)
-		alarm_monitor.unregister_alarm(src)
-		qdel(alarm_monitor)
-		alarm_monitor = null
-
-/obj/machinery/computer/station_alert/attack_hand(mob/user)
-	if(..())
-		return
-	nano_ui_interact(user)
-
-/obj/machinery/computer/station_alert/nano_ui_interact(mob/user)
-	if(alarm_monitor)
-		alarm_monitor.nano_ui_interact(user)
-
-/obj/machinery/computer/station_alert/nano_container()
-	return alarm_monitor
-
-/obj/machinery/computer/station_alert/update_icon()
-	icon_screen = initial(icon_screen)
-	if(!(stat & (BROKEN|NOPOWER)))
-		if(alarm_monitor)
-			if(alarm_monitor.has_major_alarms(get_z(src)))
-				icon_screen = "alert:2"
-	..()
+	var/active_alarms = FALSE
+	for(var/cat in GLOB.alarms)
+		var/list/L = GLOB.alarms[cat]
+		if(L.len)
+			active_alarms = TRUE
+	if(active_alarms)
+		. += "alert:2"

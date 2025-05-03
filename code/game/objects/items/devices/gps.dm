@@ -1,136 +1,91 @@
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Miscellaneous xenoarchaeology tools
-/obj/item/device/gps
-	name = "relay positioning device"
-	desc = "Pinpoints your location using the ship navigation system."
+/obj/item/gps
+	name = "global positioning system"
+	desc = "Helping lost spacemen find their way through the planets since 2016."
 	icon = 'icons/obj/telescience.dmi'
 	icon_state = "gps-c"
-	//item_state = "locator"
-
-	w_class = ITEM_SIZE_SMALL
-	slot_flags = SLOT_BELT
-	origin_tech = list(TECH_ENGINEERING = 2, TECH_DATA = 2, TECH_BLUESPACE = 2)
-	matter = list(MATERIAL_PLASTIC = 1, MATERIAL_GLASS = 1)
-	rarity_value = 15
-
-	var/gps_prefix = "COM"
-	var/datum/gps_data/gps
-
-	// Avoid displaying PDAs, tablets, computers, tracking implants and spying implants
-	var/list/hide_prefixes = list("PDA", "TAB", "MPC", "IMP", "SPY")
-
+	w_class = WEIGHT_CLASS_SMALL
+	slot_flags = ITEM_SLOT_BELT
+	obj_flags = UNIQUE_RENAME | UNIQUE_REDESC
+	var/gpstag = "COM0"
 	var/emped = FALSE
-	var/turf/locked_location
 
-/datum/gps_data/device/is_functioning()
-	var/obj/item/device/gps/G = holder
-	if(G.emped)
-		return FALSE
-	return ..()
-
-/obj/item/device/gps/Initialize()
+/obj/item/gps/Initialize(mapload)
 	. = ..()
-	gps = new /datum/gps_data/device(src, new_prefix=gps_prefix)
-	update_name()
-	overlays += image(icon, "working")
+	add_gps_component()
 
-/obj/item/device/gps/Destroy()
-	QDEL_NULL(gps)
-	return ..()
+/// Adds the GPS component to this item.
+/obj/item/gps/proc/add_gps_component()
+	AddComponent(/datum/component/gps/item, gpstag)
 
-/obj/item/device/gps/proc/update_name()
-	if(gps.serial_number)
-		name = "[initial(name)] ([gps.serial_number])"
-	else
-		name = initial(name)
-
-/obj/item/device/gps/emp_act(severity)
-	emped = TRUE
-	overlays.Cut()
-	overlays += image(icon, "emp")
-	addtimer(CALLBACK(src, PROC_REF(post_emp)), 300)
-
-/obj/item/device/gps/proc/post_emp()
-	emped = FALSE
-	overlays.Cut()
-	overlays += image(icon, "working")
-
-/obj/item/device/gps/proc/can_show_gps(datum/gps_data/G)
-	return G.is_functioning() && G.holder != src && !(G.prefix in hide_prefixes)
-
-/obj/item/device/gps/attack_self(mob/user)
-	var/t = ""
-	var/gps_window_height = 150 // Variable window height, depending on how many GPS units there are to show
-	if(emped)
-		t = "ERROR"
-	else
-		t = "[gps.serial_number]: [gps.get_coordinates_text()]"
-		t += "<BR><A href='?src=\ref[src];tag=1'>Set Tag</A>"
-		if(locked_location && locked_location.loc)
-			t += "<BR>Coordinates saved: [locked_location.loc]"
-			gps_window_height += 20
-
-		t += "<BR>"
-
-		for(var/g in GLOB.gps_trackers)
-			var/datum/gps_data/G = g
-			if(can_show_gps(G))
-				t += "<BR>[G.serial_number]: [G.get_coordinates_text(default="ERROR")]"
-				gps_window_height += 20
-
-	var/datum/browser/popup = new(user, "GPS", name, 450, min(gps_window_height, 800))
-	popup.set_content(t)
-	popup.open()
-
-/obj/item/device/gps/Topic(href, href_list)
-	..()
-	if(href_list["tag"])
-		var/a = input("Please enter desired tag.", name, gps.serial_number) as text
-		a = uppertext(copytext(sanitize(a), 1, 9))
-		if(a && src.loc == usr)
-			gps.change_serial(a)
-			update_name()
-			attack_self(usr)
-
-/obj/item/device/gps/examine(mob/user, extra_description = "")
-	extra_description += "<span class='notice'>\The [src]'s screen shows: <i>[gps.get_coordinates_text(default="ERROR")]</i>.</span>"
-	..(user, extra_description)
-
-/obj/item/device/gps/science
+/obj/item/gps/science
 	icon_state = "gps-s"
-	gps_prefix = "SCI"
+	gpstag = "SCI0"
 
-/obj/item/device/gps/engineering
+/obj/item/gps/engineering
 	icon_state = "gps-e"
-	gps_prefix = "ENG"
+	gpstag = "ENG0"
 
-/obj/item/device/gps/mining
+/obj/item/gps/mining
 	icon_state = "gps-m"
-	gps_prefix = "MIN"
-	desc = "A positioning system helpful for rescuing trapped or injured miners. Keeping one on you at all times while mining might just save your life."
+	gpstag = "MINE0"
+	desc = "A positioning system helpful for rescuing trapped or injured miners, keeping one on you at all times while mining might just save your life."
 
-// Looks like a normal GPS, but displays PDA GPS and such
-/obj/item/device/gps/contractor
-	hide_prefixes = list()
-	spawn_blacklisted = TRUE
+/obj/item/gps/cyborg
+	icon_state = "gps-b"
+	gpstag = "BORG0"
+	desc = "A mining cyborg internal positioning system. Used as a recovery beacon for damaged cyborg assets, or a collaboration tool for mining teams."
 
-// Locator
-// A GPS device that tracks beacons and implants
-/obj/item/device/gps/locator
-	name = "locator"
-	desc = "A device used to locate tracking beacons and people with tracking implants."
-	icon = 'icons/obj/device.dmi'
-	icon_state = "locator"
-	gps_prefix = "SEC"
+/obj/item/gps/cyborg/Initialize(mapload)
+	. = ..()
+	ADD_TRAIT(src, TRAIT_NODROP, CYBORG_ITEM_TRAIT)
 
-/obj/item/device/gps/locator/can_show_gps(datum/gps_data/G)
-	return G.is_functioning() && G.holder != src && (G.prefix in list("SEC", "LOC", "TBC"))
+/obj/item/gps/internal
+	icon_state = null
+	item_flags = ABSTRACT
+	gpstag = "Eerie Signal"
+	desc = "Report to a coder immediately."
+	invisibility = INVISIBILITY_MAXIMUM
 
+/obj/item/gps/mining/internal
+	icon_state = "gps-m"
+	gpstag = "MINER"
+	desc = "A positioning system helpful for rescuing trapped or injured miners, keeping one on you at all times while mining might just save your life."
 
-/obj/item/device/measuring_tape
-	name = "measuring tape"
-	desc = "A coiled metallic tape used to check dimensions and lengths."
-	icon = 'icons/obj/xenoarchaeology.dmi'
-	icon_state = "measuring"
-	w_class = ITEM_SIZE_SMALL
+/obj/item/gps/internal/base
+	gpstag = "NT_AUX"
+	desc = "A homing signal from Nanotrasen's mining base."
+
+/obj/item/gps/visible_debug
+	name = "visible GPS"
+	gpstag = "ADMIN"
+	desc = "This admin-spawn GPS unit leaves the coordinates visible \
+		on any turf that it passes over, for debugging. Especially useful \
+		for marking the area around the transition edges."
+	var/list/turf/tagged
+
+/obj/item/gps/visible_debug/Initialize(mapload)
+	. = ..()
+	tagged = list()
+	START_PROCESSING(SSfastprocess, src)
+
+/obj/item/gps/visible_debug/process()
+	var/turf/T = get_turf(src)
+	if(T)
+		// I assume it's faster to color,tag and OR the turf in, rather
+		// then checking if its there
+		T.color = RANDOM_COLOUR
+		T.maptext = MAPTEXT("[T.x],[T.y],[T.z]")
+		tagged |= T
+
+/obj/item/gps/visible_debug/proc/clear()
+	while(tagged.len)
+		var/turf/T = pop(tagged)
+		T.color = initial(T.color)
+		T.maptext = initial(T.maptext)
+
+/obj/item/gps/visible_debug/Destroy()
+	if(tagged)
+		clear()
+	tagged = null
+	STOP_PROCESSING(SSfastprocess, src)
+	. = ..()

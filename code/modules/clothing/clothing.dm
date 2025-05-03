@@ -1,700 +1,542 @@
 /obj/item/clothing
 	name = "clothing"
-	siemens_coefficient = 0.9
-	item_flags = DRAG_AND_DROP_UNEQUIP
-	bad_type = /obj/item/clothing
-	rarity_value = 5
-	spawn_frequency = 10
-	spawn_tags = SPAWN_TAG_CLOTHING
-	var/flash_protection = FLASH_PROTECTION_NONE	// Sets the item's level of flash protection.
-	var/tint = TINT_NONE							// Sets the item's level of visual impairment tint.
-	var/list/species_restricted				// Only these species can wear this kit.
-	var/gunshot_residue								// Used by forensics.
-	var/initial_name = "clothing"					// For coloring
+	resistance_flags = FLAMMABLE
+	max_integrity = 200
+	integrity_failure = 80
+	fryable = TRUE
+	var/damaged_clothes = CLOTHING_PRISTINE //similar to machine's BROKEN stat and structure's broken var
+	var/flash_protect = 0		//What level of bright light protection item has. 1 = Flashers, Flashes, & Flashbangs | 2 = Welding | -1 = OH GOD WELDING BURNT OUT MY RETINAS
+	var/tint = 0				//Sets the item's level of visual impairment tint, normally set to the same as flash_protect
+	var/up = 0					//but separated to allow items to protect but not impair vision, like space helmets
+	var/visor_flags = 0			//flags that are added/removed when an item is adjusted up/down
+	var/visor_flags_inv = 0		//same as visor_flags, but for flags_inv
+	var/visor_flags_cover = 0	//same as above, but for flags_cover
+//what to toggle when toggled with weldingvisortoggle()
+	var/visor_vars_to_toggle = VISOR_FLASHPROTECT | VISOR_TINT | VISOR_VISIONFLAGS | VISOR_INVISVIEW
+	lefthand_file = 'icons/mob/inhands/clothing_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/clothing_righthand.dmi'
+	var/alt_desc = null
+	var/toggle_message = null
+	var/alt_toggle_message = null
+	var/active_sound = null
+	var/toggle_cooldown = null
+	var/cooldown = 0
 
-	var/list/accessories = list()
-	var/list/valid_accessory_slots
-	var/list/restricted_accessory_slots
-	var/equip_delay = 0 //If set to a nonzero value, the item will require that much time to wear and remove
+	var/blocks_shove_knockdown = FALSE //Whether wearing the clothing item blocks the ability for shove to knock down.
 
-	//Used for hardsuits. If false, this piece cannot be retracted while the core module is engaged
-	var/retract_while_active = TRUE
+	var/clothing_flags = NONE
 
-	style = STYLE_NONE
-	var/style_coverage = NONE
+	var/can_be_bloody = TRUE
 
-	var/light_overlay = "helmet_light"
-	var/light_applied
-	var/brightness_on
-	var/on = FALSE
+	/// What items can be consumed to repair this clothing (must by an /obj/item/stack)
+	var/repairable_by = /obj/item/stack/sheet/cloth
 
+	//Var modification - PLEASE be careful with this I know who you are and where you live
+	var/list/user_vars_to_edit //VARNAME = VARVALUE eg: "name" = "butts"
+	var/list/user_vars_remembered //Auto built by the above + dropped() + equipped()
 
+	/// Trait modification, lazylist of traits to add/take away, on equipment/drop in the correct slot
+	var/list/clothing_traits
 
-	price_tag = 30
+	var/pocket_storage_component_path
 
-/obj/item/clothing/attack_self(mob/user)
-	if(brightness_on)
-		if(!isturf(user.loc))
-			to_chat(user, "You cannot turn the light on while in this [user.loc]")
-			return
-		on = !on
-		to_chat(user, "You [on ? "enable" : "disable"] the helmet light.")
-		update_flashlight(user)
-	else
-		return ..(user)
+	//These allow head/mask items to dynamically alter the user's hair
+	// and facial hair, checking hair_extensions.dmi and facialhair_extensions.dmi
+	// for a state matching hair_state+dynamic_hair_suffix
+	// THESE OVERRIDE THE HIDEHAIR FLAGS
+	var/dynamic_hair_suffix = ""//head > mask for head hair
+	var/dynamic_fhair_suffix = ""//mask > head for facial hair
 
-/obj/item/clothing/proc/update_flashlight(mob/user = null)
-	if(on && !light_applied)
-		set_light(brightness_on)
-		light_applied = 1
-	else if(!on && light_applied)
-		set_light(0)
-		light_applied = 0
-	update_icon(user)
-	user.update_action_buttons()
+	var/tearable //can this particular item be torn down to be used for cloth? | yogs
+	var/tearhealth = 100 //health regarding tearing clothes to get torn cloth | yogs //why is this so bad
 
-/obj/item/clothing/head/update_icon(mob/user)
+	/// How much clothing damage has been dealt to each of the limbs of the clothing, assuming it covers more than one limb
+	var/list/damage_by_parts
+	/// How much integrity is in a specific limb before that limb is disabled (for use in [/obj/item/clothing/proc/take_damage_zone], and only if we cover multiple zones.) Set to 0 to disable shredding.
+	var/limb_integrity = 0
+	/// How many zones (body parts, not precise) we have disabled so far, for naming purposes
+	var/zones_disabled
 
-	cut_overlays()
-	var/mob/living/carbon/human/H
-	if(ishuman(user))
-		H = user
-
-	if(on)
-
-		// Generate object icon.
-		if(!light_overlay_cache["[light_overlay]_icon"])
-			light_overlay_cache["[light_overlay]_icon"] = image('icons/obj/light_overlays.dmi', light_overlay)
-		overlays |= light_overlay_cache["[light_overlay]_icon"]
-
-		// Generate and cache the on-mob icon, which is used in update_inv_head().
-		var/cache_key = "[light_overlay][H ? "_[H.species.get_bodytype()]" : ""]"
-		if(!light_overlay_cache[cache_key])
-			light_overlay_cache[cache_key] = image('icons/mob/light_overlays.dmi', light_overlay)
-
-	if(H)
-		H.update_inv_head()
-
-
-/obj/item/clothing/Initialize(mapload, ...)
+/obj/item/clothing/Initialize(mapload)
+	if(CHECK_BITFIELD(clothing_flags, VOICEBOX_TOGGLABLE))
+		actions_types += /datum/action/item_action/toggle_voice_box
 	. = ..()
+	if(ispath(pocket_storage_component_path))
+		LoadComponent(pocket_storage_component_path)
+	if(can_be_bloody && ((body_parts_covered & FEET) || (flags_inv & HIDESHOES)))
+		LoadComponent(/datum/component/bloodysoles)
 
-	var/obj/screen/item_action/action = new /obj/screen/item_action/top_bar/clothing_info
-	action.owner = src
-	if(!hud_actions)
-		hud_actions = list()
-	hud_actions += action
+/obj/item/clothing/MouseDrop(atom/over_object)
+	. = ..()
+	var/mob/M = usr
 
-	if(matter)
+	if(ismecha(M.loc)) // stops inventory actions in a mech
 		return
 
-	else if(chameleon_type)
-		matter = list(MATERIAL_PLASTIC = 2 * w_class)
-		origin_tech = list(TECH_COVERT = 3)
-	else
-		matter = list(MATERIAL_BIOMATTER = 5 * w_class)
+	if(!M.incapacitated() && loc == M && istype(over_object, /atom/movable/screen/inventory/hand))
+		var/atom/movable/screen/inventory/hand/H = over_object
+		if(M.putItemFromInventoryInHandIfPossible(src, H.held_index))
+			add_fingerprint(usr)
 
+/obj/item/reagent_containers/food/snacks/clothing
+	name = "temporary moth clothing snack item"
+	desc = "If you're reading this it means I messed up. This is related to moths eating clothes and I didn't know a better way to do it than making a new food object."
+	list_reagents = list(/datum/reagent/consumable/nutriment = 1)
+	tastes = list("dust" = 1, "lint" = 1)
+	foodtype = CLOTH
+
+/obj/item/clothing/attack(mob/M, mob/living/user, params)
+	if(!user.combat_mode && ismoth(M))
+		var/obj/item/reagent_containers/food/snacks/clothing/clothing_as_food = new
+		clothing_as_food.name = name
+		if(clothing_as_food.attack(M, user, params))
+			take_damage(15, sound_effect=FALSE)
+		qdel(clothing_as_food)
+	else
+		return ..()
+
+/obj/item/clothing/attackby(obj/item/W, mob/user, params)
+	if(damaged_clothes && istype(W, repairable_by))
+		var/obj/item/stack/S = W
+		switch(damaged_clothes)
+			if(CLOTHING_DAMAGED)
+				S.use(1)
+				repair(user, params)
+			if(CLOTHING_SHREDDED)
+				if(S.amount < 3)
+					to_chat(user, span_warning("You require 3 [S.name] to repair [src]."))
+					return
+				to_chat(user, span_notice("You begin fixing the damage to [src] with [S]..."))
+				if(do_after(user, 6 SECONDS, src))
+					if(S.use(3))
+						repair(user, params)
+		return 1
+	return ..()
+
+/// Set the clothing's integrity back to 100%, remove all damage to bodyparts, and generally fix it up
+/obj/item/clothing/proc/repair(mob/user, params)
+	damaged_clothes = CLOTHING_PRISTINE
+	update_clothes_damaged_state(FALSE)
+	update_integrity(max_integrity)
+	name = initial(name) // remove "tattered" or "shredded" if there's a prefix
+	body_parts_covered = initial(body_parts_covered)
+	slot_flags = initial(slot_flags)
+	damage_by_parts = null
+	if(user)
+		UnregisterSignal(user, COMSIG_MOVABLE_MOVED)
+		to_chat(user, span_notice("You fix the damage on [src]."))
+
+/**
+  * take_damage_zone() is used for dealing damage to specific bodyparts on a worn piece of clothing, meant to be called from [/obj/item/bodypart/proc/check_woundings_mods()]
+  *
+  *	This proc only matters when a bodypart that this clothing is covering is harmed by a direct attack (being on fire or in space need not apply), and only if this clothing covers
+  * more than one bodypart to begin with. No point in tracking damage by zone for a hat, and I'm not cruel enough to let you fully break them in a few shots.
+  * Also if limb_integrity is 0, then this clothing doesn't have bodypart damage enabled so skip it.
+  *
+  * Arguments:
+  * * def_zone: The bodypart zone in question
+  * * damage_amount: Incoming damage
+  * * damage_type: BRUTE or BURN
+  * * armour_penetration: If the attack had armour_penetration
+  */
+/obj/item/clothing/proc/take_damage_zone(def_zone, damage_amount, damage_type, armour_penetration)
+	if(!def_zone || !limb_integrity || (initial(body_parts_covered) in GLOB.bitflags)) // the second check sees if we only cover one bodypart anyway and don't need to bother with this
+		return
+	var/list/covered_limbs = cover_flags2body_zones(body_parts_covered) // what do we actually cover?
+	if(!(def_zone in covered_limbs))
+		return
+
+	var/damage_dealt = take_damage(damage_amount * 0.1, damage_type, armour_penetration, FALSE) * 10 // only deal 10% of the damage to the general integrity damage, then multiply it by 10 so we know how much to deal to limb
+	LAZYINITLIST(damage_by_parts)
+	damage_by_parts[def_zone] += damage_dealt
+	if(damage_by_parts[def_zone] > limb_integrity)
+		disable_zone(def_zone, damage_type)
+
+/**
+  * disable_zone() is used to disable a given bodypart's protection on our clothing item, mainly from [/obj/item/clothing/proc/take_damage_zone()]
+  *
+  * This proc disables all protection on the specified bodypart for this piece of clothing: it'll be as if it doesn't cover it at all anymore (because it won't!)
+  * If every possible bodypart has been disabled on the clothing, we put it out of commission entirely and mark it as shredded, whereby it will have to be repaired in
+  * order to equip it again. Also note we only consider it damaged if there's more than one bodypart disabled.
+  *
+  * Arguments:
+  * * def_zone: The bodypart zone we're disabling
+  * * damage_type: Only really relevant for the verb for describing the breaking, and maybe atom_destruction()
+  */
+/obj/item/clothing/proc/disable_zone(def_zone, damage_type)
+	var/list/covered_limbs = cover_flags2body_zones(body_parts_covered)
+	if(!(def_zone in covered_limbs))
+		return
+
+	var/zone_name = parse_zone(def_zone)
+	var/break_verb = ((damage_type == BRUTE) ? "torn" : "burned")
+
+	if(iscarbon(loc))
+		var/mob/living/carbon/C = loc
+		C.visible_message(span_danger("The [zone_name] on [C]'s [src.name] is [break_verb] away!"), span_userdanger("The [zone_name] on your [src.name] is [break_verb] away!"), vision_distance = COMBAT_MESSAGE_RANGE)
+		RegisterSignal(C, COMSIG_MOVABLE_MOVED, PROC_REF(bristle), override = TRUE)
+
+	zones_disabled++
+	for(var/i in body_zone2cover_flags(def_zone))
+		body_parts_covered &= ~i
+
+	if(body_parts_covered == NONE) // if there are no more parts to break then the whole thing is kaput
+		atom_destruction((damage_type == BRUTE ? MELEE : LASER)) // melee/laser is good enough since this only procs from direct attacks anyway and not from fire/bombs
+		return
+
+	damaged_clothes = CLOTHING_DAMAGED
+	switch(zones_disabled)
+		if(1)
+			name = "damaged [initial(name)]"
+		if(2)
+			name = "mangy [initial(name)]"
+		if(3 to INFINITY) // take better care of your shit, dude
+			name = "tattered [initial(name)]"
+
+	update_clothes_damaged_state()
 
 /obj/item/clothing/Destroy()
-	for(var/obj/item/clothing/accessory/A in accessories)
-		qdel(A)
-	accessories = null
+	user_vars_remembered = null //Oh god somebody put REFERENCES in here? not to worry, we'll clean it up
 	return ..()
 
-/obj/item/clothing/get_style()
-	var/real_style = style
-	if(blood_DNA)
-		real_style -= 1
-	return real_style
+/obj/item/clothing/dropped(mob/user)
+	..()
+	if(!istype(user))
+		return
+	UnregisterSignal(user, COMSIG_MOVABLE_MOVED)
+	for(var/trait in clothing_traits)
+		REMOVE_CLOTHING_TRAIT(user, trait)
+	if(LAZYLEN(user_vars_remembered))
+		for(var/variable in user_vars_remembered)
+			if(variable in user.vars)
+				if(user.vars[variable] == user_vars_to_edit[variable]) //Is it still what we set it to? (if not we best not change it)
+					user.vars[variable] = user_vars_remembered[variable]
+		user_vars_remembered = initial(user_vars_remembered) // Effectively this sets it to null.
 
-// Aurora forensics port.
-/obj/item/clothing/clean_blood()
+/obj/item/clothing/equipped(mob/user, slot)
 	. = ..()
-	gunshot_residue = null
-
-//Delayed equipping
-/obj/item/clothing/pre_equip(mob/user, slot)
-	..(user, slot)
-	if (equip_delay > 0)
-		//If its currently worn, we must be taking it off
-		if (is_worn())
-			user.visible_message(
-				SPAN_NOTICE("[user] starts taking off \the [src]..."),
-				SPAN_NOTICE("You start taking off \the [src]...")
-			)
-			if(!do_after(user,equip_delay,src))
-				return TRUE //A nonzero return value will cause the equipping operation to fail
-
-		else if (is_held() && !(slot in unworn_slots))
-			user.visible_message(
-				SPAN_NOTICE("[user] starts putting on \the [src]..."),
-				SPAN_NOTICE("You start putting on \the [src]...")
-			)
-			if(!do_after(user,equip_delay,src))
-				return TRUE //A nonzero return value will cause the equipping operation to fail
-
-// To catch MouseDrop on clothing
-/obj/item/clothing/MouseDrop(over_object)
-	if(!(item_flags & DRAG_AND_DROP_UNEQUIP))
-		return ..()
-	if(!pre_equip(usr, over_object))
-		..()
-
-/proc/body_part_coverage_to_string(body_parts)
-	var/list/body_partsL = list()
-	if(body_parts & HEAD)
-		body_partsL.Add("head")
-	if(body_parts & FACE)
-		body_partsL.Add("face")
-	if(body_parts & EYES)
-		body_partsL.Add("eyes")
-	if(body_parts & EARS)
-		body_partsL.Add("ears")
-	if(body_parts & UPPER_TORSO)
-		body_partsL.Add("upper torso")
-	if(body_parts & LOWER_TORSO)
-		body_partsL.Add("lower torso")
-	if(body_parts & LEGS)
-		body_partsL.Add("legs")
-	else
-		if(body_parts & LEG_LEFT)
-			body_partsL.Add("left leg")
-		if(body_parts & LEG_RIGHT)
-			body_partsL.Add("right leg")
-	if(body_parts & ARMS)
-		body_partsL.Add("arms")
-	else
-		if(body_parts & ARM_LEFT)
-			body_partsL.Add("left arm")
-		if(body_parts & ARM_RIGHT)
-			body_partsL.Add("right arm")
-
-	return english_list(body_partsL)
-
-/obj/item/clothing/nano_ui_data()
-	var/list/data = list()
-	var/list/armorlist = armor.getList()
-	if(armorlist.len)
-		var/list/armor_vals = list()
-		for(var/i in armorlist)
-			if(armorlist[i])
-				armor_vals += list(list(
-					"name" = i,
-					"value" = armorlist[i]
-					))
-		data["armor_info"] = armor_vals
-	if(body_parts_covered)
-		var/body_part_string = body_part_coverage_to_string(body_parts_covered)
-		data["body_coverage"] = body_part_string
-	data["slowdown"] = slowdown
-	if(heat_protection)
-		data["heat_protection"] = body_part_coverage_to_string(heat_protection)
-		data["heat_protection_temperature"] = max_heat_protection_temperature
-	if(cold_protection)
-		data["cold_protection"] = body_part_coverage_to_string(cold_protection)
-		data["cold_protection_temperature"] = min_cold_protection_temperature
-	data["equip_delay"] = equip_delay
-	data["info_style"] = style
-	return data
-
-/obj/item/clothing/nano_ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1, state = GLOB.default_state)
-	var/list/data = nano_ui_data(user)
-
-	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
-	if(!ui)
-		ui = new(user, src, ui_key, "clothing_stats.tmpl", name, 650, 550, state = state)
-		ui.auto_update_layout = 1
-		ui.set_initial_data(data)
-		ui.open()
-
-/obj/item/clothing/ui_action_click(mob/living/user, action_name)
-	if(action_name == "Clothing information")
-		nano_ui_interact(user)
-		return TRUE
-	return ..()
-
-/obj/screen/item_action/top_bar/clothing_info
-	icon = 'icons/mob/screen/gun_actions.dmi'
-	screen_loc = "8,1:13"
-	minloc = "7,2:13"
-	name = "Clothing information"
-	icon_state = "info"
-
-
-///////////////////////////////////////////////////////////////////////
-// Ears: headsets, earmuffs and tiny objects
-/obj/item/clothing/ears
-	name = "ears"
-	w_class = ITEM_SIZE_TINY
-	throwforce = 2
-	slot_flags = SLOT_EARS
-	bad_type = /obj/item/clothing/ears
-
-/obj/item/clothing/ears/attack_hand(mob/user)
-	if (!user) return
-
-	if (src.loc != user || !ishuman(user))
-		..()
+	if (!istype(user))
 		return
+	if(slot_flags & slot) //Was equipped to a valid slot for this item?
+		if(iscarbon(user) && LAZYLEN(zones_disabled))
+			RegisterSignal(user, COMSIG_MOVABLE_MOVED, PROC_REF(bristle))
+		for(var/trait in clothing_traits)
+			ADD_CLOTHING_TRAIT(user, trait)
+		if (LAZYLEN(user_vars_to_edit))
+			for(var/variable in user_vars_to_edit)
+				if(variable in user.vars)
+					LAZYSET(user_vars_remembered, variable, user.vars[variable])
+					user.vv_edit_var(variable, user_vars_to_edit[variable])
 
-	var/mob/living/carbon/human/H = user
-	if(H.l_ear != src && H.r_ear != src)
-		..()
+// Adds a trait to the clothing traits list, and adds it to the wearer
+/obj/item/clothing/proc/attach_clothing_traits(trait_or_traits)
+	if(!islist(trait_or_traits))
+		trait_or_traits = list(trait_or_traits)
+
+	LAZYOR(clothing_traits, trait_or_traits)
+	var/mob/wearer = loc
+	if(istype(wearer) && (wearer.get_slot_by_item(src) & slot_flags))
+		for(var/new_trait in trait_or_traits)
+			ADD_CLOTHING_TRAIT(wearer, new_trait)
+
+// Removes a trait from the clothing traits list, and removes it from the wearer
+/obj/item/clothing/proc/detach_clothing_traits(trait_or_traits)
+	if(!islist(trait_or_traits))
+		trait_or_traits = list(trait_or_traits)
+
+	LAZYREMOVE(clothing_traits, trait_or_traits)
+	var/mob/wearer = loc
+	if(istype(wearer))
+		for(var/new_trait in trait_or_traits)
+			REMOVE_CLOTHING_TRAIT(wearer, new_trait)
+
+/obj/item/clothing/examine(mob/user)
+	. = ..()
+	if(damaged_clothes == CLOTHING_SHREDDED)
+		. += span_warning("<b>It is completely shredded and requires mending before it can be worn again!</b>")
 		return
+	for(var/zone in damage_by_parts)
+		var/pct_damage_part = damage_by_parts[zone] / limb_integrity * 100
+		var/zone_name = parse_zone(zone)
+		switch(pct_damage_part)
+			if(100 to INFINITY)
+				. += span_warning("<b>The [zone_name] is useless and requires mending!</b>")
+			if(60 to 99)
+				. += span_warning("The [zone_name] is heavily shredded!")
+			if(30 to 59)
+				. += span_danger("The [zone_name] is partially shredded.")
+	var/datum/component/storage/pockets = GetComponent(/datum/component/storage)
+	if(pockets)
+		var/list/how_cool_are_your_threads = list("<span class='notice'>")
+		if(pockets.attack_hand_interact)
+			how_cool_are_your_threads += "[src]'s storage opens when clicked.\n"
+		else
+			how_cool_are_your_threads += "[src]'s storage opens when dragged to yourself.\n"
+		if (pockets.can_hold?.len) // If pocket type can hold anything, vs only specific items
+			how_cool_are_your_threads += "[src] can store [pockets.max_items] <a href='byond://?src=[REF(src)];show_valid_pocket_items=1'>item\s</a>.\n"
+		else
+			how_cool_are_your_threads += "[src] can store [pockets.max_items] item\s that are [weightclass2text(pockets.max_w_class)] or smaller.\n"
+		if(pockets.quickdraw)
+			how_cool_are_your_threads += "You can quickly remove an item from [src] using Alt-Click.\n"
+		if(pockets.silent)
+			how_cool_are_your_threads += "Adding or removing items from [src] makes no noise.\n"
+		how_cool_are_your_threads += "</span>"
+		. += how_cool_are_your_threads.Join()
 
-	if(!canremove)
-		return
+	if(armor.bio || armor.bomb || armor.bullet || armor.energy || armor.laser || armor.melee || armor.fire || armor.acid|| flags_cover & HEADCOVERSMOUTH || flags_cover & HEADCOVERSEYES)
+		. += "<span class='notice'>It has a <a href='byond://?src=[REF(src)];list_armor=1'>tag</a> listing its protection classes.</span>"
 
-	var/obj/item/clothing/ears/O
-	if(slot_flags & SLOT_TWOEARS )
-		O = (H.l_ear == src ? H.r_ear : H.l_ear)
-		user.u_equip(O)
-		if(!istype(src,/obj/item/clothing/ears/offear))
-			qdel(O)
-			O = src
+/obj/item/clothing/Topic(href, href_list)
+	. = ..()
+	if(href_list["list_armor"])
+		var/additional_info = ""
+		if(flags_cover & HEADCOVERSMOUTH || flags_cover & HEADCOVERSEYES)
+			var/list/things_blocked = list()
+			if(flags_cover & HEADCOVERSMOUTH)
+				things_blocked += "facehuggers"
+			if(flags_cover & HEADCOVERSEYES)
+				things_blocked += "pepperspray"
+			if(length(things_blocked))
+				additional_info += "\n<b>COVERAGE</b>"
+				additional_info += "\nIt will block [english_list(things_blocked)]."
+		to_chat(usr, "[armor.show_protection_classes(additional_info)]")
+
+/obj/item/clothing/atom_break(damage_flag)
+	. = ..()
+	damaged_clothes = CLOTHING_DAMAGED
+	update_clothes_damaged_state()
+	if(ismob(loc)) //It's not important enough to warrant a message if nobody's wearing it
+		var/mob/M = loc
+		to_chat(M, span_warning("Your [name] starts to fall apart!"))
+
+/obj/item/clothing/proc/update_clothes_damaged_state(damaging = TRUE)
+	var/index = "[REF(initial(icon))]-[initial(icon_state)]"
+	var/static/list/damaged_clothes_icons = list()
+	if(damaging)
+		damaged_clothes = 1
+		var/icon/damaged_clothes_icon = damaged_clothes_icons[index]
+		if(!damaged_clothes_icon)
+			damaged_clothes_icon = icon(initial(icon), initial(icon_state), , 1)	//we only want to apply damaged effect to the initial icon_state for each object
+			damaged_clothes_icon.Blend("#fff", ICON_ADD) 	//fills the icon_state with white (except where it's transparent)
+			damaged_clothes_icon.Blend(icon('icons/effects/item_damage.dmi', "itemdamaged"), ICON_MULTIPLY) //adds damage effect and the remaining white areas become transparant
+			damaged_clothes_icon = fcopy_rsc(damaged_clothes_icon)
+			damaged_clothes_icons[index] = damaged_clothes_icon
+		add_overlay(damaged_clothes_icon, 1)
 	else
-		O = src
-
-	user.u_equip(src)
-
-	if (O)
-		user.put_in_hands(O)
-		O.add_fingerprint(user)
-
-	if(istype(src,/obj/item/clothing/ears/offear))
-		qdel(src)
-
-/obj/item/clothing/ears/offear
-	name = "Other ear"
-	w_class = ITEM_SIZE_HUGE
-	icon = 'icons/mob/screen1_Midnight.dmi'
-	icon_state = "blocked"
-	slot_flags = SLOT_EARS | SLOT_TWOEARS
-	spawn_tags = null
-	var/obj/item/master_item
-
-/obj/item/clothing/ears/offear/New(obj/O)
-	.=..()
-	name = O.name
-	desc = O.desc
-	icon = O.icon
-	icon_state = O.icon_state
-	w_class = O.w_class
-	set_dir(O.dir)
-	master_item = O
-
-/obj/item/clothing/ears/offear/can_be_equipped(mob/living/user, slot, disable_warning)
-	var/other_slot = (slot == slot_l_ear) ? slot_r_ear : slot_l_ear
-	if(user.get_equipped_item(other_slot) != master_item || user.get_equipped_item(slot))
-		return FALSE
-	return ..()
-
-/obj/item/clothing/ears/earmuffs
-	name = "earmuffs"
-	desc = "Protects your hearing from loud noises, and quiet ones as well."
-	icon_state = "earmuffs"
-	item_state = "earmuffs"
-	slot_flags = SLOT_EARS
-	matter = list(MATERIAL_STEEL = 1, MATERIAL_PLASTIC = 1)
+		damaged_clothes = 0
+		cut_overlay(damaged_clothes_icons[index], TRUE)
 
 
-///////////////////////////////////////////////////////////////////////
-//Glasses
 /*
 SEE_SELF  // can see self, no matter what
 SEE_MOBS  // can see all mobs, no matter what
 SEE_OBJS  // can see all objs, no matter what
 SEE_TURFS // can see all turfs (and areas), no matter what
 SEE_PIXELS// if an object is located on an unlit area, but some of its pixels are
-          // in a lit area (via pixel_x,y or smooth movement), can see those pixels
+		  // in a lit area (via pixel_x,y or smooth movement), can see those pixels
 BLIND     // can't see anything
 */
-/obj/item/clothing/glasses
-	name = "glasses"
-	icon = 'icons/inventory/eyes/icon.dmi'
-	w_class = ITEM_SIZE_SMALL
-	body_parts_covered = EYES
-	slot_flags = SLOT_EYES
-	bad_type = /obj/item/clothing/glasses
-	style = STYLE_LOW
-	var/vision_flags = 0
-	var/darkness_view = 0//Base human is 2
-	var/see_invisible = -1
-	var/have_lenses = 0
-	var/protection = 0
 
-///////////////////////////////////////////////////////////////////////
-//Gloves
-/obj/item/clothing/gloves
-	name = "gloves"
-	gender = PLURAL //Carn: for grammarically correct text-parsing
-	w_class = ITEM_SIZE_SMALL
-	icon = 'icons/inventory/hands/icon.dmi'
-	siemens_coefficient = 0.75
-	bad_type = /obj/item/clothing/gloves
-	spawn_tags = SPAWN_TAG_GLOVES
-	body_parts_covered = ARMS
-	armor = list(melee = 2, bullet = 0, energy = 3, bomb = 0, bio = 0, rad = 0)
-	slot_flags = SLOT_GLOVES
-	attack_verb = list("challenged")
-	style = STYLE_LOW
-	var/wired = 0
-	var/clipped = 0
+/proc/generate_female_clothing(index, t_color, icon, type = FEMALE_UNIFORM_FULL, flat = FALSE) //In a shellnut, blends the uniform sprite with a pre-made sprite in uniform.dmi that's mostly white pixels with a few empty ones to trim off the pixels in the empty spots
+	var/icon/female_clothing_icon = icon("icon" = icon, "icon_state" = t_color) // and make the uniform the "female" shape. female_s is either the top-only one (for jumpskirts and the like) or the full one (for jumpsuits)
+	var/icon/female_s = icon("icon" = 'icons/effects/clothing.dmi', "icon_state" = "[(type == FEMALE_UNIFORM_FULL) ? "female_full" : "female_top"]_[flat]")
+	female_clothing_icon.Blend(female_s, ICON_MULTIPLY)
+	female_clothing_icon = fcopy_rsc(female_clothing_icon)
+	GLOB.female_clothing_icons[index] = female_clothing_icon //Then it saves the icon in a global list so it doesn't have to make it again
 
-// Called just before an attack_hand(), in mob/UnarmedAttack()
-/obj/item/clothing/gloves/proc/Touch(atom/A, proximity)
-	return 0 // return 1 to cancel attack_hand()
+/proc/generate_skinny_clothing(index, t_color, icon, type) //Works the exact same as above but for skinny people
+	var/icon/skinny_clothing_icon = icon(icon, t_color)
+	var/icon/skinny_s = icon("icon" = 'icons/effects/clothing.dmi', "icon_state" = "[(type == FEMALE_UNIFORM_FULL) ? "skinny_full" : "skinny_top"]") //Hooks into same check to see if it's eligible
+	skinny_clothing_icon.Blend(skinny_s, ICON_MULTIPLY)
+	skinny_clothing_icon = fcopy_rsc(skinny_clothing_icon)
+	GLOB.skinny_clothing_icons[index] = skinny_clothing_icon
 
-/obj/item/clothing/gloves/attackby(obj/item/W, mob/user)
-	if(istype(W, /obj/item/tool/wirecutters) || istype(W, /obj/item/tool/scalpel))
-		if (clipped)
-			to_chat(user, SPAN_NOTICE("The [src] have already been clipped!"))
-			update_icon()
-			return
-
-		playsound(src.loc, 'sound/items/Wirecutter.ogg', 100, 1)
-		user.visible_message("\red [user] cuts the fingertips off of the [src].","\red You cut the fingertips off of the [src].")
-
-		clipped = 1
-		name = "modified [name]"
-		desc = "[desc]<br>They have had the fingertips cut off of them."
-		return
-
-///////////////////////////////////////////////////////////////////////
-//Head
-/obj/item/clothing/head
-	name = "head"
-	icon = 'icons/inventory/head/icon.dmi'
-	item_icons = list(
-		slot_l_hand_str = 'icons/mob/items/lefthand_hats.dmi',
-		slot_r_hand_str = 'icons/mob/items/righthand_hats.dmi',
-		)
-	body_parts_covered = HEAD
-	slot_flags = SLOT_HEAD
-	w_class = ITEM_SIZE_SMALL
-	bad_type = /obj/item/clothing/head
-	spawn_tags = SPAWN_TAG_CLOTHING_HEAD
-	style = STYLE_HIGH
-
-/obj/item/clothing/head/attack_ai(mob/user)
-	if(!mob_wear_hat(user))
-		return ..()
-
-/obj/item/clothing/head/attack_generic(mob/user)
-	if(!istype(user) || !mob_wear_hat(user))
-		return ..()
-
-/obj/item/clothing/head/proc/mob_wear_hat(mob/user)
-	if(!Adjacent(user))
-		return 0
-	var/success
-	if(isdrone(user))
-		var/mob/living/silicon/robot/drone/D = user
-		if(D.hat)
-			success = 2
-		else
-			D.wear_hat(src)
-			success = 1
-
-	if(!success)
-		return 0
-	else if(success == 2)
-		to_chat(user, SPAN_WARNING("You are already wearing a hat."))
-	else if(success == 1)
-		to_chat(user, SPAN_NOTICE("You crawl under \the [src]."))
-	return 1
-
-///////////////////////////////////////////////////////////////////////
-//Mask
-/obj/item/clothing/mask
-	name = "mask"
-	icon = 'icons/inventory/face/icon.dmi'
-	body_parts_covered = HEAD
-	slot_flags = SLOT_MASK
-	body_parts_covered = FACE|EYES
-	bad_type = /obj/item/clothing/mask
-	spawn_tags = SPAWN_TAG_MASK
-
-	var/muffle_voice = FALSE
-	var/voicechange = FALSE
-	var/list/say_messages
-	var/list/say_verbs
-
-/obj/item/clothing/mask/proc/filter_air(datum/gas_mixture/air)
-	return
-
-///////////////////////////////////////////////////////////////////////
-//Shoes
-/obj/item/clothing/shoes
-	name = "shoes"
-	icon = 'icons/inventory/feet/icon.dmi'
-	desc = "Comfortable-looking shoes."
-	gender = PLURAL //Carn: for grammarically correct text-parsing
-	siemens_coefficient = 0.9
-	body_parts_covered = LEGS
-	slot_flags = SLOT_FEET
-	spawn_tags = SPAWN_TAG_SHOES
-	bad_type = /obj/item/clothing/shoes
-
-	armor = list(melee = 2, bullet = 0, energy = 2, bomb = 0, bio = 0, rad = 0)
-	permeability_coefficient = 0.50
-	slowdown = SHOES_SLOWDOWN
-	style = STYLE_LOW
-	force = 2
-
-	var/can_hold_knife = 0
-	var/obj/item/holding
-	var/noslip = 0
-	var/module_inside = 0
-
-/obj/item/clothing/shoes/proc/draw_knife()
-	set name = "Draw Boot Knife"
-	set desc = "Pull out your boot knife."
-	set category = "IC"
-	set src in usr
-
-	if(usr.stat || usr.restrained() || usr.incapacitated())
-		return
-
-	if(!holding)
-		to_chat(usr, SPAN_WARNING("\The [src] has no knife."))
-		return
-
-	holding.forceMove(get_turf(usr))
-
-	if(usr.put_in_hands(holding))
-		usr.visible_message(SPAN_DANGER("\The [usr] pulls a knife out of their boot!"))
-		holding = null
-	else
-		to_chat(usr, SPAN_WARNING("You need an empty, unbroken hand to do that."))
-		holding.forceMove(src)
-
-	if(!holding)
-		verbs -= /obj/item/clothing/shoes/proc/draw_knife
-
-	update_icon()
-	return
-
-/obj/item/clothing/shoes/AltClick()
-	if((src in usr) && holding)
-		draw_knife()
-	else
-		..()
-
-/obj/item/clothing/shoes/attack_hand()
-	if((src in usr) && holding)
-		draw_knife()
-	else
-		..()
-
-/obj/item/clothing/shoes/attackby(obj/item/I, mob/user)
-	var/global/knifes
-	if(istype(I,/obj/item/noslipmodule))
-		if (item_flags != 0)
-			noslip = item_flags
-		module_inside = 1
-		to_chat(user, "You attached no slip sole")
-		permeability_coefficient = 0.05
-		item_flags = NOSLIP | SILENT
-		origin_tech = list(TECH_COVERT = 3)
-		siemens_coefficient = 0 // DAMN BOI
-		qdel(I)
-
-	if(!knifes)
-		knifes = list(
-			/obj/item/tool/knife,
-			/obj/item/material/shard,
-			/obj/item/tool/knife/butterfly,
-			/obj/item/material/kitchen/utensil,
-			/obj/item/tool/knife/tacknife,
-			/obj/item/tool/knife/shiv,
-		)
-	if(can_hold_knife && is_type_in_list(I, knifes))
-		if(holding)
-			to_chat(user, SPAN_WARNING("\The [src] is already holding \a [holding]."))
-			return
-		if(user.unEquip(I, src))
-			holding = I
-			user.visible_message(SPAN_NOTICE("\The [user] shoves \the [I] into \the [src]."))
-			verbs |= /obj/item/clothing/shoes/proc/draw_knife
-			update_icon()
-	else
-		return ..()
-
-/obj/item/clothing/shoes/verb/detach_noslipmodule()
-	set name = "Detach acccessory"
+/obj/item/clothing/under/verb/toggle()
+	set name = "Adjust Suit Sensors"
 	set category = "Object"
-	set src in view(1)
-
-	if (module_inside == 1 )
-		if (noslip != 0)
-			item_flags = noslip
-		var/obj/item/noslipmodule/NSM = new()
-		usr.put_in_hands(NSM)
-	else to_chat(usr, "You haven't got any accessories in your shoes")
-
-
-/obj/item/clothing/shoes/update_icon()
-	cut_overlays()
-	if(holding)
-		overlays += image(icon, "[icon_state]_knife")
-	return ..()
-
-/obj/item/clothing/shoes/proc/handle_movement(turf/walking, running)
-	return
-
-
-///////////////////////////////////////////////////////////////////////
-//Suit
-/obj/item/clothing/suit
-	icon = 'icons/inventory/suit/icon.dmi'
-	name = "suit"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|ARMS|LEGS
-	style_coverage = COVERS_TORSO
-	allowed = list(
-		/obj/item/clipboard,
-		/obj/item/storage/pouch/,
-		/obj/item/gun,
-		/obj/item/melee,
-		/obj/item/tool,
-		/obj/item/material,
-		/obj/item/ammo_magazine,
-		/obj/item/ammo_casing,
-		/obj/item/handcuffs,
-		/obj/item/tank,
-		/obj/item/device/suit_cooling_unit,
-		/obj/item/cell,
-		/obj/item/storage/fancy,
-		/obj/item/flamethrower,
-		/obj/item/device/lighting,
-		/obj/item/device/scanner,
-		/obj/item/reagent_containers/spray,
-		/obj/item/device/radio,
-		/obj/item/clothing/mask,
-		/obj/item/storage/pouch/holster/belt/sheath,
-		/obj/item/implant/carrion_spider/holographic,
-		/obj/item/shield)
-	slot_flags = SLOT_OCLOTHING
-	var/blood_overlay_type = "suit"
-	siemens_coefficient = 0.9
-	w_class = ITEM_SIZE_NORMAL
-	equip_delay = 2 SECONDS
-	bad_type = /obj/item/clothing/suit
-	var/fire_resist = T0C+100
-	var/list/extra_allowed = list()
-	style = STYLE_LOW
-	valid_accessory_slots = list("armor","armband","decor")
-	restricted_accessory_slots = list("armor","armband")
-	maxHealth = 300
-	health = 300
-
-/obj/item/clothing/suit/Initialize(mapload, ...)
-	.=..()
-	allowed |= extra_allowed
-
-///////////////////////////////////////////////////////////////////////
-//Under clothing
-/obj/item/clothing/under
-	icon = 'icons/inventory/uniform/icon.dmi'
-	item_icons = list(
-		slot_l_hand_str = 'icons/mob/items/lefthand_uniforms.dmi',
-		slot_r_hand_str = 'icons/mob/items/righthand_uniforms.dmi',
-		)
-	name = "jumpsuit"
-	body_parts_covered = UPPER_TORSO|LOWER_TORSO|LEGS|ARMS
-	permeability_coefficient = 0.90
-	slot_flags = SLOT_ICLOTHING
-	w_class = ITEM_SIZE_NORMAL
-	spawn_tags = SPAWN_TAG_CLOTHING_UNDER
-	style = STYLE_LOW
-	bad_type = /obj/item/clothing/under
-	var/has_sensor = 1 //For the crew computer 2 = unable to change mode
-	var/sensor_mode = 0
-		/*
-		1 = Report living/dead
-		2 = Report detailed damages
-		3 = Report location
-		*/
-	var/displays_id = 1
-	equip_delay = 2 SECONDS
-
-	//convenience var for defining the icon state for the overlay used when the clothing is worn.
-
-	valid_accessory_slots = list("armor","utility","armband","decor")
-	restricted_accessory_slots = list("armor","utility", "armband")
-
-
-/obj/item/clothing/under/attack_hand(mob/user)
-	if(accessories && accessories.len)
-		..()
-	if ((ishuman(usr) || issmall(usr)) && src.loc == user)
+	set src in usr
+	var/mob/user_mob = usr
+	if(!can_toggle_sensors(user_mob))
 		return
-	..()
 
-/obj/item/clothing/under/New()
-	..()
-	item_state_slots[slot_w_uniform_str] = icon_state //TODO: drop or gonna use it?
+	var/list/modes = list("Off", "Binary vitals", "Exact vitals", "Tracking beacon")
+	var/switchMode = tgui_input_list(user_mob, "Select a sensor mode", "Suit Sensors", modes, modes[sensor_mode + 1])
+	if(isnull(switchMode))
+		return
+	if(!can_toggle_sensors(user_mob))
+		return
 
-/obj/item/clothing/under/examine(mob/user, extra_description = "")
-	switch(sensor_mode)
-		if(0)
-			extra_description += "Its sensors appear to be disabled."
-		if(1)
-			extra_description += "Its binary life sensors appear to be enabled."
-		if(2)
-			extra_description += "Its vital tracker appears to be enabled."
-		if(3)
-			extra_description += "Its vital tracker and tracking beacon appear to be enabled."
-	..(user, extra_description)
-
-/obj/item/clothing/under/proc/set_sensors(mob/M)
-	if(has_sensor >= 2)
-		to_chat(usr, "The controls are locked.")
-		return 0
-	if(has_sensor <= 0)
-		to_chat(usr, "This suit does not have any sensors.")
-		return 0
-
-	if(sensor_mode == 3)
-		sensor_mode = 0
-	else
-		sensor_mode++
-
-	if (src.loc == usr)
+	sensor_mode = modes.Find(switchMode) - 1
+	if (loc == user_mob)
 		switch(sensor_mode)
-			if(0)
-				to_chat(usr, "You disable your suit's remote sensing equipment.")
-			if(1)
-				to_chat(usr, "Your suit will now report whether you are live or dead.")
-			if(2)
-				to_chat(usr, "Your suit will now report your vital lifesigns.")
-			if(3)
-				to_chat(usr, "Your suit will now report your vital lifesigns as well as your coordinate position.")
-	else if (ismob(loc))
-		switch(sensor_mode)
-			if(0)
-				for(var/mob/V in viewers(usr, 1))
-					V.show_message("\red [usr] disables [src.loc]'s remote sensing equipment.", 1)
-			if(1)
-				for(var/mob/V in viewers(usr, 1))
-					V.show_message("[usr] turns [src.loc]'s remote sensors to binary.", 1)
-			if(2)
-				for(var/mob/V in viewers(usr, 1))
-					V.show_message("[usr] sets [src.loc]'s sensors to track vitals.", 1)
-			if(3)
-				for(var/mob/V in viewers(usr, 1))
-					V.show_message("[usr] sets [src.loc]'s sensors to maximum.", 1)
+			if(SENSOR_OFF)
+				to_chat(usr, span_notice("You disable your suit's remote sensing equipment."))
+			if(SENSOR_LIVING)
+				to_chat(usr, span_notice("Your suit will now only report whether you are alive or dead."))
+			if(SENSOR_VITALS)
+				to_chat(usr, span_notice("Your suit will now only report your exact vital lifesigns."))
+			if(SENSOR_COORDS)
+				to_chat(usr, span_notice("Your suit will now report your exact vital lifesigns as well as your coordinate position."))
 
-/obj/item/clothing/under/rank
-	bad_type = /obj/item/clothing/under/rank
-	spawn_blacklisted = TRUE
+	if(ishuman(loc))
+		var/mob/living/carbon/human/human_wearer = loc
+		if(human_wearer.w_uniform == src)
+			human_wearer.update_suit_sensors()
 
-/obj/item/clothing/under/rank/New()
-	sensor_mode = 3
-	..()
+/obj/item/clothing/under/proc/can_toggle_sensors(mob/toggler)
+	if(!can_use(toggler) || toggler.stat == DEAD) //make sure they didn't hold the window open.
+		return FALSE
+	if(!toggler.CanReach(src))
+		balloon_alert(toggler, "can't reach!")
+		return FALSE
+	if(is_synth(toggler))
+		to_chat(usr, "You're unable to use suit sensors as a synthetic!")
+		return
 
-/obj/item/clothing/under/attackby(obj/item/I, mob/U)
-	if(I.get_tool_type(usr, list(QUALITY_SCREW_DRIVING), src) && ishuman(U))
-		set_sensors(U)
+	switch(has_sensor)
+		if(LOCKED_SENSORS)
+			balloon_alert(toggler, "sensor controls locked!")
+			return FALSE
+		if(BROKEN_SENSORS)
+			balloon_alert(toggler, "sensors shorted!")
+			return FALSE
+		if(NO_SENSORS)
+			balloon_alert(toggler, "no sensors to ajdust!")
+			return FALSE
+
+	return TRUE
+
+/obj/item/clothing/under/AltClick(mob/user)
+	if(..())
+		return 1
+
+	if(!istype(user) || !user.canUseTopic(src, BE_CLOSE, ismonkey(user)))
+		return
 	else
-		return ..()
+		if(attached_accessory)
+			remove_accessory(user)
+		else
+			rolldown()
+
+/obj/item/clothing/under/verb/jumpsuit_adjust()
+	set name = "Adjust Jumpsuit Style"
+	set category = null
+	set src in usr
+	rolldown()
+
+/obj/item/clothing/under/proc/rolldown(bypass = FALSE)
+	if(bypass)
+		toggle_jumpsuit_adjust()
+		if(usr)
+			var/mob/living/carbon/human/H = usr
+			H.update_inv_w_uniform()
+			H.update_body()
+		return
+	if(!can_use(usr))
+		return
+	if(!can_adjust)
+		to_chat(usr, span_warning("You cannot wear this suit any differently!"))
+		return
+	if(toggle_jumpsuit_adjust())
+		to_chat(usr, span_notice("You adjust the suit to wear it more casually."))
+	else
+		to_chat(usr, span_notice("You adjust the suit back to normal."))
+	if(ishuman(usr))
+		var/mob/living/carbon/human/H = usr
+		H.update_inv_w_uniform()
+		H.update_body()
+
+/obj/item/clothing/under/proc/toggle_jumpsuit_adjust() //Yogs Start: Reworking this to allow for Digialt to function
+	adjusted = !adjusted
+	if(adjusted) //Yogs End
+		if(fitted != FEMALE_UNIFORM_TOP)
+			fitted = NO_FEMALE_UNIFORM
+		if(!alt_covers_chest) // for the special snowflake suits that expose the chest when adjusted (and also the arms, realistically)
+			body_parts_covered &= ~CHEST
+			body_parts_covered &= ~ARMS
+	else
+		fitted = initial(fitted)
+		if(!alt_covers_chest)
+			body_parts_covered |= CHEST
+			body_parts_covered |= ARMS
+			if(!LAZYLEN(damage_by_parts))
+				return adjusted
+			for(var/zone in list(BODY_ZONE_CHEST, BODY_ZONE_L_ARM, BODY_ZONE_R_ARM)) // ugly check to make sure we don't reenable protection on a disabled part
+				if(damage_by_parts[zone] > limb_integrity)
+					for(var/part in body_zone2cover_flags(zone))
+						body_parts_covered &= part
+	return adjusted
+
+/obj/item/clothing/proc/weldingvisortoggle(mob/user) //proc to toggle welding visors on helmets, masks, goggles, etc.
+	if(!can_use(user))
+		return FALSE
+
+	visor_toggling()
+
+	to_chat(user, span_notice("You adjust \the [src] [up ? "up" : "down"]."))
+
+	if(iscarbon(user))
+		var/mob/living/carbon/C = user
+		C.head_update(src, forced = 1)
+	for(var/X in actions)
+		var/datum/action/A = X
+		A.build_all_button_icons()
+	return TRUE
+
+/obj/item/clothing/proc/visor_toggling() //handles all the actual toggling of flags
+	up = !up
+	clothing_flags ^= visor_flags
+	flags_inv ^= visor_flags_inv
+	flags_cover ^= initial(flags_cover)
+	icon_state = "[initial(icon_state)][up ? "up" : ""]"
+	if(visor_vars_to_toggle & VISOR_FLASHPROTECT)
+		flash_protect ^= initial(flash_protect)
+	if(visor_vars_to_toggle & VISOR_TINT)
+		tint ^= initial(tint)
+
+/obj/item/clothing/proc/can_use(mob/user)
+	if(user && ismob(user))
+		if(!user.incapacitated())
+			return TRUE
+	return FALSE
+
+/obj/item/clothing/atom_destruction(damage_flag, total_destruction=FALSE)
+	if(damage_flag == BOMB)
+		var/turf/T = get_turf(src)
+		spawn(1) //so the shred survives potential turf change from the explosion.
+			var/obj/effect/decal/cleanable/shreds/Shreds = new(T)
+			Shreds.desc = "The sad remains of what used to be [name]."
+		deconstruct(FALSE)
+	else if(!(damage_flag in list(ACID, FIRE)))
+		damaged_clothes = CLOTHING_SHREDDED
+		body_parts_covered = NONE
+		name = "shredded [initial(name)]"
+		slot_flags = NONE
+		update_clothes_damaged_state()
+		if(ismob(loc))
+			var/mob/M = loc
+			M.visible_message(span_danger("[M]'s [src.name] falls off, completely shredded!"), span_warning("<b>Your [src.name] falls off, completely shredded!</b>"), vision_distance = COMBAT_MESSAGE_RANGE)
+			M.dropItemToGround(src)
+	else
+		..()
+
+/// If we're a clothing with at least 1 shredded/disabled zone, give the wearer a periodic heads up letting them know their clothes are damaged
+/obj/item/clothing/proc/bristle(mob/living/L)
+	if(!istype(L))
+		return
+	if(prob(0.2))
+		to_chat(L, span_warning("The damaged threads on your [src.name] chafe!"))
+
+/*obj/item/clothing/proc/set_sensor_glob()
+	var/mob/living/carbon/human/H = src.loc
+
+	if (istype(H.w_uniform, /obj/item/clothing/under))
+		var/obj/item/clothing/under/U = H.w_uniform
+		if (U.has_sensor && U.sensor_mode && U.has_sensor != BROKEN_SENSORS)
+			GLOB.suit_sensors_list |= H
+
+		else
+			GLOB.suit_sensors_list -= H
+
+	else
+		GLOB.suit_sensors_list -= H	*/

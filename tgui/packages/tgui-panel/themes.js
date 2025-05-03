@@ -22,14 +22,17 @@ let setClientThemeTimer = null;
  * There's no way round it. We're essentially changing the skin by hand.
  * It's painful but it works, and is the way Lummox suggested.
  */
-export const setClientTheme = (name) => {
+export const setClientTheme = name => {
   // Transmit once for fast updates and again in a little while in case we won
   // the race against statbrowser init.
   clearInterval(setClientThemeTimer);
   Byond.command(`.output statbrowser:set_theme ${name}`);
   setClientThemeTimer = setTimeout(() => {
     Byond.command(`.output statbrowser:set_theme ${name}`);
-  }, 1500);
+    setClientThemeTimer = setTimeout(() => {
+      Byond.command(`.output statbrowser:set_theme ${name}`);
+    }, 1000);
+  }, 2500);
 
   if (name === 'light') {
     return Byond.winset({
@@ -55,8 +58,10 @@ export const setClientTheme = (name) => {
       'forum.text-color': '#000000',
       'github.background-color': 'none',
       'github.text-color': '#000000',
-      'discord.background-color': 'none',
-      'discord.text-color': '#000000',
+      'report-issue.background-color': 'none',
+      'report-issue.text-color': '#000000',
+      'demoview.background-color': 'none',
+      'demoview.text-color': '#000000',
       'tickets.background-color': 'none',
       'tickets.text-color': '#000000',
       // Status and verb tabs
@@ -64,6 +69,8 @@ export const setClientTheme = (name) => {
       'output.text-color': '#000000',
       'statwindow.background-color': 'none',
       'statwindow.text-color': '#000000',
+      'statbrowser.background-color': 'none',
+      'statbrowser.text-color': '#000000',
       'stat.background-color': '#FFFFFF',
       'stat.tab-background-color': 'none',
       'stat.text-color': '#000000',
@@ -81,8 +88,6 @@ export const setClientTheme = (name) => {
       'asset_cache_browser.text-color': '#000000',
       'tooltip.background-color': 'none',
       'tooltip.text-color': '#000000',
-      'input.background-color': '#FFFFFF',
-      'input.text-color': '#000000',
     });
   }
   if (name === 'dark') {
@@ -107,17 +112,21 @@ export const setClientTheme = (name) => {
       'wiki.text-color': COLOR_DARK_TEXT,
       'forum.background-color': '#494949',
       'forum.text-color': COLOR_DARK_TEXT,
-      'github.background-color': '#3a3a3a',
+      'github.background-color': '#494949',
       'github.text-color': COLOR_DARK_TEXT,
-      'discord.background-color': '#492020',
-      'discord.text-color': COLOR_DARK_TEXT,
+      'demoview.background-color': '#494949',
+      'demoview.text-color': COLOR_DARK_TEXT,
       'tickets.background-color': '#494949',
       'tickets.text-color': COLOR_DARK_TEXT,
+      'report-issue.background-color': '#492020',
+      'report-issue.text-color': COLOR_DARK_TEXT,
       // Status and verb tabs
       'output.background-color': COLOR_DARK_BG_DARKER,
       'output.text-color': COLOR_DARK_TEXT,
       'statwindow.background-color': COLOR_DARK_BG_DARKER,
       'statwindow.text-color': COLOR_DARK_TEXT,
+      'statbrowser.background-color': COLOR_DARK_BG_DARKER,
+      'statbrowser.text-color': COLOR_DARK_TEXT,
       'stat.background-color': COLOR_DARK_BG_DARKER,
       'stat.tab-background-color': COLOR_DARK_BG,
       'stat.text-color': COLOR_DARK_TEXT,
@@ -135,8 +144,6 @@ export const setClientTheme = (name) => {
       'asset_cache_browser.text-color': COLOR_DARK_TEXT,
       'tooltip.background-color': COLOR_DARK_BG,
       'tooltip.text-color': COLOR_DARK_TEXT,
-      'input.background-color': COLOR_DARK_BG_DARKER,
-      'input.text-color': COLOR_DARK_TEXT,
     });
   }
 };

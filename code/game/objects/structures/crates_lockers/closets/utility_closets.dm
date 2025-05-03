@@ -14,97 +14,94 @@
  */
 /obj/structure/closet/emcloset
 	name = "emergency closet"
-	desc = "A storage unit for emergency breathmasks and o2 tanks."
+	desc = "It's a storage unit for emergency breath masks and O2 tanks."
 	icon_state = "emergency"
-	rarity_value = 3
-	spawn_tags = SPAWN_TAG_CLOSET_TECHNICAL
 
-/obj/structure/closet/emcloset/populate_contents()
-	switch(pickweight(list("small" = 55, "aid" = 25, "tank" = 10, "both" = 10)))
+/obj/structure/closet/emcloset/anchored
+	anchored = TRUE
+
+/obj/structure/closet/emcloset/PopulateContents()
+	..()
+
+	if (prob(40))
+		new /obj/item/storage/toolbox/emergency(src)
+
+	switch (pickweight(list("small" = 35, "aid" = 30, "tank" = 20, "both" = 10, "nothing" = 5)))
 		if ("small")
-			new /obj/item/tank/emergency_oxygen(src)
-			new /obj/item/tank/emergency_oxygen(src)
+			new /obj/item/tank/internals/emergency_oxygen(src)
+			new /obj/item/tank/internals/emergency_oxygen(src)
 			new /obj/item/clothing/mask/breath(src)
 			new /obj/item/clothing/mask/breath(src)
-			new /obj/item/clothing/suit/space/emergency(src)
-			new /obj/item/clothing/head/space/emergency(src)
-		if ("aid")
-			new /obj/item/tank/emergency_oxygen(src)
-			new /obj/item/storage/toolbox/emergency(src)
-			new /obj/item/clothing/mask/breath(src)
-			new /obj/item/storage/firstaid/o2(src)
-			new /obj/item/clothing/suit/space/emergency(src)
-			new /obj/item/clothing/head/space/emergency(src)
-		if ("tank")
-			new /obj/item/tank/emergency_oxygen/engi(src)
-			new /obj/item/clothing/mask/breath(src)
-			new /obj/item/tank/emergency_oxygen/engi(src)
-			new /obj/item/clothing/mask/breath(src)
-		if ("both")
-			new /obj/item/storage/toolbox/emergency(src)
-			new /obj/item/tank/emergency_oxygen/engi(src)
-			new /obj/item/clothing/mask/breath(src)
-			new /obj/item/storage/firstaid/o2(src)
-			new /obj/item/clothing/suit/space/emergency(src)
-			new /obj/item/clothing/suit/space/emergency(src)
-			new /obj/item/clothing/head/space/emergency(src)
-			new /obj/item/clothing/head/space/emergency(src)
 
-/obj/structure/closet/emcloset/legacy/populate_contents()
-	new /obj/item/tank/oxygen(src)
-	new /obj/item/clothing/mask/gas(src)
+		if ("aid")
+			new /obj/item/tank/internals/emergency_oxygen(src)
+			new /obj/item/storage/firstaid/emergency(src)
+			new /obj/item/clothing/mask/breath(src)
+
+		if ("tank")
+			new /obj/item/tank/internals/air(src)
+			new /obj/item/clothing/mask/breath(src)
+
+		if ("both")
+			new /obj/item/tank/internals/emergency_oxygen(src)
+			new /obj/item/clothing/mask/breath(src)
+
+		if ("nothing")
+			// doot
+			return
 
 /*
  * Fire Closet
  */
 /obj/structure/closet/firecloset
 	name = "fire-safety closet"
-	desc = "A storage unit for fire-fighting supplies."
+	desc = "It's a storage unit for fire-fighting supplies."
 	icon_state = "fire"
-	rarity_value = 1.5
-	spawn_tags = SPAWN_TAG_CLOSET_TECHNICAL
 
+/obj/structure/closet/firecloset/PopulateContents()
+	..()
 
-/obj/structure/closet/firecloset/populate_contents()
-	new /obj/item/clothing/gloves/thick(src)
-	new /obj/item/clothing/suit/fire(src)
-	new /obj/item/clothing/head/hardhat/red(src)
+	new /obj/item/clothing/suit/fire/firefighter(src)
 	new /obj/item/clothing/mask/gas(src)
-	new /obj/item/tank/oxygen/red(src)
+	new /obj/item/tank/internals/oxygen/red(src)
 	new /obj/item/extinguisher(src)
+	new /obj/item/clothing/head/hardhat/red(src)
+
+/obj/structure/closet/firecloset/full/PopulateContents()
+	new /obj/item/clothing/suit/fire/firefighter(src)
+	new /obj/item/clothing/mask/gas(src)
+	new /obj/item/flashlight(src)
+	new /obj/item/tank/internals/oxygen/red(src)
 	new /obj/item/extinguisher(src)
-	new /obj/item/device/lighting/toggleable/flashlight(src)
+	new /obj/item/clothing/head/hardhat/red(src)
 
 /*
  * Tool Closet
  */
 /obj/structure/closet/toolcloset
 	name = "tool closet"
-	desc = "A storage unit for tools."
+	desc = "It's a storage unit for tools."
 	icon_state = "eng"
 	icon_door = "eng_tool"
-	rarity_value = 1.5
-	spawn_tags = SPAWN_TAG_CLOSET_TECHNICAL
 
-/obj/structure/closet/toolcloset/populate_contents()
+/obj/structure/closet/toolcloset/PopulateContents()
+	..()
 	if(prob(40))
-		new /obj/item/clothing/suit/storage/hazardvest(src)
+		new /obj/item/clothing/suit/hazardvest(src)
 	if(prob(70))
-		new /obj/item/device/lighting/toggleable/flashlight(src)
+		new /obj/item/flashlight(src)
 	if(prob(70))
-		new /obj/item/tool/screwdriver(src)
+		new /obj/item/screwdriver(src)
 	if(prob(70))
-		new /obj/item/tool/wrench(src)
+		new /obj/item/wrench(src)
 	if(prob(70))
-		new /obj/item/tool/weldingtool(src)
+		new /obj/item/weldingtool(src)
 	if(prob(70))
-		new /obj/item/tool/crowbar(src)
-	if(prob(50))
-		new /obj/item/tool/wirecutters(src)
-	if(prob(50))
-		new /obj/item/tool/wirecutters/pliers(src)
+		new /obj/item/crowbar(src)
 	if(prob(70))
-		new /obj/item/device/t_scanner(src)
+		new /obj/item/wirecutters(src)
+	if(prob(70))
+		new /obj/item/t_scanner(src)
 	if(prob(20))
 		new /obj/item/storage/belt/utility(src)
 	if(prob(30))
@@ -114,74 +111,66 @@
 	if(prob(30))
 		new /obj/item/stack/cable_coil/random(src)
 	if(prob(20))
-		new /obj/item/tool/multitool(src)
+		new /obj/item/multitool(src)
 	if(prob(5))
-		new /obj/item/clothing/gloves/insulated(src)
-	if(prob(5))
-		new /obj/item/storage/pouch/engineering_tools(src)
-	if(prob(1))
-		new /obj/item/storage/pouch/engineering_supply(src)
-	if(prob(1))
-		new /obj/item/storage/pouch/engineering_material(src)
+		new /obj/item/clothing/gloves/color/yellow(src)
 	if(prob(40))
 		new /obj/item/clothing/head/hardhat(src)
-	new /obj/spawner/tool_upgrade(src)
-	new /obj/spawner/tool_upgrade(src)
-	//Every tool closet contains a couple guaranteed toolmods
+
 
 /*
  * Radiation Closet
  */
 /obj/structure/closet/radiation
 	name = "radiation suit closet"
-	desc = "A storage unit for rad-protective suits."
+	desc = "It's a storage unit for rad-protective suits and anti radiation first-aids."
 	icon_state = "eng"
 	icon_door = "eng_rad"
 
-/obj/structure/closet/radiation/populate_contents()
+/obj/structure/closet/radiation/PopulateContents()
+	..()
+	new /obj/item/geiger_counter(src)
 	new /obj/item/clothing/suit/radiation(src)
 	new /obj/item/clothing/head/radiation(src)
-	new /obj/item/clothing/suit/radiation(src)
-	new /obj/item/clothing/head/radiation(src)
+	new /obj/item/storage/firstaid/toxin(src)
+	new /obj/item/storage/pill_bottle/penacid(src)
+	new /obj/item/storage/pill_bottle/mutadone(src)
+	new /obj/item/reagent_containers/spray/radbgone(src)
 
 /*
  * Bombsuit closet
  */
 /obj/structure/closet/bombcloset
 	name = "\improper EOD closet"
-	desc = "A storage unit for explosion-protective space suits."
+	desc = "It's a storage unit for explosion-protective suits."
 	icon_state = "bomb"
-	rarity_value = 14.28
-	spawn_tags = SPAWN_TAG_CLOSET_BOMB
 
-
-/obj/structure/closet/bombcloset/populate_contents()
-	new /obj/item/clothing/suit/space/bomb(src)
+/obj/structure/closet/bombcloset/PopulateContents()
+	..()
+	new /obj/item/clothing/suit/bomb_suit(src)
 	new /obj/item/clothing/under/color/black(src)
-	new /obj/item/clothing/shoes/color/black(src)
-	new /obj/item/clothing/head/space/bomb(src)
+	new /obj/item/clothing/shoes/sneakers/black(src)
+	new /obj/item/clothing/head/bomb_hood(src)
 
-/obj/structure/closet/bombcloset/security
-	rarity_value = 50
+/obj/structure/closet/bombcloset/security/PopulateContents()
+	new /obj/item/clothing/suit/bomb_suit/security(src)
+	new /obj/item/clothing/under/rank/security/officer(src)
+	new /obj/item/clothing/shoes/jackboots(src)
+	new /obj/item/clothing/head/bomb_hood/security(src)
 
-/obj/structure/closet/bombcloset/security/populate_contents()
-	new /obj/item/clothing/suit/space/bomb(src)
-	new /obj/item/clothing/under/rank/security(src)
-	new /obj/item/clothing/shoes/color/brown(src)
-	new /obj/item/clothing/head/space/bomb(src)
+/obj/structure/closet/bombcloset/white/PopulateContents()
+	new /obj/item/clothing/suit/bomb_suit/white(src)
+	new /obj/item/clothing/under/color/black(src)
+	new /obj/item/clothing/shoes/sneakers/black(src)
+	new /obj/item/clothing/head/bomb_hood/white(src)
 
-/obj/structure/closet/self_pacification
-	name = "\improper Anti-Depressive Self-Pacification Treatment Utility closet"
-	desc = "The last things you will ever need!"
-	icon_state = "syndicate"
-	icon_door = "syndicate_skull"
-	anchored = TRUE
+/*
+ * Ammunition
+ */
+/obj/structure/closet/ammunitionlocker
+	name = "ammunition locker"
 
-/obj/structure/closet/self_pacification/populate_contents()
-	new /obj/item/clothing/mask/breath(src)
-	new /obj/item/clothing/mask/breath(src)
-	new /obj/item/tank/emergency_oxygen/nitrogen(src)
-	new /obj/item/tank/emergency_oxygen/nitrogen(src)
-	new /obj/item/paper/self_pacification(src)
-	new /obj/item/paper(src)
-	new /obj/item/pen(src)
+/obj/structure/closet/ammunitionlocker/PopulateContents()
+	..()
+	for(var/i in 1 to 3)
+		new /obj/item/storage/box/rubbershot(src)

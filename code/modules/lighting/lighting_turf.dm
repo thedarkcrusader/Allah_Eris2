@@ -1,90 +1,118 @@
 // Causes any affecting light sources to be queued for a visibility update, for example a door got opened.
 /turf/proc/reconsider_lights()
-	for(var/A in affecting_lights)
-		var/datum/light_source/L = A
-		L.vis_update()
+	lighting_corner_NE?.vis_update()
+	lighting_corner_SE?.vis_update()
+	lighting_corner_SW?.vis_update()
+	lighting_corner_NW?.vis_update()
 
 /turf/proc/lighting_clear_overlay()
-	if(lighting_overlay)
-		qdel(lighting_overlay)
+	if (lighting_object)
+		qdel(lighting_object, force=TRUE)
 
-	for(var/A in corners)
-		var/datum/lighting_corner/C = A
-		C.update_active()
-
-// Builds a lighting overlay for us, but only if our area is dynamic.
+// Builds a lighting object for us, but only if our area is dynamic.
 /turf/proc/lighting_build_overlay()
-	if (lighting_overlay)
-		return
+	if (lighting_object)
+		qdel(lighting_object, force=TRUE) //Shitty fix for lighting objects persisting after death
 
-	var/area/A = loc
-	if (!A.dynamic_lighting)
-		return
-
-	if (!lighting_corners_initialised)
-		generate_missing_corners()
-
-	new /atom/movable/lighting_overlay(src)
-
-	for (var/LC in corners)
-		var/datum/lighting_corner/C = LC
-		if (!C.active) // We would activate the corner, calculate the lighting for it.
-			for (var/L in C.affecting)
-				var/datum/light_source/S = L
-				S.recalc_corner(C)
-
-			C.active = TRUE
+	new /datum/lighting_object(src)
 
 // Used to get a scaled lumcount.
-/turf/proc/get_lumcount(var/minlum = 0, var/maxlum = 1)
-	if (!lighting_overlay)
-		return 0.5
+/turf/proc/get_lumcount(minlum = 0, maxlum = 1)
+	if (!lighting_object)
+		return 1
 
 	var/totallums = 0
-	for(var/LL in corners)
-		var/datum/lighting_corner/L = LL
+	var/datum/lighting_corner/L
+	L = lighting_corner_NE
+	if (L)
 		totallums += L.lum_r + L.lum_b + L.lum_g
+	L = lighting_corner_SE
+	if (L)
+		totallums += L.lum_r + L.lum_b + L.lum_g
+	L = lighting_corner_SW
+	if (L)
+		totallums += L.lum_r + L.lum_b + L.lum_g
+	L = lighting_corner_NW
+	if (L)
+		totallums += L.lum_r + L.lum_b + L.lum_g
+
 
 	totallums /= 12 // 4 corners, each with 3 channels, get the average.
 
 	totallums = (totallums - minlum) / (maxlum - minlum)
 
+	totallums += dynamic_lumcount
+
 	return CLAMP01(totallums)
 
-// Can't think of a good name, this proc will recalculate the has_opaque_atom variable.
-/turf/proc/recalc_atom_opacity()
-	has_opaque_atom = FALSE
-	for (var/atom/A in src.contents)
-		if (A.opacity)
-			has_opaque_atom = TRUE
-			return
+// Returns a boolean whether the turf is on soft lighting.
+// Soft lighting being the threshold at which point the overlay considers
+// itself as too dark to allow sight and see_in_dark becomes useful.
+// So basically if this returns true the tile is unlit black.
+/turf/proc/is_softly_lit()
+	if (!lighting_object)
+		return FALSE
 
-	// If we reach this point has_opaque_atom is still false.
-	// If we ourselves are opaque this line will consider ourselves.
-	// If we are not then this is still faster than doing an explicit check.
-	has_opaque_atom = src.opacity
+	return !(luminosity || dynamic_lumcount)
 
-/turf/change_area(var/area/old_area, var/area/new_area)
-	if(new_area.dynamic_lighting != old_area.dynamic_lighting)
-		if(new_area.dynamic_lighting)
-			lighting_build_overlay()
 
-		else
-			lighting_clear_overlay()
+///Proc to add movable sources of opacity on the turf and let it handle lighting code.
+/turf/proc/add_opacity_source(atom/movable/new_source)
+	LAZYADD(opacity_sources, new_source)
+	if(opacity)
+		return
+	recalculate_directional_opacity()
 
-/turf/proc/get_corners(var/dir)
-	if(has_opaque_atom)
-		return null // Since this proc gets used in a for loop, null won't be looped though.
 
-	return corners
+///Proc to remove movable sources of opacity on the turf and let it handle lighting code.
+/turf/proc/remove_opacity_source(atom/movable/old_source)
+	LAZYREMOVE(opacity_sources, old_source)
+	if(opacity) //Still opaque, no need to worry on updating.
+		return
+	recalculate_directional_opacity()
 
-/turf/proc/generate_missing_corners()
-	lighting_corners_initialised = TRUE
-	if (!corners)
-		corners = list(null, null, null, null)
 
-	for (var/i = 1 to 4)
-		if (corners[i]) // Already have a corner on this direction.
-			continue
+///Calculate on which directions this turfs block view.
+/turf/proc/recalculate_directional_opacity()
+	. = directional_opacity
+	if(opacity)
+		directional_opacity = ALL_CARDINALS
+		if(. != directional_opacity)
+			reconsider_lights()
+		return
+	directional_opacity = NONE
+	if(opacity_sources)
+		for(var/atom/movable/opacity_source as anything in opacity_sources)
+			if(opacity_source.flags_1 & ON_BORDER_1)
+				directional_opacity |= opacity_source.dir
+			else //If fulltile and opaque, then the whole tile blocks view, no need to continue checking.
+				directional_opacity = ALL_CARDINALS
+				break
+	if(. != directional_opacity && (. == ALL_CARDINALS || directional_opacity == ALL_CARDINALS))
+		reconsider_lights() //The lighting system only cares whether the tile is fully concealed from all directions or not.
 
-		corners[i] = new/datum/lighting_corner(src, LIGHTING_CORNER_DIAGONAL[i])
+///Transfer the lighting of one area to another
+/turf/proc/transfer_area_lighting(area/old_area, area/new_area)
+	if(SSlighting.initialized && !space_lit)
+		if (new_area.static_lighting != old_area.static_lighting)
+			if (new_area.static_lighting)
+				lighting_build_overlay()
+			else
+				lighting_clear_overlay()
+
+	// We will only run this logic on turfs off the prime z layer
+	// Since on the prime z layer, we use an overlay on the area instead, to save time
+	if(SSmapping.z_level_to_plane_offset[z])
+		var/index = SSmapping.z_level_to_plane_offset[z] + 1
+		//Inherit overlay of new area
+		if(old_area.lighting_effects)
+			cut_overlay(old_area.lighting_effects[index])
+		if(new_area.lighting_effects)
+			add_overlay(new_area.lighting_effects[index])
+
+	// Manage removing/adding starlight overlays, we'll inherit from the area so we can drop it if the area has it already
+	if(space_lit)
+		if(!new_area.lighting_effects && old_area.lighting_effects)
+			overlays += GLOB.starlight_overlays[GET_TURF_PLANE_OFFSET(src) + 1]
+		else if (new_area.lighting_effects && !old_area.lighting_effects)
+			overlays -= GLOB.starlight_overlays[GET_TURF_PLANE_OFFSET(src) + 1]

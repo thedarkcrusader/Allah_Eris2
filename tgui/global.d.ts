@@ -21,13 +21,6 @@ declare module '*.svg' {
   export default content;
 }
 
-namespace JSX {
-  interface IntrinsicElements {
-    marquee: any;
-    blink: any;
-  }
-}
-
 type TguiMessage = {
   type: string;
   payload?: any;
@@ -50,6 +43,11 @@ type ByondType = {
    * Version of Trident engine of Internet Explorer. Null if N/A.
    */
   TRIDENT: number | null;
+
+  /**
+   * Version of Blink engine of WebView2. Null if N/A.
+   */
+  BLINK: number | null;
 
   /**
    * True if browser is IE8 or lower.
@@ -188,6 +186,11 @@ type ByondType = {
    * Loads a script into the document.
    */
   loadJs(url: string): void;
+
+  /**
+   * Downloads a blob, platform-agnostic
+   */
+  saveBlob(blob: Blob, filename: string, ext: string): void;
 };
 
 /**
@@ -198,4 +201,15 @@ const Byond: ByondType;
 
 interface Window {
   Byond: ByondType;
+  __store__: Store<unknown, AnyAction>;
+  __augmentStack__: (store: Store) => StackAugmentor;
+
+  // IE IndexedDB stuff.
+  msIndexedDB: IDBFactory;
+  msIDBTransaction: IDBTransaction;
+
+  // 516 byondstorage API.
+  hubStorage: Storage;
+  domainStorage: Storage;
+  serverStorage: Storage;
 }

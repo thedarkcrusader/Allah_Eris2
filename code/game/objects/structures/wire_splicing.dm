@@ -5,148 +5,139 @@
 	icon_state = "wire_splicing1"
 	density = FALSE
 	anchored = TRUE
-	flags = CONDUCT
-	layer = TURF_LAYER + 0.45
-	rarity_value = 10
-	spawn_frequency = 10
-	spawn_tags = SPAWN_TAG_TRAP_ARMED_WIRE
+	flags_1 = CONDUCT_1
+	layer = CATWALK_LAYER
 	var/messiness = 0 // How bad the splicing was, determines the chance of shock
 
-/obj/structure/wire_splicing/Initialize(roundstart)
-	.=..()
-
-
-	//Wire splice can only exist on a cable. Lets try to place it in a good location
-	if (!(locate(/obj/structure/cable) in loc))
-		//No cable in our location, lets find one nearby
-
-		//Make a list of turfs with cables in them
-		var/list/candidates = list()
-
-		//We will give each turf a score to determine its suitability
-		var/best_score = -INFINITY
-		for (var/obj/structure/cable/C in range(3, loc))
-			var/turf/floor/T = get_turf(C)
-
-			//Wire inside a wall? can't splice there
-			if (!istype(T))
-				continue
-
-			//We already checked this one
-			if (T in candidates)
-				continue
-
-			var/turf_score = 0
-
-			//Nobody walks on underplating so we don't want to place traps there
-			if (istype(T.flooring, /decl/flooring/reinforced/plating/under))
-				turf_score -= 1
-
-			if (turf_is_external(T))
-				continue //No traps in space
-
-			//Catwalks are made for walking on, we definitely want traps there
-			if (locate(/obj/structure/catwalk) in T)
-				turf_score += 2
-
-			//If its below the threshold ignore it
-			if (turf_score < best_score)
-				continue
-
-			//If it sets a new threshold, discard everything before
-			else if (turf_score > best_score)
-				best_score = turf_score
-				candidates.Cut()
-
-			candidates.Add(T)
-
-		//No nearby cables? Cancel
-		if (!candidates.len)
-			return INITIALIZE_HINT_QDEL
-
-
-		loc = pick(candidates)
+/obj/structure/wire_splicing/Initialize(mapload)
+	. = ..()
 	messiness = rand (1,10)
 	icon_state = "wire_splicing[messiness]"
+	var/static/list/loc_connections = list(
+		COMSIG_ATOM_ENTERED = PROC_REF(on_entered),
+	)
+	AddElement(/datum/element/connect_loc, loc_connections)
+
 
 	//At messiness of 2 or below, triggering when walking on a catwalk is impossible
 	//Above that it becomes possible, so we will change the layer to make it poke through catwalks
 	if (messiness > 2)
 		layer = LOW_OBJ_LAYER  // I wont do such stuff on splicing "reinforcement". Take it as nasty feature
 
-/obj/structure/wire_splicing/examine(mob/user, extra_description = "")
-	extra_description += "\nIt has [messiness] wire[messiness > 1?"s":""] dangling around"
-	..(user, extra_description)
 
-/obj/structure/wire_splicing/Crossed(AM as mob|obj)
+	//Wire splice can only exist on a cable. Lets try to place it in a good location
+	if (locate(/obj/structure/cable) in get_turf(src)) //if we're already in a good location, no problem!
+		return
+
+	//Make a list of turfs with cables in them
+	var/list/candidates = list()
+
+	//We will give each turf a score to determine its suitability
+	var/best_score = -INFINITY
+	for(var/obj/structure/cable/C in range(3, get_turf(src)))
+		var/turf/open/T = get_turf(C)
+
+		//Wire inside a wall? can't splice there
+		if (!istype(T))
+			continue
+
+		//We already checked this one
+		if (T in candidates)
+			continue
+
+		var/turf_score = 0
+
+		//Nobody walks on underplating so we don't want to place traps there
+
+		if (T.initial_gas_mix == AIRLESS_ATMOS)
+			continue //No traps in space
+
+		/*
+		//Catwalks are made for walking on, we definitely want traps there
+		if (locate(/obj/structure/catwalk) in T)
+			turf_score += 2
+		*/
+
+		//If its below the threshold ignore it
+		if (turf_score < best_score)
+			continue
+
+		//If it sets a new threshold, discard everything before
+		else if (turf_score > best_score)
+			best_score = turf_score
+			candidates.Cut()
+
+		candidates.Add(T)
+
+	//No nearby cables? Cancel
+	if (!length(candidates))
+		return INITIALIZE_HINT_QDEL
+
+	loc = pick(candidates)
+
+/obj/structure/wire_splicing/examine(mob/user)
+	. = ..()
+	if(is_syndicate(user))
+		. += span_warning("or you could add more wires..!")
+	. += "It has [messiness] wire[messiness > 1?"s":""] dangling around."
+
+/obj/structure/wire_splicing/proc/on_entered(datum/source, atom/movable/AM, ...)
 	if(isliving(AM))
 		var/mob/living/L = AM
-		var/turf/T = get_turf(src)
+		//var/turf/T = get_turf(src)
 		var/chance_to_shock = messiness * 10
-		chance_to_shock -= L.skill_to_evade_traps()
+		/*
 		if(locate(/obj/structure/catwalk) in T)
 			chance_to_shock -= 20
-		if(prob(chance_to_shock))
-			shock(L, FALSE)
+		*/
+		shock(L, chance_to_shock)
 
-/obj/structure/wire_splicing/proc/shock(mob/user as mob, using_hands = TRUE)
+/obj/structure/wire_splicing/proc/shock(mob/user, prb, siemens_coeff = 1)
 	if(!in_range(src, user))//To prevent TK and mech users from getting shocked
+		return FALSE
+	if(!prob(prb))
 		return FALSE
 	var/turf/T = get_turf(src)
 	var/obj/structure/cable/C = locate(/obj/structure/cable) in T
-	if(C)
-		if(electrocute_mob(user, C, src, hands = using_hands))
-			if(C.powernet)
-				C.powernet.trigger_warning()
-			if(user.stunned)
-				to_chat(user, SPAN_WARNING("You got electrocuted by wire splicing!"))
-				return TRUE
+	if(!C)
+		return FALSE
+	if(electrocute_mob(user, C.powernet, src, siemens_coeff, zone = pick(BODY_ZONE_L_LEG, BODY_ZONE_R_LEG)))
+		do_sparks(5, TRUE, src)
+		return TRUE
+	else
+		return FALSE
 
-/obj/structure/wire_splicing/attackby(obj/item/I, mob/user)
-	if(QUALITY_WIRE_CUTTING in I.tool_qualities)
-		if(I.use_tool(user, src, WORKTIME_FAST, QUALITY_WIRE_CUTTING, FAILCHANCE_EASY, required_stat = STAT_MEC))
-			if(!shock(user, 100))
-				to_chat(user, SPAN_NOTICE("You remove the splicing."))
-				qdel(src)
+		
 
-	if(QUALITY_CUTTING in I.tool_qualities)
-		if(I.use_tool(user, src, WORKTIME_FAST, QUALITY_CUTTING, FAILCHANCE_EASY, required_stat = STAT_MEC))
-			if(!shock(user, 100))
-				to_chat(user, SPAN_NOTICE("You remove the splicing."))
-				qdel(src)
+/obj/structure/wire_splicing/attackby(obj/item/I, mob/living/user, params)
+	if(I.tool_behaviour == TOOL_WIRECUTTER)
+		if(I.use_tool(src, user, 2 SECONDS, volume = 50))
+			if (shock(user, 50))
+				return
+			user.visible_message("[user] cuts the splicing.", span_notice("You cut the splicing."))
+			investigate_log(" was cut by [key_name(usr)] in [AREACOORD(src)]", INVESTIGATE_WIRES)
+			var/turf/T = get_turf(src)
+			var/obj/structure/cable/C = locate() in T
+			var/new_color = C?.cable_color || pick(GLOB.cable_colors)
+			new /obj/item/stack/cable_coil(T, messiness, new_color)
+			qdel(src)
 
-	if(istype(I, /obj/item/stack/cable_coil) && user.a_intent == I_HURT)
-		if(used_now)
-			to_chat(user, "The [src.name] is already being manipulated!") //so people with low stats can't spam their way past the failure chance
-			return
-		if(messiness >= 10)
-			messiness = 10
-			to_chat(user, SPAN_WARNING("Enough."))
-			return
-		used_now = TRUE
-		// keep goin!
+	if(istype(I, /obj/item/stack/cable_coil) && user.combat_mode)
 		var/obj/item/stack/cable_coil/coil = I
 		if(coil.get_amount() >= 1)
-			to_chat(user, SPAN_NOTICE("You started to wire to this pile of wires..."))
-			if(shock(user)) //check if he got his insulation gloves
-				used_now = FALSE
-				return 		//he didn't
-			if(do_after(user, 20, src))
-				if(shock(user)) //check if he got his insulation gloves. Again.
-					used_now = FALSE
-					return
-				var/fail_chance = FAILCHANCE_HARD - user.stats.getStat(STAT_MEC) // 72 for assistant
-				if(prob(fail_chance))
-					if(!shock(user, FALSE)) //why not
-						to_chat(user, SPAN_WARNING("You failed to finish your task with [src.name]! There was a [fail_chance]% chance to screw this up."))
-					used_now = FALSE
-					return
-				if(messiness >= 10)
-					messiness = 10
-				//all clear, update things
-				coil.use(1)
-				messiness += 1
-				icon_state = "wire_splicing[messiness]"
-				to_chat(user, SPAN_NOTICE("You added one more wire."))
-				used_now = FALSE
+			reinforce(user, coil)
 
+/obj/structure/wire_splicing/proc/reinforce(mob/user, obj/item/stack/cable_coil/coil)
+	if(messiness >= 10)
+		to_chat(user,span_warning("You can't seem to jam more cable into the splicing!"))
+		return
+	if(do_after(user, 2 SECONDS, src))
+		if (shock(user, 50))
+			return
+		messiness = min(messiness + 1, 10)
+		icon_state = "wire_splicing[messiness]"
+		investigate_log("wire splicing was reinforced to [messiness] by [key_name(usr)] in [AREACOORD(src)]", INVESTIGATE_WIRES)
+		user.visible_message("[user] tucks more wires into the splicing.", span_notice("You add more cables to the splicing."))
+		coil.use(1)
+		if(messiness < 10 && coil && coil.get_amount() >= 1)
+			reinforce(user, coil)

@@ -1,366 +1,191 @@
 /obj/item/gun/energy/laser
-	name = "NT LG \"Lightfall\""
-	desc = "\"NeoTheology\" brand laser carbine. Deadly and radiant, like the ire of God it represents."
-	icon = 'icons/obj/guns/energy/laser.dmi' // back and suit sprites are stolen from Valkyrie, spriter's help needed if you are willing to redraw it
+	name = "laser gun"
+	desc = "The NT-L4 is a basic energy-based laser gun that fires concentrated beams of light which pass through glass and thin metal."
 	icon_state = "laser"
-	item_state = "laser"
-	item_charge_meter = TRUE
-	fire_sound = 'sound/weapons/Laser.ogg'
-	slot_flags = SLOT_BELT|SLOT_BACK
-	w_class = ITEM_SIZE_NORMAL
-	force = WEAPON_FORCE_NORMAL
-	origin_tech = list(TECH_COMBAT = 3, TECH_MAGNET = 2)
-	matter = list(MATERIAL_PLASTEEL = 20, MATERIAL_WOOD = 8, MATERIAL_SILVER = 5)
-	zoom_factors = list(0.5)
-	damage_multiplier = 1.3
-	charge_cost = 50
-	price_tag = 2500
-	projectile_type = /obj/item/projectile/beam/midlaser
-	init_firemodes = list(
-		WEAPON_NORMAL,
-		WEAPON_CHARGE
-	)
-	twohanded = TRUE
-	init_recoil = CARBINE_RECOIL(1)
-	serial_type = "NT"
-
-/obj/item/gun/energy/laser/mounted
-	self_recharge = TRUE
-	use_external_power = TRUE
-	safety = FALSE
-	restrict_safety = TRUE
-	twohanded = FALSE
-	zoom_factors = list()
-	damage_multiplier = 1
-	charge_cost = 100
-	spawn_blacklisted = TRUE
-
-/obj/item/gun/energy/laser/mounted/blitz
-	name = "SDF LR \"Strahl\""
-	desc = "A miniaturized laser rifle, remounted for robotic use only."
-	icon_state = "laser_turret"
-	charge_meter = FALSE
-	zoom_factors = list()
-	damage_multiplier = 1
-	charge_cost = 100
-	spawn_tags = null
+	item_state = LASER
+	w_class = WEIGHT_CLASS_NORMAL
+	materials = list(/datum/material/iron=2000)
+	ammo_type = list(/obj/item/ammo_casing/energy/lasergun)
+	ammo_x_offset = 1
+	shaded_charge = 1
 
 /obj/item/gun/energy/laser/practice
-	name = "NT LG \"Lightfall\" - P"
-	desc = "A modified version of \"NeoTheology\" brand laser carbine, this one fires less concentrated energy bolts, designed for target practice."
-	matter = list(MATERIAL_PLASTEEL = 20, MATERIAL_WOOD = 8, MATERIAL_SILVER = 2)
-	price_tag = 1000
-	projectile_type = /obj/item/projectile/beam/practice
-	zoom_factors = list()
+	name = "practice laser gun"
+	desc = "A modified version of the NT-L4 laser gun, it fires less concentrated energy bolts designed for target practice."
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/practice)
+	clumsy_check = 0
+	item_flags = NONE
+	obj_flags = UNIQUE_RENAME
 
-/obj/item/gun/energy/retro
-	name = "OS LG \"Cog\""
-	icon = 'icons/obj/guns/energy/retro.dmi'
+/obj/item/gun/energy/laser/retro
+	name ="retro laser gun"
 	icon_state = "retro"
-	item_state = "retro"
-	desc = "A One Star cheaply produced laser gun. In the distant past - this was the main weapon of low-rank police forces, billions of copies of this gun were made. They are ubiquitous."
-	fire_sound = 'sound/weapons/Laser.ogg'
-	slot_flags = SLOT_BELT|SLOT_BACK
-	w_class = ITEM_SIZE_NORMAL
-	force = WEAPON_FORCE_PAINFUL
-	can_dual = TRUE
-	matter = list(MATERIAL_STEEL = 10, MATERIAL_PLASTIC = 15, MATERIAL_GLASS = 5)
-	projectile_type = /obj/item/projectile/beam
-	fire_delay = 10 //old technology
-	zoom_factors = list()
-	damage_multiplier = 1
-	charge_cost = 100
-	price_tag = 750
-	init_firemodes = list(
-		WEAPON_NORMAL,
-		BURST_2_BEAM
-	)
-	twohanded = TRUE
-	saw_off = TRUE
-	sawn = /obj/item/gun/energy/retro/sawn
-	init_recoil = CARBINE_RECOIL(1)
-	serial_type = "OS"
+	desc = "The NT-L1 laser gun, no longer used by Nanotrasen's private security or military forces. Nevertheless, it is still quite deadly and easy to maintain, making it a favorite amongst pirates and other outlaws."
+	ammo_x_offset = 3
 
-/obj/item/gun/energy/retro/sawn
-	name = "sawn down OS LG \"Cog\""
-	icon = 'icons/obj/guns/energy/obrez_retro.dmi'
-	desc = "A modified One Star cheaply produced laser gun. \
-		 In the distant past - this was the main weapon of low-rank police forces, and thus widely used by criminals."
-	icon_state = "shorty"
-	item_state = "shorty"
-	slot_flags = SLOT_BACK|SLOT_HOLSTER
-	matter = list(MATERIAL_STEEL = 5, MATERIAL_PLASTIC = 10, MATERIAL_GLASS = 5)
-	damage_multiplier = 0.8
-	penetration_multiplier = -0.2
-	charge_cost = 125
-	price_tag = 400
-	init_firemodes = list(
-		WEAPON_NORMAL
-	)
-	twohanded = FALSE
-	saw_off = FALSE
-	spawn_blacklisted = TRUE
-	init_recoil = SMG_RECOIL(1)
+/obj/item/gun/energy/laser/retro/old
+	name ="laser gun"
+	icon_state = "retro"
+	desc = "The NT-L1 laser gun, no longer used by Nanotrasen's private security or military forces. Nevertheless, it is still quite deadly and easy to maintain, making it a favorite amongst pirates and other outlaws. This one in particular seems extremely worn out and barely functional. How long were you in cryo?"
+	ammo_type = list(/obj/item/ammo_casing/energy/lasergun/old)
+	ammo_x_offset = 3
 
-/obj/item/gun/energy/captain
-	name = "NT LG \"Destiny\""
-	icon = 'icons/obj/guns/energy/capgun.dmi'
+/obj/item/gun/energy/laser/hellgun
+	name ="hellfire laser gun"
+	desc = "The NT-L2, nicknamed 'hellgun', is the second non-experimental model laser gun, built before NT began installing regulators on its laser weaponry. This pattern of laser gun became infamous for the gruesome burn wounds and fires that it caused, and was quietly discontinued once it began to affect NT's reputation."
+	icon_state = "hellgun"
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/hellfire)
+
+/obj/item/gun/energy/laser/captain
+	name = "antique laser gun"
 	icon_state = "caplaser"
 	item_state = "caplaser"
-	item_charge_meter = TRUE
-	desc = "This weapon is old, yet still robust and reliable. It's marked with old Nanotrasen brand, a distant reminder of what this corporation was, before the Church took control of everything."
-	force = WEAPON_FORCE_PAINFUL
-	fire_sound = 'sound/weapons/Laser.ogg'
-	slot_flags = SLOT_BELT|SLOT_HOLSTER
-	w_class = ITEM_SIZE_NORMAL
-	can_dual = TRUE
-	projectile_type = /obj/item/projectile/beam/midlaser
-	zoom_factors = list()
-	damage_multiplier = 1.2
-	origin_tech = null
-	self_recharge = TRUE
-	charge_cost = 100
-	price_tag = 4500
-	init_firemodes = list(
-		WEAPON_NORMAL,
-		WEAPON_CHARGE
-	)
-	twohanded = FALSE
-	spawn_blacklisted = TRUE//antag_item_targets
-	init_recoil = HANDGUN_RECOIL(1)
-	serial_type = "NT"
+	desc = "The NT-S01 laser gun is NTs first attempt to provide an inbuilt recharger, and is the first in its line as an 'S' or special class weapon given to space station command members. Due to how expensive it is to produce, and that the material used to do so deteriorates quickly, it was decommissioned, and the few models left are used as prizes meant to never see the light of day."
+	force = 10
+	ammo_x_offset = 3
+	selfcharge = TRUE
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | ACID_PROOF
+
+/obj/item/gun/energy/laser/scattershot
+	name = "scatter shot laser rifle"
+	icon_state = "lasercannon"
+	desc = "An industrial-grade heavy-duty laser rifle with a modified laser lens to scatter its shot into multiple smaller lasers. The inner-core can self-charge for theoretically infinite use."
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/scatter, /obj/item/ammo_casing/energy/laser)
+	ammo_x_offset = 3
+	force = 10
+	selfcharge = TRUE
+	shaded_charge = FALSE
+	resistance_flags = INDESTRUCTIBLE | LAVA_PROOF | FIRE_PROOF | ACID_PROOF
+
+/obj/item/gun/energy/laser/cyborg
+	can_charge = FALSE
+	desc = "An energy-based laser gun that self charges. So this is what freedom looks like?"
+	charge_delay = 5
+	selfcharge = TRUE
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/cyborg)
+
+/obj/item/gun/energy/laser/cyborg/emp_act()
+	return
+
+/obj/item/gun/energy/laser/scatter
+	name = "scatter laser gun"
+	desc = "A laser gun equipped with a refraction kit that spreads bolts."
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/scatter, /obj/item/ammo_casing/energy/laser)
+
+/obj/item/gun/energy/laser/scatter/shotty
+	name = "energy shotgun"
+	icon = 'icons/obj/guns/projectile.dmi'
+	icon_state = "cshotgun"
+	item_state = "shotgun"
+	desc = "A combat shotgun gutted and refitted with an internal disabler system."
+	shaded_charge = 0
+	pin = /obj/item/firing_pin/implant/mindshield
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/scatter/disabler)
+
+///Laser Cannon
 
 /obj/item/gun/energy/lasercannon
-	name = "Prototype: laser cannon"
-	desc = "With the laser cannon, the lasing medium is enclosed in a tube lined with uranium-235 and subjected to high neutron flux in a nuclear reactor core. This incredible technology may help YOU achieve high excitation rates with small laser volumes!"
-	icon = 'icons/obj/guns/energy/lascannon.dmi'
+	name = "accelerator laser cannon"
+	desc = "An advanced laser cannon that does more damage the farther away the target is."
 	icon_state = "lasercannon"
-	item_state = "lasercannon"
-	item_charge_meter = TRUE
+	item_state = LASER
+	w_class = WEIGHT_CLASS_BULKY
+	force = 10
+	flags_1 =  CONDUCT_1
+	slot_flags = ITEM_SLOT_BACK
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/accelerator)
+	pin = null
+	ammo_x_offset = 3
+
+/obj/item/ammo_casing/energy/laser/accelerator
+	projectile_type = /obj/projectile/beam/laser/accelerator
+	select_name = "accelerator"
 	fire_sound = 'sound/weapons/lasercannonfire.ogg'
-	origin_tech = list(TECH_COMBAT = 4, TECH_MATERIAL = 3, TECH_POWER = 3)
-	w_class = ITEM_SIZE_HUGE
-	slot_flags = SLOT_BELT|SLOT_BACK
-	projectile_type = /obj/item/projectile/beam/heavylaser
-	charge_cost = 100
-	serial_type = "ML"
-	fire_delay = 20
-	zoom_factors = list()
-	damage_multiplier = 1
-	matter = list(MATERIAL_STEEL = 25, MATERIAL_SILVER = 4, MATERIAL_URANIUM = 1)
-	price_tag = 3000
-	init_firemodes = list(
-		WEAPON_NORMAL
-		)
-	twohanded = TRUE
-	init_recoil = LMG_RECOIL(1)
 
-/obj/item/gun/energy/lasercannon/mounted
-	name = "mounted laser cannon"
-	self_recharge = TRUE
-	use_external_power = TRUE
-	recharge_time = 35
-	safety = FALSE
-	restrict_safety = TRUE
-	twohanded = FALSE
-	zoom_factors = list()
-	damage_multiplier = 1
-	charge_cost = 300
-	spawn_blacklisted = TRUE
+/obj/projectile/beam/laser/accelerator
+	name = "accelerator laser"
+	icon_state = "scatterlaser"
+	range = 255
+	damage = 6
 
-/obj/item/gun/energy/psychic
-	icon = 'icons/obj/guns/energy/psychiccannon.dmi'
-	icon_state = "psychic_lasercannon"
-	item_state = "psychic_lasercannon"
-	projectile_type = /obj/item/projectile/beam/psychic
-	icon_contained = TRUE
-	spawn_blacklisted = TRUE
-	var/contractor = FALSE //Check if it's a contractor psychic weapon
-	var/datum/mind/owner
-	var/list/victims = list()
-	var/datum/antag_contract/derail/contract
-	pierce_multiplier = 4
-
-/obj/item/gun/energy/psychic/Initialize()
+/obj/projectile/beam/laser/accelerator/Range()
 	..()
-	if(contractor)
-		START_PROCESSING(SSobj, src)
+	damage += 7
+	transform *= 1 + ((damage/7) * 0.2)//20% larger per tile
 
-/obj/item/gun/energy/psychic/Destroy()
-	if(contractor)
-		STOP_PROCESSING(SSobj, src)
-	return ..()
-
-/obj/item/gun/energy/psychic/Process()
-	if(owner && !contract)
-		find_contract()
-		if(contract)
-			STOP_PROCESSING(SSobj, src)
-	else
-		STOP_PROCESSING(SSobj, src)
-
-/obj/item/gun/energy/psychic/proc/find_contract()
-	for(var/datum/antag_contract/derail/C in GLOB.various_antag_contracts)
-		if(C.completed)
-			continue
-		contract = C
-		victims = list()
-		if(src in owner.current.GetAllContents(includeSelf = FALSE))
-			to_chat(owner.current, SPAN_NOTICE("[src] has found new contract."))
-		break
-
-/obj/item/gun/energy/psychic/proc/reg_break(mob/living/carbon/human/victim)
-	if(victim.get_species() != SPECIES_HUMAN)
-		return
-
-	if(!contract)
-		return
-
-	if(owner && owner.current)
-		if(victim == owner.current)
-			return
-
-		// If in owner's inventory, give a signal that the break was registred and counted towards contract
-		if((src in owner.current.GetAllContents(includeSelf = FALSE)) && !(victim in victims))
-			to_chat(owner.current, SPAN_DANGER("[src] clicks."))
-
-	victims |= victim
-
-	if(contract.completed)
-		to_chat(owner.current, SPAN_DANGER("Somebody all ready have comleted targeted contract."))
-		contract = null
-		START_PROCESSING(SSobj, src)
-
-	else if(victims.len >= contract.count)
-		contract.report(src)
-		contract = null
-		START_PROCESSING(SSobj, src)
-
-/obj/item/gun/energy/psychic/lasercannon
-	name = "Prototype: psychic laser cannon"
-	desc = "A laser cannon that attacks the minds of people, causing sanity loss and inducing mental breakdowns."
-	description_antag = "Can pierce a wall"
-	icon = 'icons/obj/guns/energy/psychiccannon.dmi'
-	icon_state = "psychic_lasercannon"
-	item_state = "psychic_lasercannon"
-	fire_sound = 'sound/weapons/lasercannonfire.ogg'
-	item_charge_meter = FALSE
-	origin_tech = list(TECH_COMBAT = 4, TECH_MATERIAL = 3, TECH_POWER = 3, TECH_COVERT = 5)
-	projectile_type = /obj/item/projectile/beam/psychic/heavylaser
-	w_class = ITEM_SIZE_NORMAL
-	force = WEAPON_FORCE_NORMAL
-	slot_flags = SLOT_BELT|SLOT_BACK
-	contractor = TRUE
-	serial_type = "ML"
-	pierce_multiplier = 4
-	zoom_factors = list()
-	damage_multiplier = 1
-	charge_cost = 50
-	fire_delay = 20
-	price_tag = 6000
-	matter = list(MATERIAL_STEEL = 25, MATERIAL_SILVER = 4, MATERIAL_URANIUM = 1)
-	init_firemodes = list(
-		WEAPON_NORMAL,
-		WEAPON_CHARGE
-		)
-	twohanded = FALSE
-	init_recoil = LMG_RECOIL(1)
-
-/obj/item/gun/energy/psychic/mindflayer
-	name = "Prototype: mind flayer"
-	desc = "A cruel weapon designed to break the minds of those it targets, causing sanity loss and mental breakdowns."
-	icon = 'icons/obj/guns/energy/xray.dmi'
+///X-ray gun
+/obj/item/gun/energy/xray
+	name = "\improper X-ray laser gun"
+	desc = "A high-power laser gun capable of expelling concentrated X-ray blasts that pass through heavy materials."
 	icon_state = "xray"
-	projectile_type = /obj/item/projectile/beam/psychic
-	fire_sound = 'sound/weapons/Laser.ogg'
-	slot_flags = SLOT_BELT|SLOT_HOLSTER
-	fire_delay = 10
-	price_tag = 2200
-	matter = list(MATERIAL_PLASTEEL = 15, MATERIAL_SILVER = 5, MATERIAL_PLASMA = 3)
-	twohanded = FALSE
-	init_recoil = HANDGUN_RECOIL(1)
+	item_state = null
+	ammo_type = list(/obj/item/ammo_casing/energy/xray/optimized)
+	pin = null
+	ammo_x_offset = 3
 
-/obj/item/gun/energy/psychic/mindflayer/update_icon(var/ignore_inhands)
-	if(charge_meter)
-		var/ratio = 0
+////////Laser Tag////////////////////
 
-		if(cell && cell.charge >= charge_cost)
-			ratio = cell.charge / cell.maxcharge
-			ratio = min(max(round(ratio, 0.25) * 100, 25), 100)
+/obj/item/gun/energy/laser/bluetag
+	name = "laser tag gun"
+	icon_state = "bluetag"
+	desc = "A retro laser gun modified to fire harmless blue beams of light. Sound effects included!"
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/bluetag)
+	item_flags = NONE
+	clumsy_check = FALSE
+	pin = /obj/item/firing_pin/tag/blue
+	ammo_x_offset = 2
+	selfcharge = TRUE
 
-		if(item_charge_meter)
-			set_item_state("-[ratio]")
-			wielded_item_state = "_doble-[ratio]"
-			icon_state = "xray[ratio]"
-	if(!ignore_inhands)
-		update_wear_icon()
+/obj/item/gun/energy/laser/bluetag/hitscan
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/bluetag/hitscan)
 
-/obj/item/gun/energy/laser/makeshift
-	name = "HM LG \"Retina Burn\""
-	desc = "A somewhat power inefficient makeshift laser carbine, but shockingly reliable."
-	icon = 'icons/obj/guns/energy/makeshift_carbine.dmi'
-	icon_state = "makeshift"
-	item_state = "makeshift"
-	origin_tech = list(TECH_COMBAT = 2, TECH_MAGNET = 1)
-	matter = list(MATERIAL_STEEL = 20, MATERIAL_PLASTIC = 15, MATERIAL_SILVER = 5)
-	item_charge_meter = TRUE
-	slot_flags = SLOT_BELT
-	w_class = ITEM_SIZE_NORMAL
-	force = WEAPON_FORCE_NORMAL
-	zoom_factors = list()
-	charge_cost = 100 //worst lightfall
-	fire_delay = 10 //ditto
-	price_tag = 500
-	init_firemodes = list(
-		WEAPON_NORMAL
-	)
-	spawn_tags = SPAWN_TAG_GUN_HANDMADE
-	init_recoil = CARBINE_RECOIL(1)
+/obj/item/gun/energy/laser/redtag
+	name = "laser tag gun"
+	icon_state = "redtag"
+	desc = "A retro laser gun modified to fire harmless beams red of light. Sound effects included!"
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/redtag)
+	item_flags = NONE
+	clumsy_check = FALSE
+	pin = /obj/item/firing_pin/tag/red
+	ammo_x_offset = 2
+	selfcharge = TRUE
 
-/obj/item/gun/energy/laser/makeshift_pistol
-	name = "HM LG \"Scorcher\""
-	desc = "A heavy makeshift laser pistol, trades off some power and efficiency for ease of storage and use."
-	icon = 'icons/obj/guns/energy/makeshift_pistol.dmi'
-	icon_state = "makeshiftpistol"
-	item_state = "makeshiftpistol"
-	origin_tech = list(TECH_COMBAT = 2, TECH_MAGNET = 1)
-	matter = list(MATERIAL_STEEL = 10, MATERIAL_PLASTIC = 7)
-	item_charge_meter = TRUE
-	slot_flags = SLOT_BELT|SLOT_HOLSTER
-	w_class = ITEM_SIZE_NORMAL
-	force = WEAPON_FORCE_NORMAL
-	projectile_type = /obj/item/projectile/beam
-	damage_multiplier = 0.5
-	charge_cost = 125
-	fire_delay = 15
-	price_tag = 250
-	init_firemodes = list(
-		BURST_2_BEAM
-	)
-	zoom_factors = list()
-	twohanded = FALSE
-	spawn_tags = SPAWN_TAG_GUN_HANDMADE
-	init_recoil = SMG_RECOIL(1)
+/obj/item/gun/energy/laser/redtag/hitscan
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/redtag/hitscan)
 
+/obj/item/gun/energy/laser/makeshiftlasrifle
+	name = "makeshift laser rifle"
+	desc = "A makeshift rifle that shoots lasers. Lacks factory precision, but the screwable bulb allows modulating the photonic output."
+	icon_state = "lasrifle"
+	item_state = "makeshiftlas"
+	lefthand_file = 'icons/mob/inhands/weapons/guns_lefthand.dmi'
+	righthand_file = 'icons/mob/inhands/weapons/guns_righthand.dmi'
+	w_class = WEIGHT_CLASS_NORMAL
+	ammo_type = list(/obj/item/ammo_casing/energy/laser/makeshiftlasrifle, /obj/item/ammo_casing/energy/laser/makeshiftlasrifle/weak)
+	icon = 'icons/obj/guns/energy.dmi'
+	can_charge = TRUE
+	charge_sections = 1
+	ammo_x_offset = 2
+	shaded_charge = FALSE //if this gun uses a stateful charge bar for more detail
 
-/obj/item/gun/energy/laser/makeshift_pistol/update_icon(ignore_inhands)
-	if(charge_meter)
-		var/ratio = 0
+/obj/item/ammo_casing/energy/laser/makeshiftlasrifle
+	e_cost = 1000 //The amount of energy a cell needs to expend to create this shot.
+	projectile_type = /obj/projectile/beam/laser/makeshiftlasrifle
+	select_name = "strong"
+	variance = 2
 
-		//make sure that rounding down will not give us the empty state even if we have charge for a shot left.
-		if(cell && cell.charge >= charge_cost)
-			ratio = cell.charge / cell.maxcharge
-			ratio = min(max(round(ratio, 1) * 100, 100), 100) //if you want to make a charge meter sprite for hands (0 25 50 75 100), replace with following line
-//			ratio = min(max(round(ratio, 0.25) * 100, 25), 100)
-		if(modifystate)
-			icon_state = "[modifystate][ratio]"
-			wielded_item_state = "_doble" + "[ratio]"
-		else
-			icon_state = "[initial(icon_state)][ratio]"
+/obj/projectile/beam/laser/makeshiftlasrifle
+	damage = 17
 
-		if(item_charge_meter)
-			set_item_state("-[ratio]")
-			wielded_item_state = "_doble" + "-[ratio]"
-	if(!ignore_inhands)
-		update_wear_icon()
+/obj/item/ammo_casing/energy/laser/makeshiftlasrifle/weak
+	e_cost = 100 //The amount of energy a cell needs to expend to create this shot.
+	projectile_type = /obj/projectile/beam/laser/makeshiftlasrifle/weak
+	select_name = "weak"
+	fire_sound = 'sound/weapons/laser2.ogg'
 
+/obj/projectile/beam/laser/makeshiftlasrifle/weak
+	name = "weak laser"
+	damage = 5
+
+/obj/projectile/beam/laser/buckshot
+	damage = 10
