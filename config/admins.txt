@@ -8,8 +8,8 @@
 # and will override any duplicate entries in the database.									  #
 ###############################################################################################
 
-spl99	=	Host
-Xantam	=	Host
+theblackflag	=	Host
+Eagle_01 	=	Host
 
 cowbot93 = Council Member
 
