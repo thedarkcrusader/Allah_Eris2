@@ -1,0 +1,61 @@
+
+/mob/living/silicon/apply_damage(damage = 0,damagetype = BRUTE, def_zone = null, blocked = FALSE, wound_bonus = 0, bare_wound_bonus = 0, sharpness = SHARP_NONE, attack_direction = null)
+	if(SEND_SIGNAL(src, COMSIG_MOB_APPLY_DAMAGE, damage, damagetype, def_zone) & COMPONENT_NO_APPLY_DAMAGE)
+		return FALSE
+	var/hit_percent = (100-blocked)/100
+	if(!damage || (hit_percent <= 0))
+		return 0
+	switch(damagetype)
+		if(BRUTE)
+			adjustBruteLoss(damage * hit_percent)
+		if(BURN)
+			adjustFireLoss(damage * hit_percent)
+	return damage * hit_percent
+
+
+/mob/living/silicon/apply_effect(effect = 0,effecttype = EFFECT_STUN, blocked = FALSE)
+	return FALSE //The only effect that can hit them atm is flashes and they still directly edit so this works for now
+
+/mob/living/silicon/adjustToxLoss(amount, updating_health = TRUE, forced = FALSE) //immune to tox damage
+	return FALSE
+
+/mob/living/silicon/setToxLoss(amount, updating_health = TRUE, forced = FALSE)
+	return FALSE
+
+/mob/living/silicon/adjustCloneLoss(amount, updating_health = TRUE, forced = FALSE) //immune to clone damage
+	return FALSE
+
+/mob/living/silicon/setCloneLoss(amount, updating_health = TRUE, forced = FALSE)
+	return FALSE
+
+/mob/living/silicon/adjustStaminaLoss(amount, updating_health = TRUE, forced = FALSE) //immune to stamina damage.
+	return FALSE
+
+/mob/living/silicon/setStaminaLoss(amount, updating_health = TRUE)
+	return FALSE
+
+/mob/living/silicon/adjustOrganLoss(slot, amount, maximum = 500) //immune to organ damage (no organs, duh)
+	return FALSE
+
+/mob/living/silicon/adjustOrganLoss(slot, amount, maximum = 500)
+	return FALSE
+
+/mob/living/silicon/adjustOxyLoss(amount, updating_health = TRUE, forced = FALSE) //immune to oxygen damage
+	if(istype(src, /mob/living/silicon/ai)) //ais are snowflakes and use oxyloss for being in AI cards and having no battery
+		return ..()
+
+	return FALSE
+
+/mob/living/silicon/setOxyLoss(amount, updating_health = TRUE, forced = FALSE)
+	if(istype(src, /mob/living/silicon/ai)) //ditto
+		return ..()
+
+	return FALSE
+
+//Special snowflake AI damage nos
+/mob/living/silicon/ai/adjustFireLoss(amount, updating_health = TRUE, forced = FALSE, required_status)
+	return FALSE
+
+/mob/living/silicon/ai/adjustBruteLoss(amount, updating_health = TRUE, forced = FALSE, required_status)
+	return FALSE
+

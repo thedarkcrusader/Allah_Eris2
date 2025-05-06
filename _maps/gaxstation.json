@@ -1,0 +1,21 @@
+{
+	"map_name": "NVS Gax",
+	"internal_name": "GaxStation",
+	"map_path": "map_files/GaxStation",
+	"map_file": "GaxStation.dmm",
+	"shuttles": {
+		"cargo": "cargo_gax",
+		"ferry": "ferry_fancy",
+		"emergency": "emergency_box"
+	},
+	"cryo_spawn": true,
+	"job_changes": {
+		"Captain": {
+			"special_charter": "ship"
+		},
+		"Psychiatrist": {
+			"spawn_positions": 0,
+			"total_positions": 0
+		}
+	}
+}
