@@ -1,98 +1,86 @@
-/obj/item/computer_hardware/battery
-	name = "power cell controller"
-	desc = "A charge controller for standard power cells, used in all kinds of modular computers."
-	icon_state = "cell_con"
-	critical = 1
-	malfunction_probability = 1
-	var/obj/item/stock_parts/cell/battery
-	device_type = MC_CELL
-
-/obj/item/computer_hardware/battery/Initialize(mapload, battery_type)
-	. = ..()
-	if(battery_type)
-		battery = new battery_type(src)
-
-/obj/item/computer_hardware/battery/Destroy()
-	if(battery)
-		QDEL_NULL(battery)
-	return ..()
-
-///What happens when the battery is removed (or deleted) from the module, through try_eject() or not.
-/obj/item/computer_hardware/battery/Exited(atom/A, atom/newloc)
-	if(A == battery)
-		battery = null
-		if(holder?.enabled && !holder.use_power())
-			holder.shutdown_computer()
-	return ..()
-
-/obj/item/computer_hardware/battery/try_insert(obj/item/I, mob/living/user = null)
-	if(!holder)
-		return FALSE
-
-	if(!istype(I, /obj/item/stock_parts/cell))
-		return FALSE
-
-	if(battery)
-		to_chat(user, span_warning("You try to connect \the [I] to \the [src], but its connectors are occupied."))
-		return FALSE
-
-	if(I.w_class > holder.max_hardware_size)
-		to_chat(user, span_warning("This power cell is too large for \the [holder]!"))
-		return FALSE
-
-	if(user && !user.transferItemToLoc(I, src))
-		return FALSE
-
-	battery = I
-	to_chat(user, span_notice("You connect \the [I] to \the [src]."))
-
-	return TRUE
-
-/obj/item/computer_hardware/battery/try_eject(mob/living/user, forced = FALSE)
-	if(!battery)
-		to_chat(user, span_warning("There is no power cell connected to \the [src]."))
-		return FALSE
-	else
-		if(user)
-			user.put_in_hands(battery)
-			to_chat(user, span_notice("You detach \the [battery] from \the [src]."))
-		else
-			battery.forceMove(drop_location())
-		
-		return TRUE
-
-
-/obj/item/stock_parts/cell/computer
+/**
+  * This device is wrapper for actual power cell. I have decided to not use power
+  * cells directly as even low-end cells available on station have tremendeous capacity
+  * in comparsion. Higher tier cells would provide your device with nearly infinite
+  * battery life, which is something i want to avoid.
+  */
+/obj/item/stock_parts/computer/battery_module
 	name = "standard battery"
-	desc = "A standard power cell, commonly seen in high-end portable microcomputers or low-end laptops."
-	icon = 'icons/obj/module.dmi'
-	icon_state = "cell_mini"
-	w_class = WEIGHT_CLASS_TINY
-	maxcharge = 750
+	desc = "A standard power cell, commonly seen in high-end portable microcomputers or low-end laptops. It's rating is 120 Wh."
+	icon_state = "battery_normal"
+	critical = TRUE
+	malfunction_probability = 1
+	origin_tech = list(TECH_POWER = 1, TECH_ENGINEERING = 1)
+	var/battery_rating = 120
+	var/obj/item/cell/battery = null
 
-
-/obj/item/stock_parts/cell/computer/advanced
+/obj/item/stock_parts/computer/battery_module/advanced
 	name = "advanced battery"
-	desc = "An advanced power cell, often used in most laptops. It is too large to be fitted into smaller devices."
-	icon_state = "cell"
-	w_class = WEIGHT_CLASS_SMALL
-	maxcharge = 1500
+	desc = "An advanced power cell, often used in most laptops. It is too large to be fitted into smaller devices. It's rating is 650 Wh."
+	icon_state = "battery_advanced"
+	origin_tech = list(TECH_POWER = 2, TECH_ENGINEERING = 2)
+	hardware_size = 2
+	battery_rating = 650
 
-/obj/item/stock_parts/cell/computer/super
+/obj/item/stock_parts/computer/battery_module/super
 	name = "super battery"
-	desc = "An advanced power cell, often used in high-end laptops."
-	icon_state = "cell"
-	w_class = WEIGHT_CLASS_NORMAL
-	maxcharge = 2000
+	desc = "A very advanced power cell, often used in high-end devices, or as uninterruptable power supply for important consoles or servers. It's rating is 820 Wh."
+	icon_state = "battery_super"
+	origin_tech = list(TECH_POWER = 3, TECH_ENGINEERING = 3)
+	hardware_size = 2
+	battery_rating = 820
 
-/obj/item/stock_parts/cell/computer/micro
+/obj/item/stock_parts/computer/battery_module/ultra
+	name = "ultra battery"
+	desc = "A very advanced large power cell. It's often used as uninterruptable power supply for critical consoles or servers. It's rating is 1100 Wh."
+	icon_state = "battery_ultra"
+	origin_tech = list(TECH_POWER = 5, TECH_ENGINEERING = 4)
+	hardware_size = 3
+	battery_rating = 1100
+
+/obj/item/stock_parts/computer/battery_module/micro
 	name = "micro battery"
-	desc = "A small power cell, commonly seen in most portable microcomputers."
-	icon_state = "cell_micro"
-	maxcharge = 500
+	desc = "A small power cell, commonly seen in most portable microcomputers. It's rating is 80 Wh."
+	icon_state = "battery_micro"
+	origin_tech = list(TECH_POWER = 2, TECH_ENGINEERING = 2)
+	battery_rating = 80
 
-/obj/item/stock_parts/cell/computer/nano
+/obj/item/stock_parts/computer/battery_module/nano
 	name = "nano battery"
-	desc = "A tiny power cell, commonly seen in low-end portable microcomputers."
-	icon_state = "cell_micro"
-	maxcharge = 300
+	desc = "A tiny power cell, commonly seen in low-end portable microcomputers. It's rating is 60 Wh."
+	icon_state = "battery_nano"
+	origin_tech = list(TECH_POWER = 1, TECH_ENGINEERING = 1)
+	battery_rating = 60
+
+// This is not intended to be obtainable in-game. Intended for adminbus and debugging purposes.
+/obj/item/stock_parts/computer/battery_module/lambda
+	name = "lambda coil"
+	desc = "A very complex power source compatible with various computers. It is capable of providing power for nearly unlimited duration."
+	icon_state = "battery_lambda"
+	hardware_size = 1
+	battery_rating = 9000
+
+/obj/item/stock_parts/computer/battery_module/lambda/Initialize()
+	. = ..()
+	battery = new/obj/item/cell/infinite(src)
+
+/obj/item/stock_parts/computer/battery_module/diagnostics()
+	. = ..()
+	. += "Internal battery charge: [battery.charge]/[battery.maxcharge] CU"
+
+/obj/item/stock_parts/computer/battery_module/Initialize()
+	. = ..()
+	battery = new/obj/item/cell/standard(src)
+	battery.maxcharge = battery_rating
+	battery.charge = 0
+
+/obj/item/stock_parts/computer/battery_module/Destroy()
+	QDEL_NULL(battery)
+	return ..()
+
+/obj/item/stock_parts/computer/battery_module/proc/charge_to_full()
+	if(battery)
+		battery.charge = battery.maxcharge
+
+/obj/item/stock_parts/computer/battery_module/get_cell()
+	return battery

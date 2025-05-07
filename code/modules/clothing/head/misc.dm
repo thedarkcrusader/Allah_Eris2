@@ -1,23 +1,39 @@
+
+
 /obj/item/clothing/head/centhat
-	name = "\improper CentCom hat"
+	name = "\improper CentComm. hat"
 	icon_state = "centcom"
+	item_state_slots = list(
+		slot_l_hand_str = "centhat",
+		slot_r_hand_str = "centhat",
+		)
 	desc = "It's good to be emperor."
-	item_state = "that"
-	flags_inv = 0
-	armor = list(MELEE = 30, BULLET = 15, LASER = 30, ENERGY = 10, BOMB = 25, BIO = 0, RAD = 0, FIRE = 50, ACID = 50)
-	strip_delay = 80
+	siemens_coefficient = 0.9
+	body_parts_covered = 0
 
-/obj/item/clothing/head/centhat/admiral
-	name = "\improper CentCom admiral hat"
-	icon_state = "admiral"
-	desc = "It's good to be a god."
-	item_state = "admiral"
+/obj/item/clothing/head/hairflower
+	name = "hair flower pin"
+	icon_state = "hairflower"
+	desc = "A floral pin with a clip on the back to attach to hair."
+	slot_flags = SLOT_HEAD | SLOT_EARS
+	body_parts_covered = 0
 
-/obj/item/clothing/head/centhat/admiral/executive
-	name = "\improper CentCom executive admiral hat"
-	icon_state = "grand_admiral"
-	desc = "It's good to be free."
-	item_state = "grand_admiral"
+/obj/item/clothing/head/hairflower/red
+	color = COLOR_RED
+
+/obj/item/clothing/head/hairflower/blue
+	color = COLOR_BLUE
+
+/obj/item/clothing/head/hairflower/pink
+	color = COLOR_PINK
+
+/obj/item/clothing/head/hairflower/yellow
+	color = COLOR_YELLOW
+
+/obj/item/clothing/head/hairflower/bow
+	icon_state = "bow"
+	name = "hair bow"
+	desc = "A ribbon tied into a bow with a clip on the back to attach to hair."
 
 /obj/item/clothing/head/powdered_wig
 	name = "powdered wig"
@@ -26,445 +42,354 @@
 	item_state = "pwig"
 
 /obj/item/clothing/head/that
-	name = "top-hat"
+	name = "tophat"
 	desc = "It's an amish looking hat."
 	icon_state = "tophat"
-	item_state = "that"
-	dog_fashion = /datum/dog_fashion/head
-	throwforce = 1
-
-/obj/item/clothing/head/canada
-	name = "striped red tophat"
-	desc = "It smells like fresh donut holes. / <i>Il sent comme des trous de beignets frais.</i>"
-	icon_state = "canada"
-	item_state = "canada"
+	item_state = "tophat"
+	siemens_coefficient = 0.9
+	body_parts_covered = 0
 
 /obj/item/clothing/head/redcoat
 	name = "redcoat's hat"
 	icon_state = "redcoat"
 	desc = "<i>'I guess it's a redhead.'</i>"
+	body_parts_covered = 0
 
 /obj/item/clothing/head/mailman
-	name = "mailman's hat"
+	name = "mail cap"
 	icon_state = "mailman"
-	desc = "<i>'Right-on-time'</i> mail service head wear."
+	desc = "<i>Choo-choo</i>!"
+	body_parts_covered = 0
 
 /obj/item/clothing/head/plaguedoctorhat
-	name = "plague doctor's hat"
-	desc = "These were once used by plague doctors. They're pretty much useless."
+	name = "plague doctor hat"
+	desc = "These were once used by Plague doctors. They're pretty much useless."
 	icon_state = "plaguedoctor"
-	armor = list(MELEE = 0, BULLET = 0, LASER = 0, ENERGY = 0, BOMB = 0, BIO = 60, RAD = 0, FIRE = 0, ACID = 0)
+	permeability_coefficient = 0.01
+	siemens_coefficient = 0.9
+	body_parts_covered = 0
 
 /obj/item/clothing/head/hasturhood
 	name = "hastur's hood"
-	desc = "It's <i>unspeakably</i> stylish."
+	desc = "It's unspeakably stylish."
 	icon_state = "hasturhood"
-	flags_inv = HIDEHAIR
-	flags_cover = HEADCOVERSEYES
+	flags_inv = BLOCKHAIR
+	body_parts_covered = HEAD|FACE|EYES
 
 /obj/item/clothing/head/nursehat
 	name = "nurse's hat"
 	desc = "It allows quick identification of trained medical personnel."
 	icon_state = "nursehat"
-	dynamic_hair_suffix = ""
-
-	dog_fashion = /datum/dog_fashion/head/nurse
+	siemens_coefficient = 0.9
+	body_parts_covered = 0
 
 /obj/item/clothing/head/syndicatefake
-	name = "black space-helmet replica"
-	icon_state = "syndicate-helm-black-red"
-	item_state = "syndicate-helm-black-red"
-	desc = "A plastic replica of a Syndicate agent's space helmet. You'll look just like a real murderous Syndicate agent in this! This is a toy, it is not made for use in space!"
-	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
+	name = "red space-helmet replica"
+	item_state_slots = list(
+		slot_l_hand_str = "syndicate-helm-black-red",
+		slot_r_hand_str = "syndicate-helm-black-red",
+		)
+	icon_state = "syndicate"
+	desc = "A plastic replica of a bloodthirsty mercenary's space helmet, you'll look just like a real murderous criminal operative in this! This is a toy, it is not made for use in space!"
+	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|BLOCKHAIR
+	siemens_coefficient = 2.0
+	body_parts_covered = HEAD|FACE|EYES
+	item_flags = null
 
 /obj/item/clothing/head/cueball
 	name = "cueball helmet"
-	desc = "A large, featureless white orb meant to be worn on your head. How do you even see out of this thing?"
+	desc = "A large, featureless white orb mean to be worn on your head. How do you even see out of this thing?"
 	icon_state = "cueball"
-	item_state="cueball"
-	flags_cover = HEADCOVERSEYES|HEADCOVERSMOUTH
-	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
+	item_state = "cueball"
+	flags_inv = BLOCKHAIR
+	body_parts_covered = HEAD|FACE|EYES
+	item_flags = null
 
-/obj/item/clothing/head/snowman
-	name = "Snowman Head"
-	desc = "A ball of white styrofoam. So festive."
-	icon_state = "snowman_h"
-	item_state = "snowman_h"
-	flags_cover = HEADCOVERSEYES
-	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
+/obj/item/clothing/head/cardborg
+	name = "cardborg helmet"
+	desc = "A helmet made out of a box."
+	icon_state = "cardborg_h"
+	item_state = "cardborg_h"
+	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE
+	body_parts_covered = HEAD|FACE|EYES
+	item_flags = null
 
-/obj/item/clothing/head/justice
-	name = "justice hat"
-	desc = "Fight for what's righteous!"
-	icon_state = "justicered"
-	item_state = "justicered"
-	flags_inv = HIDEHAIR|HIDEEARS|HIDEEYES|HIDEFACE|HIDEFACIALHAIR
-	flags_cover = HEADCOVERSEYES
-
-/obj/item/clothing/head/justice/blue
-	icon_state = "justiceblue"
-	item_state = "justiceblue"
-
-/obj/item/clothing/head/justice/yellow
-	icon_state = "justiceyellow"
-	item_state = "justiceyellow"
-
-/obj/item/clothing/head/justice/green
-	icon_state = "justicegreen"
-	item_state = "justicegreen"
-
-/obj/item/clothing/head/justice/pink
-	icon_state = "justicepink"
-	item_state = "justicepink"
+/obj/item/clothing/head/cardborg/Initialize()
+	. = ..()
+	set_extension(src, /datum/extension/appearance/cardborg)
 
 /obj/item/clothing/head/rabbitears
 	name = "rabbit ears"
-	desc = "Wearing these makes you look useless, and only good for your sex appeal."
+	desc = "Nyaaaaaaa, what's up doc?"
 	icon_state = "bunny"
-	dynamic_hair_suffix = ""
-
-	dog_fashion = /datum/dog_fashion/head/rabbit
-
+	body_parts_covered = 0
 
 /obj/item/clothing/head/flatcap
 	name = "flat cap"
 	desc = "A working man's cap."
-	icon_state = "flat_cap"
-	item_state = "detective"
+	icon_state = "flatcap_white"
+	item_state_slots = list(
+		slot_l_hand_str = "det_hat",
+		slot_r_hand_str = "det_hat",
+		)
+	siemens_coefficient = 0.9
 
+
+/obj/item/clothing/head/mariner
+	name = "mariner's cap"
+	desc = "A cap loved by farmers, sailors and rabblerousers in the whole galaxy."
+	icon_state = "mariner_white"
+	siemens_coefficient = 0.9
 
 /obj/item/clothing/head/pirate
 	name = "pirate hat"
-	desc = "Ahoy! This hat inspires you to take arms to scourge the several seas."
+	desc = "Yarr."
 	icon_state = "pirate"
-	item_state = "pirate"
-	dog_fashion = /datum/dog_fashion/head/pirate
+	body_parts_covered = 0
 
-/obj/item/clothing/head/pirate
-	var/datum/language/piratespeak/L = new
-
-/obj/item/clothing/head/pirate/equipped(mob/user, slot)
-	. = ..()
-	if(!ishuman(user))
-		return
-	if(slot == ITEM_SLOT_HEAD)
-		user.grant_language(/datum/language/piratespeak/, TRUE, TRUE, LANGUAGE_HAT)
-		to_chat(user, "You suddenly know how to speak like a pirate!")
-
-/obj/item/clothing/head/pirate/dropped(mob/user)
-	. = ..()
-	if(!ishuman(user))
-		return
-	var/mob/living/carbon/human/H = user
-	if(H.get_item_by_slot(ITEM_SLOT_HEAD) == src)
-		user.remove_language(/datum/language/piratespeak/, TRUE, TRUE, LANGUAGE_HAT)
-		to_chat(user, "You can no longer speak like a pirate.")
-
-/obj/item/clothing/head/pirate/captain
-	name = "pirate captain hat"
-	desc = "Ahoy! A hat befit only for the greatest pirates. May your exploits be legendary and your treasure hoard safe!"
+/obj/item/clothing/head/hgpiratecap
+	name = "pirate hat"
+	desc = "Yarr."
 	icon_state = "hgpiratecap"
-	item_state = "hgpiratecap"
+	body_parts_covered = 0
 
-/obj/item/clothing/head/pirate/bandana
+/obj/item/clothing/head/bandana
 	name = "pirate bandana"
-	desc = "Ahoy! A colorful wrap to collect and wipe up sweat after long days at sea."
-	icon_state = "bandana"
-	item_state = "bandana"
-	dynamic_hair_suffix = ""
+	desc = "Yarr."
+	icon_state = "pirate_bandana"
+	body_parts_covered = 0
 
 /obj/item/clothing/head/bowler
 	name = "bowler-hat"
 	desc = "Gentleman, elite aboard!"
 	icon_state = "bowler"
-	item_state = "bowler"
-	dynamic_hair_suffix = ""
+	body_parts_covered = 0
+
+//stylish bs12 hats
+
+/obj/item/clothing/head/bowlerhat
+	name = "bowler hat"
+	icon_state = "bowler_hat"
+	desc = "For the gentleman of distinction."
+	body_parts_covered = 0
+
+/obj/item/clothing/head/bowlerhat/razor
+	name = "bowler-hat"
+	desc = "The brim of this hat is covered in thin razors."
+	sharp = TRUE
+	edge = TRUE
+	force = 10
+	throwforce = 60
+	throw_range = 9
+	throw_speed = 4
+	does_spin = FALSE
+	attack_verb = list("sliced", "torn", "cut")
+	armor = list(
+		melee = ARMOR_MELEE_RESISTANT,
+		bullet = ARMOR_BALLISTIC_RESISTANT,
+		laser = ARMOR_LASER_HANDGUNS,
+		energy = ARMOR_ENERGY_SMALL,
+		bomb = ARMOR_BOMB_PADDED
+		)
+
+/obj/item/clothing/head/beaverhat
+	name = "beaver hat"
+	icon_state = "beaver_hat"
+	desc = "Soft felt makes this hat both comfortable and elegant."
+
+/obj/item/clothing/head/boaterhat
+	name = "boater hat"
+	icon_state = "boater_hat"
+	desc = "The ultimate in summer fashion."
+
+/obj/item/clothing/head/fedora
+	name = "fedora"
+	icon_state = "fedora"
+	desc = "A sharp, stylish hat."
+
+/obj/item/clothing/head/panama
+	name = "panama hat"
+	icon_state = "panama"
+	desc = "A hat that makes you want to smuggle drugs."
+
+
+/obj/item/clothing/head/feathertrilby
+	name = "feather trilby"
+	icon_state = "feather_trilby"
+	desc = "A sharp, stylish hat with a feather."
+
+/obj/item/clothing/head/fez
+	name = "fez"
+	icon_state = "fez"
+	desc = "You should wear a fez. Fezzes are cool."
+
+//end bs12 hats
 
 /obj/item/clothing/head/witchwig
 	name = "witch costume wig"
 	desc = "Eeeee~heheheheheheh!"
 	icon_state = "witch"
-	item_state = "witch"
-	flags_inv = HIDEHAIR
+	flags_inv = BLOCKHAIR
+	siemens_coefficient = 2.0
 
 /obj/item/clothing/head/chicken
 	name = "chicken suit head"
 	desc = "Bkaw!"
 	icon_state = "chickenhead"
-	item_state = "chickensuit"
-	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-
-/obj/item/clothing/head/griffin
-	name = "griffon head"
-	desc = "Why not 'eagle head'? Who knows."
-	icon_state = "griffinhat"
-	item_state = "griffinhat"
-	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
+	item_state_slots = list(
+		slot_l_hand_str = "chickensuit",
+		slot_r_hand_str = "chickensuit",
+		)
+	flags_inv = BLOCKHAIR
+	siemens_coefficient = 0.7
+	body_parts_covered = HEAD|FACE|EYES
 
 /obj/item/clothing/head/bearpelt
 	name = "bear pelt hat"
 	desc = "Fuzzy."
 	icon_state = "bearpelt"
-	item_state = "bearpelt"
+	flags_inv = BLOCKHAIR
+	siemens_coefficient = 0.7
 
 /obj/item/clothing/head/xenos
 	name = "xenos helmet"
 	icon_state = "xenos"
-	item_state = "xenos_helm"
+	item_state_slots = list(
+		slot_l_hand_str = "xenos_helm",
+		slot_r_hand_str = "xenos_helm",
+		)
 	desc = "A helmet made out of chitinous alien hide."
-	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
+	w_class = ITEM_SIZE_NORMAL
+	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|BLOCKHAIR
+	siemens_coefficient = 2.0
+	body_parts_covered = HEAD|FACE|EYES
+	item_flags = null
 
-/obj/item/clothing/head/fedora
-	name = "fedora"
-	icon_state = "fedora"
-	item_state = "fedora"
-	desc = "A really cool hat if you're a mobster. A really lame hat if you're not."
-	pocket_storage_component_path = /datum/component/storage/concrete/pockets/small/fedora
+/obj/item/clothing/head/philosopher_wig
+	name = "natural philosopher's wig"
+	desc = "A stylish monstrosity unearthed from Earth's Renaissance period. With this most distinguish'd wig, you'll be ready for your next soiree!"
+	icon_state = "philosopher_wig"
+	item_state_slots = list(
+		slot_l_hand_str = "pwig",
+		slot_r_hand_str = "pwig",
+		)
+	flags_inv = BLOCKHAIR
+	body_parts_covered = 0
 
-/obj/item/clothing/head/fedora/suicide_act(mob/user)
-	if(user.gender == FEMALE)
-		return 0
-	var/mob/living/carbon/human/H = user
-	user.visible_message(span_suicide("[user] is donning [src]! It looks like [user.p_theyre()] trying to be nice to girls."))
-	user.say("M'lady.", forced = "fedora suicide")
-	sleep(1 SECONDS)
-	H.facial_hair_style = "Neckbeard"
-	return(BRUTELOSS)
+/obj/item/clothing/head/hijab
+	name = "hijab"
+	desc = "A veil which is wrapped to cover the head and chest."
+	icon_state = "hijab"
+	body_parts_covered = 0
+	flags_inv = BLOCKHAIR
 
-/obj/item/clothing/head/fedora/brown
-	icon_state = "detective"
-	desc = "A brown fedora, typically worn by investigators. This one has no protective fibers."
+/obj/item/clothing/head/kippa
+	name = "kippa"
+	desc = "A small, brimless cap."
+	icon_state = "kippa"
+	body_parts_covered = 0
 
-/obj/item/clothing/head/sombrero
-	name = "sombrero"
-	icon = 'icons/obj/clothing/sombrero.dmi'
-	icon_state = "sombrero"
-	item_state = "sombrero"
-	desc = "You can practically taste the fiesta."
-	flags_inv = HIDEHAIR
+/obj/item/clothing/head/turban
+	name = "turban"
+	desc = "A sturdy cloth, worn around the head."
+	icon_state = "turban"
+	body_parts_covered = 0
+	flags_inv = BLOCKHEADHAIR //Shows beards!
 
-	dog_fashion = /datum/dog_fashion/head/sombrero
+/obj/item/clothing/head/cowboy_hat
+	name = "cowboy hat"
+	desc = "A wide-brimmed hat, in the prevalent style of America's frontier period. By SolGov law, you are required to wear this hat while watching True Grit."
+	icon_state = "cowboyhat"
+	item_state = "cowboy_hat"
+	body_parts_covered = 0
 
-	greyscale_config = /datum/greyscale_config/sombrero
-	greyscale_config_worn = /datum/greyscale_config/sombrero/worn
-	greyscale_config_inhand_left = /datum/greyscale_config/sombrero/lefthand
-	greyscale_config_inhand_right = /datum/greyscale_config/sombrero/righthand
+/obj/item/clothing/head/taqiyah
+	name = "taqiyah"
+	desc = "A short, rounded skullcap usually worn for religious purposes."
+	icon_state = "taqiyah"
+	item_state = "taqiyah"
+	body_parts_covered = 0
 
-/obj/item/clothing/head/sombrero/green
-	name = "green sombrero"
-	desc = "As elegant as a dancing cactus."
-	flags_inv = HIDEHAIR|HIDEFACE|HIDEEARS
-	dog_fashion = null
-	greyscale_colors = "#13d968#ffffff"
-	flags_1 = IS_PLAYER_COLORABLE_1
+/obj/item/clothing/head/rastacap
+	name = "rastacap"
+	desc = "A round, crocheted cap, often worn to tuck hair away or for religious purposes."
+	icon_state = "rastacap"
+	item_state = "rastacap"
+	body_parts_covered = 0
+	flags_inv = BLOCKHEADHAIR
 
-/obj/item/clothing/head/sombrero/shamebrero
-	name = "shamebrero"
-	icon_state = "shamebrero"
-	desc = "Once it's on, it never comes off."
-	dog_fashion = null
-	greyscale_colors = "#d565d3#f8db18"
-	flags_1 = IS_PLAYER_COLORABLE_1
+/obj/item/clothing/head/tank
+	name = "padded cap"
+	desc = "A padded skullcup for those prone to bumping their heads against hard surfaces."
+	icon_state = "tank"
+	flags_inv = BLOCKHEADHAIR
+	color = "#5f5f5f"
+	armor = list(
+		melee = ARMOR_MELEE_KNIVES,
+		bomb = ARMOR_BOMB_PADDED
+		)
 
-/obj/item/clothing/head/sombrero/shamebrero/Initialize(mapload)
-	. = ..()
-	ADD_TRAIT(src, TRAIT_NODROP, SHAMEBRERO_TRAIT)
+/obj/item/clothing/head/tank/olive
+	color = "#727c58"
 
-/obj/item/clothing/head/cone
-	desc = "This cone is trying to warn you of something!"
-	name = "warning cone"
-	icon = 'icons/obj/janitor.dmi'
-	icon_state = "cone"
-	item_state = "cone"
-	force = 1
-	throwforce = 3
-	throw_speed = 2
-	throw_range = 5
-	w_class = WEIGHT_CLASS_SMALL
-	attack_verb = list("warned", "cautioned", "smashed")
-	resistance_flags = NONE
-	dynamic_hair_suffix = ""
+/obj/item/clothing/head/tank/tan
+	color = "#ae9f79"
 
-/obj/item/clothing/head/santa
-	name = "santa hat"
-	desc = "On the first day of christmas my employer gave to me!"
-	icon_state = "santahatnorm"
-	item_state = "that"
-	cold_protection = HEAD
-	min_cold_protection_temperature = FIRE_HELM_MIN_TEMP_PROTECT
-	dog_fashion = /datum/dog_fashion/head/santa
+/obj/item/clothing/head/beanie
+	name = "beanie"
+	desc = "A head-hugging brimless winter cap. This one is tight."
+	icon_state = "beanie"
+	item_state = "beanie"
+	body_parts_covered = 0
 
-/obj/item/clothing/head/jester
-	name = "jester hat"
-	desc = "A hat with bells, to add some merriness to the suit."
-	icon_state = "jester_hat"
-	dynamic_hair_suffix = ""
+/obj/item/clothing/head/helmet/facecover
+	name = "face cover"
+	desc = "A helmet made of plastic. It's completely opaque. This will stop the stare."
+	icon_state = "facecover"
+	valid_accessory_slots = null
+	tint = TINT_BLIND
+	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|BLOCKHAIR
+	body_parts_covered = HEAD|FACE|EYES
+	flash_protection = FLASH_PROTECTION_MAJOR
 
-/obj/item/clothing/head/rice_hat
-	name = "rice hat"
-	desc = "Welcome to the rice fields, motherfucker."
-	icon_state = "rice_hat"
-	hattable = FALSE
+/obj/item/clothing/head/beret/pcrc
+	name = "\improper PCRC beret"
+	desc = "A navy beret with the emblem of Proxima Centauri Risk Control, a private security firm. For agents that are more inclined towards style than safety."
+	icon_state = "beret_corporate_pcrc"
 
-/obj/item/clothing/head/lizard
-	name = "lizardskin cloche hat"
-	desc = "How many lizards died to make this hat? Not enough."
-	icon_state = "lizard"
+/obj/item/clothing/head/beret/saare
+	name = "\improper SAARE beret"
+	desc = "A gray beret with the emblem of Strategic Assault and Asset Retention Enterprises, a private military corporation. For mercenaries that are more inclined towards style than safety."
+	icon_state = "beret_corporate_saare"
 
-/obj/item/clothing/head/papersack
-	name = "paper sack hat"
-	desc = "A paper sack with crude holes cut out for eyes. Useful for hiding one's identity or ugliness."
-	icon_state = "papersack"
-	flags_inv = HIDEHAIR|HIDEFACE|HIDEEARS
+/obj/item/clothing/head/deckcrew
+	name = "deck crew helmet"
+	desc = "A helmet with ear protection and a visor, used in hangars on many ships."
+	icon_state = "deckcrew"
+	flags_inv = BLOCKHEADHAIR
+	volume_multiplier = 0.1
 
-/obj/item/clothing/head/papersack/smiley
-	name = "paper sack hat"
-	desc = "A paper sack with crude holes cut out for eyes and a sketchy smile drawn on the front. Not creepy at all."
-	icon_state = "papersack_smile"
-	flags_inv = HIDEHAIR|HIDEFACE|HIDEEARS
+/obj/item/clothing/head/deckcrew/green
+	name = "green deck crew helmet"
+	desc = "A helmet with ear protection and a visor, used by support staff in Fleet hangars."
+	icon_state = "deckcrew_g"
 
-/obj/item/clothing/head/crown
-	name = "crown"
-	desc = "A crown fit for a king, a petty king maybe."
-	icon_state = "crown"
-	armor = list(MELEE = 15, BULLET = 0, LASER = 0,ENERGY = 15, BOMB = 0, BIO = 0, RAD = 0, FIRE = 100, ACID = 50, WOUND = 5)
-	resistance_flags = FIRE_PROOF
-	dynamic_hair_suffix = ""
+/obj/item/clothing/head/deckcrew/blue
+	name = "blue deck crew helmet"
+	desc = "A helmet with ear protection and a visor, used by tug operators in Fleet hangars."
+	icon_state = "deckcrew_b"
 
-/obj/item/clothing/head/crown/fancy
-	name = "magnificent crown"
-	desc = "A crown worn by only the highest emperors of the <s>land</s> space."
-	icon_state = "fancycrown"
+/obj/item/clothing/head/deckcrew/yellow
+	name = "yellow deck crew helmet"
+	desc = "A helmet with ear protection and a visor, used by traffic control in Fleet hangars."
+	icon_state = "deckcrew_y"
 
-/obj/item/clothing/head/crown/resin
-	name = "resin crown"
-	desc = "Despite being formed with incredibly tough resin and given a mythril insert, it's still more of a fashion statement than a helmet."
-	icon_state = "resincrown"
-	armor = list(MELEE = 25,ENERGY = 10,FIRE = 0, ACID = 10)
-	resistance_flags = NONE
+/obj/item/clothing/head/deckcrew/purple
+	name = "purple deck crew helmet"
+	desc = "A helmet with ear protection and a visor, used by fueling personnel in Fleet hangars."
+	icon_state = "deckcrew_p"
 
-/obj/item/clothing/head/scarecrow_hat
-	name = "scarecrow hat"
-	desc = "A simple straw hat."
-	icon_state = "scarecrow_hat"
-
-/obj/item/clothing/head/lobsterhat
-	name = "foam lobster head"
-	desc = "When everything's going to crab, protecting your head is the best choice."
-	icon_state = "lobster_hat"
-	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-
-/obj/item/clothing/head/drfreezehat
-	name = "doctor freeze's wig"
-	desc = "A cool wig for cool people."
-	icon_state = "drfreeze_hat"
-	flags_inv = HIDEHAIR
-
-/obj/item/clothing/head/pharaoh
-	name = "pharaoh hat"
-	desc = "Walk like an Egyptian."
-	icon_state = "pharoah_hat"
-	icon_state = "pharoah_hat"
-
-/obj/item/clothing/head/jester/alt
-	name = "jester hat"
-	desc = "A hat with bells, to add some merriness to the suit."
-	icon_state = "jester_hat2"
-	dynamic_hair_suffix = ""
-
-/obj/item/clothing/head/nemes
-	name = "headdress of Nemes"
-	desc = "Lavish space tomb not included."
-	icon_state = "nemes_headdress"
-	icon_state = "nemes_headdress"
-
-/obj/item/clothing/head/frenchberet
-	name = "french beret"
-	desc = "A quality beret, infused with the aroma of chain-smoking, wine-swilling Parisians. You feel less inclined to engage military conflict, for some reason."
-	icon_state = "beret"
-	dynamic_hair_suffix = ""
-
-/obj/item/clothing/head/frenchberet/equipped(mob/M, slot)
-	. = ..()
-	if (slot == ITEM_SLOT_HEAD)
-		RegisterSignal(M, COMSIG_MOB_SAY, PROC_REF(handle_speech))
-	else
-		UnregisterSignal(M, COMSIG_MOB_SAY)
-
-/obj/item/clothing/head/frenchberet/dropped(mob/M)
-	. = ..()
-	UnregisterSignal(M, COMSIG_MOB_SAY)
-
-/obj/item/clothing/head/frenchberet/proc/handle_speech(datum/source, mob/speech_args)
-	var/message = speech_args[SPEECH_MESSAGE]
-	if(message[1] != "*")
-		message = " [message]"
-		var/list/french_words = strings("french_replacement.json", "french")
-
-		for(var/key in french_words)
-			var/value = french_words[key]
-			if(islist(value))
-				value = pick(value)
-
-			message = replacetextEx(message, " [uppertext(key)]", " [uppertext(value)]")
-			message = replacetextEx(message, " [capitalize(key)]", " [capitalize(value)]")
-			message = replacetextEx(message, " [key]", " [value]")
-
-		if(prob(3))
-			message += pick(" Honh honh honh!"," Honh!"," Zut Alors!")
-	speech_args[SPEECH_MESSAGE] = trim(message)
-
-/obj/item/clothing/head/clownmitre
-	name = "Hat of the Honkmother"
-	desc = "It's hard for parishoners to see a banana peel on the floor when they're looking up at your glorious chapeau."
-	icon_state = "clownmitre"
-
-/obj/item/clothing/head/kippah
-	name = "kippah"
-	desc = "Signals that you follow the Jewish Halakha. Keeps the head covered and the soul extra-Orthodox."
-	icon_state = "kippah"
-
-/obj/item/clothing/head/medievaljewhat
-	name = "medieval Jew hat"
-	desc = "A silly looking hat, intended to be placed on the heads of the station's oppressed religious minorities."
-	icon_state = "medievaljewhat"
-
-/obj/item/clothing/head/taqiyahwhite
-	name = "white taqiyah"
-	desc = "An extra-mustahabb way of showing your devotion to Allah."
-	icon_state = "taqiyahwhite"
-	pocket_storage_component_path = /datum/component/storage/concrete/pockets/small
-
-/obj/item/clothing/head/taqiyahred
-	name = "red taqiyah"
-	desc = "An extra-mustahabb way of showing your devotion to Allah."
-	icon_state = "taqiyahred"
-	pocket_storage_component_path = /datum/component/storage/concrete/pockets/small
-
-/datum/action/item_action/hatsky_voiceline
-	name = "Press Voice Button"
-	desc = "Engage the voice box on your Hatsky to hear a classic line from the real Officer Beepsky!"
-
-/obj/item/clothing/head/hatsky
-	name = "officer hatsky"
-	desc = "A hat for true Beepsky appreciators. Not guaranteed to actually keep you safe from anything."
-	icon_state = "beepsky_hat"
-	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-	flags_cover = HEADCOVERSEYES|HEADCOVERSMOUTH
-	var/recharge_time = 0
-	var/recharge_rate = 50
-	actions_types = list(/datum/action/item_action/hatsky_voiceline)
-
-/obj/item/clothing/head/hatsky/ui_action_click(mob/user, action)
-	if(istype(action,/datum/action/item_action/hatsky_voiceline))
-		user.visible_message("[user] presses a button on [user.p_their()] General Hatsky!")
-		if(recharge_time > world.time)
-			to_chat(user, span_warning("Hatsky needs more time to recharge its voice box!"))
-			return
-		playsound(loc, pick('sound/voice/beepsky/criminal.ogg', 'sound/voice/beepsky/justice.ogg', 'sound/voice/beepsky/freeze.ogg'), 50, FALSE)
-		recharge_time = world.time + recharge_rate
-
-/obj/item/clothing/head/shamanash
-	name = "shaman skull"
-	desc = "The skull of a long dead animal bolted to the front of a repurposed pan."
-	icon_state = "shamskull"
+/obj/item/clothing/head/deckcrew/red
+	name = "red deck crew helmet"
+	desc = "A helmet with ear protection and a visor, used by munitions handlers in Fleet hangars."
+	icon_state = "deckcrew_r"

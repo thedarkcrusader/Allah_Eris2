@@ -1,150 +1,52 @@
+// Defines for the ai_intelligence var.
+// Controls if the mob will do 'advanced tactics' like running from grenades.
+#define AI_DUMB			1 // Be dumber than usual.
+#define AI_NORMAL		2 // Default level.
+#define AI_SMART		3 // Will do more processing to be a little smarter, like not walking while confused if it could risk stepping randomly onto a bad tile.
 
-///All AI machinery heat production is multiplied by this value
-#define AI_TEMPERATURE_MULTIPLIER 5 //Thermodynamics? No... No I don't think that's a thing. Balance so we don't use an insane amount of power to produce noticeable heat
-///Temperature limit of all AI machinery
-#define AI_TEMP_LIMIT 288.15 //15C, much hotter than a normal server room for leniency :)
+#define ai_log(M,V)	if(debug_ai) ai_log_output(M,V)
 
-///How long the AI can stay in the black-box before it's fully destroyed
-#define AI_BLACKBOX_LIFETIME 300
-///How much CPU we need to use to revive the AI
-#define AI_BLACKBOX_PROCESSING_REQUIREMENT 2500
+// Logging level defines.
+#define AI_LOG_OFF		0 // Don't show anything.
+#define AI_LOG_ERROR	1 // Show logs of things likely causing the mob to not be functioning correctly.
+#define AI_LOG_WARNING	2 // Show less serious but still helpful to know issues that might be causing things to work incorrectly.
+#define AI_LOG_INFO		3 // Important regular events, like selecting a target or switching stances.
+#define AI_LOG_DEBUG	4 // More detailed information about the flow of execution.
+#define AI_LOG_TRACE	5 // Even more detailed than the last. Will absolutely flood your chatlog.
 
+// Results of pre-movement checks.
+// Todo: Move outside AI code?
+#define MOVEMENT_ON_COOLDOWN	-1	// Recently moved and needs to try again soon.
+#define MOVEMENT_FAILED			0	// Move() returned false for whatever reason and the mob didn't move.
+#define MOVEMENT_SUCCESSFUL		1	// Move() returned true and the mob hopefully moved.
 
-#define AI_HEATSINK_CAPACITY 5000
-#define AI_HEATSINK_COEFF 1
+// Results of pre-attack checks.
+#define ATTACK_ON_COOLDOWN		-1	// Recently attacked and needs to try again soon.
+#define ATTACK_FAILED			0	// Something else went wrong! Maybe they moved away!
+#define ATTACK_SUCCESSFUL		1	// We attacked (or tried to, misses count too)
 
-///How many ticks can an AI data core store? When this amount of ticks have passed while it's in an INVALID state it can no longer be used by an AI
-#define MAX_AI_DATA_CORE_TICKS (45 * (20 / SSair.wait))
-///How much power does the AI date core use while being in a valid state. This is also the base heat output. (Divide by heat capacity to get actual temperature increase)
-#define AI_DATA_CORE_POWER_USAGE 7500
-///How many ticks can a server cabinet store. If it reaches 0  the resources will no longer be available.
-#define MAX_AI_SERVER_CABINET_TICKS (15 * (20 / SSair.wait))
+// Reasons for targets to not be valid. Based on why, the AI responds differently.
+#define AI_TARGET_VALID			0 // We can fight them.
+#define AI_TARGET_INVIS			1 // They were in field of view but became invisible. Switch to STANCE_BLINDFIGHT if no other viable targets exist.
+#define AI_TARGET_NOSIGHT		2 // No longer in field of view. Go STANCE_REPOSITION to their last known location if no other targets are seen.
+#define AI_TARGET_ALLY			3 // They are an ally. Find a new target.
+#define AI_TARGET_DEAD			4 // They're dead. Find a new target.
+#define AI_TARGET_INVINCIBLE	5 // Target is currently unable to receive damage for whatever reason. Find a new target or wait.
 
+// Stances to determine AI state.
+#define STANCE_SLEEP        0	// Doing (almost) nothing, to save on CPU because nobody is around to notice or the mob died.
+#define STANCE_IDLE         1	// The more or less default state. Wanders around, looks for baddies, and spouts one-liners.
+#define STANCE_ALERT        2	// A baddie is visible but not too close, and essentially we tell them to go away or die.
+#define STANCE_APPROACH     3	// Attempting to get into range to attack them.
+#define STANCE_FIGHT	    4	// Actually fighting, with melee or ranged.
+#define STANCE_BLINDFIGHT   5	// Fighting something that cannot be seen by the mob, from invisibility or out of sight.
+#define STANCE_REPOSITION   6	// Relocating to a better position while in combat. Also used when moving away from a danger like grenades.
+#define STANCE_MOVE         7	// Similar to above but for out of combat. If a baddie is seen, they'll cancel and fight them.
+#define STANCE_FOLLOW       8	// Following somone, without trying to murder them.
+#define STANCE_FLEE         9	// Run away from the target because they're too spooky/we're dying/some other reason.
+#define STANCE_DISABLED     10	// Used when the holder is afflicted with certain status effects, such as stuns or confusion.
 
-//AI Project Categories.
-#define AI_PROJECT_HUDS "Sensor HUDs"
-#define AI_PROJECT_CAMERAS "Visibility Upgrades"
-#define AI_PROJECT_INDUCTION "Induction"
-#define AI_PROJECT_SURVEILLANCE "Surveillance"
-#define AI_PROJECT_EFFICIENCY "Efficiency"
-#define AI_PROJECT_CROWD_CONTROL "Crowd Control"
-#define AI_PROJECT_CYBORG "Cyborg Management"
-#define AI_PROJECT_MISC "Misc."
+#define STANCE_ATTACK       11  // Backwards compatability
+#define STANCE_ATTACKING    12  // Ditto
 
-//Update this list if you add any new ones, else the category won't show up in the UIs
-GLOBAL_LIST_INIT(ai_project_categories, list(
-	AI_PROJECT_HUDS,
-	AI_PROJECT_CAMERAS,
-	AI_PROJECT_SURVEILLANCE,
-	AI_PROJECT_INDUCTION,
-	AI_PROJECT_EFFICIENCY,
-	AI_PROJECT_CROWD_CONTROL,
-	AI_PROJECT_CYBORG,
-	AI_PROJECT_MISC
-))
-
-//Synth Project Categories
-#define SYNTH_PROJECT_MOBILITY "Mobility"
-#define SYNTH_PROJECT_EMERGENCY_FUNCTIONS "Emergency Functions"
-#define SYNTH_PROJECT_MISC "Misc."
-//Update this list if you add any new ones, else the category won't show up in the UIs
-GLOBAL_LIST_INIT(synth_project_categories, list(
-	SYNTH_PROJECT_MOBILITY,
-	SYNTH_PROJECT_EMERGENCY_FUNCTIONS,
-	SYNTH_PROJECT_MISC
-))
-
-#define SYNTH_DAMAGED	"damage to own synthetic shell"
-#define SYNTH_RESTRICTED_ITEM "usage of restricted weapon"
-#define SYNTH_OBJ_DAMAGE "damage to inanimate object"
-#define SYNTH_RESTRICTED_WEAPON "usage of restricted weapon"
-#define SYNTH_ORGANIC_HARM "harm to organic being"
-
-GLOBAL_LIST_INIT(synth_punishment_values, list(
-	"[SYNTH_DAMAGED]" = 1,
-	"[SYNTH_RESTRICTED_ITEM]" = 5,
-	"[SYNTH_OBJ_DAMAGE]" = 5,
-	"[SYNTH_RESTRICTED_WEAPON]" = 10,
-	"[SYNTH_ORGANIC_HARM]" = 15,
-))
-
-//Synth Governor Defines
-//How fast the governor suspicion decreases
-#define SYNTH_GOVERNOR_SUSPICION_DECREASE 0.05
-
-
-///How much is the AI download progress increased by per tick? Multiplied by a modifer on the AI if they have upgraded. Need to reach 100 to be downloaded
-#define AI_DOWNLOAD_PER_PROCESS 1.125
-///Check for tracked individual coming into view every X ticks
-#define AI_CAMERA_MEMORY_TICKS 15
-
-
-//AI hardware
-#define AI_CPU_BASE_POWER_USAGE 1250
-
-#define AI_RAM_POWER_USAGE 500
-
-//Needs UI change to properly work!
-#define AI_MAX_CPUS_PER_RACK 4
-//Needs UI change to properly work!
-#define AI_MAX_RAM_PER_RACK 4
-
-///How many AI research points does 1 THz generate?
-#define AI_RESEARCH_PER_CPU 7.5
-
-//How long between each data core being able to send a warning. Wouldn't want any spam if we had jittery temps would we?
-#define AI_DATA_CORE_WARNING_COOLDOWN (5 MINUTES)
-
-
-//Self explanatory. 1 bitcoin is equals to 1 CPU * AI_RESEARCH_PER_CPU
-#define MAX_AI_BITCOIN_MINED_PER_TICK 250
-//Self explanatory, see MAX_AI_BITCOIN_MINED_PER_TICK * this = max money 1 network can contribute per tick. (17,5 credits every 2 seconds, max 63k over 2 hours)
-#define AI_BITCOIN_PRICE 0.025
-
-
-//Self explanatory. 1 point is equals to 1 CPU * AI_RESEARCH_PER_CPU. Higher value = can use more CPU and get benefits
-#define MAX_AI_REGULAR_RESEARCH_PER_TICK 500
-//Self explanatory. Lower value = more CPU equals less points. Station makes approx. 56 points per tick. This results in 25 (50% gain)
-#define AI_REGULAR_RESEARCH_POINT_MULTIPLIER 0.05
-
-
-//How much RAM and CPU a core needs locally to be functional
-#define AI_CORE_CPU_REQUIREMENT 1
-#define AI_CORE_RAM_REQUIREMENT 1 
-
-//For network based research and tasks. Since each network are going to contribute to a "global" pool of research there's no point in making this more complicated or modular
-//Adding an entry here automatically adds it to the UI and allows CPU to be allocated. Just use your define in the network process() to do stuff
-#define AI_CRYPTO "Cryptocurrency Mining"
-#define AI_RESEARCH "Research Assistance"
-#define AI_REVIVAL "AI Restoration"
-#define AI_PUZZLE "Floppy Drive Decryption"
-#define SYNTH_RESEARCH "Synth Research Allocation"
-
-GLOBAL_LIST_INIT(possible_ainet_activities, list(
-	"[AI_CRYPTO]",
-	"[AI_RESEARCH]",
-	"[AI_REVIVAL]",
-	"[AI_PUZZLE]",
-	"[SYNTH_RESEARCH]"
-))
-
-GLOBAL_LIST_INIT(ainet_activity_tagline, list(
-	"[AI_CRYPTO]" = "Use CPU to generate credits!",
-	"[AI_RESEARCH]" = "Use CPU to generate regular research points!",
-	"[AI_REVIVAL]" = "Revive a dead AI using CPU!",
-	"[AI_PUZZLE]" = "Use CPU to break encryption on floppy drives!",
-	"[SYNTH_RESEARCH]" = "Give connected synths CPU for research!"
-))
-
-GLOBAL_LIST_INIT(ainet_activity_description, list(
-	"[AI_CRYPTO]" = "Using CPU to mine NTCoin should allow for a meager sum of passive credit income.",
-	"[AI_RESEARCH]" = "Allocating additional CPU to the research servers should allow for increased point gain. Not to be confused with AI Research points.",
-	"[AI_REVIVAL]" = "If you've inserted a volatile neural core into a connected data core this will revive it using CPU.",
-	"[AI_PUZZLE]" = "If you've found and inserted an encrypted floppy drive into a connected server cabinet you can decrypt it using CPU.",
-	"[SYNTH_RESEARCH]" = "CPU allocated to this task will be split amongst connected synths so they can research local projects."
-))
-
-
-//Exploration defines
-#define AI_FLOPPY_DECRYPTION_COST 2500
-#define AI_FLOPPY_EXPONENT 1.25
+#define STANCES_COMBAT      list(STANCE_ALERT, STANCE_APPROACH, STANCE_FIGHT, STANCE_BLINDFIGHT, STANCE_REPOSITION)

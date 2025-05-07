@@ -1,68 +1,48 @@
 /obj/structure/closet/secure_closet/personal
-	desc = "It's a secure locker for personnel. The first card swiped gains control."
 	name = "personal closet"
-	req_access = list(ACCESS_PERSONAL_LOCKERS)
+	desc = "It's a secure locker for personnel."
+	req_access = list(access_all_personal_lockers)
+	locked = FALSE
 	var/registered_name = null
 
-/obj/structure/closet/secure_closet/personal/PopulateContents()
-	..()
-	if(prob(50))
-		new /obj/item/storage/backpack/duffelbag(src)
-	if(prob(50))
-		new /obj/item/storage/backpack(src)
-	else
-		new /obj/item/storage/backpack/satchel(src)
-	new /obj/item/radio/headset(src)
+/obj/structure/closet/secure_closet/personal/WillContain()
+	return list(
+		new /datum/atom_creator/weighted(list(/obj/item/storage/backpack, /obj/item/storage/backpack/satchel/grey)),
+		/obj/item/device/radio/headset
+	)
+
+/obj/structure/closet/secure_closet/personal/empty/WillContain()
+	return
 
 /obj/structure/closet/secure_closet/personal/patient
 	name = "patient's closet"
-
-/obj/structure/closet/secure_closet/personal/patient/PopulateContents()
-	new /obj/item/clothing/under/color/white(src)
-	new /obj/item/clothing/shoes/sneakers/white(src)
+/obj/structure/closet/secure_closet/personal/patient/WillContain()
+	return list(/obj/item/clothing/suit/hospital/blue, /obj/item/clothing/suit/hospital/green, /obj/item/clothing/suit/hospital/pink)
 
 /obj/structure/closet/secure_closet/personal/cabinet
-	icon_state = "cabinet"
-	resistance_flags = FLAMMABLE
-	max_integrity = 70
+	closet_appearance = /singleton/closet_appearance/cabinet/secure
 
-/obj/structure/closet/secure_closet/personal/cabinet/PopulateContents()
-	new /obj/item/storage/backpack/satchel/leather/withwallet( src )
-	new /obj/item/instrument/piano_synth(src)
-	new /obj/item/radio/headset(src)
+/obj/structure/closet/secure_closet/personal/cabinet/WillContain()
+	return list(/obj/item/storage/backpack/satchel/grey/withwallet, /obj/item/device/radio/headset)
 
-//miner personal closet
-/obj/structure/closet/secure_closet/personal/miner
-	desc = "Its a secure locker for shaft miners. The first card swiped gains control."
-	name = "miner personal closet"
+/obj/structure/closet/secure_closet/personal/CanToggleLock(mob/user, obj/item/card/id/id_card)
+	return ..() || (istype(id_card) && id_card.registered_name && (!registered_name || (registered_name == id_card.registered_name)))
 
-/obj/structure/closet/secure_closet/personal/miner/PopulateContents()
-	new /obj/item/pickaxe(src) //mining tools
-	new /obj/item/shovel(src) //mining tools
-
-/obj/structure/closet/secure_closet/personal/prisoner
-	desc = "It's a secure locker for prisoners. The first card swiped gains control."
-	name = "prisoner closet"
-
-/obj/structure/closet/secure_closet/personal/prisoner/PopulateContents() //empty intentionally
-
-/obj/structure/closet/secure_closet/personal/attackby(obj/item/W, mob/user, params)
-	var/obj/item/card/id/I = W.GetID()
-	if(istype(I))
-		if(broken)
-			to_chat(user, span_danger("It appears to be broken."))
-			return
-		if(!I || !I.registered_name)
-			return
-		if(allowed(user) || !registered_name || (istype(I) && (registered_name == I.registered_name)))
-			//they can open all lockers, or nobody owns this, or they own this locker
-			locked = !locked
-			update_appearance(UPDATE_ICON)
-
-			if(!registered_name)
-				registered_name = I.registered_name
-				desc = "Owned by [I.registered_name]."
+/obj/structure/closet/secure_closet/personal/togglelock(mob/user, obj/item/card/id/id_card)
+	if (..())
+		if(locked)
+			id_card = istype(id_card) ? id_card : user.GetIdCard()
+			if (id_card)
+				set_owner(id_card.registered_name)
 		else
-			to_chat(user, span_danger("Access Denied."))
+			set_owner(null)
+
+/obj/structure/closet/secure_closet/personal/proc/set_owner(registered_name)
+	if (registered_name)
+		src.registered_name = registered_name
+		src.SetName(name + " ([registered_name])")
+		src.desc = "Currently used by [registered_name]."
 	else
-		return ..()
+		src.registered_name = null
+		src.SetName(initial(name))
+		src.desc = initial(desc)

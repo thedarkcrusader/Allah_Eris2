@@ -1,95 +1,118 @@
 /obj/structure/lattice
 	name = "lattice"
-	desc = "A lightweight support lattice. These hold our station together."
-	icon = 'icons/obj/smooth_structures/lattice.dmi'
-	icon_state = "lattice-255"
-	base_icon_state = "lattice"
+	desc = "A lightweight support lattice."
+	icon = 'icons/obj/structures/smoothlattice.dmi'
+	icon_state = "lattice0"
 	density = FALSE
 	anchored = TRUE
-	armor = list(MELEE = 50, BULLET = 0, LASER = 0, ENERGY = 0, BOMB = 0, BIO = 0, RAD = 0, FIRE = 80, ACID = 50)
-	max_integrity = 50
-	layer = LATTICE_LAYER //under pipes
-	plane = FLOOR_PLANE
-	obj_flags = CAN_BE_HIT | BLOCK_Z_OUT_DOWN
-	smoothing_flags = SMOOTH_BITMASK
-	smoothing_groups = SMOOTH_GROUP_LATTICE
-	canSmoothWith = SMOOTH_GROUP_LATTICE + SMOOTH_GROUP_WALLS + SMOOTH_GROUP_OPEN_FLOOR
-	var/number_of_rods = 1
-	//	flags = CONDUCT_1
+	w_class = ITEM_SIZE_NORMAL
+	layer = LATTICE_LAYER
+	color = COLOR_STEEL
+	var/init_material = MATERIAL_STEEL
+	obj_flags = OBJ_FLAG_NOFALL
 
-/obj/structure/lattice/examine(mob/user)
+/obj/structure/lattice/get_material()
+	return material
+
+/obj/structure/lattice/Initialize(mapload, new_material)
 	. = ..()
-	. += deconstruction_hints(user)
+	DELETE_IF_DUPLICATE_OF(/obj/structure/lattice)
+	if(!(istype(src.loc, /turf/space) || istype(src.loc, /turf/simulated/open)))
+		return INITIALIZE_HINT_QDEL
+	if(!new_material)
+		new_material = init_material
+	material = SSmaterials.get_material_by_name(new_material)
+	if(!istype(material))
+		return INITIALIZE_HINT_QDEL
 
-/obj/structure/lattice/proc/deconstruction_hints(mob/user)
-	return span_notice("The rods look like they could be <b>cut</b>. There's space for more <i>rods</i> or a <i>tile</i>.")
+	SetName("[material.display_name] lattice")
+	desc = "A lightweight support [material.display_name] lattice."
+	color =  material.icon_colour
 
-/obj/structure/lattice/Initialize(mapload)
+	update_icon()
+	if(!mapload)
+		update_neighbors()
+
+/obj/structure/lattice/Destroy()
+	var/turf/old_loc = get_turf(src)
 	. = ..()
-	for(var/obj/structure/lattice/LAT in loc)
-		if(LAT != src)
-			QDEL_IN(LAT, 0)
+	if(old_loc)
+		update_neighbors(old_loc)
 
-/obj/structure/lattice/blob_act(obj/structure/blob/B)
-	return
+/obj/structure/lattice/proc/update_neighbors(location = loc)
+	for (var/dir in GLOB.cardinal)
+		var/obj/structure/lattice/L = locate(/obj/structure/lattice, get_step(location, dir))
+		if(L)
+			L.update_icon()
 
-/obj/structure/lattice/ratvar_act()
-	new /obj/structure/lattice/clockwork(loc)
+/obj/structure/lattice/ex_act(severity)
+	if(severity <= EX_ACT_HEAVY)
+		qdel(src)
 
-/obj/structure/lattice/attackby(obj/item/C, mob/user, params)
-	if(resistance_flags & INDESTRUCTIBLE)
-		return
-	if(C.tool_behaviour == TOOL_WIRECUTTER)
-		to_chat(user, span_notice("Slicing [name] joints ..."))
-		deconstruct()
-	else
-		var/turf/T = get_turf(src)
-		return T.attackby(C, user) //hand this off to the turf instead (for building plating, catwalks, etc)
+/obj/structure/lattice/proc/deconstruct(mob/user, obj/item/tool)
+	user.visible_message(
+		SPAN_NOTICE("\The [user] slices \the [src] apart with \a [tool]."),
+		SPAN_NOTICE("You \the [src] apart with \a [tool].")
+	)
+	var/obj/item/stack/material/rods/rods = new(loc, 1, material.name)
+	transfer_fingerprints_to(rods)
+	var/turf/source = get_turf(src)
+	if(locate(/obj/structure/cable, source))
+		for(var/obj/structure/cable/C in source)
+			C.visible_message(SPAN_WARNING("\The [C] snaps!"))
+			new/obj/item/stack/cable_coil(source, (C.d1 ? 2 : 1), C.color)
+			qdel(C)
+	qdel_self()
 
-/obj/structure/lattice/deconstruct(disassembled = TRUE)
-	if(!(flags_1 & NODECONSTRUCT_1))
-		new /obj/item/stack/rods(get_turf(src), number_of_rods)
-	qdel(src)
 
-/obj/structure/lattice/rcd_vals(mob/user, obj/item/construction/rcd/the_rcd)
-	if(the_rcd.construction_mode == RCD_FLOORWALL)
-		return list("mode" = RCD_FLOORWALL, "delay" = 0, "cost" = 2)
+/obj/structure/lattice/use_tool(obj/item/tool, mob/user, list/click_params)
+	// Floor Tile, Cable Coil - Passthrough to turf
+	if (istype(tool, /obj/item/stack/tile) || isCoil(tool))
+		return tool.resolve_attackby(get_turf(src), user, click_params)
 
-/obj/structure/lattice/rcd_act(mob/user, obj/item/construction/rcd/the_rcd, passed_mode)
-	if(passed_mode == RCD_FLOORWALL)
-		to_chat(user, span_notice("You build a floor."))
-		var/turf/T = src.loc
-		if(isspaceturf(T))
-			T.place_on_top(/turf/open/floor/plating, flags = CHANGETURF_INHERIT_AIR)
-			qdel(src)
+	// Plasma Cutter - Deconstruct
+	if (istype(tool, /obj/item/gun/energy/plasmacutter))
+		var/obj/item/gun/energy/plasmacutter/cutter = tool
+		if (!cutter.slice(user))
 			return TRUE
-	return FALSE
+		deconstruct(user)
+		return TRUE
 
-/obj/structure/lattice/singularity_pull(S, current_size)
-	if(current_size >= STAGE_FOUR)
-		deconstruct()
+	// Welder - Deconstruct
+	if (isWelder(tool))
+		var/obj/item/weldingtool/welder = tool
+		if (!welder.remove_fuel(1, user))
+			return TRUE
+		deconstruct(user)
+		return TRUE
 
-/obj/structure/lattice/clockwork
-	name = "cog lattice"
-	desc = "A lightweight support lattice. These hold the Justiciar's station together."
-	icon = 'icons/obj/smooth_structures/lattice_clockwork.dmi'
-	smoothing_flags = NONE
-	smoothing_groups = null
-	canSmoothWith = null
+	// Rods - Create catwalk
+	if (istype(tool, /obj/item/stack/material/rods))
+		var/obj/item/stack/material/rods/rods = tool
+		if (!rods.use(2))
+			USE_FEEDBACK_STACK_NOT_ENOUGH(rods, 2, "to create a catwalk")
+			return TRUE
+		playsound(src, 'sound/weapons/Genhit.ogg', 50, TRUE)
+		var/obj/structure/catwalk/catwalk = new(loc)
+		transfer_fingerprints_to(catwalk)
+		user.visible_message(
+			SPAN_NOTICE("\The [user] constructs \a [catwalk] over \the [src] with \a [tool]."),
+			SPAN_NOTICE("You construct \a [catwalk] over \the [src] with \the [tool].")
+		)
+		qdel_self()
+		return TRUE
 
-/obj/structure/lattice/clockwork/Initialize(mapload)
-	. = ..()
-	ratvar_act()
-	if(is_reebe(z))
-		resistance_flags |= INDESTRUCTIBLE
+	return ..()
 
-/obj/structure/lattice/clockwork/ratvar_act()
-	if(ISODD(x+y))
-		icon = 'icons/obj/smooth_structures/lattice_clockwork_large.dmi'
-		pixel_x = -9
-		pixel_y = -9
-	else
-		icon = 'icons/obj/smooth_structures/lattice_clockwork.dmi'
-		pixel_x = 0
-		pixel_y = 0
-	return TRUE
+
+/obj/structure/lattice/on_update_icon()
+	var/dir_sum = 0
+	for (var/direction in GLOB.cardinal)
+		var/turf/T = get_step(src, direction)
+		if(locate(/obj/structure/lattice, T) || locate(/obj/structure/catwalk, T))
+			dir_sum += direction
+		else
+			if(!(istype(get_step(src, direction), /turf/space)) && !(istype(get_step(src, direction), /turf/simulated/open)))
+				dir_sum += direction
+
+	icon_state = "lattice[dir_sum]"

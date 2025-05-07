@@ -1,16 +1,18 @@
-//Used by spraybottles.
-/obj/effect/decal/chempuff
-	name = "chemicals"
-	icon = 'icons/obj/chempuff.dmi'
-	pass_flags = PASSTABLE | PASSGRILLE
-	layer = FLY_LAYER
+/obj/decal/point
+	name = "arrow"
+	desc = "It's an arrow hanging in mid-air. There may be a wizard about."
+	icon = 'icons/mob/screen1.dmi'
+	icon_state = "arrow"
+	layer = POINTER_LAYER
+	anchored = TRUE
+	mouse_opacity = 0
 
-/obj/effect/decal/chempuff/blob_act(obj/structure/blob/B)
-	return
+/obj/decal/point/Initialize()
+	. = ..()
+	QDEL_IN(src, 2 SECONDS)
 
-/obj/effect/decal/fakelattice
-	name = "lattice"
-	desc = "A lightweight support lattice."
-	icon = 'icons/obj/smooth_structures/lattice.dmi'
-	icon_state = "lattice"
-	density = TRUE
+// Used for spray that you spray at walls, tables, hydrovats etc
+/obj/decal/spraystill
+	density = FALSE
+	anchored = TRUE
+	layer = PROJECTILE_LAYER

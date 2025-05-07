@@ -1,12 +1,10 @@
+/proc/create_all_lighting_overlays()
+	for(var/zlevel = 1 to world.maxz)
+		create_lighting_overlays_zlevel(zlevel)
 
-/proc/create_all_lighting_objects()
-	for(var/area/area as anything in GLOB.areas)
-		if(!area.static_lighting)
-			continue
-		for (var/list/zlevel_turfs as anything in area.get_zlevel_turf_lists())
-			for(var/turf/area_turf as anything in zlevel_turfs)
-				if(area_turf.space_lit)
-					continue
-				new /datum/lighting_object(area_turf)
-			CHECK_TICK
-		CHECK_TICK
+/proc/create_lighting_overlays_zlevel(zlevel)
+	ASSERT(zlevel)
+
+	for(var/turf/T in block(locate(1, 1, zlevel), locate(world.maxx, world.maxy, zlevel)))
+		if(T.dynamic_lighting)
+			T.lighting_build_overlay()

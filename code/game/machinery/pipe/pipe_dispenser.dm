@@ -1,114 +1,112 @@
 /obj/machinery/pipedispenser
 	name = "pipe dispenser"
-	icon = 'icons/obj/stationobjs.dmi'
+	icon = 'icons/obj/machines/pipe_dispenser.dmi'
 	icon_state = "pipe_d"
-	desc = "Dispenses countless types of pipes. Very useful if you need pipes."
 	density = TRUE
-	interaction_flags_machine = INTERACT_MACHINE_ALLOW_SILICON | INTERACT_MACHINE_OPEN_SILICON | INTERACT_MACHINE_OFFLINE
-	var/wait = 0
-	var/piping_layer = PIPING_LAYER_DEFAULT
+	anchored = FALSE
+	stat_immune = MACHINE_STAT_NOSCREEN//Doesn't need screen, just input for the parts wanted
+	obj_flags = OBJ_FLAG_ANCHORABLE
 
-/obj/machinery/pipedispenser/attack_paw(mob/user)
-	return attack_hand(user)
+	construct_state = /singleton/machine_construction/default/panel_closed
+	uncreated_component_parts = null
 
-/obj/machinery/pipedispenser/ui_interact(mob/user)
+	idle_power_usage = 500
+	power_channel = EQUIP
+	use_power = POWER_USE_OFF
+
+	machine_name = "pipe dispenser"
+	machine_desc = "A semi-portable dispenser that uses compressed matter to create atmospherics pipes. Vital for repair or construction efforts."
+
+	var/pipe_color = "white"
+
+/obj/machinery/pipedispenser/Initialize()//for mapping purposes. Anchor them by map var edit if needed.
 	. = ..()
-	var/dat = "PIPING LAYER: <A href='byond://?src=[REF(src)];layer_down=1'>--</A><b>[piping_layer]</b><A href='byond://?src=[REF(src)];layer_up=1'>++</A><BR>"
+	if(anchored)
+		update_use_power(POWER_USE_IDLE)
 
-	var/recipes = GLOB.atmos_pipe_recipes
+/obj/machinery/pipedispenser/proc/get_console_data(list/pipe_categories, color_options = FALSE)
+	. = list()
+	. += "<table>"
+	if(color_options)
+		. += "<tr><td>Color</td><td><a href='byond://?src=\ref[src];color=\ref[src]'>[SPAN_COLOR(pipe_color, pipe_color)]</a></td></tr>"
+	for(var/category in pipe_categories)
+		var/datum/pipe/cat = category
+		. += "<tr><td>[SPAN_COLOR("#517087", "<strong>[initial(cat.category)]</strong>")]</td></tr>"
+		for(var/datum/pipe/pipe in pipe_categories[category])
+			var/line = "[pipe.name]</td>"
+			. += "<tr><td>[line]<td><a href='byond://?src=\ref[src];build=\ref[pipe]'>Dispense</a></td><td><a href='byond://?src=\ref[src];buildfive=\ref[pipe]'>5x</a></td><td><a href='byond://?src=\ref[src];buildten=\ref[pipe]'>10x</a></td></tr>"
+	.+= "</table>"
+	. = jointext(., null)
 
-	for(var/category in recipes)
-		var/list/cat_recipes = recipes[category]
-		dat += "<b>[category]:</b><ul>"
-
-		for(var/i in cat_recipes)
-			var/datum/pipe_info/I = i
-			dat += I.Render(src)
-
-		dat += "</ul>"
-
-	user << browse("<HEAD><meta charset='UTF-8'><TITLE>[src]</TITLE></HEAD><TT>[dat]</TT>", "window=pipedispenser")
-	onclose(user, "pipedispenser")
-	return
+/obj/machinery/pipedispenser/proc/build_quantity(datum/pipe/P, quantity)
+	for(var/I = quantity;I > 0;I -= 1)
+		P.Build(P, loc, pipe_colors[pipe_color])
+		use_power_oneoff(500)
 
 /obj/machinery/pipedispenser/Topic(href, href_list)
-	if(..())
-		return 1
-	var/mob/living/L = usr
-	if(!anchored || (istype(L) && !(L.mobility_flags & MOBILITY_UI)) || usr.stat || usr.restrained() || !in_range(loc, usr))
-		usr << browse(null, "window=pipedispenser")
-		return 1
-	usr.set_machine(src)
-	add_fingerprint(usr)
-	if(href_list["makepipe"])
-		if(wait < world.time)
-			var/p_type = text2path(href_list["makepipe"])
-			if (!verify_recipe(GLOB.atmos_pipe_recipes, p_type))
-				return
-			var/p_dir = text2num(href_list["dir"])
-			var/obj/item/pipe/P = new (loc, p_type, p_dir)
-			P.set_piping_layer(piping_layer)
-			P.add_fingerprint(usr)
-			wait = world.time + 10
-	if(href_list["makemeter"])
-		if(wait < world.time )
-			new /obj/item/pipe_meter(loc)
-			wait = world.time + 15
-	if(href_list["layer_up"])
-		piping_layer = clamp(++piping_layer, PIPING_LAYER_MIN, PIPING_LAYER_MAX)
-	if(href_list["layer_down"])
-		piping_layer = clamp(--piping_layer, PIPING_LAYER_MIN, PIPING_LAYER_MAX)
-	return
-
-/obj/machinery/pipedispenser/attackby(obj/item/W, mob/user, params)
-	add_fingerprint(user)
-	if (istype(W, /obj/item/pipe) || istype(W, /obj/item/pipe_meter))
-// yogs start - disposable check
-		if(istype(W, /obj/item/pipe))
-			var/obj/item/pipe/P = W
-			if(!P.disposable)
-				to_chat(usr, span_warning("[src] is too valuable to dispose of!"))
-				return
-// yogs end
-		to_chat(usr, span_notice("You put [W] back into [src]."))
-		qdel(W)
+	if((. = ..()))
 		return
-	else
-		return ..()
+	if(href_list["build"])
+		var/datum/pipe/P = locate(href_list["build"])
+		build_quantity(P, 1)
+	if(href_list["buildfive"])
+		var/datum/pipe/P = locate(href_list["buildfive"])
+		build_quantity(P, 5)
+	if(href_list["buildten"])
+		var/datum/pipe/P = locate(href_list["buildten"])
+		build_quantity(P, 10)
+	if(href_list["color"])
+		var/choice = input(usr, "What color do you want pipes to have?") as null|anything in pipe_colors
+		if(!choice)
+			return 1
+		pipe_color = choice
+		updateUsrDialog()
 
-/obj/machinery/pipedispenser/proc/verify_recipe(recipes, path)
-	for(var/category in recipes)
-		var/list/cat_recipes = recipes[category]
-		for(var/i in cat_recipes)
-			var/datum/pipe_info/info = i
-			if (path == info.id)
-				return TRUE
-	return FALSE
-
-/obj/machinery/pipedispenser/wrench_act(mob/living/user, obj/item/I)
-	if(default_unfasten_wrench(user, I, 40))
-		user << browse(null, "window=pipedispenser")
-
+/obj/machinery/pipedispenser/interface_interact(mob/user)
+	interact(user)
 	return TRUE
 
+/obj/machinery/pipedispenser/CanUseTopic(mob/user)
+	if (!anchored)
+		to_chat(user, "You need to anchor \the [src] to be able to operate it.")
+		return STATUS_CLOSE
+	return ..()
+
+/obj/machinery/pipedispenser/interact(mob/user)
+	var/datum/browser/popup = new (user, "Pipe List", "[src] Control Panel")
+	popup.set_content(get_console_data(GLOB.all_pipe_datums_by_category, TRUE))
+	popup.open()
+
+/obj/machinery/pipedispenser/post_anchor_change()
+	if (anchored)
+		set_stat(MACHINE_STAT_MAINT, FALSE)
+	else
+		set_stat(MACHINE_STAT_MAINT, TRUE)
+	..()
+
+/obj/machinery/pipedispenser/use_tool(obj/item/W, mob/living/user, list/click_params)
+	if (istype(W, /obj/item/pipe) || istype(W, /obj/item/machine_chassis))
+		if(!user.unEquip(W))
+			return TRUE
+		to_chat(user, SPAN_NOTICE("You put \the [W] back into \the [src]."))
+		qdel(W)
+		return TRUE
+
+	return ..()
 
 /obj/machinery/pipedispenser/disposal
 	name = "disposal pipe dispenser"
-	icon = 'icons/obj/stationobjs.dmi'
+	icon = 'icons/obj/machines/pipe_dispenser.dmi'
 	icon_state = "pipe_d"
-	desc = "Dispenses pipes that will ultimately be used to move trash around."
-	density = TRUE
+	machine_name = "disposal pipe dispenser"
+	machine_desc = "Similar to a normal pipe dispenser, but calibrated for the heavy, dense metal tubes used in disposals networks."
 
-
-//Allow you to drag-drop disposal pipes and transit tubes into it
-/obj/machinery/pipedispenser/disposal/MouseDrop_T(obj/structure/pipe, mob/usr)
-	if(usr.incapacitated())
+//Allow you to drag-drop disposal pipes into it
+/obj/machinery/pipedispenser/disposal/MouseDrop_T(obj/structure/disposalconstruct/pipe as obj, mob/user as mob)
+	if(!CanPhysicallyInteract(user))
 		return
 
-	if (!istype(pipe, /obj/structure/disposalconstruct) && !istype(pipe, /obj/structure/c_transit_tube) && !istype(pipe, /obj/structure/c_transit_tube_pod))
-		return
-
-	if (get_dist(usr, src) > 1 || get_dist(src,pipe) > 1 )
+	if (!istype(pipe) || get_dist(src,pipe) > 1 )
 		return
 
 	if (pipe.anchored)
@@ -117,107 +115,6 @@
 	qdel(pipe)
 
 /obj/machinery/pipedispenser/disposal/interact(mob/user)
-
-	var/dat = ""
-	var/recipes = GLOB.disposal_pipe_recipes
-
-	for(var/category in recipes)
-		var/list/cat_recipes = recipes[category]
-		dat += "<b>[category]:</b><ul>"
-
-		for(var/i in cat_recipes)
-			var/datum/pipe_info/I = i
-			dat += I.Render(src)
-
-		dat += "</ul>"
-
-	user << browse("<HEAD><meta charset='UTF-8'><TITLE>[src]</TITLE></HEAD><TT>[dat]</TT>", "window=pipedispenser")
-	return
-
-
-/obj/machinery/pipedispenser/disposal/Topic(href, href_list)
-	if(..())
-		return 1
-	usr.set_machine(src)
-	add_fingerprint(usr)
-	if(href_list["dmake"])
-		if(wait < world.time)
-			var/p_type = text2path(href_list["dmake"])
-			if (!verify_recipe(GLOB.disposal_pipe_recipes, p_type))
-				return
-			var/obj/structure/disposalconstruct/C = new (loc, p_type)
-
-			if(!C.can_place())
-				to_chat(usr, span_warning("There's not enough room to build that here!"))
-				qdel(C)
-				return
-			if(href_list["dir"])
-				C.setDir(text2num(href_list["dir"]))
-			C.add_fingerprint(usr)
-			C.update_appearance(UPDATE_ICON)
-			wait = world.time + 15
-	return
-
-//transit tube dispenser
-//inherit disposal for the dragging proc
-/obj/machinery/pipedispenser/disposal/transit_tube
-	name = "transit tube dispenser"
-	icon = 'icons/obj/stationobjs.dmi'
-	icon_state = "pipe_d"
-	density = TRUE
-	desc = "Dispenses pipes that will move beings around."
-
-/obj/machinery/pipedispenser/disposal/transit_tube/interact(mob/user)
-
-	var/dat = {"<B>Transit Tubes:</B><BR>
-<A href='byond://?src=[REF(src)];tube=[TRANSIT_TUBE_STRAIGHT]'>Straight Tube</A><BR>
-<A href='byond://?src=[REF(src)];tube=[TRANSIT_TUBE_STRAIGHT_CROSSING]'>Straight Tube with Crossing</A><BR>
-<A href='byond://?src=[REF(src)];tube=[TRANSIT_TUBE_CURVED]'>Curved Tube</A><BR>
-<A href='byond://?src=[REF(src)];tube=[TRANSIT_TUBE_DIAGONAL]'>Diagonal Tube</A><BR>
-<A href='byond://?src=[REF(src)];tube=[TRANSIT_TUBE_DIAGONAL_CROSSING]'>Diagonal Tube with Crossing</A><BR>
-<A href='byond://?src=[REF(src)];tube=[TRANSIT_TUBE_JUNCTION]'>Junction</A><BR>
-<b>Station Equipment:</b><BR>
-<A href='byond://?src=[REF(src)];tube=[TRANSIT_TUBE_STATION]'>Through Tube Station</A><BR>
-<A href='byond://?src=[REF(src)];tube=[TRANSIT_TUBE_TERMINUS]'>Terminus Tube Station</A><BR>
-<A href='byond://?src=[REF(src)];tube=[TRANSIT_TUBE_POD]'>Transit Tube Pod</A><BR>
-<A href='byond://?src=[REF(src)];tube=[TRANSIT_TUBE_CARGO_POD]'>Transit Tube Cargo Pod</A><BR>
-"}
-
-	user << browse("<HEAD><meta charset='UTF-8'><TITLE>[src]</TITLE></HEAD><TT>[dat]</TT>", "window=pipedispenser")
-	return
-
-
-/obj/machinery/pipedispenser/disposal/transit_tube/Topic(href, href_list)
-	if(..())
-		return 1
-	usr.set_machine(src)
-	add_fingerprint(usr)
-	if(wait < world.time)
-		if(href_list["tube"])
-			var/tube_type = text2num(href_list["tube"])
-			var/obj/structure/C
-			switch(tube_type)
-				if(TRANSIT_TUBE_STRAIGHT)
-					C = new /obj/structure/c_transit_tube(loc)
-				if(TRANSIT_TUBE_STRAIGHT_CROSSING)
-					C = new /obj/structure/c_transit_tube/crossing(loc)
-				if(TRANSIT_TUBE_CURVED)
-					C = new /obj/structure/c_transit_tube/curved(loc)
-				if(TRANSIT_TUBE_DIAGONAL)
-					C = new /obj/structure/c_transit_tube/diagonal(loc)
-				if(TRANSIT_TUBE_DIAGONAL_CROSSING)
-					C = new /obj/structure/c_transit_tube/diagonal/crossing(loc)
-				if(TRANSIT_TUBE_JUNCTION)
-					C = new /obj/structure/c_transit_tube/junction(loc)
-				if(TRANSIT_TUBE_STATION)
-					C = new /obj/structure/c_transit_tube/station(loc)
-				if(TRANSIT_TUBE_TERMINUS)
-					C = new /obj/structure/c_transit_tube/station/reverse(loc)
-				if(TRANSIT_TUBE_POD)
-					C = new /obj/structure/c_transit_tube_pod(loc)
-				if(TRANSIT_TUBE_CARGO_POD)
-					C = new /obj/structure/c_transit_tube_pod/cargo(loc)
-			if(C)
-				C.add_fingerprint(usr)
-			wait = world.time + 15
-	return
+	var/datum/browser/popup = new (user, "Disposal Pipe List", "[src] Control Panel")
+	popup.set_content(get_console_data(GLOB.all_disposal_pipe_datums_by_category))
+	popup.open()

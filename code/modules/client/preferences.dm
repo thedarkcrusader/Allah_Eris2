@@ -1,573 +1,558 @@
-GLOBAL_LIST_EMPTY(preferences_datums)
+#define SAVE_RESET -1
+
+#define JOB_PRIORITY_HIGH   FLAG_01
+#define JOB_PRIORITY_MEDIUM FLAG_02
+#define JOB_PRIORITY_LOW    FLAG_03
+#define JOB_PRIORITY_LIKELY (JOB_PRIORITY_HIGH | JOB_PRIORITY_MEDIUM)
+#define JOB_PRIORITY_PICKED (JOB_PRIORITY_HIGH | JOB_PRIORITY_MEDIUM | JOB_PRIORITY_LOW)
+
+#define MAX_LOAD_TRIES 5
+
+/datum/preferences_slot
+	var/slot
+	var/age
 
 /datum/preferences
-	var/client/parent
 	//doohickeys for savefiles
-	var/path
+	var/is_guest = FALSE
 	var/default_slot = 1				//Holder so it doesn't default to slot 1, rather the last one used
-	var/max_save_slots = 3
+
+	var/use_slot_priority_list = FALSE
+	var/list/datum/preferences_slot/slot_priority_list = list()
+
+	// Cache, mapping slot record ids to character names
+	// Saves reading all the slot records when listing
+	var/list/slot_names = null
 
 	//non-preference stuff
+	var/warns = 0
 	var/muted = 0
 	var/last_ip
 	var/last_id
 
+	// Populated with an error message if loading fails.
+	var/load_failed = null
+
 	//game-preferences
 	var/lastchangelog = ""				//Saved changlog filesize to detect if there was a change
 
-	//Antag preferences
-	var/list/be_special = list()		//Special role selection
+	var/client/client = null
+	var/client_ckey = null
 
-	/// Custom keybindings. Map of keybind names to keyboard inputs.
-	/// For example, by default would have "swap_hands" -> list("X")
-	var/list/key_bindings = list()
+	var/datum/browser/popup
 
-	/// Cached list of keybindings, mapping keys to actions.
-	/// For example, by default would have "X" -> list("swap_hands")
-	var/list/key_bindings_by_key = list()
-	
-	var/toggles = TOGGLES_DEFAULT
-	var/db_flags
-	var/chat_toggles = TOGGLES_DEFAULT_CHAT
-	var/extra_toggles = TOGGLES_DEFAULT_EXTRA
-	var/ghost_form = "ghost"
-
-	var/list/player_alt_titles = list()
-
-	var/list/randomise = list()
-
-	//Quirk list
-	var/list/all_quirks = list()
-
-	//Job preferences 2.0 - indexed by job title , no key or value implies never
-	var/list/job_preferences = list()
-
-	/// The current window, PREFERENCE_TAB_* in [`code/__DEFINES/preferences.dm`]
-	var/current_window = PREFERENCE_TAB_CHARACTER_PREFERENCES
-
-	var/unlock_content = 0
-
-	var/list/ignoring = list()
-
-	var/list/exp = list()
-
-	var/action_buttons_screen_locs = list()
-
-
-	/// A preview of the current character
-	var/atom/movable/screen/character_preview_view/character_preview_view
-
-	/// Icon for the preview background
-	var/icon/background = "floor"
-
-	/// A list of instantiated middleware
-	var/list/datum/preference_middleware/middleware = list()
-
-	/// The savefile relating to core preferences, PREFERENCE_PLAYER
-	var/savefile/game_savefile
-
-	/// The savefile relating to character preferences, PREFERENCE_CHARACTER
-	var/savefile/character_savefile
-
-	/// A list of keys that have been updated since the last save.
-	var/list/recently_updated_keys = list()
-
-	/// A cache of preference entries to values.
-	/// Used to avoid expensive READ_FILE every time a preference is retrieved.
-	var/value_cache = list()
-
-	/// If set to TRUE, will update character_profiles on the next ui_data tick.
-	var/tainted_character_profiles = FALSE
-
-	///removed, kept here for migration in 'legacy_mood_migration.dm'
-	///DO NOT USE THIS!
-	var/yogtoggles
-
-/datum/preferences/Destroy(force, ...)
-	QDEL_NULL(character_preview_view)
-	QDEL_LIST(middleware)
-	value_cache = null
-	return ..()
+	var/datum/category_collection/player_setup_collection/player_setup
+	var/datum/browser/panel
 
 /datum/preferences/New(client/C)
-	parent = C
-
-	for (var/middleware_type in subtypesof(/datum/preference_middleware))
-		middleware += new middleware_type(src)
-
 	if(istype(C))
-		if(!IsGuestKey(C.key))
-			load_path(C.ckey)
+		client = C
+		client_ckey = C.ckey
+		SScharacter_setup.preferences_datums[C.ckey] = src
+		if(SScharacter_setup.initialized)
+			setup()
+		else
+			SScharacter_setup.prefs_awaiting_setup += src
+	..()
 
-			if (C.IsByondMember())
-				unlock_content |= DONOR_BYOND
+/datum/preferences/proc/setup()
+	if(!length(GLOB.skills))
+		GET_SINGLETON(/singleton/hierarchy/skill)
+	player_setup = new(src)
+	gender = pick(MALE, FEMALE)
+	real_name = random_name(gender,species)
+	b_type = RANDOM_BLOOD_TYPE
 
-			// the latter handles race cases where the prefs are not fully loaded in, or GLOB.donators hasn't loaded in yet
-			if(is_donator(C) || (C.ckey in get_donators())) 
-				unlock_content |= DONOR_YOGS
+	if(client)
+		if(IsGuestKey(client.key))
+			is_guest = TRUE
+		else
+			load_data()
 
-	// give save slots to donors
-	if (unlock_content & DONOR_YOGS)
-		max_save_slots += DONOR_YOGS_SLOTS + DONOR_BYOND_SLOTS
-	else if (unlock_content & DONOR_BYOND)
-		max_save_slots += DONOR_BYOND_SLOTS
+	sanitize_preferences()
+	if(client && istype(client.mob, /mob/new_player))
+		var/mob/new_player/np = client.mob
+		np.new_player_panel(TRUE)
 
-	// give them default keybinds and update their movement keys
-	key_bindings = deepCopyList(GLOB.default_hotkeys)
-	key_bindings_by_key = get_key_bindings_by_key(key_bindings)
-	randomise = get_default_randomization()
+/datum/preferences/proc/load_data()
+	load_failed = null
+	var/stage = "pre"
+	try
+		var/pref_path = get_path(client_ckey, "preferences")
+		if(!fexists(pref_path))
+			stage = "migrate"
+			// Try to migrate legacy savefile-based preferences
+			if(!migrate_legacy_preferences())
+				// If there's no old save, there'll be nothing to load.
+				return
 
-	var/loaded_preferences_successfully = load_preferences()
-	if(loaded_preferences_successfully)
-		if(load_character())
-			return
-	//we couldn't load character data so just randomize the character appearance + name
-	randomise_appearance_prefs()		//let's create a random character then - rather than a fat, bald and naked man.
-	if(C)
-		apply_all_client_preferences()
-		C.set_macros()
+		stage = "load"
+		load_preferences()
+		load_character()
+	catch(var/exception/E)
+		load_failed = "{[stage]} [E]"
+		throw E
 
-	if(!loaded_preferences_successfully)
-		save_preferences()
-	save_character()		//let's save this new random character so it doesn't keep generating new ones.
+/datum/preferences/proc/migrate_legacy_preferences()
+	// We make some assumptions here:
+	// - all relevant savefiles were version 17, which covers anything saved from 2018+
+	// - legacy saves were only made on the "torch" map
+	// - a maximum of 40 slots were used
 
-/datum/preferences/ui_interact(mob/user, datum/tgui/ui)
-	if(!SSjob.initialized)
-		tgui_alert(user, "You cannot open the preferences menu before the job subsystem is initialized!")
-		return
+	var/legacy_pref_path = get_path(client.ckey, "preferences", "sav")
+	if(!fexists(legacy_pref_path))
+		return 0
 
-	// If you leave and come back, re-register the character preview
-	if (!isnull(character_preview_view) && !(character_preview_view in user.client?.screen))
-		user.client?.register_map_obj(character_preview_view)
+	var/savefile/S = new(legacy_pref_path)
+	if(S["version"] != 17)
+		return 0
 
-	ui = SStgui.try_update_ui(user, src, ui)
-	if(!ui)
-		ui = new(user, src, "PreferencesMenu")
-		ui.set_autoupdate(FALSE)
-		ui.open()
+	// Legacy version 17 ~= new version 1
+	var/datum/pref_record_reader/savefile/savefile_reader = new(S, 1)
 
-		// HACK: Without this the character starts out really tiny because of some BYOND bug.
-		// You can fix it by changing a preference, so let's just forcably update the body to emulate this.
-		addtimer(CALLBACK(character_preview_view, /atom/movable/screen/character_preview_view/proc/update_body), 1 SECONDS)
+	player_setup.load_preferences(savefile_reader)
+	var/orig_slot = default_slot
 
-/datum/preferences/ui_state(mob/user)
-	return GLOB.always_state
+	S.cd = "/torch"
+	for(var/slot = 1 to 40)
+		if(!S.dir.Find("character[slot]"))
+			continue
+		S.cd = "/torch/character[slot]"
+		default_slot = slot
+		player_setup.load_character(savefile_reader)
+		save_character(override_key="character_torch_[slot]")
+		S.cd = "/torch"
+	S.cd = "/"
 
-// Without this, a hacker would be able to edit other people's preferences if
-// they had the ref to Topic to.
-/datum/preferences/ui_status(mob/user, datum/ui_state/state)
-	return user.client == parent ? UI_INTERACTIVE : UI_CLOSE
-
-/datum/preferences/ui_data(mob/user)
-	var/list/data = list()
-
-	if (isnull(character_preview_view))
-		character_preview_view = create_character_preview_view(user)
-	else if (character_preview_view.client != parent)
-		// The client re-logged, and doing this when they log back in doesn't seem to properly
-		// carry emissives.
-		character_preview_view.register_to_client(parent)
-
-	if (tainted_character_profiles)
-		data["character_profiles"] = create_character_profiles()
-		tainted_character_profiles = FALSE
-
-	data["character_preferences"] = compile_character_preferences(user)
-
-	data["active_slot"] = default_slot
-
-	for (var/datum/preference_middleware/preference_middleware as anything in middleware)
-		data += preference_middleware.get_ui_data(user)
-
-	return data
-
-/datum/preferences/ui_static_data(mob/user)
-	var/list/data = list()
-
-	data["character_profiles"] = create_character_profiles()
-
-	data["character_preview_view"] = character_preview_view.assigned_map
-	data["overflow_role"] = SSjob.GetJob(SSjob.overflow_role).title
-	data["window"] = current_window
-
-	data["content_unlocked"] = unlock_content
-	data["ckey"] = lowertext(user.client.ckey)
-
-	for (var/datum/preference_middleware/preference_middleware as anything in middleware)
-		data += preference_middleware.get_ui_static_data(user)
-
-	return data
-
-/datum/preferences/ui_assets(mob/user)
-	var/list/assets = list(
-		get_asset_datum(/datum/asset/spritesheet/preferences),
-		get_asset_datum(/datum/asset/json/preferences),
-	)
-
-	for (var/datum/preference_middleware/preference_middleware as anything in middleware)
-		assets += preference_middleware.get_ui_assets()
-
-	return assets
-
-/datum/preferences/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
-	. = ..()
-	if (.)
-		return
-
-	switch (action)
-		if ("change_slot")
-			// Save existing character
-			save_character()
-
-			// SAFETY: `load_character` performs sanitization the slot number
-			if (!load_character(params["slot"]))
-				tainted_character_profiles = TRUE
-				randomise_appearance_prefs()
-				save_character()
-
-			for (var/datum/preference_middleware/preference_middleware as anything in middleware)
-				preference_middleware.on_new_character(usr)
-
-			character_preview_view.update_body()
-
-			return TRUE
-		if ("rotate")
-			character_preview_view.dir = turn(character_preview_view.dir, -90)
-
-			return TRUE
-		if ("cycle")
-			background = next_list_item(background, GLOB.preview_backgrounds)
-			character_preview_view.update_body()
-
-			return TRUE
-		if ("set_preference")
-			var/requested_preference_key = params["preference"]
-			var/value = params["value"]
-
-			for (var/datum/preference_middleware/preference_middleware as anything in middleware)
-				if (preference_middleware.pre_set_preference(usr, requested_preference_key, value))
-					return TRUE
-
-			var/datum/preference/requested_preference = GLOB.preference_entries_by_key[requested_preference_key]
-			if (isnull(requested_preference))
-				return FALSE
-
-			// SAFETY: `update_preference` performs validation checks
-			if (!update_preference(requested_preference, value))
-				return FALSE
-
-			if (istype(requested_preference, /datum/preference/name))
-				tainted_character_profiles = TRUE
-
-			return TRUE
-		if ("set_color_preference")
-			var/requested_preference_key = params["preference"]
-
-			var/datum/preference/requested_preference = GLOB.preference_entries_by_key[requested_preference_key]
-			if (isnull(requested_preference))
-				return FALSE
-
-			if (!istype(requested_preference, /datum/preference/color))
-				return FALSE
-
-			var/default_value = read_preference(requested_preference.type)
-
-
-			// Yielding
-			var/new_color = input(
-				usr,
-				"Select new color",
-				null,
-				default_value || COLOR_WHITE,
-			) as color | null
-
-			if (!new_color)
-				return FALSE
-
-			if (!update_preference(requested_preference, new_color))
-				return FALSE
-
-			return TRUE
-
-	for (var/datum/preference_middleware/preference_middleware as anything in middleware)
-		var/delegation = preference_middleware.action_delegations[action]
-		if (!isnull(delegation))
-			return call(preference_middleware, delegation)(params, usr)
-
-	return FALSE
-
-/datum/preferences/ui_close(mob/user)
-	save_character()
+	default_slot = orig_slot
 	save_preferences()
-	QDEL_NULL(character_preview_view)
 
-/datum/preferences/Topic(href, list/href_list)
-	. = ..()
-	if (.)
+	return 1
+
+/datum/preferences/proc/get_content(mob/user)
+	if(!SScharacter_setup.initialized)
+		return
+	if(!user || !user.client)
 		return
 
-	if (href_list["open_keybindings"])
-		current_window = PREFERENCE_TAB_KEYBINDINGS
-		update_static_data(usr)
-		ui_interact(usr)
-		return TRUE
+	var/dat = "<center>"
 
-/datum/preferences/Topic(href, list/href_list)
-	. = ..()
-	if (.)
-		return
-
-	if (href_list["open_keybindings"])
-		current_window = PREFERENCE_TAB_KEYBINDINGS
-		update_static_data(usr)
-		ui_interact(usr)
-		return TRUE
-
-/datum/preferences/proc/create_character_preview_view(mob/user)
-	character_preview_view = new(null, src, user.client)
-	character_preview_view.update_body()
-	character_preview_view.register_to_client(user.client)
-
-	return character_preview_view
-
-/datum/preferences/proc/compile_character_preferences(mob/user)
-	var/list/preferences = list()
-
-	for (var/datum/preference/preference as anything in get_preferences_in_priority_order())
-		if (!preference.is_accessible(src))
-			continue
-
-		LAZYINITLIST(preferences[preference.category])
-
-		var/value = read_preference(preference.type)
-		var/data = preference.compile_ui_data(user, value)
-
-		preferences[preference.category][preference.savefile_key] = data
-
-	for (var/datum/preference_middleware/preference_middleware as anything in middleware)
-		var/list/append_character_preferences = preference_middleware.get_character_preferences(user)
-		if (isnull(append_character_preferences))
-			continue
-
-		for (var/category in append_character_preferences)
-			if (category in preferences)
-				preferences[category] += append_character_preferences[category]
-			else
-				preferences[category] = append_character_preferences[category]
-
-	return preferences
-
-/// Applies all PREFERENCE_PLAYER preferences
-/datum/preferences/proc/apply_all_client_preferences()
-	for (var/datum/preference/preference as anything in get_preferences_in_priority_order())
-		if (preference.savefile_identifier != PREFERENCE_PLAYER)
-			continue
-
-		value_cache -= preference.type
-		preference.apply_to_client(parent, read_preference(preference.type))
-
-// This is necessary because you can open the set preferences menu before
-// the atoms SS is done loading.
-INITIALIZE_IMMEDIATE(/atom/movable/screen/character_preview_view)
-
-/// A preview of a character for use in the preferences menu
-/atom/movable/screen/character_preview_view
-	name = "character_preview"
-	del_on_map_removal = FALSE
-	layer = GAME_PLANE
-	plane = GAME_PLANE
-
-	/// The body that is displayed
-	var/mob/living/carbon/human/dummy/body
-
-	/// The preferences this refers to
-	var/datum/preferences/preferences
-
-	var/list/plane_masters = list()
-
-	/// The client that is watching this view
-	var/client/client
-
-/atom/movable/screen/character_preview_view/Initialize(mapload, datum/preferences/preferences, client/client)
-	. = ..()
-
-	assigned_map = "character_preview_[REF(src)]"
-	set_position(1, 1)
-
-	src.preferences = preferences
-
-/atom/movable/screen/character_preview_view/Destroy()
-	QDEL_NULL(body)
-
-	for (var/plane_master in plane_masters)
-		client?.screen -= plane_master
-		qdel(plane_master)
-
-	client?.clear_map(assigned_map)
-	client?.screen -= src
-
-	preferences?.character_preview_view = null
-
-	client = null
-	plane_masters = null
-	preferences = null
-
-	return ..()
-
-/// Updates the currently displayed body
-/atom/movable/screen/character_preview_view/proc/update_body()
-	if (isnull(body))
-		create_body()
+	if(is_guest)
+		dat += "Please create an account to save your preferences. If you have an account and are seeing this, please adminhelp for assistance."
+	else if(load_failed)
+		dat += "Loading your savefile failed. Please adminhelp for assistance."
 	else
-		body.wipe_state()
-	appearance = preferences.render_new_preview_appearance(body)
+		dat += "Slot - "
+		dat += "<a href='byond://?src=\ref[src];load=1'>Load slot</a> - "
+		dat += "<a href='byond://?src=\ref[src];save=1'>Save slot</a> - "
+		dat += "<a href='byond://?src=\ref[src];resetslot=1'>Reset slot</a> - "
+		dat += "<a href='byond://?src=\ref[src];reload=1'>Reload slot</a>"
 
-/atom/movable/screen/character_preview_view/proc/create_body()
-	QDEL_NULL(body)
+	dat += "<br>"
+	dat += player_setup.header()
+	dat += "<br><HR></center>"
+	dat += player_setup.content(user)
+	return dat
 
-	body = new
+/datum/preferences/proc/open_setup_window(mob/user)
+	if (!SScharacter_setup.initialized)
+		return
+	popup = new (user, "preferences_browser", "Character Setup", 1200, 800, src)
+	var/content = {"
+	<script type='text/javascript'>
+		function update_content(data){
+			document.getElementById('content').innerHTML = data;
+		}
+	</script>
+	<div id='content'>[get_content(user)]</div>
+	"}
+	popup.set_content(content)
+	popup.open()
 
-	// Without this, it doesn't show up in the menu
-	body.appearance_flags &= ~KEEP_TOGETHER
+/datum/preferences/proc/update_setup_window(mob/user)
+	send_output(user, url_encode(get_content(user)), "preferences_browser.browser:update_content")
 
-/// Registers the relevant map objects to a client
-/atom/movable/screen/character_preview_view/proc/register_to_client(client/client)
-	QDEL_LIST(plane_masters)
+/datum/preferences/proc/process_link(mob/user, list/href_list)
 
-	src.client = client
+	if(!user)	return
+	if(isliving(user)) return
 
+	if(href_list["preference"] == "open_whitelist_forum")
+		if(config.forum_url)
+			send_link(user, config.forum_url)
+		else
+			to_chat(user, SPAN_DANGER("The forum URL is not set in the server configuration."))
+			return
+	update_setup_window(usr)
+	return 1
+
+/datum/preferences/Topic(href, list/href_list)
+	if(..())
+		return 1
+
+	if (href_list["close"])
+		popup = null
+
+	. = 1
+
+	if(href_list["save"])
+		save_preferences()
+		save_character()
+	else if(href_list["reload"])
+		load_preferences()
+		load_character()
+		sanitize_preferences()
+	else if(href_list["load"])
+		if(!IsGuestKey(usr.key))
+			open_load_dialog(usr, href_list["details"])
+	else if (href_list["order_prefs"])
+		open_prefs_ordering_panel(usr)
+	else if(href_list["changeslot"])
+		load_character(text2num(href_list["changeslot"]))
+		sanitize_preferences()
+		close_load_dialog(usr)
+
+		if (winget(usr, "preferences_browser", "is-visible") == "true")
+			open_setup_window(usr)
+
+	else if(href_list["resetslot"])
+		if(real_name != input("This will reset the current slot. Enter the character's full name to confirm."))
+			. = 0
+		else
+			load_character(SAVE_RESET)
+			sanitize_preferences()
+	else if(href_list["addslot"])
+		if(length(slot_priority_list) < config.maximum_queued_characters)
+			var/datum/preferences_slot/new_slot = new()
+			new_slot.slot = text2num(href_list["addslot"])
+			load_slot(new_slot)
+			slot_priority_list.Add(new_slot)
+			save_preferences()
+	else if(href_list["removeslot"])
+		var/slotnum = text2num(href_list["removeslot"])
+		for(var/datum/preferences_slot/slot in slot_priority_list)
+			if(slot.slot == slotnum)
+				slot_priority_list.Remove(slot)
+		save_preferences()
+	else if(href_list["moveslotup"])
+		var/slot = text2num(href_list["moveslotup"])
+		if(slot != 1)
+			slot_priority_list.Swap(slot, slot - 1)
+		save_preferences()
+	else if(href_list["moveslotdown"])
+		var/slot = text2num(href_list["moveslotdown"])
+		if(slot != length(slot_priority_list))
+			slot_priority_list.Swap(slot, slot + 1)
+		save_preferences()
+	else if (href_list["show_preferences_loaded"])
+		load_character(text2num(href_list["show_preferences_loaded"]))
+		open_setup_window(usr)
+	else
+		. = 0
+
+	if(href_list["refresh"])
+		if (istype(client.mob, /mob/new_player))
+			var/mob/new_player/M = client.mob
+			M.new_player_panel()
+	if(href_list["refreshslots"] && panel?.title == "Character Priorities")
+		open_prefs_ordering_panel(usr)
+
+	update_setup_window(usr)
+
+/datum/preferences/proc/copy_to(mob/living/carbon/human/character, is_preview_copy = FALSE)
+	// Sanitizing rather than saving as someone might still be editing when copy_to occurs.
+	player_setup.sanitize_setup()
+	character.set_species(species)
+
+	character.fully_replace_character_name(real_name)
+
+	character.gender = gender
+	character.pronouns = pronouns
+	character.age = age
+	character.b_type = b_type
+
+	character.eye_color = eye_color
+
+	character.head_hair_style = head_hair_style
+	character.head_hair_color = head_hair_color
+
+	character.facial_hair_style = facial_hair_style
+	character.facial_hair_color = facial_hair_color
+
+	character.skin_color = skin_color
+
+	character.skin_tone = skin_tone
+	character.base_skin = base_skin
+
+	// Replace any missing limbs.
+	for(var/name in BP_ALL_LIMBS)
+		var/obj/item/organ/external/O = character.organs_by_name[name]
+		if(!O && organ_data[name] != "amputated")
+			var/list/organ_data = character.species.has_limbs[name]
+			if(!islist(organ_data)) continue
+			var/limb_path = organ_data["path"]
+			O = new limb_path(character)
+
+	// Destroy/cyborgize organs and limbs. The order is important for preserving low-level choices for robolimb sprites being overridden.
+	for(var/name in BP_BY_DEPTH)
+		var/status = organ_data[name]
+		var/obj/item/organ/external/O = character.organs_by_name[name]
+		if(!O)
+			continue
+		O.status = 0
+		O.model = null
+		if(status == "amputated")
+			character.organs_by_name[O.organ_tag] = null
+			character.organs -= O
+			if(O.children) // This might need to become recursive.
+				for(var/obj/item/organ/external/child in O.children)
+					character.organs_by_name[child.organ_tag] = null
+					character.organs -= child
+					qdel(child)
+			qdel(O)
+		else if(status == "cyborg")
+			if(rlimb_data[name])
+				O.robotize(rlimb_data[name])
+			else
+				O.robotize()
+		else //normal organ
+			O.force_icon = initial(O.force_icon)
+			O.SetName(initial(O.name))
+			O.desc = initial(O.desc)
+
+	//For species that don't care about your silly prefs
+	character.species.handle_limbs_setup(character)
+	if(!is_preview_copy)
+		for(var/name in list(BP_HEART,BP_EYES,BP_BRAIN,BP_LUNGS,BP_LIVER,BP_KIDNEYS,BP_STOMACH))
+			var/status = organ_data[name]
+			if(!status)
+				continue
+			var/obj/item/organ/I = character.internal_organs_by_name[name]
+			if(I)
+				if(status == "assisted")
+					I.mechassist()
+				else if(status == "mechanical")
+					I.robotize()
+
+	QDEL_NULL_LIST(character.worn_underwear)
+	character.worn_underwear = list()
+
+	for(var/underwear_category_name in all_underwear)
+		var/datum/category_group/underwear/underwear_category = GLOB.underwear.categories_by_name[underwear_category_name]
+		if(underwear_category)
+			var/underwear_item_name = all_underwear[underwear_category_name]
+			var/datum/category_item/underwear/UWD = underwear_category.items_by_name[underwear_item_name]
+			var/metadata = all_underwear_metadata[underwear_category_name]
+			var/obj/item/underwear/UW = UWD.create_underwear(character, metadata)
+			if(UW)
+				UW.ForceEquipUnderwear(character, FALSE)
+		else
+			all_underwear -= underwear_category_name
+
+	character.backpack_setup = new(backpack, backpack_metadata["[backpack]"])
+
+	for(var/N in character.organs_by_name)
+		var/obj/item/organ/external/O = character.organs_by_name[N]
+		O.markings.Cut()
+
+	for(var/M in body_markings)
+		var/datum/sprite_accessory/marking/mark_datum = GLOB.body_marking_styles_list[M]
+		var/mark_color = "[body_markings[M]]"
+
+		for(var/BP in mark_datum.body_parts)
+			var/obj/item/organ/external/O = character.organs_by_name[BP]
+			if (O)
+				O.markings[mark_datum] = mark_color
+
+	character.force_update_limbs()
+	character.update_mutations(0)
+	character.update_body(0)
+	character.update_underwear(0)
+	character.update_hair(0)
+	character.update_icons()
+
+	if(is_preview_copy)
+		return
+
+	for(var/token in cultural_info)
+		character.set_cultural_value(token, cultural_info[token], defer_language_update = TRUE)
+	character.update_languages()
+	for(var/lang in alternate_languages)
+		character.add_language(lang)
+
+	character.flavor_texts["general"] = flavor_texts["general"]
+	character.flavor_texts["head"] = flavor_texts["head"]
+	character.flavor_texts["face"] = flavor_texts["face"]
+	character.flavor_texts["eyes"] = flavor_texts["eyes"]
+	character.flavor_texts["torso"] = flavor_texts["torso"]
+	character.flavor_texts["arms"] = flavor_texts["arms"]
+	character.flavor_texts["hands"] = flavor_texts["hands"]
+	character.flavor_texts["legs"] = flavor_texts["legs"]
+	character.flavor_texts["feet"] = flavor_texts["feet"]
+
+	character.public_record = public_record
+	character.med_record = med_record
+	character.sec_record = sec_record
+	character.gen_record = gen_record
+	character.exploit_record = exploit_record
+
+	if(LAZYLEN(picked_traits))
+		for (var/picked_type as anything in picked_traits)
+			var/singleton/trait/selected = GET_SINGLETON(picked_type)
+			if (!selected || !istype(selected))
+				continue
+			if (length(selected.metaoptions))
+				var/list/temp_list = picked_traits[picked_type]
+				for (var/meta_option in temp_list)
+					character.SetTrait(picked_type, temp_list[meta_option], meta_option)
+			else
+				character.SetTrait(picked_type, picked_traits[picked_type])
+
+	if(LAZYLEN(character.descriptors))
+		for(var/entry in body_descriptors)
+			character.descriptors[entry] = body_descriptors[entry]
+
+	if(!character.isSynthetic())
+		character.set_nutrition(rand(140,360))
+		character.set_hydration(rand(140,360))
+
+/datum/preferences/proc/open_load_dialog(mob/user, details)
+	var/dat  = list()
+	dat += "<body>"
+	dat += "<tt><center>"
+
+	dat += "<b>Select a character slot to load</b><hr>"
+	for(var/i = 1 to config.character_slots)
+		var/name = slot_names?[get_slot_key(i)]
+		if (!name)
+			name = "Character [i]"
+		if (i == default_slot)
+			name = "<b>[name]</b>"
+		dat += "<a href='byond://?src=\ref[src];changeslot=[i];[details?"details=1":""];refresh=1'>[name]</a><br>"
+
+	dat += "<hr>"
+	dat += "</center></tt>"
+	panel = new(user, "Character Slots", "Character Slots", 300, 390, src)
+	panel.set_content(jointext(dat,null))
+	panel.open()
+
+/datum/preferences/proc/close_load_dialog(mob/user)
+	if(panel)
+		panel.close()
+		panel = null
+	close_browser(user, "window=saves")
+
+/datum/preferences/proc/open_prefs_ordering_panel(mob/user)
 	if (!client)
 		return
+	if (!SScharacter_setup.initialized)
+		return
+	var/list/dat = list()
+	dat += "<div align='center'><b>Select your character priorities (up to [config.maximum_queued_characters])</b><hr>"
 
-	for (var/plane_master_type in subtypesof(/atom/movable/screen/plane_master))
-		var/atom/movable/screen/plane_master/plane_master = new plane_master_type
-		plane_master.screen_loc = "[assigned_map]:CENTER"
-		client?.screen |= plane_master
+	dat += "<div align='right' style='width:45%;float:left;'><b>Inactive</b><br>"
+	for(var/i = 1 to config.character_slots)
+		var/active = FALSE
+		for(var/datum/preferences_slot/slot in slot_priority_list)
+			if(slot.slot == i)
+				active = TRUE
+				break
+		if(!active)
+			var/name = slot_names?[get_slot_key(i)]
+			if (!name)
+				name = "Character [i]"
+			dat += "<a href='byond://?src=\ref[src];show_preferences_loaded=[i]'>[name]</a>"
+			if(length(slot_priority_list) < config.maximum_queued_characters)
+				dat += "<a href='byond://?src=\ref[src];addslot=[i];refreshslots=1;refresh=1'>&gt;</a>"
+			dat += "<br>"
+	dat += "</div><div style='width:10%;float:center;'>   </div>"
+	dat += "<div align='left' style='width:45%;float:right;'><b>Active</b><br>"
+	for(var/i = 1 to length(slot_priority_list))
+		var/datum/preferences_slot/pref = client.prefs.slot_priority_list[i]
+		if(length(slot_priority_list) != 1)
+			dat += "<a href='byond://?src=\ref[src];removeslot=[pref.slot];refreshslots=1;refresh=1'>&lt;</a>"
+		var/name = slot_names?[get_slot_key(pref.slot)]
+		if (!name)
+			name = "Character [i]"
+		dat += "<a href='byond://?src=\ref[src];show_preferences_loaded=[i]'>[name]</a>"
+		if(i != 1)
+			dat += "<a href='byond://?src=\ref[src];moveslotup=[i];refreshslots=1;refresh=1'>&uarr;</a>"
+		if(i != length(slot_priority_list))
+			dat += "<a href='byond://?src=\ref[src];moveslotdown=[i];refreshslots=1;refresh=1'>&darr;</a>"
+		dat += "<br>"
+	dat += "</div></div>"
 
-		plane_masters += plane_master
+	panel = new(user, "Character Priorities", "Character Priorities", 350, 390, src)
+	panel.set_content(dat.Join())
+	panel.open()
 
-	client?.register_map_obj(src)
+/datum/preferences/proc/selected_jobs_titles(priority = JOB_PRIORITY_PICKED)
+	. = list()
+	if (priority & JOB_PRIORITY_HIGH)
+		. |= job_high
+	if (priority & JOB_PRIORITY_MEDIUM)
+		. |= job_medium
+	if (priority & JOB_PRIORITY_LOW)
+		. |= job_low
 
-/datum/preferences/proc/create_character_profiles()
-	var/list/profiles = list()
-
-	var/savefile/savefile = new(path)
-	for (var/index in 1 to max_save_slots)
-		// It won't be updated in the savefile yet, so just read the name directly
-		if (index == default_slot)
-			profiles += read_preference(/datum/preference/name/real_name)
+/datum/preferences/proc/selected_jobs_list(priority = JOB_PRIORITY_PICKED)
+	. = list()
+	for (var/title in selected_jobs_titles(priority))
+		var/datum/job/job = SSjobs.get_by_title(title)
+		if (!job)
 			continue
+		. += job
 
-		savefile.cd = "/character[index]"
-
-		var/name
-		READ_FILE(savefile["real_name"], name)
-
-		if (isnull(name))
-			profiles += null
+/datum/preferences/proc/selected_jobs_assoc(priority = JOB_PRIORITY_PICKED)
+	. = list()
+	for (var/title in selected_jobs_titles(priority))
+		var/datum/job/job = SSjobs.get_by_title(title)
+		if (!job)
 			continue
+		.[title] = job
 
-		profiles += name
-
-	return profiles
-
-/datum/preferences/proc/set_job_preference_level(datum/job/job, level)
-	if (!job)
-		return FALSE
-
-	if (level == JP_HIGH)
-		var/datum/job/overflow_role = SSjob.overflow_role
-		var/overflow_role_title = initial(overflow_role.title)
-
-		for(var/other_job in job_preferences)
-			if(job_preferences[other_job] == JP_HIGH)
-				// Overflow role needs to go to NEVER, not medium!
-				if(other_job == overflow_role_title)
-					job_preferences[other_job] = null
-				else
-					job_preferences[other_job] = JP_MEDIUM
-
-	if(level == null)
-		job_preferences -= job.title
-	else
-		job_preferences[job.title] = level
-
-	return TRUE
-
-/datum/preferences/proc/GetQuirkBalance()
-	var/bal = 0
-	for(var/V in all_quirks)
-		var/datum/quirk/T = SSquirks.quirks[V]
-		bal -= initial(T.value)
-	return bal
-
-/datum/preferences/proc/GetPositiveQuirkCount()
-	var/sum = 0
-	for(var/q in all_quirks)
-		if(SSquirks.quirk_points[q] > 0)
-			sum++
-	return sum
-
-/datum/preferences/proc/validate_quirks()
-	if(GetQuirkBalance() < 0)
-		all_quirks = list()
-
-/datum/preferences/proc/apply_prefs_to(mob/living/carbon/human/character, icon_updates = TRUE)
-	character.dna.features = list()
-
-	for (var/datum/preference/preference as anything in get_preferences_in_priority_order())
-		if (preference.savefile_identifier != PREFERENCE_CHARACTER)
+/datum/preferences/proc/selected_branches_list(priority = JOB_PRIORITY_PICKED)
+	. = list()
+	for (var/datum/job/job in selected_jobs_list(priority))
+		var/name = branches[job.title]
+		if (!name)
 			continue
+		. |= GLOB.mil_branches.get_branch(name)
 
-		// Dont apply if it's unique and we can't customize it
-		// This fixes pod hair color overwriting human hair color
-		if (preference.unique && !preference.can_apply(src))
+/datum/preferences/proc/selected_branches_assoc(priority = JOB_PRIORITY_PICKED)
+	. = list()
+	for (var/datum/job/job in selected_jobs_list(priority))
+		var/name = branches[job.title]
+		if (!name || .[name])
 			continue
+		.[name] = GLOB.mil_branches.get_branch(name)
 
-		preference.apply_to_human(character, read_preference(preference.type))
-	
-	character.dna.real_name = character.real_name
+/datum/preferences/proc/for_each_selected_job(datum/callback/callback, priority = JOB_PRIORITY_LIKELY)
+	. = list()
+	if (!islist(priority))
+		priority = selected_jobs_assoc(priority)
+	for (var/title in priority)
+		var/datum/job/job = priority[title]
+		.[title] = invoke(callback, job)
 
-	if(icon_updates)
-		character.icon_render_key = null //turns out if you don't set this to null update_body_parts does nothing, since it assumes the operation was cached
-		character.update_body()
-		character.update_hair()
-		character.update_body_parts()
+/datum/preferences/proc/for_each_selected_job_multi(list/callbacks, priority = JOB_PRIORITY_LIKELY)
+	. = list()
+	if (!islist(priority))
+		priority = selected_jobs_assoc(priority)
+	for (var/callback in callbacks)
+		. += for_each_selected_job(callback, priority)
 
-/// Inverts the key_bindings list such that it can be used for key_bindings_by_key
-/datum/preferences/proc/get_key_bindings_by_key(list/key_bindings)
-	var/list/output = list()
+/datum/preferences/proc/for_each_selected_branch(datum/callback/callback, priority = JOB_PRIORITY_LIKELY)
+	. = list()
+	if (!islist(priority))
+		priority = selected_branches_assoc(priority)
+	for (var/name in priority)
+		var/datum/mil_branch/branch = priority[name]
+		.[name] = invoke(callback, branch)
 
-	for (var/action in key_bindings)
-		for (var/key in key_bindings[action])
-			LAZYADD(output[key], action)
-
-	return output
-
-/// Returns the default `randomise` variable ouptut
-/datum/preferences/proc/get_default_randomization()
-	var/list/default_randomization = list()
-
-	for (var/preference_key in GLOB.preference_entries_by_key)
-		var/datum/preference/preference = GLOB.preference_entries_by_key[preference_key]
-		if (preference.is_randomizable() && preference.randomize_by_default)
-			default_randomization[preference_key] = RANDOM_ENABLED
-
-	return default_randomization
-
-
-// yogs procs
-
-/datum/preferences/proc/GetPlayerAltTitle(datum/job/job)
-	return player_alt_titles.Find(job.title) > 0 \
-		? player_alt_titles[job.title] \
-		: job.title
-
-/datum/preferences/proc/SetPlayerAltTitle(datum/job/job, new_title)
-	// remove existing entry
-	if(player_alt_titles.Find(job.title))
-		player_alt_titles -= job.title
-
-	// add one if it's not default
-	if(job.title != new_title)
-		player_alt_titles[job.title] = new_title
+/datum/preferences/proc/for_each_selected_branch_multi(list/callbacks, priority = JOB_PRIORITY_LIKELY)
+	. = list()
+	if (!islist(priority))
+		priority = selected_branches_assoc(priority)
+	for (var/callback in callbacks)
+		. += for_each_selected_branch(callback, priority)

@@ -1,26 +1,49 @@
 {
-	"eslint.nodePath": "./tgui/.yarn/sdks",
-	"eslint.workingDirectories": [
-		"./tgui"
-	],
-	"typescript.tsdk": "./tgui/.yarn/sdks/typescript/lib",
-	"typescript.enablePromptUseWorkspaceTsdk": true,
-	"typescript.tsdk": "./tgui/.yarn/sdks/typescript/lib",
-	"typescript.enablePromptUseWorkspaceTsdk": true,
-	"search.exclude": {
-		"**/.yarn": true,
-		"**/.pnp.*": true
-	},
-	"files.eol": "\n",
-	"gitlens.advanced.blame.customArguments": ["-w"],
-	"tgstationTestExplorer.project.resultsType": "json",
-	"[javascript]": {
-		"editor.rulers": [80]
-	},
-	"[typescript]": {
-		"editor.rulers": [80]
-	},
-	"[scss]": {
-		"editor.rulers": [80]
-	}
+  "editor.renderWhitespace": "boundary",
+
+  "files.eol": "\n",
+  "files.encoding": "utf8",
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  "files.trimTrailingWhitespace": true,
+
+  "files.associations": {
+    "*.{dme,dmf,dmm,dm}": "dm"
+  },
+  "[dm]": {
+    "files.eol": "\r\n",
+    "editor.detectIndentation": false,
+    "editor.insertSpaces": false
+  },
+
+  "[markdown]": {
+    "files.trimTrailingWhitespace": false
+  },
+
+  "[python]": {
+    "editor.detectIndentation": false,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4
+  },
+
+  "[yaml]": {
+    "editor.detectIndentation": false,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+
+  "workbench.editorAssociations": {
+    "*.dmi": "dmiEditor.dmiEditor"
+  },
+
+  "debug.onTaskErrors": "abort",
+  "dreammaker.objectTreePane": true,
+  "dreammaker.autoUpdate": true,
+  "dreammaker.tickOnCreate": true,
+
+  "gitlens.advanced.blame.customArguments": [
+    "--ignore-revs-file", ".git-blame-ignore-revs"
+  ],
+
+  "diffEditor.ignoreTrimWhitespace": false
 }

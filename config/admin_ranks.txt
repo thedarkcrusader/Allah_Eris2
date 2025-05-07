@@ -1,25 +1,23 @@
-##############################################################################################################
-# ADMIN RANK DEFINES                                                                                         #
-# The format of this is very simple. Rank name goes first.                                                   #
-# Rank is CASE-SENSITIVE, all punctuation save for '-', '_' and '@' will be stripped so spaces don't matter. #
-# You can then define permissions for each rank by adding a '=' followed by keywords                         #
-# These keywords represent groups of verbs and abilities.                                                    #
-# keywords are preceded by a '+'.																			 #
-# +@ (or +prev) is a special shorthand which adds all the rights of the rank above it.                       #
-# Ranks with no keywords will just be given the most basic verbs and abilities                ~Carn          #
-##############################################################################################################
+########################################################################################
+# ADMIN RANK DEFINES                                                                   #
+# The format of this is very simple. Rank name goes first.                             #
+# Rank is CASE-SENSITIVE, all punctuation will be stripped so spaces don't matter.     #
+# Each rank is then followed by keywords with the prefix "+".                          #
+# These keywords represent groups of verbs and abilities which are given to that rank. #
+# +@ (or +prev) is a special shorthand which adds all the rights of the rank above it. #
+# Ranks with no keywords will just be given the most basic verbs and abilities   ~Carn #
+########################################################################################
 # PLEASE NOTE: depending on config options, some abilities will be unavailable regardless if you have permission to use them!
-# If network-based admin loading is enabled, ranks and their keywords listed here will be used for protected admins and temporary rank changes
+# ALSO NOTE: this is a WorkInProgress at the moment. Most of this is just arbitrarily thrown in whatever group because LoadsaWork2Do+LittleTime.
+#            I'll be doing more moving around as feedback comes in. So be sure to check the notes after updates.
 
-# Follow the format below when documenting new keywords so the server tools may parse it
-
-# BEGIN_KEYWORDS
+# KEYWORDS:
 # +ADMIN = general admin tools, verbs etc
 # +FUN = events, other event-orientated actions. Access to the fun secrets in the secrets panel.
 # +BAN = the ability to ban, jobban and fullban
 # +STEALTH = the ability to stealthmin (make yourself appear with a fake name to everyone but other admins
 # +POSSESS = the ability to possess objects
-# +POLL (or +POLL) = the ability to create in game server polls (requires DB)
+# +REJUV (or +REJUVINATE) = the ability to heal, respawn, modify damage and use godmode
 # +BUILD (or +BUILDMODE) = the ability to use buildmode
 # +SERVER = higher-risk admin verbs and abilities, such as those which affect the server configuration.
 # +DEBUG = debug tools used for diagnosing and fixing problems. It's useful to give this to coders so they can investigate problems on a live server.
@@ -27,23 +25,21 @@
 # +RIGHTS (or +PERMISSIONS) = allows you to promote and/or demote people.
 # +SOUND (or +SOUNDS) = allows you to upload and play sounds
 # +SPAWN (or +CREATE) = mob transformations, spawning of most atoms including mobs (high-risk atoms, e.g. blackholes, will require the +FUN flag too)
-# +AUTOLOGIN = admin gains powers upon connect. This defaults to on, you can use -AUTOLOGIN to make a role require using the readmin verb to gain powers. (this does not effect the admin's ability to walk past bans or other on-connect limitations like panic bunker or pop limit.)
-# +DBRANKS = when sql-based admin loading is enabled, allows for non-temporary changes in the permissions panel to be saved (requires DB)
 # +EVERYTHING (or +HOST or +ALL) = Simply gives you everything without having to type every flag
-# +DEV = For potentially server ending procs
-# END_KEYWORDS
 
- 
-Host	=	+EVERYTHING
- 
-Council Member	=	+EVERYTHING
- 
-Head Developer	=	+EVERYTHING
+RetiredAdmin
 
-SysOp	=	+EVERYTHING
+Moderator       +MOD
+TrialModerator  +MOD
 
-Administrator	=	+STEALTH +ADMIN +BASIC +BAN +SPAWN +VAREDIT +DEBUG +SERVER +FUN +TICKET +BUILD +AUTOLOGIN
+TrialAdmin      +@ +ADMIN +STEALTH +SPAWN +REJUV +VAREDIT +BAN +SERVER
+GameAdmin       +@ +DEBUG +FUN +POSSESS +BUILDMODE +SOUND +PERMISSIONS
+SeniorAdmin     +@
 
-Admin Observer	=	+STEALTH +AUTOLOGIN
+HeadDeveloper   +EVERYTHING
+HeadAdmin       +EVERYTHING
+Host            +EVERYTHING
 
-Maintainer	=	+STEALTH +ADMIN +VAREDIT +DEBUG +SERVER +BASIC +SPAWN +POLL +DEV
+Developer       +DEBUG +VAREDIT +SERVER +SPAWN +REJUV +POSSESS +BUILDMODE +ADMIN +FUN
+TrialDevAdmin   +DEBUG +VAREDIT +SERVER +SPAWN +REJUV +POSSESS +BUILDMODE +ADMIN +STEALTH +BAN +FUN
+DevAdmin        +DEBUG +VAREDIT +SERVER +SPAWN +REJUV +POSSESS +BUILDMODE +ADMIN +STEALTH +BAN +FUN +SOUND +PERMISSIONS

@@ -1,26 +1,62 @@
-/obj/structure/chair/e_chair
+/obj/structure/bed/chair/e_chair
 	name = "electric chair"
 	desc = "Looks absolutely SHOCKING!"
 	icon_state = "echair0"
+	var/on = 0
 	var/obj/item/assembly/shock_kit/part = null
-	var/last_time = 1
-	item_chair = null
+	var/last_time = 1.0
+	buckle_movable = FALSE
+	bed_flags = BED_FLAG_CANNOT_BE_ELECTRIFIED | BED_FLAG_CANNOT_BE_PADDED
 
-/obj/structure/chair/e_chair/Initialize(mapload)
-	. = ..()
-	add_overlay(mutable_appearance('icons/obj/chairs.dmi', "echair_over", MOB_LAYER + 1))
+/obj/structure/bed/chair/e_chair/New()
+	..()
+	AddOverlays(image('icons/obj/structures/furniture.dmi', src, "echair_over", MOB_LAYER + 1, dir))
+	return
 
-/obj/structure/chair/e_chair/attackby(obj/item/W, mob/user, params)
-	if(W.tool_behaviour == TOOL_WRENCH)
-		var/obj/structure/chair/C = new /obj/structure/chair(loc)
-		W.play_tool_sound(src)
-		C.setDir(dir)
-		part.forceMove(loc)
+
+/obj/structure/bed/chair/e_chair/use_tool(obj/item/tool, mob/user, list/click_params)
+	// Wrench - Dismantle electric chair
+	if (isWrench(tool))
+		var/obj/structure/bed/chair/chair = new /obj/structure/bed/chair(loc)
+		playsound(src, 'sound/items/Ratchet.ogg', 50, TRUE)
+		chair.set_dir(dir)
+		part.dropInto(loc)
 		part.master = null
+		transfer_fingerprints_to(chair)
+		user.visible_message(
+			SPAN_NOTICE("\The [user] removes \the [part] from \the [chair] with \a [tool]."),
+			SPAN_NOTICE("You remove \the [part] from \the [chair] with \the [tool].")
+		)
 		part = null
-		qdel(src)
+		qdel_self()
+		return TRUE
 
-/obj/structure/chair/e_chair/proc/shock()
+	return ..()
+
+
+/obj/structure/bed/chair/e_chair/verb/toggle()
+	set name = "Toggle Electric Chair"
+	set category = "Object"
+	set src in oview(1)
+
+	if(on)
+		on = 0
+		icon_state = "echair0"
+	else
+		on = 1
+		icon_state = "echair1"
+	to_chat(usr, SPAN_NOTICE("You switch [on ? "on" : "off"] [src]."))
+	return
+
+/obj/structure/bed/chair/e_chair/rotate()
+	..()
+	ClearOverlays()
+	AddOverlays(image('icons/obj/structures/furniture.dmi', src, "echair_over", MOB_LAYER + 1, dir))
+	return
+
+/obj/structure/bed/chair/e_chair/proc/shock()
+	if(!on)
+		return
 	if(last_time + 50 > world.time)
 		return
 	last_time = world.time
@@ -29,22 +65,24 @@
 	var/area/A = get_area(src)
 	if(!isarea(A))
 		return
-	if(!A.powered(AREA_USAGE_EQUIP))
+	if(!A.powered(EQUIP))
 		return
-	A.use_power(AREA_USAGE_EQUIP, 5000)
+	A.use_power_oneoff(5000, EQUIP)
+	var/light = A.power_light
+	A.update_icon()
 
-	flick("echair_shock", src)
-	var/datum/effect_system/spark_spread/s = new /datum/effect_system/spark_spread
+	flick("echair1", src)
+	var/datum/effect/spark_spread/s = new /datum/effect/spark_spread
 	s.set_up(12, 1, src)
 	s.start()
-	if(has_buckled_mobs())
-		for(var/m in buckled_mobs)
-			var/mob/living/buckled_mob = m
-			buckled_mob.electrocute_act(170, src, 1)
-			to_chat(buckled_mob, span_userdanger("You feel a deep shock course through your body!"))
-			if(buckled_mob.mind && IS_REVOLUTIONARY(buckled_mob) && prob(50))
-				var/datum/antagonist/rev/rev = buckled_mob.mind.has_antag_datum(/datum/antagonist/rev)
-				if(rev)
-					rev.remove_revolutionary(TRUE)
-					visible_message("<span class='danger'>The electric shock cleared [buckled_mob]'s brainwashing!'")
-	visible_message(span_danger("The electric chair went off!"), span_italics("You hear a deep sharp shock!"))
+	if(buckled_mob)
+		buckled_mob.burn_skin(85)
+		to_chat(buckled_mob, SPAN_DANGER("You feel a deep shock course through your body!"))
+		sleep(1)
+		buckled_mob.burn_skin(85)
+		buckled_mob.Stun(600)
+	visible_message(SPAN_DANGER("The electric chair went off!"), SPAN_DANGER("You hear a deep sharp shock!"))
+
+	A.power_light = light
+	A.update_icon()
+	return

@@ -1,575 +1,402 @@
-///Can the atom pass this mob (always true for /mob)
-/**
-  * Get the current movespeed delay of the mob
-  *
-  * DO NOT OVERRIDE THIS UNLESS YOU ABSOLUTELY HAVE TO.
-  * THIS IS BEING PHASED OUT FOR THE MOVESPEED MODIFICATION SYSTEM.
-  * See mob_movespeed.dm
-  */
-/mob/proc/movement_delay()	//update /living/movement_delay() if you change this
-	return cached_multiplicative_slowdown
+/mob
+	var/moving           = FALSE
 
-/**
-  * If your mob is conscious, drop the item in the active hand
-  *
-  * This is a hidden verb, likely for binding with winset for hotkeys
-  */
-/client/verb/drop_item()
-	set hidden = TRUE
-	if(!iscyborg(mob) && mob.stat == CONSCIOUS)
-		mob.dropItemToGround(mob.get_active_held_item())
-	return
+/mob/proc/SelfMove(direction)
+	if(DoMove(direction, src) & MOVEMENT_HANDLED)
+		return TRUE // Doesn't necessarily mean the mob physically moved
 
-/**
-  * force move the control_object of your client mob
-  *
-  * Used in admin possession and called from the client Move proc
-  * ensures the possessed object moves and not the admin mob
-  *
-  * Has no sanity other than checking density
-  */
-/client/proc/Move_object(direct)
-	if(mob && mob.control_object)
-		if(mob.control_object.density)
-			step(mob.control_object,direct)
-			if(!mob.control_object)
-				return
-			mob.control_object.setDir(direct)
-		else
-			mob.control_object.forceMove(get_step(mob.control_object,direct))
+/mob/CanPass(atom/movable/mover, turf/target, height=0, air_group=0)
+	if(air_group || (height==0)) return 1
 
-#define MOVEMENT_DELAY_BUFFER 0.75
-#define MOVEMENT_DELAY_BUFFER_DELTA 1.25
-
-/**
-  * Move a client in a direction
-  *
-  * Huge proc, has a lot of functionality
-  *
-  * Mostly it will despatch to the mob that you are the owner of to actually move
-  * in the physical realm
-  *
-  * Things that stop you moving as a mob:
-  * * world time being less than your next move_delay
-  * * not being in a mob, or that mob not having a loc
-  * * missing the n and direction parameters
-  * * being in remote control of an object (calls Moveobject instead)
-  * * being dead (it ghosts you instead)
-  *
-  * Things that stop you moving as a mob living (why even have OO if you're just shoving it all
-  * in the parent proc with istype checks right?):
-  * * having incorporeal_move set (calls Process_Incorpmove() instead)
-  * * being grabbed
-  * * being buckled  (relaymove() is called to the buckled atom instead)
-  * * having your loc be some other mob (relaymove() is called on that mob instead)
-  * * Not having MOBILITY_MOVE
-  * * Failing Process_Spacemove() call
-  *
-  * At this point, if the mob is is confused, then a random direction and target turf will be calculated for you to travel to instead
-  *
-  * Now the parent call is made (to the byond builtin move), which moves you
-  *
-  * Some final move delay calculations (doubling if you moved diagonally successfully)
-  *
-  * if mob throwing is set I believe it's unset at this point via a call to finalize
-  *
-  * Finally if you're pulling an object and it's dense, you are turned 180 after the move
-  * (if you ask me, this should be at the top of the move so you don't dance around)
-  *
-  */
-/client/Move(n, direct)
-	if(world.time < move_delay) //do not move anything ahead of this check please
-		return FALSE
+	if(ismob(mover))
+		var/mob/moving_mob = mover
+		if ((other_mobs && moving_mob.other_mobs))
+			return 1
+		return (!mover.density || !density || lying)
 	else
-		next_move_dir_add = 0
-		next_move_dir_sub = 0
-	var/old_move_delay = move_delay
-	move_delay = world.time + world.tick_lag //this is here because Move() can now be called mutiple times per tick
-	if(!mob || !mob.loc)
-		return FALSE
-	if(!n || !direct)
-		return FALSE
-	if(mob.notransform)
-		return FALSE	//This is sota the goto stop mobs from moving var
-	if(mob.control_object)
-		return Move_object(direct)
-	if(mob.stat == DEAD && (SSlag_switch.measures[DISABLE_DEAD_KEYLOOP] && !is_admin(mob)))
-		return FALSE
-	if(!isliving(mob))
-		return mob.Move(n, direct)
-	if(mob.stat == DEAD)
-		mob.ghostize()
-		return FALSE
-	if(mob.force_moving)
-		return FALSE
+		return (!mover.density || !density || lying)
 
-	var/mob/living/L = mob  //Already checked for isliving earlier
-	/*if(L.incorporeal_move)	//Move though walls //yogs start - turned into component
-		Process_Incorpmove(direct)
-		return FALSE*/ //yogs end
+/mob/proc/SetMoveCooldown(timeout)
+	var/datum/movement_handler/mob/delay/delay = GetMovementHandler(/datum/movement_handler/mob/delay)
+	if(delay)
+		delay.SetDelay(timeout)
 
-	if(mob.remote_control)					//we're controlling something, our movement is relayed to it
-		return mob.remote_control.relaymove(mob, direct)
+/mob/proc/ExtraMoveCooldown(timeout)
+	var/datum/movement_handler/mob/delay/delay = GetMovementHandler(/datum/movement_handler/mob/delay)
+	if(delay)
+		delay.AddDelay(timeout)
 
-	if(isAI(mob))
-		return AIMove(direct,mob)
-
-	if(Process_Grab()) //are we restrained by someone's grip?
-		return
-
-	if(mob.buckled)							//if we're buckled to something, tell it we moved.
-		return mob.buckled.relaymove(mob, direct)
-
-	if(!(L.mobility_flags & MOBILITY_MOVE))
-		return FALSE
-
-	if(ismovable(mob.loc))	//Inside an object, tell it we moved
-		var/atom/loc_atom = mob.loc
-		return loc_atom.relaymove(mob, direct)
-
-	if(!mob.Process_Spacemove(direct))
-		return FALSE
-
-	var/handled = SEND_SIGNAL(L, COMSIG_MOB_CLIENT_PRE_MOVE, direct)
-	if(handled)
-		return FALSE//yogs end
-
-	//We are now going to move
-	var/add_delay = mob.movement_delay()
-	mob.set_glide_size(DELAY_TO_GLIDE_SIZE(add_delay * (((direct & 3) && (direct & 12)) ? 2 : 1))) // set it now in case of pulled objects
-	if(old_move_delay + (add_delay*MOVEMENT_DELAY_BUFFER_DELTA) + MOVEMENT_DELAY_BUFFER > world.time)
-		move_delay = old_move_delay
-	else
-		move_delay = world.time
-
-	//this is in two areas, i have no clue why, all i know is that i hate it and don't have the time to fix it
-	if(L.has_status_effect(/datum/status_effect/confusion))
-		var/newdir = 0
-		if(prob(50))
-			newdir = angle2dir(dir2angle(direct) + pick(45, -45))
-		else if(prob(50) && L.get_timed_status_effect_duration(/datum/status_effect/confusion) > 10 SECONDS)
-			newdir = angle2dir(dir2angle(direct) + pick(90, -90))
-		if(newdir)
-			direct = newdir
-			n = get_step(L, direct)
-
-	. = ..()
-
-	var/diagonal = (direct & (direct - 1)) && mob.loc == n
-	if(diagonal) //moved diagonally successfully
-		add_delay *= SQRT_2 // sqrt(2)
-	mob.set_glide_size(DELAY_TO_GLIDE_SIZE(add_delay))
-	move_delay += add_delay
-	if(.) // If mob is null here, we deserve the runtime
-		if(mob.throwing)
-			mob.throwing.finalize(FALSE)
-
-	var/atom/movable/P = mob.pulling
-	if(P && !ismob(P) && P.density)
-		mob.setDir(turn(mob.dir, 180))
-
-	SEND_SIGNAL(L, COMSIG_MOB_CLIENT_MOVED)
-/**
-  * Checks to see if you're being grabbed and if so attempts to break it
-  *
-  * Called by client/Move()
-  */
-/client/proc/Process_Grab()
-	if(!mob.pulledby)
-		return FALSE
-	if(mob.pulledby == mob.pulling && mob.pulledby.grab_state == GRAB_PASSIVE) //Don't autoresist passive grabs if we're grabbing them too.
-		return FALSE
-	if(HAS_TRAIT(mob, TRAIT_INCAPACITATED))
-		COOLDOWN_START(src, move_delay, 1 SECONDS)
-		return TRUE
-	else if(mob.restrained(ignore_grab = TRUE))
-		COOLDOWN_START(src, move_delay, 1 SECONDS)
-		to_chat(src, span_warning("You're restrained! You can't move!"))
-		return TRUE
-	return mob.resist_grab(TRUE)
-
-/**
-  * Allows mobs to ignore density and phase through objects
-  *
-  * Called by client/Move()
-  *
-  * The behaviour depends on the incorporeal_move value of the mob
-  *
-  * * INCORPOREAL_MOVE_BASIC - forceMoved to the next tile with no stop
-  * * INCORPOREAL_MOVE_SHADOW  - the same but leaves a cool effect path
-  * * INCORPOREAL_MOVE_JAUNT - the same but blocked by holy tiles
-  *
-  * You'll note this is another mob living level proc living at the client level
-  */
-/client/proc/Process_Incorpmove(direct)
-	var/turf/mobloc = get_turf(mob)
-	if(!isliving(mob))
-		return
-	var/mob/living/L = mob
-	switch(L.incorporeal_move)
-		if(INCORPOREAL_MOVE_BASIC)
-			var/T = get_step(L,direct)
-			if(T)
-				L.forceMove(T)
-			L.setDir(direct)
-		if(INCORPOREAL_MOVE_SHADOW)
-			if(prob(50))
-				var/locx
-				var/locy
-				switch(direct)
-					if(NORTH)
-						locx = mobloc.x
-						locy = (mobloc.y+2)
-						if(locy>world.maxy)
-							return
-					if(SOUTH)
-						locx = mobloc.x
-						locy = (mobloc.y-2)
-						if(locy<1)
-							return
-					if(EAST)
-						locy = mobloc.y
-						locx = (mobloc.x+2)
-						if(locx>world.maxx)
-							return
-					if(WEST)
-						locy = mobloc.y
-						locx = (mobloc.x-2)
-						if(locx<1)
-							return
-					else
-						return
-				var/target = locate(locx,locy,mobloc.z)
-				if(target)
-					L.loc = target
-					var/limit = 2//For only two trailing shadows.
-					for(var/turf/T in getline(mobloc, L.loc))
-						new /obj/effect/temp_visual/dir_setting/ninja/shadow(T, L.dir)
-						limit--
-						if(limit<=0)
-							break
-			else
-				new /obj/effect/temp_visual/dir_setting/ninja/shadow(mobloc, L.dir)
-				var/T = get_step(L,direct)
-				if(T)
-					L.forceMove(T)
-			L.setDir(direct)
-		if(INCORPOREAL_MOVE_JAUNT) //Incorporeal move, but blocked by holy-watered tiles and salt piles.
-			var/turf/open/floor/stepTurf = get_step(L, direct)
-			if(stepTurf)
-				for(var/obj/effect/decal/cleanable/food/salt/S in stepTurf)
-					to_chat(L, span_warning("[S] bars your passage!"))
-					if(isrevenant(L))
-						var/mob/living/simple_animal/revenant/R = L
-						R.reveal(20)
-						R.stun(20)
-					return
-				if(stepTurf.turf_flags & NOJAUNT)
-					to_chat(L, span_warning("Some strange aura is blocking the way."))
-					return
-				if (locate(/obj/effect/blessing, stepTurf))
-					to_chat(L, span_warning("Holy energies block your path!"))
-					return
-
-				L.forceMove(stepTurf)
-			L.setDir(direct)
+/mob/proc/checkMoveCooldown()
+	if(world.time < next_move)
+		return FALSE // Need to wait more.
 	return TRUE
 
+/client/proc/client_dir(input, direction=-1)
+	return turn(input, direction*dir2angle(dir))
 
-/**
-  * Handles mob/living movement in space (or no gravity)
-  *
-  * Called by /client/Move()
-  *
-  * return TRUE for movement or FALSE for none
-  *
-  * You can move in space if you have a spacewalk ability
-  */
-/mob/Process_Spacemove(movement_dir = 0)
-	if(spacewalk || ..())
-		return TRUE
-	var/atom/movable/backup = get_spacemove_backup()
-	if(backup)
-		if(istype(backup) && movement_dir && !backup.anchored)
-			if(backup.newtonian_move(turn(movement_dir, 180))) //You're pushing off something movable, so it moves
-				to_chat(src, span_info("You push off of [backup] to propel yourself."))
-		return TRUE
-	return FALSE
+/client/Northeast()
+	diagonal_action(NORTHEAST)
+/client/Northwest()
+	diagonal_action(NORTHWEST)
+/client/Southeast()
+	diagonal_action(SOUTHEAST)
+/client/Southwest()
+	diagonal_action(SOUTHWEST)
 
-/**
-  * Find movable atoms? near a mob that are viable for pushing off when moving
-  */
-/mob/get_spacemove_backup()
-	for(var/A in orange(1, get_turf(src)))
-		if(isarea(A))
-			continue
-		else if(isturf(A))
-			var/turf/turf = A
-			if(isspaceturf(turf))
-				continue
-			if(!turf.density && !mob_negates_gravity())
-				continue
-			return A
+/client/proc/diagonal_action(direction)
+	switch(client_dir(direction, 1))
+		if(NORTHEAST)
+			swap_hand()
+			return
+		if(SOUTHEAST)
+			attack_self()
+			return
+		if(SOUTHWEST)
+			if(iscarbon(usr))
+				var/mob/living/carbon/C = usr
+				C.toggle_throw_mode()
+			else
+				to_chat(usr, SPAN_WARNING("This mob type cannot throw items."))
+			return
+		if(NORTHWEST)
+			mob.hotkey_drop()
+
+/mob/proc/hotkey_drop()
+	to_chat(src, SPAN_WARNING("This mob type cannot drop items."))
+
+/mob/living/carbon/hotkey_drop()
+	var/obj/item/hand = get_active_hand()
+	if(!hand)
+		to_chat(src, SPAN_WARNING("You have nothing to drop in your hand."))
+	else if(hand.can_be_dropped_by_client(src))
+		drop_item()
+
+//This gets called when you press the delete button.
+/client/verb/delete_key_pressed()
+	set hidden = 1
+
+	if(!usr.pulling)
+		to_chat(usr, SPAN_NOTICE("You are not pulling anything."))
+		return
+	usr.stop_pulling()
+
+/client/verb/swap_hand()
+	set hidden = 1
+	if(istype(mob, /mob/living/carbon))
+		mob:swap_hand()
+	if(istype(mob,/mob/living/silicon/robot))
+		var/mob/living/silicon/robot/R = mob
+		R.cycle_modules()
+	return
+
+
+
+/client/verb/attack_self()
+	set hidden = 1
+	if(mob)
+		mob.mode()
+	return
+
+
+/client/verb/toggle_throw_mode()
+	set hidden = 1
+	if(!istype(mob, /mob/living/carbon))
+		return
+	if (!mob.stat && isturf(mob.loc) && !mob.restrained())
+		mob:toggle_throw_mode()
+	else
+		return
+
+
+/client/verb/drop_item()
+	set hidden = 1
+	if(!isrobot(mob) && mob.stat == CONSCIOUS && isturf(mob.loc))
+		var/obj/item/I = mob.get_active_hand()
+		if(I && I.can_be_dropped_by_client(mob))
+			mob.drop_item()
+
+//This proc should never be overridden elsewhere at /atom/movable to keep directions sane.
+/atom/movable/Move(newloc, direct)
+	if (direct & (direct - 1))
+		if (direct & 1)
+			if (direct & 4)
+				if (step(src, NORTH))
+					step(src, EAST)
+				else
+					if (step(src, EAST))
+						step(src, NORTH)
+			else
+				if (direct & 8)
+					if (step(src, NORTH))
+						step(src, WEST)
+					else
+						if (step(src, WEST))
+							step(src, NORTH)
 		else
+			if (direct & 2)
+				if (direct & 4)
+					if (step(src, SOUTH))
+						step(src, EAST)
+					else
+						if (step(src, EAST))
+							step(src, SOUTH)
+				else
+					if (direct & 8)
+						if (step(src, SOUTH))
+							step(src, WEST)
+						else
+							if (step(src, WEST))
+								step(src, SOUTH)
+	else
+		var/atom/A = src.loc
+
+		var/olddir = dir //we can't override this without sacrificing the rest of movable/New()
+		. = ..()
+		if(direct != olddir)
+			dir = olddir
+			set_dir(direct)
+
+		src.move_speed = world.time - src.l_move_time
+		src.l_move_time = world.time
+		if ((A != src.loc && A && A.z == src.z))
+			src.last_move = get_dir(A, src.loc)
+
+	if(!inertia_moving)
+		inertia_next_move = world.time + inertia_move_delay
+		space_drift(direct ? direct : last_move)
+
+/client/Move(n, direction)
+	if(!user_acted(src))
+		return
+	if(!mob)
+		return // Moved here to avoid nullrefs below
+	return mob.SelfMove(direction)
+
+
+/mob/Process_Spacemove(allow_movement)
+	. = ..()
+	if (.)
+		return
+
+	var/atom/movable/backup = get_spacemove_backup()
+	if (backup)
+		if (istype(backup) && allow_movement)
+			return backup
+		return TRUE
+
+/mob/proc/space_do_move(allow_move, direction)
+	if(ismovable(allow_move))//push off things in space
+		handle_space_pushoff(allow_move, direction)
+		allow_move = -1
+
+	if(allow_move == -1 && handle_spaceslipping())
+		return 0
+
+	return 1
+
+/mob/proc/handle_space_pushoff(atom/movable/AM, direction)
+	if(AM.anchored)
+		return
+
+	if(ismob(AM))
+		var/mob/M = AM
+		if(M.check_space_footing())
+			return
+
+	AM.inertia_ignore = src
+	if(step(AM, turn(direction, 180)))
+		to_chat(src, "<span class='info'>You push off of [AM] to propel yourself.</span>")
+		inertia_ignore = AM
+
+/mob/proc/get_spacemove_backup()
+	var/shoegrip = Check_Shoegrip()
+
+	for(var/thing in trange(1,src))//checks for walls or grav turf first
+		var/turf/T = thing
+		if(T.density || T.is_wall() || (T.is_floor() && (shoegrip || T.has_gravity())))
+			return T
+
+	var/obj/item/grab/G = locate() in src
+	for(var/A in range(1, get_turf(src)))
+		if(ismovable(A))
 			var/atom/movable/AM = A
-			if(AM == buckled)
+			if(AM == src || AM == inertia_ignore || !AM.simulated || !AM.mouse_opacity || AM == buckled)	//mouse_opacity is hacky as hell, need better solution
 				continue
 			if(ismob(AM))
 				var/mob/M = AM
 				if(M.buckled)
 					continue
-			if(!AM.CanPass(src) || AM.density)
+			if(AM.density || !AM.CanPass(src))
 				if(AM.anchored)
 					return AM
-				if(pulling == AM)
+				if(G && AM == G.affecting)
 					continue
 				. = AM
 
-/**
-  * Returns true if a mob has gravity
-  *
-  * I hate that this exists
-  */
-/mob/proc/mob_has_gravity()
-	return has_gravity()
+/mob/proc/check_space_footing()	//checks for gravity or maglockable turfs to prevent space related movement
+	if(has_gravity() || anchored || buckled)
+		return 1
 
-/**
-  * Does this mob ignore gravity
-  */
-/mob/proc/mob_negates_gravity()
+	if(Check_Shoegrip())
+		for(var/thing in trange(1,src))	//checks for turfs that one can maglock to
+			var/turf/T = thing
+			if(T.density || T.is_wall() || T.is_floor())
+				return 1
+
+	return 0
+
+/mob/proc/Check_Shoegrip()
+	return 0
+
+//return 1 if slipped, 0 otherwise
+/mob/proc/handle_spaceslipping()
+	if(prob(skill_fail_chance(SKILL_EVA, slip_chance(10), SKILL_EXPERIENCED)))
+		to_chat(src, SPAN_WARNING("You slipped!"))
+		step(src,turn(last_move, pick(45,-45)))
+		return 1
+	return 0
+
+/mob/proc/slip_chance(prob_slip = 10)
+	if(stat)
+		return 0
+	if(buckled)
+		return 0
+	if(Check_Shoegrip())
+		return 0
+	if(MOVING_DELIBERATELY(src))
+		prob_slip *= 0.5
+	return prob_slip
+
+#define DO_MOVE(this_dir) var/final_dir = turn(this_dir, -dir2angle(dir)); Move(get_step(mob, final_dir), final_dir);
+
+/client/verb/moveup()
+	set name = ".moveup"
+	set instant = 1
+	DO_MOVE(NORTH)
+
+/client/verb/movedown()
+	set name = ".movedown"
+	set instant = 1
+	DO_MOVE(SOUTH)
+
+/client/verb/moveright()
+	set name = ".moveright"
+	set instant = 1
+	DO_MOVE(EAST)
+
+/client/verb/moveleft()
+	set name = ".moveleft"
+	set instant = 1
+	DO_MOVE(WEST)
+
+#undef DO_MOVE
+
+/mob/proc/set_next_usable_move_intent()
+	var/checking_intent = (istype(move_intent) ? move_intent.type : move_intents[1])
+	for(var/i = 1 to length(move_intents)) // One full iteration of the move set.
+		checking_intent = next_in_list(checking_intent, move_intents)
+		if(set_move_intent(GET_SINGLETON(checking_intent)))
+			return
+
+/mob/proc/set_move_intent(singleton/move_intent/next_intent)
+	if(next_intent && move_intent != next_intent && next_intent.can_be_used_by(src))
+		move_intent = next_intent
+		if(hud_used)
+			hud_used.move_intent.icon_state = move_intent.hud_icon_state
+		return TRUE
 	return FALSE
 
-/**
- * used for determining if a mob should be flung
- */
-/mob/proc/mob_has_heavy_gravity()
-	return FALSE
+/mob/proc/get_movement_datum_by_flag(move_flag = MOVE_INTENT_DELIBERATE)
+	for(var/m_intent in move_intents)
+		var/singleton/move_intent/check_move_intent = GET_SINGLETON(m_intent)
+		if(check_move_intent.flags & move_flag)
+			return check_move_intent
 
-/// Called when this mob slips over, override as needed
-/mob/proc/slip(knockdown_amount, obj/O, lube, stun, force_drop)
-	return
+/mob/proc/get_movement_datum_by_missing_flag(move_flag = MOVE_INTENT_DELIBERATE)
+	for(var/m_intent in move_intents)
+		var/singleton/move_intent/check_move_intent = GET_SINGLETON(m_intent)
+		if(!(check_move_intent.flags & move_flag))
+			return check_move_intent
 
-/// Update the gravity status of this mob
-/mob/proc/update_gravity()
-	return
+/mob/proc/get_movement_datums_by_flag(move_flag = MOVE_INTENT_DELIBERATE)
+	. = list()
+	for(var/m_intent in move_intents)
+		var/singleton/move_intent/check_move_intent = GET_SINGLETON(m_intent)
+		if(check_move_intent.flags & move_flag)
+			. += check_move_intent
 
-//bodypart selection verbs - Cyberboss
-//8: repeated presses toggles through head - eyes - mouth
-//9: eyes 8: head 7: mouth
-//4: r-arm 5: chest 6: l-arm
-//1: r-leg 2: groin 3: l-leg
+/mob/proc/get_movement_datums_by_missing_flag(move_flag = MOVE_INTENT_DELIBERATE)
+	. = list()
+	for(var/m_intent in move_intents)
+		var/singleton/move_intent/check_move_intent = GET_SINGLETON(m_intent)
+		if(!(check_move_intent.flags & move_flag))
+			. += check_move_intent
 
-///Validate the client's mob has a valid zone selected
-/client/proc/check_has_body_select()
-	return mob && mob.hud_used && mob.hud_used.zone_select && istype(mob.hud_used.zone_select, /atom/movable/screen/zone_sel)
+/mob/verb/SetDefaultWalk()
+	set name = "Set Default Walk"
+	set desc = "Select your default walking style."
+	set category = "IC"
+	var/choice = input(usr, "Select a default walk.", "Set Default Walk") as null|anything in get_movement_datums_by_missing_flag(MOVE_INTENT_QUICK)
+	if(choice && (choice in get_movement_datums_by_missing_flag(MOVE_INTENT_QUICK)))
+		default_walk_intent = choice
+		to_chat(src, "You will now default to [default_walk_intent] when moving deliberately.")
 
-/**
-  * Hidden verb to set the target zone of a mob to the head
-  *
-  * (bound to 8) - repeated presses toggles through head - eyes - mouth
-  */
+/mob/verb/SetDefaultRun()
+	set name = "Set Default Run"
+	set desc = "Select your default running style."
+	set category = "IC"
+	var/choice = input(usr, "Select a default run.", "Set Default Run") as null|anything in get_movement_datums_by_flag(MOVE_INTENT_QUICK)
+	if(choice && (choice in get_movement_datums_by_flag(MOVE_INTENT_QUICK)))
+		default_run_intent = choice
+		to_chat(src, "You will now default to [default_run_intent] when moving quickly.")
 
-///Hidden verb to target the head, bound to 8
-/client/verb/body_toggle_head()
-	set name = "body-toggle-head"
+/client/verb/setmovingslowly()
 	set hidden = TRUE
-
-	if(!check_has_body_select())
+	if (!mob)
 		return
+	if (mob.get_preference_value(/datum/client_preference/toggle_run) == GLOB.PREF_NO)
+		mob.set_moving_slowly()
 
-	var/next_in_line
-	switch(mob.zone_selected)
-		if(BODY_ZONE_HEAD)
-			next_in_line = BODY_ZONE_PRECISE_EYES
-		if(BODY_ZONE_PRECISE_EYES)
-			next_in_line = BODY_ZONE_PRECISE_MOUTH
-		else
-			next_in_line = BODY_ZONE_HEAD
 
-	var/atom/movable/screen/zone_sel/selector = mob.hud_used.zone_select
-	selector.set_selected_zone(next_in_line, mob)
+/mob/proc/set_moving_slowly()
+	if (!default_walk_intent)
+		default_walk_intent = get_movement_datum_by_missing_flag(MOVE_INTENT_QUICK)
+	if (default_walk_intent && move_intent != default_walk_intent)
+		set_move_intent(default_walk_intent)
 
-///Hidden verb to target the eyes, bound to 7
-/client/verb/body_eyes()
-	set name = "body-eyes"
+
+/client/verb/setmovingquickly()
 	set hidden = TRUE
-
-	if(!check_has_body_select())
+	if (!mob)
 		return
-
-	var/atom/movable/screen/zone_sel/selector = mob.hud_used.zone_select
-	selector.set_selected_zone(BODY_ZONE_PRECISE_EYES, mob)
-
-
-///Hidden verb to target the mouth, bound to 9
-/client/verb/body_mouth()
-	set name = "body-mouth"
-	set hidden = TRUE
-
-	if(!check_has_body_select())
-		return
-
-	var/atom/movable/screen/zone_sel/selector = mob.hud_used.zone_select
-	selector.set_selected_zone(BODY_ZONE_PRECISE_MOUTH, mob)
-
-///Hidden verb to target the right arm, bound to 4
-/client/verb/body_r_arm()
-	set name = "body-r-arm"
-	set hidden = TRUE
-
-	if(!check_has_body_select())
-		return
-
-	var/atom/movable/screen/zone_sel/selector = mob.hud_used.zone_select
-	selector.set_selected_zone(BODY_ZONE_R_ARM, mob)
-
-///Hidden verb to target the chest, bound to 5
-/client/verb/body_chest()
-	set name = "body-chest"
-	set hidden = TRUE
-
-	if(!check_has_body_select())
-		return
-
-	var/atom/movable/screen/zone_sel/selector = mob.hud_used.zone_select
-	selector.set_selected_zone(BODY_ZONE_CHEST, mob)
-
-///Hidden verb to target the left arm, bound to 6
-/client/verb/body_l_arm()
-	set name = "body-l-arm"
-	set hidden = TRUE
-
-	if(!check_has_body_select())
-		return
-
-	var/atom/movable/screen/zone_sel/selector = mob.hud_used.zone_select
-	selector.set_selected_zone(BODY_ZONE_L_ARM, mob)
-
-///Hidden verb to target the right leg, bound to 1
-/client/verb/body_r_leg()
-	set name = "body-r-leg"
-	set hidden = TRUE
-
-	if(!check_has_body_select())
-		return
-
-	var/atom/movable/screen/zone_sel/selector = mob.hud_used.zone_select
-	selector.set_selected_zone(BODY_ZONE_R_LEG, mob)
-
-///Hidden verb to target the groin, bound to 2
-/client/verb/body_groin()
-	set name = "body-groin"
-	set hidden = TRUE
-
-	if(!check_has_body_select())
-		return
-
-	var/atom/movable/screen/zone_sel/selector = mob.hud_used.zone_select
-	selector.set_selected_zone(BODY_ZONE_PRECISE_GROIN, mob)
-
-///Hidden verb to target the left leg, bound to 3
-/client/verb/body_l_leg()
-	set name = "body-l-leg"
-	set hidden = TRUE
-
-	if(!check_has_body_select())
-		return
-
-	var/atom/movable/screen/zone_sel/selector = mob.hud_used.zone_select
-	selector.set_selected_zone(BODY_ZONE_L_LEG, mob)
-
-///Verb to toggle the walk or run status
-/client/verb/toggle_walk_run()
-	set name = "toggle-walk-run"
-	set hidden = TRUE
-	set instant = TRUE
-	if(mob)
-		mob.toggle_move_intent(usr)
-
-/**
-  * Toggle the move intent of the mob
-  *
-  * triggers an update the move intent hud as well
-  */
-/mob/proc/toggle_move_intent(mob/user)
-	if(m_intent == MOVE_INTENT_RUN)
-		m_intent = MOVE_INTENT_WALK
+	if (mob.get_preference_value(/datum/client_preference/toggle_run) == GLOB.PREF_NO)
+		mob.set_moving_quickly()
 	else
-		m_intent = MOVE_INTENT_RUN
-	if(hud_used && hud_used.static_inventory)
-		for(var/atom/movable/screen/mov_intent/selector in hud_used.static_inventory)
-			selector.update_appearance(UPDATE_ICON)
+		mob.toggle_moving_quickly()
 
-///Moves a mob upwards in z level
-/mob/verb/up()
-	set name = "Move Upwards"
-	set category = "IC"
 
-	if(remote_control)
-		return remote_control.relaymove(src, UP)
+/mob/proc/set_moving_quickly()
+	if (!default_run_intent)
+		default_run_intent = get_movement_datum_by_flag(MOVE_INTENT_QUICK)
+	if (default_run_intent && move_intent != default_run_intent)
+		set_move_intent(default_run_intent)
 
-	var/turf/current_turf = get_turf(src)
-	var/turf/above_turf = GET_TURF_ABOVE(current_turf)
 
-	if(!above_turf)
-		to_chat(src, span_warning("There's nowhere to go in that direction!"))
-		return
+/mob/proc/toggle_moving_quickly()
+	var/quick = get_movement_datum_by_flag(MOVE_INTENT_QUICK)
+	if (move_intent == quick)
+		var/slow = get_movement_datum_by_missing_flag(MOVE_INTENT_QUICK)
+		if (slow && move_intent != slow)
+			set_move_intent(slow)
+	else if (quick)
+		set_move_intent(quick)
 
-	if(ismovable(loc)) //Inside an object, tell it we moved
-		var/atom/loc_atom = loc
-		return loc_atom.relaymove(src, UP)
 
-	var/ventcrawling_flag = HAS_TRAIT(src, TRAIT_MOVE_VENTCRAWLING) ? ZMOVE_VENTCRAWLING : 0
+/mob/proc/can_sprint()
+	return FALSE
 
-	if(can_z_move(DOWN, above_turf, current_turf, ZMOVE_FALL_FLAGS|ventcrawling_flag)) //Will we fall down if we go up?
-		if(buckled)
-			to_chat(src, span_warning("[buckled] is not capable of flight."))
-		else
-			to_chat(src, span_warning("You are not Superman."))
-		return
-	balloon_alert(src, "moving up...")
-	var/move_time = isobserver(src) ? 0 : 1 SECONDS
-	if(hud_used?.move_up && move_time)
-		hud_used.move_up.icon_state = "move_up_using"
-	if(do_after(src, move_time))
-		if(zMove(UP, z_move_flags = ZMOVE_FLIGHT_FLAGS|ZMOVE_FEEDBACK|ventcrawling_flag))
-			to_chat(src, span_notice("You move upwards."))
-	if(hud_used?.move_up)
-		hud_used.move_up.icon_state = initial(hud_used.move_up.icon_state)
-	
+/mob/proc/adjust_stamina(amt)
+	return
 
-///Moves a mob down a z level
-/mob/verb/down()
-	set name = "Move Down"
-	set category = "IC"
-
-	if(remote_control)
-		return remote_control.relaymove(src, DOWN)
-
-	var/turf/current_turf = get_turf(src)
-	var/turf/below_turf = GET_TURF_BELOW(current_turf)
-	
-	if(!below_turf)
-		to_chat(src, span_warning("There's nowhere to go in that direction!"))
-		return
-
-	if(ismovable(loc)) //Inside an object, tell it we moved
-		var/atom/loc_atom = loc
-		return loc_atom.relaymove(src, DOWN)
-
-	var/ventcrawling_flag = HAS_TRAIT(src, TRAIT_MOVE_VENTCRAWLING) ? ZMOVE_VENTCRAWLING : 0
-	balloon_alert(src, "moving down...")
-	var/move_time = isobserver(src) ? 0 : 1 SECONDS
-	if(hud_used?.move_down && move_time)
-		hud_used.move_down.icon_state = "move_down_using"
-	if(do_after(src, move_time))
-		if(zMove(DOWN, z_move_flags = ZMOVE_FLIGHT_FLAGS|ZMOVE_FEEDBACK|ventcrawling_flag))
-			to_chat(src, span_notice("You move down."))
-	if(hud_used?.move_down)
-		hud_used.move_down.icon_state = initial(hud_used.move_down.icon_state)
-
-/mob/abstract_move(atom/destination)
-	var/turf/new_turf = get_turf(destination)
-	if(new_turf && (istype(new_turf, /turf/cordon/secret) || is_secret_level(new_turf.z)) && !client?.holder)
-		return
-	return ..()
+/mob/proc/get_stamina()
+	return 100

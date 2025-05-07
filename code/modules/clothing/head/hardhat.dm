@@ -2,184 +2,107 @@
 	name = "hard hat"
 	desc = "A piece of headgear used in dangerous working conditions to protect the head. Comes with a built-in flashlight."
 	icon_state = "hardhat0_yellow"
-	item_state = "hardhat0_yellow"
-	worn_icon = 'icons/mob/clothing/head/head.dmi'
-	armor = list(MELEE = 15, BULLET = 5, LASER = 20, ENERGY = 10, BOMB = 20, BIO = 10, RAD = 20, FIRE = 100, ACID = 50, WOUND = 10, ELECTRIC = 100) // now OSHA-compliant!
+	action_button_name = "Toggle Headlamp"
+	head_light_range = 5 //light range when on
+	brightness_on = 0.8 //luminosity when on
+	light_overlay = "hardhat_light"
+	w_class = ITEM_SIZE_NORMAL
+	item_flags = null
+	armor = list(
+		melee = ARMOR_MELEE_RESISTANT,
+		bullet = ARMOR_BALLISTIC_MINOR,
+		laser = ARMOR_LASER_SMALL,
+		energy = ARMOR_ENERGY_MINOR,
+		bomb = ARMOR_BOMB_PADDED,
+		bio = ARMOR_BIO_MINOR,
+		rad = ARMOR_RAD_MINOR
+	)
 	flags_inv = 0
-	actions_types = list(/datum/action/item_action/toggle_helmet_light)
-	resistance_flags = FIRE_PROOF
-	dynamic_hair_suffix = "+generic"
-	hattable = FALSE
-	light_system = MOVABLE_LIGHT
-	light_range = 4
-	light_power = 0.8
-	light_on = FALSE
-
-	dog_fashion = /datum/dog_fashion/head
-
-	//Determines used sprites: hardhat[on]_[hat_type]
-	var/hat_type = "yellow"
-	///Whether the headlamp is on or off.
-	var/on = FALSE
-
-/obj/item/clothing/head/hardhat/attack_self(mob/living/user)
-	toggle_helmet_light(user)
-
-/obj/item/clothing/head/hardhat/proc/toggle_helmet_light(mob/living/user)
-	on = !on
-	if(on)
-		turn_on(user)
-	else
-		turn_off(user)
-	update_appearance(UPDATE_ICON)
-
-/obj/item/clothing/head/hardhat/update_icon_state()
-	. = ..()
-	icon_state = "hardhat[on]_[hat_type]"
-	item_state = "hardhat[on]_[hat_type]"
-	if(ishuman(loc))
-		var/mob/living/carbon/human/H = loc
-		H.update_inv_head()
-	for(var/datum/action/A as anything in actions)
-		A.build_all_button_icons(force = TRUE)
-
-/obj/item/clothing/head/hardhat/proc/turn_on(mob/user)
-	set_light_on(TRUE)
-
-/obj/item/clothing/head/hardhat/proc/turn_off(mob/user)
-	set_light_on(FALSE)
+	siemens_coefficient = 0.9
+	heat_protection = HEAD
+	max_heat_protection_temperature = FIRE_HELMET_MAX_HEAT_PROTECTION_TEMPERATURE
+	max_pressure_protection = FIRESUIT_MAX_PRESSURE
 
 /obj/item/clothing/head/hardhat/orange
 	icon_state = "hardhat0_orange"
-	item_state = "hardhat0_orange"
-	hat_type = "orange"
-	dog_fashion = null
 
 /obj/item/clothing/head/hardhat/red
 	icon_state = "hardhat0_red"
-	item_state = "hardhat0_red"
-	hat_type = "red"
-	dog_fashion = null
-	name = "firefighter helmet"
-	clothing_flags = STOPSHIGHPRESSURE
-	heat_protection = HEAD
-	max_heat_protection_temperature = FIRE_HELM_MAX_TEMP_PROTECT
-	cold_protection = HEAD
-	min_cold_protection_temperature = FIRE_HELM_MIN_TEMP_PROTECT
-
-/obj/item/clothing/head/hardhat/red/upgraded
-	name = "workplace-ready firefighter helmet"
-	desc = "By applying state of the art lighting technology to a fire helmet, and using photo-chemical hardening methods, this hardhat will protect you from robust workplace hazards."
-	icon_state = "hardhat0_purple"
-	item_state = "hardhat0_purple"
-	light_range = 5
-	heat_protection = HEAD
-	max_heat_protection_temperature = FIRE_HELM_MAX_TEMP_PROTECT
-	cold_protection = HEAD
-	min_cold_protection_temperature = FIRE_HELM_MIN_TEMP_PROTECT
-	custom_materials = list(/datum/material/iron = 4000, /datum/material/glass = 1000, /datum/material/plastic = 3000, /datum/material/silver = 500)
-	hat_type = "purple"
 
 /obj/item/clothing/head/hardhat/white
 	icon_state = "hardhat0_white"
-	item_state = "hardhat0_white"
-	hat_type = "white"
-	clothing_flags = STOPSHIGHPRESSURE
-	heat_protection = HEAD
-	max_heat_protection_temperature = FIRE_HELM_MAX_TEMP_PROTECT
-	cold_protection = HEAD
-	min_cold_protection_temperature = FIRE_HELM_MIN_TEMP_PROTECT
-	dog_fashion = /datum/dog_fashion/head
 
-/obj/item/clothing/head/hardhat/dblue
+/obj/item/clothing/head/hardhat/blue
 	icon_state = "hardhat0_dblue"
-	item_state = "hardhat0_dblue"
-	hat_type = "dblue"
-	dog_fashion = null
 
-/obj/item/clothing/head/hardhat/atmos
-	icon_state = "hardhat0_atmos"
-	item_state = "hardhat0_atmos"
-	hat_type = "atmos"
-	dog_fashion = null
-	name = "atmospheric technician's firefighting helmet"
-	desc = "A firefighter's helmet, able to keep the user cool in any situation."
-	clothing_flags = STOPSPRESSUREDAMAGE | THICKMATERIAL | BLOCK_GAS_SMOKE_EFFECT | HEADINTERNALS
-	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-	flags_cover = HEADCOVERSEYES | HEADCOVERSMOUTH
-	heat_protection = HEAD
-	max_heat_protection_temperature = FIRE_IMMUNITY_MAX_TEMP_PROTECT
+/obj/item/clothing/head/hardhat/light
+	name = "light damage control helmet"
+	desc = "A lighter polymer helmet commonly used by engineers and first responders throughout human space. It comes with a built-in flashlight and has 'Damage Control' written on its back in yellow lettering."
+	icon_state = "Damage-Control-Helmet-light"
+	light_overlay = "EMS_light"
+	armor = list(
+		melee = ARMOR_MELEE_RESISTANT,
+		bullet = ARMOR_BALLISTIC_MINOR,
+		energy = ARMOR_ENERGY_MINOR,
+		bomb = ARMOR_BOMB_PADDED,
+		bio = ARMOR_BIO_MINOR
+	)
+
+/obj/item/clothing/head/hardhat/light/medic
+	name = "\improper EMS helmet"
+	desc = "A polymer helmet worn by EMTs throughout human space to protect their head. This one comes with an attached flashlight and has 'Medic' written on its back in blue lettering."
+	icon_state = "EMS_helmet"
+
+/obj/item/clothing/head/hardhat/firefighter
+	name = "firefighter helmet"
+	desc = "A complete, face covering helmet specially designed for firefighting. It is airtight and has a port for internals."
+	icon_state = "Firefighter-Helmet"
+	item_flags = ITEM_FLAG_THICKMATERIAL | ITEM_FLAG_AIRTIGHT
+	permeability_coefficient = 0
+	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|HIDEFACE|BLOCKHAIR
+	body_parts_covered = HEAD|FACE|EYES
 	cold_protection = HEAD
-	min_cold_protection_temperature = FIRE_HELM_MIN_TEMP_PROTECT
+	min_cold_protection_temperature = SPACE_HELMET_MIN_COLD_PROTECTION_TEMPERATURE
+	siemens_coefficient = 0.9
+	randpixel = 0
+	species_restricted = list("exclude", SPECIES_NABBER, SPECIES_DIONA)
+	flash_protection = FLASH_PROTECTION_MAJOR
 
-/obj/item/clothing/head/hardhat/weldhat
-	name = "welding hard hat"
-	desc = "A piece of headgear used in dangerous working conditions to protect the head. Comes with a built-in flashlight AND welding shield! The bulb seems a little smaller though."
-	light_range = 3 //Needs a little bit of tradeoff
-	dog_fashion = null
-	actions_types = list(/datum/action/item_action/toggle_helmet_light, /datum/action/item_action/toggle_welding_screen)
-	flash_protect = 2
-	tint = 2
-	flags_inv = HIDEEYES | HIDEFACE
-	flags_cover = HEADCOVERSEYES | HEADCOVERSMOUTH
-	visor_vars_to_toggle = VISOR_FLASHPROTECT | VISOR_TINT
-	visor_flags_inv = HIDEEYES | HIDEFACE
-	visor_flags_cover = HEADCOVERSEYES | HEADCOVERSMOUTH
+/obj/item/clothing/head/hardhat/firefighter/chief
+	name = "chief firefighter helmet"
+	icon_state = "Firefighter-Helmet-Chief"
 
-/obj/item/clothing/head/hardhat/weldhat/Initialize(mapload)
-	. = ..()
-	update_appearance(UPDATE_ICON)
+/obj/item/clothing/head/hardhat/damage_control
+	name = "damage control helmet"
+	desc = "A helmet commonly used by engineers and first responders throughout the human space. Comes with a built-in flashlight."
+	icon_state = "Damage-Control-Helmet"
+	light_overlay = "DC_light"
+	flags_inv = HIDEEARS|BLOCKHAIR
+	species_restricted = list("exclude", SPECIES_NABBER, SPECIES_DIONA)
 
-/obj/item/clothing/head/hardhat/weldhat/attack_self(mob/living/user)
-	toggle_helmet_light(user)
+/obj/item/clothing/head/hardhat/damage_control/yellow
+	name = "senior damage control helmet"
+	icon_state = "Damage-Control-Helmet-Yellow"
 
-/obj/item/clothing/head/hardhat/weldhat/AltClick(mob/user)
-	if(user.canUseTopic(src, BE_CLOSE))
-		toggle_welding_screen(user)
+/obj/item/clothing/head/hardhat/damage_control/white
+	name = "chief damage control helmet"
+	icon_state = "Damage-Control-Helmet-White"
 
-/obj/item/clothing/head/hardhat/weldhat/ui_action_click(mob/user, actiontype)
-	if(istype(actiontype, /datum/action/item_action/toggle_welding_screen))
-		toggle_welding_screen(user)
-		return
+/obj/item/clothing/head/hardhat/damage_control/emergency
+	name = "\improper Emergency Management Bureau helmet"
+	desc = "The helmet currently issued by the emergency management bureau, commonly used by engineers and first responders throughout the human space. Comes with a built-in flashlight."
+	icon_state = "Damage-Control-Helmet-EMB"
 
-	return ..()
+/obj/item/clothing/head/hardhat/damage_control/emergency_old
+	name = "ancient red EMB helmet"
+	desc = "This helmet used to be issued by the emergency management bureau once upon a time, and is still being used in frontier systems. Comes with a built-in flashlight."
+	icon_state = "EMB-ancient-red"
+	light_overlay = "EMB-ancient_light"
 
-/obj/item/clothing/head/hardhat/weldhat/proc/toggle_welding_screen(mob/living/user)
-	if(weldingvisortoggle(user))
-		playsound(src, 'sound/mecha/mechmove03.ogg', 50, 1) //Visors don't just come from nothing
-	update_appearance(UPDATE_ICON)
+/obj/item/clothing/head/hardhat/damage_control/emergency_old/yellow
+	name = "ancient yellow EMB helmet"
+	icon_state = "EMB-ancient-yellow"
 
-/obj/item/clothing/head/hardhat/weldhat/worn_overlays(mutable_appearance/standing, isinhands = FALSE, icon_file)
-	. = ..()
-	if(isinhands)
-		return
-
-	if(!up)
-		. += mutable_appearance('icons/mob/clothing/head/head.dmi', "weldvisor")
-
-/obj/item/clothing/head/hardhat/weldhat/update_overlays()
-	. = ..()
-	if(!up)
-		. += "weldvisor"
-
-/obj/item/clothing/head/hardhat/weldhat/orange
-	icon_state = "hardhat0_orange"
-	item_state = "hardhat0_orange"
-	hat_type = "orange"
-
-/obj/item/clothing/head/hardhat/weldhat/white
-	desc = "A piece of headgear used in dangerous working conditions to protect the head. Comes with a built-in flashlight AND welding shield!" //This bulb is not smaller
-	icon_state = "hardhat0_white"
-	item_state = "hardhat0_white"
-	light_range = 4 //Boss always takes the best stuff
-	hat_type = "white"
-	clothing_flags = STOPSPRESSUREDAMAGE
-	heat_protection = HEAD
-	max_heat_protection_temperature = FIRE_HELM_MAX_TEMP_PROTECT
-	cold_protection = HEAD
-	min_cold_protection_temperature = FIRE_HELM_MIN_TEMP_PROTECT
-
-/obj/item/clothing/head/hardhat/weldhat/dblue
-	icon_state = "hardhat0_dblue"
-	item_state = "hardhat0_dblue"
-	hat_type = "dblue"
+/obj/item/clothing/head/hardhat/damage_control/emergency_old/white
+	name = "ancient white EMB helmet"
+	icon_state = "EMB-ancient-white"

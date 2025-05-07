@@ -1,131 +1,107 @@
-/obj/item/assembly/timer
+/obj/item/device/assembly/timer
 	name = "timer"
-	desc = "Used to time things. Works well with contraptions which has to count down. Tick tock."
+	desc = "Used to time things. Works well with contraptions which have to count down. Tick tock."
 	icon_state = "timer"
-	materials = list(/datum/material/iron=500, /datum/material/glass=50)
-	attachable = TRUE
-	var/timing = FALSE
+	origin_tech = list(TECH_MAGNET = 1)
+	matter = list(MATERIAL_STEEL = 500, MATERIAL_GLASS = 50, MATERIAL_WASTE = 10)
+
+	wires = WIRE_PULSE
+
+	secured = 0
+
+	var/timing = 0
 	var/time = 10
-	var/saved_time = 10
-	var/loop = FALSE
-	var/hearing_range = 3
 
-/obj/item/assembly/timer/suicide_act(mob/living/user)
-	user.visible_message(span_suicide("[user] looks at the timer and decides [user.p_their()] fate! It looks like [user.p_theyre()] going to commit suicide!"))
-	activate()//doesnt rely on timer_end to prevent weird metas where one person can control the timer and therefore someone's life. (maybe that should be how it works...)
-	addtimer(CALLBACK(src, PROC_REF(manual_suicide), user), time SECONDS)//kill yourself once the time runs out
-	return MANUAL_SUICIDE
+/obj/item/device/assembly/timer/proc/timer_end()
 
-/obj/item/assembly/timer/proc/manual_suicide(mob/living/user)
-	user.visible_message(span_suicide("[user]'s time is up!"))
-	user.adjustOxyLoss(200)
-	user.death(0)
 
-/obj/item/assembly/timer/Initialize(mapload)
-	. = ..()
-	START_PROCESSING(SSobj, src)
+/obj/item/device/assembly/timer/activate()
+	if(!..())	return 0//Cooldown check
 
-/obj/item/assembly/timer/Destroy()
-	STOP_PROCESSING(SSobj, src)
-	. = ..()
-
-/obj/item/assembly/timer/examine(mob/user)
-	. = ..()
-	. += span_notice("The timer is [timing ? "counting down from [time]":"set for [time] seconds"].")
-
-/obj/item/assembly/timer/activate()
-	if(!..())
-		return FALSE//Cooldown check
 	timing = !timing
-	update_appearance(UPDATE_ICON)
-	return TRUE
+
+	update_icon()
+	return 0
 
 
-/obj/item/assembly/timer/toggle_secure()
-	secured = !secured
+/obj/item/device/assembly/timer/set_secure(make_secure)
+	..()
 	if(secured)
 		START_PROCESSING(SSobj, src)
 	else
-		timing = FALSE
+		timing = 0
 		STOP_PROCESSING(SSobj, src)
-	update_appearance(UPDATE_ICON)
+	update_icon()
 	return secured
 
 
-/obj/item/assembly/timer/proc/timer_end()
-	if(!secured || next_activate > world.time)
-		return FALSE
-	pulse(FALSE)
-	audible_message("[icon2html(src, hearers(src))] *beep* *beep* *beep*", null, hearing_range)
-	for(var/CHM in get_hearers_in_view(hearing_range, src))
-		if(ismob(CHM))
-			var/mob/LM = CHM
-			LM.playsound_local(get_turf(src), 'sound/machines/triple_beep.ogg', ASSEMBLY_BEEP_VOLUME, TRUE)
-	if(loop)
-		timing = TRUE
-	update_appearance(UPDATE_ICON)
+/obj/item/device/assembly/timer/timer_end()
+	if(!secured)	return 0
+	pulse(0)
+	if(!holder)
+		visible_message("[icon2html(src, viewers(get_turf(src)))] *beep* *beep*", "*beep* *beep*")
+	cooldown = 2
+	spawn(10)
+		process_cooldown()
+	return
 
 
-/obj/item/assembly/timer/process(delta_time)
-	if(!timing)
-		return
-	time -= delta_time
-	if(time <= 0)
-		timing = FALSE
+/obj/item/device/assembly/timer/Process()
+	if(timing && (time > 0))
+		time--
+		playsound(loc, 'sound/items/timer.ogg', 50)
+	if(timing && time <= 0)
+		timing = 0
 		timer_end()
-		time = saved_time
+		time = 10
+	return
 
-/obj/item/assembly/timer/update_icon(updates=ALL)
-	. = ..()
-	if(holder)
-		holder.update_icon(updates)
 
-/obj/item/assembly/timer/update_overlays()
-	. = ..()
+/obj/item/device/assembly/timer/on_update_icon()
+	ClearOverlays()
 	attached_overlays = list()
 	if(timing)
-		. += "timer_timing"
+		AddOverlays("timer_timing")
 		attached_overlays += "timer_timing"
-
-/obj/item/assembly/timer/ui_status(mob/user)
-	if(is_secured(user))
-		return ..()
-	return UI_CLOSE
-
-/obj/item/assembly/timer/ui_interact(mob/user, datum/tgui/ui)
-	ui = SStgui.try_update_ui(user, src, ui)
-	if(!ui)
-		ui = new(user, src, "Timer", name)
-		ui.open()
+	if(holder)
+		holder.update_icon()
+	return
 
 
-/obj/item/assembly/timer/ui_data(mob/user)
-	var/list/data = list()
-	data["seconds"] = round(time % 60)
-	data["minutes"] = round((time - data["seconds"]) / 60)
+/obj/item/device/assembly/timer/interact(mob/user as mob)//TODO: Have this use the wires
+	if(!secured)
+		user.show_message(SPAN_WARNING("\The [name] is unsecured!"))
+		return 0
+	var/second = time % 60
+	var/minute = (time - second) / 60
+	var/dat = text("<TT><B>Timing Unit</B>\n[] []:[]\n<A href='byond://?src=\ref[];tp=-30'>-</A> <A href='byond://?src=\ref[];tp=-1'>-</A> <A href='byond://?src=\ref[];tp=1'>+</A> <A href='byond://?src=\ref[];tp=30'>+</A>\n</TT>", (timing ? text("<A href='byond://?src=\ref[];time=0'>Timing</A>", src) : text("<A href='byond://?src=\ref[];time=1'>Not Timing</A>", src)), minute, second, src, src, src, src)
+	dat += "<BR><BR><A href='byond://?src=\ref[src];refresh=1'>Refresh</A>"
+	dat += "<BR><BR><A href='byond://?src=\ref[src];close=1'>Close</A>"
+	show_browser(user, dat, "window=timer")
+	onclose(user, "timer")
+	return
 
-	data["timing"] = timing
-	data["loop"] = loop
-	return data
 
-/obj/item/assembly/timer/ui_act(action, params)
-	if(..())
+/obj/item/device/assembly/timer/Topic(href, href_list, state = GLOB.physical_state)
+	if((. = ..()))
+		close_browser(usr, "window=timer")
+		onclose(usr, "timer")
 		return
 
-	switch(action)
-		if("time")
-			timing = !timing
-			if(timing && istype(holder, /obj/item/transfer_valve))
-				log_bomber(usr, "activated a", src, "attachment on [holder]")
-			update_appearance(UPDATE_ICON)
-			. = TRUE
-		if("repeat")
-			loop = !loop
-			. = TRUE
-		if("input")
-			var/value = text2num(params["adjust"])
-			if(value)
-				value = round(time + value)
-				time = clamp(value, 1, 600)
-				saved_time = time
-				. = TRUE
+	if(href_list["time"])
+		timing = text2num(href_list["time"])
+		update_icon()
+
+	if(href_list["tp"])
+		var/tp = text2num(href_list["tp"])
+		time += tp
+		time = min(max(round(time), 0), 600)
+
+	if(href_list["close"])
+		close_browser(usr, "window=timer")
+		return
+
+	if(usr)
+		attack_self(usr)
+
+	return

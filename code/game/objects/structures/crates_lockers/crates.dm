@@ -1,405 +1,375 @@
 /obj/structure/closet/crate
 	name = "crate"
 	desc = "A rectangular steel crate."
-	icon = 'icons/obj/crates.dmi'
-	icon_state = "crate"
-	req_access = null
-	can_weld_shut = FALSE
-	open_flags = HORIZONTAL_HOLD | HORIZONTAL_LID | ALLOW_OBJECTS | ALLOW_DENSE
-	dense_when_open = TRUE
-	delivery_icon = "deliverycrate"
-	door_anim_time = 0 // no animation
-	breakout_time = 20 SECONDS
-	var/crate_climb_time = 20
-	var/obj/item/paper/fluff/jobs/cargo/manifest/manifest
-	///The resident (owner) of this crate/coffin.
-	var/mob/living/resident
-	///The time it takes to pry this open with a crowbar.
-	var/pry_lid_timer = 25 SECONDS
+	closet_appearance = /singleton/closet_appearance/crate
+	atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_CLIMBABLE
+	obj_flags = OBJ_FLAG_CAN_TABLE
+	setup = 0
+	storage_types = CLOSET_STORAGE_ITEMS
+	var/points_per_crate = 5
+	var/rigged = 0
 
-/obj/structure/closet/crate/Initialize(mapload)
+/obj/structure/closet/crate/open()
+	if((atom_flags & ATOM_FLAG_OPEN_CONTAINER) && !opened && can_open())
+		object_shaken()
 	. = ..()
-	AddElement(/datum/element/climbable, climb_time = crate_climb_time, climb_stun = 0) //add element in closed state before parent init opens it(if it does)
-	if(icon_state == "[initial(icon_state)]open")
-		opened = TRUE
-	update_appearance(UPDATE_ICON)
+	if(.)
+		if(rigged)
+			visible_message(SPAN_DANGER("There are wires attached to the lid of [src]..."))
+			for(var/obj/item/device/assembly_holder/H in src)
+				H.process_activation(usr)
+			for(var/obj/item/device/assembly/A in src)
+				A.activate()
 
-/obj/structure/closet/crate/CanAllowThrough(atom/movable/mover, turf/target)
+/obj/structure/closet/crate/examine(mob/user)
 	. = ..()
-	if(!istype(mover, /obj/structure/closet))
-		var/obj/structure/closet/crate/locatedcrate = locate(/obj/structure/closet/crate) in get_turf(mover)
-		if(locatedcrate) //you can walk on it like tables, if you're not in an open crate trying to move to a closed crate
-			if(opened) //if we're open, allow entering regardless of located crate openness
-				return TRUE
-			if(!locatedcrate.opened) //otherwise, if the located crate is closed, allow entering
-				return TRUE
+	if(rigged && opened)
+		var/list/devices = list()
+		for(var/obj/item/device/assembly_holder/H in src)
+			devices += H
+		for(var/obj/item/device/assembly/A in src)
+			devices += A
+		to_chat(user,"There are some wires attached to the lid, connected to [english_list(devices)].")
 
-/obj/structure/closet/crate/update_icon_state()
-	. = ..()
-	icon_state = "[initial(icon_state)][opened ? "open" : ""]"
 
-/obj/structure/closet/crate/update_overlays()
-	. = ..()
-	if(manifest)
-		. += "manifest"
+/obj/structure/closet/crate/use_tool(obj/item/tool, mob/user, list/click_params)
+	// Below interactions only apply if the crate is closed
+	if (opened)
+		return ..()
 
-/obj/structure/closet/crate/attack_hand(mob/user)
-	if(istype(src.loc, /obj/structure/crate_shelf))
-		return FALSE // No opening crates in shelves!!
-	if(manifest)
-		tear_manifest(user)
+	// Assembly - Attach to rigged crate
+	if (istype(tool, /obj/item/device/assembly_holder) || istype(tool, /obj/item/device/assembly))
+		if (!rigged)
+			USE_FEEDBACK_FAILURE("\The [src] needs to be rigged with wiring before you can attach \the [tool].")
+			return TRUE
+		if (!user.unEquip(tool, src))
+			FEEDBACK_UNEQUIP_FAILURE(user, tool)
+			return TRUE
+		user.visible_message(
+			SPAN_NOTICE("\The [user] attaches \a [tool] to \the [src]."),
+			SPAN_NOTICE("You attach \the [tool] to \the [src].")
+		)
+		return TRUE
+
+	// Cable Coil - Rig crate
+	if (isCoil(tool))
+		if (rigged)
+			USE_FEEDBACK_FAILURE("\The [src] is already rigged.")
+			return TRUE
+		var/obj/item/stack/cable_coil/cable = tool
+		if (!cable.use(1))
+			USE_FEEDBACK_STACK_NOT_ENOUGH(cable, 1, "to rig \the [src].")
+			return TRUE
+		rigged = TRUE
+		user.visible_message(
+			SPAN_NOTICE("\The [user] adds some wiring to \the [src] with [cable.get_vague_name(FALSE)]."),
+			SPAN_NOTICE("You rig \the [src] with [cable.get_exact_name(1)].")
+		)
+		return TRUE
+
+	// Wirecutters - Remove wiring
+	if (isWirecutter(tool))
+		if (!rigged)
+			USE_FEEDBACK_FAILURE("\The [src] has no wiring to cut.")
+			return TRUE
+		rigged = FALSE
+		new /obj/item/stack/cable_coil(loc, 1)
+		playsound(src, 'sound/items/Wirecutter.ogg', 50, TRUE)
+		user.visible_message(
+			SPAN_NOTICE("\The [user] cuts \the [src]'s wiring with \a [tool]."),
+			SPAN_NOTICE("You cuts \the [src]'s wiring with \the [tool].")
+		)
+		return TRUE
+
 	return ..()
 
-/obj/structure/closet/crate/MouseDrop(atom/drop_atom, src_location, over_location)
+
+/obj/structure/closet/crate/secure
+	desc = "A secure crate."
+	name = "secure crate"
+	closet_appearance = /singleton/closet_appearance/crate/secure
+	setup = CLOSET_HAS_LOCK
+	locked = TRUE
+	health_max = 200
+	health_min_damage = 5
+
+/obj/structure/closet/crate/secure/Initialize()
 	. = ..()
-	var/mob/living/user = usr
-	if(!isliving(user))
-		return // Ghosts busted.
-	if(!isturf(user.loc) || user.incapacitated() || user.body_position == LYING_DOWN)
-		return // If the user is in a weird state, don't bother trying.
-	if(get_dist(drop_atom, src) != 1 || get_dist(drop_atom, user) != 1)
-		return // Check whether the crate is exactly 1 tile from the shelf and the user.
-	if(istype(drop_atom, /turf/open) && istype(loc, /obj/structure/crate_shelf) && user.Adjacent(drop_atom))
-		var/obj/structure/crate_shelf/shelf = loc
-		return shelf.unload(src, user, drop_atom) // If we're being dropped onto a turf, and we're inside of a crate shelf, unload.
-	if(istype(drop_atom, /obj/structure/crate_shelf) && isturf(loc) && user.Adjacent(src))
-		var/obj/structure/crate_shelf/shelf = drop_atom
-		return shelf.load(src, user) // If we're being dropped onto a crate shelf, and we're in a turf, load.
+	update_icon()
 
-/obj/structure/closet/crate/open(mob/living/user)
-	. = ..()
-	RemoveElement(/datum/element/climbable, climb_time = crate_climb_time, climb_stun = 0)
-	AddElement(/datum/element/climbable, climb_time = crate_climb_time * 0.5, climb_stun = 0)
-	if(. && manifest)
-		to_chat(user, span_notice("The manifest is torn off [src]."))
-		playsound(src, 'sound/items/poster_ripped.ogg', 75, 1)
-		manifest.forceMove(get_turf(src))
-		manifest = null
-		update_appearance(UPDATE_ICON)
-
-/obj/structure/closet/crate/close(mob/living/user)
-	. = ..()
-	RemoveElement(/datum/element/climbable, climb_time = crate_climb_time * 0.5, climb_stun = 0)
-	AddElement(/datum/element/climbable, climb_time = crate_climb_time, climb_stun = 0)
-
-/obj/structure/closet/crate/proc/tear_manifest(mob/user)
-	to_chat(user, span_notice("You tear the manifest off of [src]."))
-	playsound(src, 'sound/items/poster_ripped.ogg', 75, 1)
-
-	manifest.forceMove(loc)
-	if(ishuman(user))
-		user.put_in_hands(manifest)
-	manifest = null
-	update_appearance(UPDATE_ICON)
-
-/obj/structure/closet/crate/coffin
-	name = "coffin"
-	desc = "It's a burial receptacle for the dearly departed."
-	icon_state = "coffin"
-	resistance_flags = FLAMMABLE
-	max_integrity = 70
-	material_drop = /obj/item/stack/sheet/mineral/wood
-	material_drop_amount = 5
+/obj/structure/closet/crate/plastic
+	name = "plastic crate"
+	desc = "A rectangular plastic crate."
+	points_per_crate = 1
+	closet_appearance = /singleton/closet_appearance/crate/plastic
+	material = MATERIAL_PLASTIC
 
 /obj/structure/closet/crate/internals
-	desc = "An internals crate."
 	name = "internals crate"
-	icon_state = "o2crate"
+	desc = "A internals crate."
+
+/obj/structure/closet/crate/internals/fuel
+	name = "fuel tank crate"
+	desc = "A fuel tank crate."
+
+/obj/structure/closet/crate/internals/fuel/WillContain()
+	return list(/obj/item/tank/hydrogen = 4)
 
 /obj/structure/closet/crate/trashcart
-	desc = "A heavy, metal trashcart with wheels."
 	name = "trash cart"
-	icon_state = "trashcart"
+	desc = "A heavy, metal trashcart with wheels."
+	closet_appearance = /singleton/closet_appearance/cart/trash
 
 /obj/structure/closet/crate/medical
-	desc = "A medical crate."
 	name = "medical crate"
-	icon_state = "medicalcrate"
+	desc = "A medical crate."
+	closet_appearance = /singleton/closet_appearance/crate/medical
+
+/obj/structure/closet/crate/rcd
+	name = "\improper RCD crate"
+	desc = "A crate with rapid construction device."
+
+/obj/structure/closet/crate/rcd/WillContain()
+	return list(
+		/obj/item/rcd_ammo = 3,
+		/obj/item/rcd
+	)
+
+/obj/structure/closet/crate/solar
+	name = "solar pack crate"
+
+/obj/structure/closet/crate/solar/WillContain()
+	return list(
+		/obj/item/solar_assembly = 14,
+		/obj/item/stock_parts/circuitboard/solar_control,
+		/obj/item/tracker_electronics,
+		/obj/item/paper/solar
+	)
+
+/obj/structure/closet/crate/solar_assembly
+	name = "solar assembly crate"
+
+/obj/structure/closet/crate/solar_assembly/WillContain()
+	return list(/obj/item/solar_assembly = 16)
 
 /obj/structure/closet/crate/freezer
-	desc = "A freezer."
 	name = "freezer"
-	icon_state = "freezer"
+	desc = "A freezer."
+	temperature = -16 CELSIUS
+	closet_appearance = /singleton/closet_appearance/crate/freezer
 
-//Snowflake organ freezer code
-//Order is important, since we check source, we need to do the check whenever we have all the organs in the crate
+	var/target_temp = T0C - 40
+	var/cooling_power = 40
 
-/obj/structure/closet/crate/freezer/open()
-	recursive_organ_check(src)
-	..()
+/obj/structure/closet/crate/freezer/return_air()
+	var/datum/gas_mixture/gas = (..())
+	if(!gas)	return null
+	var/datum/gas_mixture/newgas = new/datum/gas_mixture()
+	newgas.copy_from(gas)
+	if(newgas.temperature <= target_temp)	return
 
-/obj/structure/closet/crate/freezer/close()
-	..()
-	recursive_organ_check(src)
+	if((newgas.temperature - cooling_power) > target_temp)
+		newgas.temperature -= cooling_power
+	else
+		newgas.temperature = target_temp
+	return newgas
 
-/obj/structure/closet/crate/freezer/Destroy()
-	recursive_organ_check(src)
-	return ..()
+/obj/structure/closet/crate/freezer/ProcessAtomTemperature()
+	return PROCESS_KILL
 
-/obj/structure/closet/crate/freezer/Initialize(mapload)
-	recursive_organ_check(src)
-	return ..()
+/obj/structure/closet/crate/freezer/rations //For use in the escape shuttle
+	name = "emergency rations"
+	desc = "A crate of emergency rations."
 
+/obj/structure/closet/crate/freezer/rations/WillContain()
+	return list(
+		/obj/random/mre = 6,
+		/obj/item/storage/mre/menu9,
+		/obj/item/storage/mre/menu10,
+		/obj/item/reagent_containers/food/drinks/cans/waterbottle = 8
+	)
 
-/obj/structure/closet/crate/freezer/blood
-	name = "blood freezer"
-	desc = "A freezer containing packs of blood."
-	icon_state = "freezerblood"
+/obj/structure/closet/crate/freezer/meat
+	name = "meat crate"
+	desc = "A crate of meat."
 
-/obj/structure/closet/crate/freezer/blood/PopulateContents()
-	. = ..()
-	new /obj/item/reagent_containers/blood(src)
-	new /obj/item/reagent_containers/blood(src)
-	new /obj/item/reagent_containers/blood/AMinus(src)
-	new /obj/item/reagent_containers/blood/BMinus(src)
-	new /obj/item/reagent_containers/blood/BPlus(src)
-	new /obj/item/reagent_containers/blood/OMinus(src)
-	new /obj/item/reagent_containers/blood/OPlus(src)
-	new /obj/item/reagent_containers/blood/lizard(src)
-	new /obj/item/reagent_containers/blood/vox(src)
-	new /obj/item/reagent_containers/blood/gorilla(src) // yogs -- gorilla people
-	new /obj/item/reagent_containers/blood/ethereal(src)
-	for(var/i in 1 to 3)
-		new /obj/item/reagent_containers/blood/random(src)
+/obj/structure/closet/crate/freezer/meat/WillContain()
+	return list(
+		/obj/item/reagent_containers/food/snacks/meat/beef = 4,
+		/obj/item/reagent_containers/food/snacks/meat/syntiflesh = 4,
+		/obj/random/fish = 8
+	)
 
-/obj/structure/closet/crate/freezer/surplus_limbs
-	name = "surplus prosthetic limbs"
-	desc = "A crate containing an assortment of cheap prosthetic limbs."
-	icon_state = "freezermedical"
-
-/obj/structure/closet/crate/freezer/surplus_limbs/PopulateContents()
-	. = ..()
-	new /obj/item/bodypart/l_arm/robot/surplus(src)
-	new /obj/item/bodypart/l_arm/robot/surplus(src)
-	new /obj/item/bodypart/r_arm/robot/surplus(src)
-	new /obj/item/bodypart/r_arm/robot/surplus(src)
-	new /obj/item/bodypart/leg/left/robot/surplus(src)
-	new /obj/item/bodypart/leg/left/robot/surplus(src)
-	new /obj/item/bodypart/leg/right/robot/surplus(src)
-	new /obj/item/bodypart/leg/right/robot/surplus(src)
+/obj/structure/closet/crate/bin
+	name = "large bin"
+	desc = "A large bin."
 
 /obj/structure/closet/crate/radiation
+	name = "radioactive crate"
+	desc = "A leadlined crate with a radiation sign on it."
+	closet_appearance = /singleton/closet_appearance/crate/radiation
+
+/obj/structure/closet/crate/radiation_gear
+	name = "radioactive gear crate"
 	desc = "A crate with a radiation sign on it."
-	name = "radiation crate"
-	icon_state = "radiation"
+	closet_appearance = /singleton/closet_appearance/crate/radiation
+
+/obj/structure/closet/crate/radiation_gear/WillContain()
+	return list(/obj/item/clothing/suit/radiation = 8)
+
+/obj/structure/closet/crate/secure/weapon
+	name = "weapons crate"
+	desc = "A secure weapons crate."
+	closet_appearance = /singleton/closet_appearance/crate/secure/weapon
+
+/obj/structure/closet/crate/secure/phoron
+	name = "phoron crate"
+	desc = "A secure phoron crate."
+	closet_appearance = /singleton/closet_appearance/crate/secure/hazard
+
+/obj/structure/closet/crate/secure/shuttle
+	name = "storage compartment"
+	desc = "A secure storage compartment bolted to the floor, to secure loose objects on Zero-G flights."
+	anchored = TRUE
+	closet_appearance = /singleton/closet_appearance/crate/secure/shuttle
+
+/obj/structure/closet/crate/secure/gear
+	name = "gear crate"
+	desc = "A secure gear crate."
+	closet_appearance = /singleton/closet_appearance/crate/secure/weapon
+
+/obj/structure/closet/crate/secure/hydrosec
+	name = "secure hydroponics crate"
+	desc = "A crate with a lock on it, painted in the scheme of botany and botanists."
+	closet_appearance = /singleton/closet_appearance/crate/secure/hydroponics
+
+/obj/structure/closet/crate/large
+	name = "large crate"
+	desc = "A hefty metal crate."
+	storage_capacity = 2 * MOB_LARGE
+	storage_types = CLOSET_STORAGE_ITEMS|CLOSET_STORAGE_STRUCTURES
+	closet_appearance = /singleton/closet_appearance/large_crate
+
+/obj/structure/closet/crate/large/hydroponics
+	closet_appearance = /singleton/closet_appearance/large_crate/hydroponics
+
+/obj/structure/closet/crate/secure/large
+	name = "large crate"
+	desc = "A hefty metal crate with an electronic locking system."
+	closet_appearance = /singleton/closet_appearance/large_crate/secure
+
+	storage_capacity = 2 * MOB_LARGE
+	storage_types = CLOSET_STORAGE_ITEMS|CLOSET_STORAGE_STRUCTURES
+
+/obj/structure/closet/crate/secure/large/phoron
+	closet_appearance = /singleton/closet_appearance/large_crate/secure/hazard
+
+//fluff variant
+/obj/structure/closet/crate/secure/large/reinforced
+	desc = "A hefty, reinforced metal crate with an electronic locking system."
 
 /obj/structure/closet/crate/hydroponics
 	name = "hydroponics crate"
 	desc = "All you need to destroy those pesky weeds and pests."
-	icon_state = "hydrocrate"
+	closet_appearance = /singleton/closet_appearance/crate/hydroponics
 
-/obj/structure/closet/crate/engineering
-	name = "engineering crate"
-	icon_state = "engi_crate"
+/obj/structure/closet/crate/hydroponics/prespawned/WillContain()
+	return list(
+		/obj/item/reagent_containers/spray/plantbgone = 2,
+		/obj/item/material/minihoe = 2,
+		/obj/item/storage/plants = 2,
+		/obj/item/material/hatchet = 2,
+		/obj/item/wirecutters/clippers = 2,
+		/obj/item/device/scanner/plant = 2
+	)
 
-/obj/structure/closet/crate/engineering/electrical
-	icon_state = "engi_e_crate"
+/obj/structure/closet/crate/secure/biohazard
+	name = "biohazard cart"
+	desc = "A heavy cart with extensive sealing. You shouldn't eat things you find in it."
+	open_sound = 'sound/items/Deconstruct.ogg'
+	close_sound = 'sound/items/Deconstruct.ogg'
+	req_access = list(access_xenobiology)
+	closet_appearance = /singleton/closet_appearance/cart/biohazard
+	storage_capacity = 2 * MOB_LARGE
+	storage_types = CLOSET_STORAGE_ITEMS|CLOSET_STORAGE_MOBS|CLOSET_STORAGE_STRUCTURES
 
-/obj/structure/closet/crate/rcd
-	desc = "A crate for the storage of an RCD."
-	name = "\improper RCD crate"
-	icon_state = "engi_crate"
+/obj/structure/closet/crate/secure/biohazard/blanks/WillContain()
+	return list(/obj/structure/closet/body_bag/cryobag/blank)
 
-/obj/structure/closet/crate/rcd/PopulateContents()
-	..()
-	for(var/i in 1 to 4)
-		new /obj/item/rcd_ammo(src)
-	new /obj/item/construction/rcd(src)
+/obj/structure/closet/crate/secure/biohazard/blanks/can_close()
+	for(var/obj/structure/closet/closet in get_turf(src))
+		if(closet != src && !(istype(closet, /obj/structure/closet/body_bag/cryobag)))
+			return 0
+	return 1
 
-/obj/structure/closet/crate/science
-	name = "science crate"
-	desc = "A science crate."
-	icon_state = "scicrate"
+/obj/structure/closet/crate/secure/biohazard/alt
+	name = "biowaste disposal cart"
+	desc = "A heavy cart used for organ disposal with markings indicating the things inside are probably gross."
+	req_access = list(access_surgery)
+	closet_appearance = /singleton/closet_appearance/cart/biohazard/alt
 
-/obj/structure/closet/crate/solarpanel_small
-	name = "budget solar panel crate"
-	icon_state = "engi_e_crate"
+/obj/structure/closet/crate/paper_refill
+	name = "paper refill crate"
+	desc = "A rectangular plastic crate, filled up with blank papers for refilling bins and printers. A bureaucrat's favorite."
+	material = MATERIAL_PLASTIC
 
-/obj/structure/closet/crate/solarpanel_small/PopulateContents()
-	..()
-	for(var/i in 1 to 13)
-		new /obj/item/solar_assembly(src)
-	new /obj/item/circuitboard/computer/solar_control(src)
-	new /obj/item/paper/guides/jobs/engi/solars(src)
-	new /obj/item/electronics/tracker(src)
+/obj/structure/closet/crate/paper_refill/WillContain()
+	return list(/obj/item/paper = 30)
 
-/obj/structure/closet/crate/goldcrate
-	name = "gold crate"
+/obj/structure/closet/crate/uranium
+	name = "fissibles crate"
+	desc = "A crate with a radiation sign on it."
+	closet_appearance = /singleton/closet_appearance/crate/radiation
 
-/obj/structure/closet/crate/goldcrate/PopulateContents()
-	..()
-	for(var/i in 1 to 3)
-		new /obj/item/stack/sheet/mineral/gold(src, 1, FALSE)
-	new /obj/item/storage/belt/champion(src)
+/obj/structure/closet/crate/uranium/WillContain()
+	return list(/obj/item/stack/material/uranium/ten = 5)
 
-/obj/structure/closet/crate/silvercrate
-	name = "silver crate"
+///Base ninja equipment
+/obj/structure/closet/crate/ninja
+	name = "ninja equipment crate"
+	desc = "An ominous equipment crate."
+	closet_appearance = /singleton/closet_appearance/crate/secure/weapon
 
-/obj/structure/closet/crate/silvercrate/PopulateContents()
-	..()
-	for(var/i in 1 to 5)
-		new /obj/item/coin/silver(src)
+/obj/structure/closet/crate/ninja/WillContain()
+	return list(
+		/obj/item/rig/light/ninja,
+		/obj/item/material/sword/katana,
+		/obj/item/storage/box/syndie_kit/silenced
+	)
 
-/obj/structure/closet/crate/magic
-	name = "Rune Crate"
-	desc = "This crate glows with a weak glow, are you sure you want to open it?"
+///Ninja equipment loadouts. Overwritten in torch/structures/closets.dm because of away/example check evils
+/obj/structure/closet/crate/ninja/sol
+	name = "sol equipment crate"
+	desc = "A tactical equipment crate."
 
+/obj/structure/closet/crate/ninja/sol/WillContain()
+	return list(
+		/obj/item/rig/light/ninja/sol
+	)
 
-/obj/structure/closet/crate/magic/PopulateContents()
-	var/table = rand(1,12) //12 customized surprise mechanics�  for you all
-	switch(table)
-		if(1)
-			new /obj/item/gun/magic/rune/icycle_rune(src)
-			new /obj/item/gun/magic/rune/tentacle_rune(src)
-			new /obj/item/gun/magic/rune/heal_rune(src)
-			new /obj/item/gun/magic/rune/fire_rune(src)
-		if(2)
-			new /obj/item/gun/magic/rune/honk_rune(src)
-			new /obj/item/gun/magic/rune/chaos_rune(src)
-			new /obj/item/gun/magic/rune/bomb_rune(src)
-			new /obj/item/gun/magic/rune/toxic_rune(src)
-		if(3)
-			new /obj/item/gun/magic/rune/death_rune(src)
-			new /obj/item/gun/magic/rune/bullet_rune(src)
-			new /obj/item/gun/magic/rune/mutation_rune(src)
-			new /obj/item/gun/magic/rune/resizement_rune(src)
-		if(4)
-			new /obj/item/gun/magic/rune/icycle_rune(src)
-			new /obj/item/gun/magic/rune/heal_rune(src)
-			new /obj/item/gun/magic/rune/honk_rune(src)
-			new /obj/item/gun/magic/rune/bomb_rune(src)
-		if(5)
-			new /obj/item/gun/magic/rune/death_rune(src)
-			new /obj/item/gun/magic/rune/mutation_rune(src)
-			new /obj/item/gun/magic/rune/tentacle_rune(src)
-			new /obj/item/gun/magic/rune/fire_rune(src)
-		if(6)
-			new	/obj/item/gun/magic/rune/chaos_rune(src)
-			new	/obj/item/gun/magic/rune/toxic_rune(src)
-			new /obj/item/gun/magic/rune/bullet_rune(src)
-			new /obj/item/gun/magic/rune/resizement_rune(src)
-		if(7)
-			new /obj/item/gun/magic/rune/icycle_rune(src)
-			new /obj/item/gun/magic/rune/fire_rune(src)
-			new /obj/item/gun/magic/rune/bomb_rune(src)
-			new /obj/item/gun/magic/rune/bullet_rune(src)
-		if(8)
-			new /obj/item/gun/magic/rune/tentacle_rune(src)
-			new /obj/item/gun/magic/rune/honk_rune(src)
-			new /obj/item/gun/magic/rune/toxic_rune(src)
-			new /obj/item/gun/magic/rune/mutation_rune(src)
-		if(9)
-			new /obj/item/gun/magic/rune/heal_rune(src)
-			new /obj/item/gun/magic/rune/chaos_rune(src)
-			new /obj/item/gun/magic/rune/death_rune(src)
-			new /obj/item/gun/magic/rune/resizement_rune(src)
-		if(10)
-			new /obj/item/gun/magic/rune/fire_rune(src)
-			new /obj/item/gun/magic/rune/bomb_rune(src)
-			new /obj/item/gun/magic/rune/bullet_rune(src)
-			new /obj/item/gun/magic/rune/icycle_rune(src)
-		if(11)
-			new /obj/item/gun/magic/rune/honk_rune(src)
-			new /obj/item/gun/magic/rune/toxic_rune(src)
-			new /obj/item/gun/magic/rune/mutation_rune(src)
-			new /obj/item/gun/magic/rune/tentacle_rune(src)
-		if(12)
-			new /obj/item/gun/magic/rune/chaos_rune(src)
-			new /obj/item/gun/magic/rune/death_rune(src)
-			new /obj/item/gun/magic/rune/resizement_rune(src)
-			new /obj/item/gun/magic/rune/heal_rune(src)
+/obj/structure/closet/crate/ninja/gcc
+	name = "gcc equipment crate"
+	desc = "A heavy equipment crate."
 
-/obj/structure/closet/crate/sphere
-	desc = "An Advanced Crate that defies all known cargo standards."
-	name = "Advanced Crate"
-	icon = 'yogstation/icons/obj/crates.dmi'
-	icon_state = "round"
+/obj/structure/closet/crate/ninja/gcc/WillContain()
+	return list(
+		/obj/item/rig/light/ninja/gcc
+	)
 
-/obj/structure/closet/crate/critter/exoticgoats
-	name = "goat crate"
-	desc = "Contains a completly random goat from Goat Tech Industries that may or may not break the laws of science!"
+/obj/structure/closet/crate/ninja/corpo
+	name = "corporate equipment crate"
+	desc = "A patented equipment crate."
 
-/obj/structure/closet/crate/critter/exoticgoats/Initialize(mapload)
-	. = ..()
-	var/loot = rand(1,40) //40 different goats!
-	switch(loot)
-		if(1)
-			new /mob/living/simple_animal/hostile/retaliate/goat(loc)
-		if(2)
-			new /mob/living/simple_animal/hostile/retaliate/goat/clown(loc)
-		if(3)
-			new /mob/living/simple_animal/hostile/retaliate/goat/ras(loc)
-		if(4)
-			new /mob/living/simple_animal/hostile/retaliate/goat/blue(loc)
-		if(5)
-			new /mob/living/simple_animal/hostile/retaliate/goat/chocolate(loc)
-		if(6)
-			new /mob/living/simple_animal/hostile/retaliate/goat/christmas(loc)
-		if(7)
-			new /mob/living/simple_animal/hostile/retaliate/goat/confetti(loc)
-		if(8)
-			new /mob/living/simple_animal/hostile/retaliate/goat/cottoncandy(loc)
-		if(9)
-			new /mob/living/simple_animal/hostile/retaliate/goat/glowing(loc)
-		if(10)
-			new /mob/living/simple_animal/hostile/retaliate/goat/goatgoat(loc)
-		if(11)
-			new /mob/living/simple_animal/hostile/retaliate/goat/horror(loc)
-		if(12)
-			new /mob/living/simple_animal/hostile/retaliate/goat/inverted(loc)
-		if(13)
-			new /mob/living/simple_animal/hostile/retaliate/goat/memory(loc)
-		if(14)
-			new /mob/living/simple_animal/hostile/retaliate/goat/mirrored(loc)
-		if(15)
-			new /mob/living/simple_animal/hostile/retaliate/goat/paper(loc)
-		if(16)
-			new /mob/living/simple_animal/hostile/retaliate/goat/pixel(loc)
-		if(17)
-			new /mob/living/simple_animal/hostile/retaliate/goat/radioactive(loc)
-		if(18)
-			new /mob/living/simple_animal/hostile/retaliate/goat/rainbow(loc)
-		if(19)
-			new /mob/living/simple_animal/hostile/retaliate/goat/cute(loc)
-		if(20)
-			new /mob/living/simple_animal/hostile/retaliate/goat/star(loc)
-		if(21)
-			new /mob/living/simple_animal/hostile/retaliate/goat/twisted(loc)
-		if(22)
-			new /mob/living/simple_animal/hostile/retaliate/goat/huge(loc)
-		if(23)
-			new /mob/living/simple_animal/hostile/retaliate/goat/tiny(loc)
-		if(24)
-			new /mob/living/simple_animal/hostile/retaliate/goat/ghost(loc)
-		if(25)
-			new /mob/living/simple_animal/hostile/retaliate/goat/brick(loc)
-		if(26)
-			new /mob/living/simple_animal/hostile/retaliate/goat/watercolor(loc)
-		if(27)
-			new /mob/living/simple_animal/hostile/retaliate/goat/brown(loc)
-		if(28)
-			new /mob/living/simple_animal/hostile/retaliate/goat/panda(loc)
-		if(29)
-			new /mob/living/simple_animal/hostile/retaliate/goat/black(loc)
-		if(30)
-			new /mob/living/simple_animal/hostile/retaliate/goat/green(loc)
-		if(31)
-			new /mob/living/simple_animal/hostile/retaliate/goat/orange(loc)
-		if(32)
-			new /mob/living/simple_animal/hostile/retaliate/goat/purple(loc)
-		if(33)
-			new /mob/living/simple_animal/hostile/retaliate/goat/red(loc)
-		if(34)
-			new /mob/living/simple_animal/hostile/retaliate/goat/yellow(loc)
-		if(35)
-			new /mob/living/simple_animal/hostile/retaliate/goat/legitgoat(loc)
-		if(36)
-			new /mob/living/simple_animal/hostile/retaliate/goat/skiddo(loc)
-		if(37)
-			new /mob/living/simple_animal/hostile/retaliate/goat/gogoat(loc)
-		if(38)
-			new /mob/living/simple_animal/hostile/retaliate/goat/sanic(loc)
-		if(39)
-			new /mob/living/simple_animal/hostile/retaliate/goat/plunger(loc)
-		if(40)
-			new /mob/living/simple_animal/hostile/retaliate/goat/suspicious(loc)
+/obj/structure/closet/crate/ninja/corpo/WillContain()
+	return list(
+		/obj/item/rig/light/ninja/corpo
+	)
+
+/obj/structure/closet/crate/ninja/merc
+	name = "mercenary equipment crate"
+	desc = "A traitorous equipment crate."
+
+/obj/structure/closet/crate/ninja/merc/WillContain()
+	return list(
+		/obj/item/rig/merc/ninja
+	)

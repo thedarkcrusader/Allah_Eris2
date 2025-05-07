@@ -1,14 +1,9 @@
 #define CHARS_PER_LINE 5
 #define FONT_SIZE "5pt"
 #define FONT_COLOR "#09f"
-#define FONT_STYLE "Small Fonts"
-#define MAX_TIMER 15000 //yogs - changed 9000 to 15000
+#define FONT_STYLE "Arial Black"
 
-#define PRESET_SHORT 1800 //yogs - changed 1200 to 1800
-#define PRESET_MEDIUM 3000 //yogs - changed 1800 to 3000
-#define PRESET_LONG 6000 //yogs - changed 3000 to 6000
-
-
+//This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:31
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // Brig Door control displays.
@@ -20,343 +15,279 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////
 /obj/machinery/door_timer
 	name = "door timer"
-	icon = 'icons/obj/status_display.dmi'
+	icon = 'icons/obj/machines/status_display.dmi'
 	icon_state = "frame"
 	desc = "A remote control for a door."
-	req_access = list(ACCESS_SECURITY)
-	density = FALSE
-	var/id = null // id of linked machinery/lockers
-	var/desired_name = null
-	var/desired_crime = null
-	var/activation_time = 0
-	var/timer_duration = 0
-
-	var/timing = FALSE		// boolean, true/1 timer is on, false/0 means it's not timing
+	req_access = list(access_brig)
+	anchored = TRUE    		// can't pick it up
+	density = FALSE       		// can walk through it.
+	obj_flags = OBJ_FLAG_WALL_MOUNTED
+	var/id = null     		// id of door it controls.
+	var/releasetime = 0		// when world.timeofday reaches it - release the prisoner
+	var/timing = 1    		// boolean, true/1 timer is on, false/0 means it's not timing
+	var/picture_state		// icon_state of alert picture, if not displaying text/numbers
 	var/list/obj/machinery/targets = list()
-	var/obj/item/radio/Radio //needed to send messages to sec radio
-
-	var/static/list/crimespetty = list(
-		list(name="Petty Theft", tooltip="To take items from areas one does not have access to or to take items belonging to others or the station as a whole.", colour="good",icon="hand-holding",sentence="600"),
-		list(name="Vandalism (Cosmetic)", tooltip="To deliberately vandalize the station.", colour="good",icon="spray-can",sentence="600"),
-		list(name="Resisting Arrest", tooltip="To not cooperate with an officer who attempts a proper arrest.", colour="good",icon="running",sentence="600"),
-		list(name="Drug Possession", tooltip="To possess space drugs or other narcotics by unauthorized personnel.", colour="good",icon="joint",sentence="600"),
-		list(name="Indecent Exposure", tooltip="To be intentionally and publicly unclothed.", colour="good",icon="flushed",sentence="600"),
-		list(name="Trespass", tooltip="To be in an area which a person does not have access to. This counts for general areas of the ship, and trespass in restricted areas is a more serious crime.", colour="good",icon="door-open",sentence="600")
-	)
-	var/static/list/crimesminor = list(
-		list(name="Vandalism (Destructive)", tooltip="To deliberately damage the station without malicious intent.", colour="average",icon="car-crash",sentence="1800"),
-		list(name="Narcotics Distribution", tooltip="To distribute narcotics and other controlled substances.", colour="average",icon="tablets",sentence="1800"),
-		list(name="Possession of a Weapon", tooltip="To be in possession of a dangerous item that is not part of their job role.", colour="average",icon="bolt",sentence="1800"),
-		list(name="Possession, Contraband", tooltip="To be in possession of illegal or prohibited goods.", colour="average",icon="syringe",sentence="1800"),
-		list(name="Assault", tooltip="To use physical force against someone without the apparent intent to kill them.", colour="average",icon="fist-raised",sentence="1800")
-	)
-	var/static/list/crimesmoderate = list(
-		list(name="Theft", tooltip="To steal restricted or dangerous items",colour="average",icon="people-carry",sentence="3000"),
-		list(name="Rioting", tooltip="To partake in an unauthorized and disruptive assembly of crewmen that refuse to disperse.",colour="average",icon="users",sentence="3000"),
-		list(name="Creating a workplace hazard", tooltip="To endanger the crew or station through negligent or irresponsible, but not deliberately malicious, actions.",colour="average",icon="bomb",sentence="3000"),
-		list(name="Breaking and Entry", tooltip="Forced entry to areas where the subject does not have access to. This counts for general areas, and breaking into restricted areas is a more serious crime.",colour="average",icon="door-closed",sentence="3000"),
-		list(name="Insubordination", tooltip="To disobey a lawful direct order from one's superior officer.",colour="average",icon="user-minus",sentence="3000"),
-		list(name="Animal Cruelty", tooltip="To kill an animal for reasons other than research, food purposes, self-defense purposes, or as a resolution to animal overpopulation.",colour="average",icon="user-minus",sentence="3000")
-	)
-	var/static/list/crimesmajor = list(
-		list(name="Assault, Officer", tooltip="To use physical force against a Department Head or member of Security without the apparent intent to kill them.",colour="bad",icon="gavel",sentence="4200"),
-		list(name="Possession, restricted weapon", tooltip="To be in possession of a restricted weapon without prior authorization, such as guns, batons, flashes, grenades, etc.",colour="bad",icon="exclamation",sentence="4200"),
-		list(name="Possession, Explosives", tooltip="To be in possession of an explosive device.",colour="bad",icon="bomb",sentence="4200"),
-		list(name="Inciting a Riot", tooltip="To attempt to stir the crew into a riot",colour="bad",icon="bullhorn",sentence="4200"),
-		list(name="Sabotage", tooltip="To hinder the work of the crew or station through malicious actions.",colour="bad",icon="fire",sentence="4200"),
-		list(name="Major Trespass", tooltip="Being in a restricted area without prior authorization. This includes any Security Area, Command area (including EVA), The Engine Room, Atmos, or Toxins Research.",colour="bad",icon="key",sentence="4200")
-	)
-	var/static/list/crimessevere = list(
-		list(name="Assault With a Deadly Weapon", tooltip="	To use physical force, through a deadly weapon, against someone without the apparent intent to kill them.",colour="bad",icon="user-injured",sentence="6000"),
-		list(name="Manslaughter", tooltip="To unintentionally kill someone through negligent, but not malicious, actions.",colour="bad",icon="skull-crossbones",sentence="6000"),
-		list(name="Possession, Syndicate Contraband", tooltip="To be in unauthorized possession of syndicate or other PTE technology.",colour="bad",icon="bomb",sentence="6000"),
-		list(name="Embezzlement", tooltip="To misuse a security or command position to steal money from the crew.",colour="bad",icon="dollar-sign",sentence="6000"),
-		list(name="B&E of a Restricted Area", tooltip="This is breaking into any Security area, Command area (Bridge, EVA, Captains Quarters, Teleporter, etc.), the Engine Room, Atmos, or Toxins research.",colour="bad",icon="id-card",sentence="6000"),
-		list(name="Dereliction of Duty", tooltip="To willfully abandon an obligation that is critical to the station's continued operation.",colour="bad",icon="walking",sentence="6000")
-	)
+	var/timetoset = 0		// Used to set releasetime upon starting the timer
 
 	maptext_height = 26
 	maptext_width = 32
-	maptext_y = -1
 
-/obj/machinery/door_timer/Initialize(mapload)
-	. = ..()
+/obj/machinery/door_timer/Initialize()
+	..()
+	return INITIALIZE_HINT_LATELOAD
 
-	Radio = new/obj/item/radio(src)
-	Radio.listening = 0
+/obj/machinery/door_timer/LateInitialize(mapload)
+	for(var/obj/machinery/door/window/brigdoor/M in SSmachines.machinery)
+		if (M.id == src.id)
+			targets += M
 
-/obj/machinery/door_timer/Initialize(mapload)
-	. = ..()
-	if(id != null)
-		for(var/obj/machinery/door/window/brigdoor/M in urange(20, src))
-			if (M.id == id)
-				targets += M
+	for(var/obj/machinery/flasher/F in SSmachines.machinery)
+		if(F.id_tag == src.id)
+			targets += F
 
-		for(var/obj/machinery/flasher/F in urange(20, src))
-			if(F.id == id)
-				targets += F
+	for(var/obj/structure/closet/secure_closet/brig/C in world)
+		if(C.id == src.id)
+			targets += C
 
-		for(var/obj/structure/closet/secure_closet/brig/C in urange(20, src))
-			if(C.id == id)
-				targets += C
-
-	if(!targets.len)
-		atom_break()
-	update_appearance(UPDATE_ICON)
-
-/obj/machinery/door_timer/attackby(obj/item/W, mob/user, params)
-	var/obj/item/card/id/card = W.GetID()
-	if (card)
-		say("Prisoner name set.")
-		desired_name = card.registered_name
-	else
-		return FALSE
+	if(length(targets)==0)
+		set_broken(TRUE)
+	queue_icon_update()
 
 //Main door timer loop, if it's timing and time is >0 reduce time by 1.
 // if it's less than 0, open door, reset timer
 // update the door_timer window and the icon
-/obj/machinery/door_timer/process()
-	if(stat & (NOPOWER|BROKEN))
-		return
+/obj/machinery/door_timer/Process()
+	if(inoperable())	return
+	if(src.timing)
 
-	if(timing)
-		if(world.time - activation_time >= timer_duration)
-			timer_end() // open doors, reset timer, clear status screen
-		update_appearance(UPDATE_ICON)
+		// poorly done midnight rollover
+		// (no seriously there's gotta be a better way to do this)
+		var/timeleft = timeleft()
+		if(timeleft > 1e5)
+			src.releasetime = 0
+
+
+		if(world.timeofday > src.releasetime)
+			src.timer_end(TRUE) // open doors, reset timer, clear status screen, broadcast to sec HUDs
+			src.timing = 0
+
+		src.update_icon()
+
+	else
+		timer_end()
+
+	return
+
 
 // open/closedoor checks if door_timer has power, if so it checks if the
 // linked door is open/closed (by density) then opens it/closes it.
-/obj/machinery/door_timer/proc/timer_start(mob/user)
-	if(stat & (NOPOWER|BROKEN))
-		return 0
 
-	activation_time = world.time
-	timing = TRUE
+// Closes and locks doors, power check
+/obj/machinery/door_timer/proc/timer_start()
+	if(inoperable())	return 0
+
+	// Set releasetime
+	releasetime = world.timeofday + timetoset
+
+
+	//set timing
+	timing = 1
 
 	for(var/obj/machinery/door/window/brigdoor/door in targets)
-		if(door.density)
-			continue
-		INVOKE_ASYNC(door, TYPE_PROC_REF(/obj/machinery/door/window/brigdoor, close))
+		if(door.density)	continue
+		spawn(0)
+			door.close()
 
 	for(var/obj/structure/closet/secure_closet/brig/C in targets)
-		if(C.broken)
-			continue
-		if(C.opened && !C.close())
-			continue
+		if(C.broken)	continue
+		if(C.opened && !C.close())	continue
 		C.locked = TRUE
-		C.update_appearance(UPDATE_ICON)
-
-	if(desired_crime)
-		var/datum/data/record/R = find_record("name", desired_name, GLOB.data_core.security)
-		if(R)
-			R.fields["criminal"] = WANTED_PRISONER
-			var/crime = GLOB.data_core.createCrimeEntry(desired_crime, null, user.real_name, station_time_timestamp())
-			GLOB.data_core.addCrime(R.fields["id"], crime)
-			investigate_log("New Crime: <strong>[desired_crime]</strong> | Added to [R.fields["name"]] by [key_name(user)]", INVESTIGATE_RECORDS)
-			say("Criminal record for [R.fields["name"]] successfully updated with inputted crime.")
-			playsound(loc, 'sound/machines/ping.ogg', 50, 1)
-		else if(!desired_name)
-			say("No prisoner name inputted, security record not updated.")
-			
+		C.queue_icon_update()
 	return 1
 
 
-/obj/machinery/door_timer/proc/timer_end(forced = FALSE)
-	if(stat & (NOPOWER|BROKEN))
-		return 0
+// Opens and unlocks doors, power check
+/obj/machinery/door_timer/proc/timer_end(broadcast_to_huds = 0)
+	if(inoperable())	return 0
 
-	if(!forced)
-		Radio.set_frequency(FREQ_SECURITY)
-		Radio.talk_into(src, "Timer has expired. Releasing prisoner.", FREQ_SECURITY)
+	// Reset releasetime
+	releasetime = 0
 
-	timing = FALSE
-	activation_time = null
-	set_timer(0)
-	update_appearance(UPDATE_ICON)
-	var/datum/data/record/R = find_record("name", desired_name, GLOB.data_core.security)
-	if(R)
-		R.fields["criminal"] = WANTED_DISCHARGED
-	for(var/mob/living/carbon/human/H in GLOB.carbon_list)
-		H.sec_hud_set_security_status()
+	//reset timing
+	timing = 0
+
+	if (broadcast_to_huds)
+		broadcast_security_hud_message("The timer for [id] has expired.", src)
 
 	for(var/obj/machinery/door/window/brigdoor/door in targets)
-		if(!door.density)
-			continue
-		INVOKE_ASYNC(door, TYPE_PROC_REF(/obj/machinery/door/window/brigdoor, open))
+		if(!door.density)	continue
+		spawn(0)
+			door.open()
 
 	for(var/obj/structure/closet/secure_closet/brig/C in targets)
-		if(C.broken)
-			continue
-		if(C.opened)
-			continue
-		C.locked = FALSE
-		C.update_appearance(UPDATE_ICON)
-
-	desired_crime = null
-	desired_name = null
+		if(C.broken)	continue
+		if(C.opened)	continue
+		C.locked = 0
+		C.queue_icon_update()
 
 	return 1
 
 
-/**
- * Return time left.
- * Arguments:
- * * seconds - return time in seconds if TRUE, else deciseconds.
- */
-/obj/machinery/door_timer/proc/time_left(seconds = FALSE)
-	. = max(0,timer_duration - (activation_time ? world.time - activation_time : 0))
-	if(seconds)
-		. /= 10
+// Check for releasetime timeleft
+/obj/machinery/door_timer/proc/timeleft()
+	. = round((releasetime - world.timeofday)/10)
+	if(. < 0)
+		. = 0
 
-/**
- * Set the timer. Does NOT automatically start counting down, but does update the display.
- *
- * returns TRUE if no change occurred
- *
- * Arguments:
- * value - time in deciseconds to set the timer for.
- */
-/obj/machinery/door_timer/proc/set_timer(value)
-	var/new_time = clamp(value,0,MAX_TIMER)
-	. = new_time == timer_duration //return 1 on no change
-	timer_duration = new_time
+// Set timetoset
+/obj/machinery/door_timer/proc/timeset(seconds)
+	timetoset = seconds * 10
 
-/obj/machinery/door_timer/ui_interact(mob/user, datum/tgui/ui)
-	ui = SStgui.try_update_ui(user, src, ui)
-	if(!ui)
-		ui = new(user, src, "BrigTimer", name)
-		ui.open()
+	if(timetoset <= 0)
+		timetoset = 0
 
-/obj/machinery/door_timer/ui_data()
+	return
+
+/obj/machinery/door_timer/interface_interact(mob/user)
+	ui_interact(user)
+	return TRUE
+
+/obj/machinery/door_timer/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1)
 	var/list/data = list()
-	var/time_left = time_left(seconds = TRUE)
-	data["seconds"] = round(time_left % 60)
-	data["minutes"] = round((time_left - data["seconds"]) / 60)
+
+	var/timeval = timing ? timeleft() : timetoset/10
 	data["timing"] = timing
-	data["flash_charging"] = FALSE
-	data["desired_name"] = desired_name
-	data["desired_crime"] = desired_crime
+	data["minutes"] = round(timeval/60)
+	data["seconds"] = timeval % 60
 
-	for(var/obj/machinery/flasher/F in targets)
-		if(F.last_flash && (F.last_flash + 150) > world.time)
-			data["flash_charging"] = TRUE
-			break
-	return data
+	var/list/flashes = list()
 
-/obj/machinery/door_timer/ui_static_data()
-	var/list/data = list()
-
-	data["pettyCrimes"] = crimespetty
-	data["minorCrimes"] = crimesminor
-	data["moderateCrimes"] = crimesmoderate
-	data["majorCrimes"] = crimesmajor
-	data["severeCrimes"] = crimessevere
-
-	return data
-
-/obj/machinery/door_timer/ui_act(action, params)
-	if(..())
-		return
-	. = TRUE
-
-	if(!allowed(usr))
-		to_chat(usr, span_warning("Access denied."))
-		return FALSE
-
-	switch(action)
-		if("time")
-			var/value = text2num(params["adjust"])
-			if(value)
-				. = set_timer(time_left()+value)
-		if("start")
-			timer_start(usr)
-			for(var/mob/living/carbon/human/H in GLOB.carbon_list)
-				H.sec_hud_set_security_status()
-		if("stop")
-			timer_end(forced = TRUE)
-			for(var/mob/living/carbon/human/H in GLOB.carbon_list)
-				H.sec_hud_set_security_status()
-		if("flash")
-			for(var/obj/machinery/flasher/F in targets)
-				F.flash()
-		if("preset")
-			var/preset = params["preset"]
-			var/preset_time = time_left()
-			switch(preset)
-				if("short")
-					preset_time = PRESET_SHORT
-				if("medium")
-					preset_time = PRESET_MEDIUM
-				if("long")
-					preset_time = PRESET_LONG
-			. = set_timer(preset_time)
-			if(timing)
-				activation_time = world.time
-		if("prisoner_name")
-			var/prisoner_name = stripped_input(usr, "Input prisoner's name...", "Crimes", desired_name)
-			if(!prisoner_name || !Adjacent(usr))
-				return FALSE
-			desired_name = prisoner_name
-		if("presetCrime")
-			var/value = text2num(params["preset"])
-			var/preset_crime = "N/A"
-			for(var/allcrimes in crimespetty + crimesminor + crimesmoderate + crimesmajor + crimessevere)
-				if(params["crime"] == allcrimes["name"])
-					preset_crime = params["crime"]
-					break
-			desired_crime += preset_crime + ", "
-			if(value)
-				. = set_timer(time_left()+value)
+	for(var/obj/machinery/flasher/flash  in targets)
+		var/list/flashdata = list()
+		if(flash.last_flash && (flash.last_flash + 150) > world.time)
+			flashdata["status"] = 0
 		else
-			. = FALSE
+			flashdata["status"] = 1
+		flashes[LIST_PRE_INC(flashes)] = flashdata
+
+	data["flashes"] = flashes
+
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
+	if (!ui)
+		ui = new(user, src, ui_key, "brig_timer.tmpl", name, 270, 150)
+		ui.set_initial_data(data)
+		ui.open()
+		ui.set_auto_update(1)
+
+/obj/machinery/door_timer/CanUseTopic(user, state)
+	if(!allowed(user))
+		return STATUS_UPDATE
+	return ..()
+
+/obj/machinery/door_timer/OnTopic(mob/user, list/href_list, state)
+	if (href_list["toggle"])
+		if(timing)
+			timer_end()
+		else
+			timer_start()
+			if(timetoset > 18000)
+				log_and_message_admins("has started a brig timer over 30 minutes in length!", user)
+		. =  TOPIC_REFRESH
+
+	if (href_list["flash"])
+		for(var/obj/machinery/flasher/F in targets)
+			F.flash()
+		. =  TOPIC_REFRESH
+
+	if (href_list["adjust"])
+		timetoset += text2num(href_list["adjust"])
+		timetoset = clamp(timetoset, 0, 36000)
+		. = TOPIC_REFRESH
+
+	update_icon()
+
 
 //icon update function
-// if NOPOWER, display blank
-// if BROKEN, display blue screen of death icon AI uses
+// if MACHINE_STAT_NOPOWER, display blank
+// if MACHINE_STAT_BROKEN, display blue screen of death icon AI uses
 // if timing=true, run update display function
-/obj/machinery/door_timer/update_icon(updates=ALL)
-	. = ..()
-	if(stat & BROKEN)
-		return
-	if(stat & NOPOWER)
+/obj/machinery/door_timer/on_update_icon()
+	if(!is_powered())
 		icon_state = "frame"
 		return
-
-	if(timing)
+	if(MACHINE_IS_BROKEN(src))
+		set_picture("ai_bsod")
+		return
+	if(src.timing)
 		var/disp1 = id
-		var/time_left = time_left(seconds = TRUE)
-		var/disp2 = "[add_leading(num2text((time_left / 60) % 60), 2, "0")]:[add_leading(num2text(time_left % 60), 2, "0")]"
+		var/timeleft = timeleft()
+		var/disp2 = "[pad_left(num2text((timeleft / 60) % 60), 2, "0")]~[pad_left(num2text(timeleft % 60), 2, "0")]"
 		if(length(disp2) > CHARS_PER_LINE)
 			disp2 = "Error"
 		update_display(disp1, disp2)
-		return
-	if(maptext)
-		maptext = ""
+	else
+		if(maptext)
+			maptext = ""
+		update_display("Set","Time") // would be nice to have some default printed text
+	return
+
 
 // Adds an icon in case the screen is broken/off, stolen from status_display.dm
-/obj/machinery/door_timer/update_overlays()
-	. = ..()
-	if(!(stat & BROKEN))
-		return
-	if(maptext)
-		maptext = ""
-	. += mutable_appearance('icons/obj/status_display.dmi', "ai_bsod")
+/obj/machinery/door_timer/proc/set_picture(state)
+	picture_state = state
+	ClearOverlays()
+	AddOverlays(image('icons/obj/machines/status_display.dmi', icon_state=picture_state))
 
 
 //Checks to see if there's 1 line or 2, adds text-icons-numbers/letters over display
 // Stolen from status_display
 /obj/machinery/door_timer/proc/update_display(line1, line2)
-	line1 = uppertext(line1)
-	line2 = uppertext(line2)
 	var/new_text = {"<div style="font-size:[FONT_SIZE];color:[FONT_COLOR];font:'[FONT_STYLE]';text-align:center;" valign="top">[line1]<br>[line2]</div>"}
 	if(maptext != new_text)
 		maptext = new_text
 
-#undef PRESET_SHORT
-#undef PRESET_MEDIUM
-#undef PRESET_LONG
 
-#undef MAX_TIMER
+//Actual string input to icon display for loop, with 5 pixel x offsets for each letter.
+//Stolen from status_display
+/obj/machinery/door_timer/proc/texticon(tn, px = 0, py = 0)
+	var/image/I = image('icons/obj/machines/status_display.dmi', "blank")
+	var/len = length(tn)
+
+	for(var/d = 1 to len)
+		var/char = copytext(tn, len-d+1, len-d+2)
+		if(char == " ")
+			continue
+		var/image/ID = image('icons/obj/machines/status_display.dmi', icon_state=char)
+		ID.pixel_x = -(d-1)*5 + px
+		ID.pixel_y = py
+		I.AddOverlays(ID)
+	return I
+
+
+/obj/machinery/door_timer/cell_1
+	name = "Cell 1"
+	id = "Cell 1"
+
+/obj/machinery/door_timer/cell_2
+	name = "Cell 2"
+	id = "Cell 2"
+
+/obj/machinery/door_timer/cell_3
+	name = "Cell 3"
+	id = "Cell 3"
+
+/obj/machinery/door_timer/cell_4
+	name = "Cell 4"
+	id = "Cell 4"
+
+/obj/machinery/door_timer/cell_5
+	name = "Cell 5"
+	id = "Cell 5"
+
+/obj/machinery/door_timer/cell_6
+	name = "Cell 6"
+	id = "Cell 6"
+
 #undef FONT_SIZE
 #undef FONT_COLOR
 #undef FONT_STYLE

@@ -10,73 +10,89 @@
 	Note that AI have no need for the adjacency proc, and so this proc is a lot cleaner.
 */
 /mob/living/silicon/ai/DblClickOn(atom/A, params)
-	if(control_disabled || incapacitated())
-		return
+	if(control_disabled || stat) return
 
 	if(ismob(A))
 		ai_actual_track(A)
 	else
 		A.move_camera_by_click()
 
+
 /mob/living/silicon/ai/ClickOn(atom/A, params)
 	if(world.time <= next_click)
 		return
 	next_click = world.time + 1
 
-	if(multicam_on)
-		var/turf/T = get_turf(A)
-		if(T)
-			for(var/atom/movable/screen/movable/pic_in_pic/ai/P in T.vis_locs)
-				if(P.ai == src)
-					P.Click(params)
-					break
-
-	if(check_click_intercept(params,A))
-		return
-
-	if(control_disabled || incapacitated())
-		return
-
-	var/turf/pixel_turf = get_turf_pixel(A)
-	if(isnull(pixel_turf))
-		return
-	if(!can_see(A))
-		if(isturf(A)) //On unmodified clients clicking the static overlay clicks the turf underneath
-			return //So there's no point messaging admins
-		message_admins("[ADMIN_LOOKUPFLW(src)] failed can_see on AI click of [A] (Turf Loc: [ADMIN_VERBOSEJMP(pixel_turf)]))")
-		log_admin("[key_name(src)] failed can_see on AI click of [A] (Turf Loc: [AREACOORD(pixel_turf)])")
+	if(incapacitated())
 		return
 
 	var/list/modifiers = params2list(params)
-	if(modifiers["shift"] && modifiers["ctrl"])
-		CtrlShiftClickOn(A)
-		return
-	if(modifiers["middle"])
-		if(controlled_mech) //Are we piloting a mech? Placed here so the modifiers are not overridden.
-			controlled_mech.click_action(A, src, params) //Override AI normal click behavior.
-		return
-	if(modifiers["shift"])
-		ShiftClickOn(A)
-		return
-	if(modifiers["alt"]) // alt and alt-gr (rightalt)
-		AltClickOn(A)
-		return
-	if(modifiers["ctrl"] && CtrlClickOn(A)) // returns whether or not it should be overridden
+	if (modifiers["ctrl"] && modifiers["alt"] && modifiers["shift"])
+		if (!control_disabled && A.AICtrlAltShiftClick(src))
+			return TRUE
+		if (CtrlAltShiftClickOn(A))
+			return TRUE
+	else if (modifiers["ctrl"] && modifiers["alt"])
+		if (!control_disabled && A.AICtrlAltClick(src))
+			return TRUE
+		if (CtrlAltClickOn(A))
+			return TRUE
+	else if (modifiers["shift"] && modifiers["ctrl"])
+		if (!control_disabled && A.AICtrlShiftClick(src))
+			return TRUE
+		if (CtrlShiftClickOn(A))
+			return TRUE
+	else if (modifiers["shift"] && modifiers["alt"])
+		if (!control_disabled && A.AIAltShiftClick(src))
+			return TRUE
+		if (AltShiftClickOn(A))
+			return TRUE
+	else if (modifiers["middle"])
+		if (!control_disabled && A.AIMiddleClick(src))
+			return TRUE
+		if (MiddleClickOn(A))
+			return TRUE
+	else if (modifiers["shift"])
+		if (!control_disabled && A.AIShiftClick(src))
+			return TRUE
+		if (ShiftClickOn(A))
+			return TRUE
+	else if (modifiers["alt"])
+		if (!control_disabled && A.AIAltClick(src))
+			return TRUE
+		if (AltClickOn(A))
+			return TRUE
+	else if (modifiers["ctrl"])
+		if (!control_disabled && A.AICtrlClick(src))
+			return TRUE
+		if (CtrlClickOn(A))
+			return TRUE
+
+	face_atom(A) // change direction to face what you clicked on
+
+	if(control_disabled || !canClick())
 		return
 
-	if(world.time <= next_move)
+	if(multitool_mode && isobj(A))
+		var/obj/O = A
+		var/datum/extension/interactive/multitool/MT = get_extension(O, /datum/extension/interactive/multitool)
+		if(MT)
+			MT.interact(aiMulti, src)
+			return
+
+	if(silicon_camera.in_camera_mode)
+		silicon_camera.camera_mode_off()
+		silicon_camera.captureimage(A, usr)
 		return
 
-	if(aicamera.in_camera_mode)
-		aicamera.camera_mode_off()
-		aicamera.captureimage(pixel_turf, usr)
-		return
-	if(waypoint_mode)
-		waypoint_mode = 0
-		set_waypoint(A)
-		return
-
-	A.attack_ai(src, modifiers)
+	/*
+		AI restrained() currently does nothing
+	if(restrained())
+		RestrainedClickOn(A)
+	else
+	*/
+	A.add_hiddenprint(src)
+	A.attack_ai(src)
 
 /*
 	AI has no need for the UnarmedAttack() and RangedAttack() procs,
@@ -84,152 +100,121 @@
 	The below is only really for safety, or you can alter the way
 	it functions and re-insert it above.
 */
-/mob/living/silicon/ai/UnarmedAttack(atom/A, proximity, modifiers)
-	A.attack_ai(src, modifiers)
-/mob/living/silicon/ai/RangedAttack(atom/A, proximity, modifiers)
-	A.attack_ai(src, modifiers)
+/mob/living/silicon/ai/UnarmedAttack(atom/A)
+	A.attack_ai(src)
 
-/atom/proc/attack_ai(mob/user, modifiers)
+/mob/living/silicon/ai/RangedAttack(atom/A, params)
+	A.attack_ai(src)
+	return TRUE
+
+
+/**
+ * Called when an AI mob clicks on an atom.
+ *
+ * **Parameters**:
+ * - `user` - The mob clicking on the atom.
+ */
+/atom/proc/attack_ai(mob/user as mob)
 	return
-
-/*
-	Since the AI handles shift, ctrl, and alt-click differently
-	than anything else in the game, atoms have separate procs
-	for AI shift, ctrl, and alt clicking.
-*/
-
-/mob/living/silicon/ai/CtrlShiftClickOn(atom/A)
-	A.AICtrlShiftClick(src)
-
-/mob/living/silicon/ai/ShiftClickOn(atom/A)
-	A.AIShiftClick(src)
-
-/mob/living/silicon/ai/CtrlClickOn(atom/A)
-	return A.AICtrlClick(src)
-
-/mob/living/silicon/ai/AltClickOn(atom/A)
-	A.AIAltClick(src)
 
 /*
 	The following criminally helpful code is just the previous code cleaned up;
 	I have no idea why it was in atoms.dm instead of respective files.
 */
-/* Questions: Instead of an Emag check on every function, can we not add to airlocks onclick if emag return? */
 
-/* Atom Procs */
-/atom/proc/AICtrlClick()
-	return
-/atom/proc/AIAltClick(mob/living/silicon/ai/user)
-	AltClick(user)
-	return
-/atom/proc/AIShiftClick()
-	return
 /atom/proc/AICtrlShiftClick()
-	return
+	return FALSE
 
-
-/* Airlocks */
-/obj/machinery/door/airlock/AICtrlClick() // Bolts doors
-	if((obj_flags & EMAGGED) || (obj_flags & CMAGGED))
+/obj/machinery/door/airlock/AICtrlShiftClick() // Electrifies doors.
+	if(usr.incapacitated())
 		return FALSE
-
-	var/mob/living/silicon/ai/AI = usr
-	if(istype(AI) && !AI.has_subcontroller_connection(get_area(src)))
-		to_chat(AI, span_warning("No connection to subcontroller detected. Priming servos..."))
-		if(!do_after(AI, 1 SECONDS, src, IGNORE_USER_LOC_CHANGE))
-			return TRUE
-
-	toggle_bolt(usr)
-	add_hiddenprint(usr)
+	if(!electrified_until)
+		// permanent shock
+		Topic(src, list("command"="electrify_permanently", "activate" = "1"))
+	else
+		// disable/6 is not in Topic; disable/5 disables both temporary and permanent shock
+		Topic(src, list("command"="electrify_permanently", "activate" = "0"))
 	return TRUE
 
-/obj/machinery/door/airlock/AIAltClick() // Eletrifies doors.
-	if((obj_flags & EMAGGED) || (obj_flags & CMAGGED))
-		return
+/atom/proc/AICtrlAltClick()
+	return FALSE
 
-	var/mob/living/silicon/ai/AI = usr
-	if(istype(AI) && !AI.has_subcontroller_connection(get_area(src)))
-		to_chat(AI, span_warning("No connection to subcontroller detected. Priming servos..."))
-		if(!do_after(AI, 1 SECONDS, src, IGNORE_USER_LOC_CHANGE))
-			return
-
-	if(!secondsElectrified)
-		shock_perm(usr)
-	else
-		shock_restore(usr)
+/atom/proc/AIShiftClick()
+	return FALSE
 
 /obj/machinery/door/airlock/AIShiftClick()  // Opens and closes doors!
-	if((obj_flags & EMAGGED) || (obj_flags & CMAGGED))
-		return
-
-	var/mob/living/silicon/ai/AI = usr
-	if(istype(AI) && !AI.has_subcontroller_connection(get_area(src)))
-		to_chat(AI, span_warning("No connection to subcontroller detected. Priming servos..."))
-		if(!do_after(AI, 1 SECONDS, src, IGNORE_USER_LOC_CHANGE))
-			return
-	user_toggle_open(usr)
-	add_hiddenprint(usr)
-
-/obj/machinery/door/airlock/AICtrlShiftClick()  // Sets/Unsets Emergency Access Override
-	if((obj_flags & EMAGGED) || (obj_flags & CMAGGED))
-		return
-
-	var/mob/living/silicon/ai/AI = usr
-	if(istype(AI) && !AI.has_subcontroller_connection(get_area(src)))
-		to_chat(AI, span_warning("No connection to subcontroller detected. Priming servos..."))
-		if(!do_after(AI, 1 SECONDS, src, IGNORE_USER_LOC_CHANGE))
-			return
-
-	toggle_emergency(usr)
-	add_hiddenprint(usr)
-
-/* APC */
-/obj/machinery/power/apc/AICtrlClick() // turns off/on APCs.
-	var/mob/living/silicon/ai/AI = usr
-	if(istype(AI) && !AI.has_subcontroller_connection(get_area(src)))
-		to_chat(AI, span_warning("No connection to subcontroller detected. Polling APC..."))
-		if(!do_after(AI, 1 SECONDS, src, IGNORE_USER_LOC_CHANGE))
-			return TRUE
-	if(can_use(usr, 1))
-		toggle_breaker(usr)
+	if(usr.incapacitated())
+		return FALSE
+	if(density)
+		Topic(src, list("command"="open", "activate" = "1"))
+	else
+		Topic(src, list("command"="open", "activate" = "0"))
 	return TRUE
 
-/* AI Turrets */
-/obj/machinery/turretid/AIAltClick() //toggles lethal on turrets
-	if(ailock)
-		return
-	toggle_lethal(usr)
+/atom/proc/AICtrlClick()
+	return FALSE
+
+/obj/machinery/door/airlock/AICtrlClick() // Bolts doors
+	if(usr.incapacitated())
+		return FALSE
+	if(locked)
+		Topic(src, list("command"="bolts", "activate" = "0"))
+	else
+		Topic(src, list("command"="bolts", "activate" = "1"))
+	return TRUE
+
+/obj/machinery/power/apc/AICtrlClick() // turns off/on APCs.
+	if(usr.incapacitated())
+		return FALSE
+	Topic(src, list("breaker"="1"))
+	return TRUE
 
 /obj/machinery/turretid/AICtrlClick() //turns off/on Turrets
-	if(ailock)
-		return TRUE
-	toggle_on(usr)
+	if(usr.incapacitated())
+		return FALSE
+	Topic(src, list("command"="enable", "value"="[!enabled]"))
 	return TRUE
 
-/* Holopads */
-/obj/machinery/holopad/AIAltClick(mob/living/silicon/ai/user)
-	hangup_all_calls()
-	add_hiddenprint(usr)
+/atom/proc/AIAltClick(atom/A)
+	return FALSE
 
-/* Humans (With upgrades) */
-/mob/living/carbon/human/AIShiftClick(mob/living/silicon/ai/user)
+/obj/machinery/turretid/AIAltClick() //toggles lethal on turrets
+	if(usr.incapacitated())
+		return FALSE
+	Topic(src, list("command"="lethal", "value"="[!lethal]"))
+	return TRUE
 
-	if(user.client && (user.client.eye == user.eyeobj || user.client.eye == user.loc))
-		if(user.canExamineHumans)
-			user.examinate(src)
-		if(user.canCameraMemoryTrack)
-			if(name == "Unknown")
-				to_chat(user, span_warning("Unable to track 'Unknown' persons! Their name must be visible."))
-				return
-			if(src == user.cameraMemoryTarget)
-				to_chat(user, span_warning("Stop tracking this individual? <a href='byond://?src=[REF(user)];stopTrackHuman=1'>\[UNTRACK\]</a>"))
-			else
-				to_chat(user, span_warning("Track this individual? <a href='byond://?src=[REF(user)];trackHuman=[src.name]'>\[TRACK\]</a>"))
-	return
+/atom/proc/AIMiddleClick(mob/living/silicon/user)
+	return FALSE
+
+/obj/machinery/door/airlock/AIMiddleClick() // Toggles door bolt lights.
+	if(usr.incapacitated())
+		return FALSE
+	if(..())
+		return TRUE
+
+	if(!src.lights)
+		Topic(src, list("command"="lights", "activate" = "1"))
+	else
+		Topic(src, list("command"="lights", "activate" = "0"))
+	return TRUE
+
+
+/atom/proc/AIAltShiftClick(atom/A)
+	return FALSE
+
+
+/atom/proc/AICtrlAltShiftClick(atom/A)
+	return FALSE
+
 
 //
-// Override TurfAdjacent for AltClicking
+// Override AdjacentQuick for AltClicking
 //
 
 /mob/living/silicon/ai/TurfAdjacent(turf/T)
-	return (GLOB.cameranet && GLOB.cameranet.checkTurfVis(T))
+	return (cameranet && cameranet.is_turf_visible(T))
+
+/mob/living/silicon/ai/face_atom(atom/A)
+	if(eyeobj)
+		eyeobj.face_atom(A)

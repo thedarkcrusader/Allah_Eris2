@@ -1,30 +1,41 @@
+#define SKILL_UNSKILLED   1
+#define SKILL_BASIC       2
+#define SKILL_TRAINED     3
+#define SKILL_EXPERIENCED 4
+#define SKILL_MASTER      5
+#define HAS_PERK          SKILL_UNSKILLED + 1
 
-/// Medicine and surgery.
-#define SKILL_PHYSIOLOGY "physiology"
-/// Construction and repair of structures and machinery.
-#define SKILL_MECHANICAL "mechanics"
-/// Hacking, piloting, and robotic maintenance.
-#define SKILL_TECHNICAL "technical"
-/// Chemistry, botany, physics, and other sciences.
-#define SKILL_SCIENCE "science"
-/// Strength, endurance, accuracy.
-#define SKILL_FITNESS "fitness"
+/// Min skill value selectable
+#define SKILL_MIN      SKILL_UNSKILLED
+/// Max skill value selectable
+#define SKILL_MAX      SKILL_MASTER
+/// Default skill value for mobs
+#define SKILL_DEFAULT  SKILL_EXPERIENCED
+/// Baseline skill level used for determining mechanical skill multipliers.
+#define SKILL_BASELINE SKILL_TRAINED
 
-/// No experience whatsoever.
-#define EXP_NONE 0
-/// Some experience, but not much.
-#define EXP_LOW 1
-/// Enough experience to do a decent job.
-#define EXP_MID 2
-/// Above average skill level.
-#define EXP_HIGH 3
-/// Exceptionally skilled.
-#define EXP_MASTER 4
-/// Uniquely gifted. Not obtainable through normal means.
-#define EXP_GENIUS 5
+#define SKILL_EASY     SKILL_UNSKILLED
+#define SKILL_AVERAGE  SKILL_BASIC
+#define SKILL_HARD     SKILL_EXPERIENCED
 
-/// Experience required to increase your skills by one level. Increases exponentially the higher your level already is.
-#define EXPERIENCE_PER_LEVEL 500
-
-/// Calculates how much experience is required to reach a given level.
-#define EXP_REQ_CALC(level) (EXPERIENCE_PER_LEVEL * (((2**(level + 1)) / 2) - 1))
+#define SKILL_BUREAUCRACY   /singleton/hierarchy/skill/organizational/bureaucracy
+#define SKILL_FINANCE       /singleton/hierarchy/skill/organizational/finance
+#define SKILL_EVA           /singleton/hierarchy/skill/general/EVA
+#define SKILL_MECH          /singleton/hierarchy/skill/general/EVA/mech
+#define SKILL_PILOT         /singleton/hierarchy/skill/general/pilot
+#define SKILL_HAULING       /singleton/hierarchy/skill/general/hauling
+#define SKILL_COMPUTER      /singleton/hierarchy/skill/general/computer
+#define SKILL_BOTANY        /singleton/hierarchy/skill/service/botany
+#define SKILL_COOKING       /singleton/hierarchy/skill/service/cooking
+#define SKILL_COMBAT        /singleton/hierarchy/skill/security/combat
+#define SKILL_WEAPONS       /singleton/hierarchy/skill/security/weapons
+#define SKILL_FORENSICS     /singleton/hierarchy/skill/security/forensics
+#define SKILL_CONSTRUCTION  /singleton/hierarchy/skill/engineering/construction
+#define SKILL_ELECTRICAL    /singleton/hierarchy/skill/engineering/electrical
+#define SKILL_ATMOS         /singleton/hierarchy/skill/engineering/atmos
+#define SKILL_ENGINES       /singleton/hierarchy/skill/engineering/engines
+#define SKILL_DEVICES       /singleton/hierarchy/skill/research/devices
+#define SKILL_SCIENCE       /singleton/hierarchy/skill/research/science
+#define SKILL_MEDICAL       /singleton/hierarchy/skill/medical/medical
+#define SKILL_ANATOMY       /singleton/hierarchy/skill/medical/anatomy
+#define SKILL_CHEMISTRY     /singleton/hierarchy/skill/medical/chemistry

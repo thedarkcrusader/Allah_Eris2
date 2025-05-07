@@ -1,228 +1,261 @@
-/datum/surgery
-	var/name = "surgery"
-	var/desc = "surgery description"
-	var/icon = 'icons/misc/surgery_icons.dmi'
-	var/icon_state
-	/// Determines what overlay to apply to the surgery icon
-	var/tier = "0"
-	var/status = 1
-	/// Steps in a surgery
-	var/list/steps = list()
-	/// Actively performing a Surgery
-	var/step_in_progress = 0
-	/// Can cancel this surgery after step 1 with cautery
-	var/can_cancel = 1
-	/// Acceptable Species
-	var/list/target_mobtypes = list(/mob/living/carbon/human)
-	/// Surgery location
-	var/location = BODY_ZONE_CHEST
-	/// Prevents you from performing an operation on incorrect limbs. FALSE for any limb type
-	var/requires_bodypart_type = BODYPART_ORGANIC
-	/// Multiple locations
-	var/list/possible_locs = list()
-	/// If this surgery ignores clothes
-	var/ignore_clothes = 0
-	/// Operation target mob
-	var/mob/living/carbon/target
-	/// Operable body part
-	var/obj/item/bodypart/operated_bodypart
-	/// The actual wound datum instance we're targeting
-	var/datum/wound/operated_wound
-	/// The wound type this surgery targets
-	var/datum/wound/targetable_wound
-	/// Surgery available only when a bodypart is present, or only when it is missing.
-	var/requires_bodypart = TRUE
-	/// Step success propability multiplier
-	var/success_multiplier = 0
-	/// Some surgeries don't work on limbs that don't really exist
-	var/requires_real_bodypart = 0
-	/// Does the vicitm needs to be lying down.
-	var/lying_required = TRUE
-	/// Can the surgery be performed on yourself.
-	var/self_operable = FALSE
-	/// Handles techweb-oriented surgeries, previously restricted to the /advanced subtype (You still need to add designs)
-	var/requires_tech = FALSE
-	/// Type; doesn't show up if this type exists. Set to /datum/surgery if you want to hide a "base" surgery (useful for typing parents IE healing.dm just make sure to null it out again)
-	var/replaced_by
+// A list of types that will not attempt to perform surgery if the user is on help intent.
+GLOBAL_LIST_AS(surgery_tool_exceptions, list(
+	/obj/item/auto_cpr,
+	/obj/item/device/scanner/health,
+	/obj/item/shockpaddles,
+	/obj/item/reagent_containers/hypospray,
+	/obj/item/modular_computer,
+	/obj/item/reagent_containers/syringe,
+	/obj/item/reagent_containers/borghypo
+))
 
-/datum/surgery/New(surgery_target, surgery_location, surgery_bodypart)
-	..()
-	if(surgery_target)
-		target = surgery_target
-		if(is_synth(target))
-			ignore_clothes = TRUE
-		target.surgeries += src
-		if(surgery_location)
-			location = surgery_location
-		if(surgery_bodypart)
-			operated_bodypart = surgery_bodypart
-			if(targetable_wound)
-				operated_wound = operated_bodypart.get_wound_type(targetable_wound)
-				operated_wound.attached_surgery = src
+GLOBAL_LIST_EMPTY(surgery_tool_exception_cache)
 
-/datum/surgery/Destroy()
-	if(operated_wound)
-		operated_wound.attached_surgery = null
-	if(target)
-		target.surgeries -= src
-	target = null
-	operated_bodypart = null
-	return ..()
+/* SURGERY STEPS */
+/singleton/surgery_step
+	var/name
+	var/list/allowed_tools               // type path referencing tools that can be used for this step, and how well are they suited for it
+	var/list/allowed_species             // type paths referencing races that this step applies to.
+	var/list/disallowed_species          // type paths referencing races that this step applies to.
+	var/min_duration = 0                 // duration of the step
+	var/max_duration = 0                 // duration of the step
+	var/can_infect = 0                   // evil infection stuff that will make everyone hate me
+	var/blood_level = 0                  // How much blood this step can get on surgeon. 1 - hands, 2 - full body.
+	var/shock_level = 0	                 // what shock level will this step put patient on
+	var/delicate = 0                     // if this step NEEDS stable optable or can be done on any valid surface with no penalty
+	var/surgery_candidate_flags = 0      // Various bitflags for requirements of the surgery.
+	var/strict_access_requirement = TRUE // Whether or not this surgery will be fuzzy on size requirements.
 
+//returns how well tool is suited for this step
+/singleton/surgery_step/proc/tool_quality(obj/item/tool)
+	for (var/T in allowed_tools)
+		if (istype(tool,T))
+			return allowed_tools[T]
+	return 0
 
-/datum/surgery/proc/can_start(mob/user, mob/living/target) //FALSE to not show in list
-	. = TRUE
-	if(replaced_by == /datum/surgery)
-		return FALSE
+/singleton/surgery_step/proc/pre_surgery_step(mob/living/user, mob/living/carbon/human/target, target_zone, obj/item/tool)
+	return TRUE
 
-	if(HAS_TRAIT(user, TRAIT_SURGEON) || HAS_TRAIT(user.mind, TRAIT_SURGEON))
-		if(replaced_by)
-			return FALSE
-		else
-			return TRUE
+// Checks if this step applies to the user mob at all
+/singleton/surgery_step/proc/is_valid_target(mob/living/carbon/human/target)
+	if(!ishuman(target))
+		return 0
 
-	if(!requires_tech && !replaced_by)
-		return TRUE
-	// True surgeons (like abductor scientists) need no instructions
+	if(allowed_species)
+		for(var/species in allowed_species)
+			if(target.species.get_bodytype(target) == species)
+				return 1
 
-	if(requires_tech)
-		. = FALSE
+	if(disallowed_species)
+		for(var/species in disallowed_species)
+			if(target.species.get_bodytype(target) == species)
+				return 0
 
-	var/turf/T = get_turf(target)
-	var/list/adv_surgeries = list()
+	return 1
 
-	//Get the surgery bed component and adds available surgeries to the list
-	var/datum/component/surgery_bed/SB
-	for(var/obj/op_table in T.get_all_contents())
-		SB = op_table.GetComponent(/datum/component/surgery_bed)
-		if(istype(SB))
-			break
+/singleton/surgery_step/proc/get_skill_reqs(mob/living/user, mob/living/carbon/human/target, obj/item/tool, target_zone)
+	if(delicate)
+		return SURGERY_SKILLS_DELICATE
+	else
+		return SURGERY_SKILLS_GENERIC
 
-	if(istype(SB))
-		adv_surgeries |= SB.get_surgeries()
+// checks whether this step can be applied with the given user and target
+/singleton/surgery_step/proc/can_use(mob/living/user, mob/living/carbon/human/target, target_zone, obj/item/tool)
+	return assess_bodypart(user, target, target_zone, tool) && assess_surgery_candidate(user, target, target_zone, tool)
 
-	//Get the advanced health analyzer in the off hand or pockets if available and adds available surgeries to the list
-	var/analyzerlocations = list(user.get_inactive_held_item(), user.get_item_by_slot(ITEM_SLOT_LPOCKET), user.get_item_by_slot(ITEM_SLOT_RPOCKET))
-	var/obj/item/healthanalyzer/advanced/adv = locate() in analyzerlocations
-	if(iscyborg(user) && !istype(adv))
-		var/mob/living/silicon/robot/R = user
-		adv = locate() in R.module.modules
-
-	if(istype(adv))
-		adv_surgeries |= adv.advanced_surgeries
-
-	var/obj/item/rod_of_asclepius/snakestick = user.get_inactive_held_item() //this would be in the inactive hand, unless we let it start surgeries
-	if(istype(snakestick))
-		adv_surgeries |= snakestick.advanced_surgeries
-
-	//Get the advanced health analyzer in the off had if available and adds available surgeries to the list
-	if(replaced_by in adv_surgeries)
-		return FALSE
-	if(type in adv_surgeries)
-		return TRUE
-
-/datum/surgery/proc/next_step(mob/user, modifiers)
-	if(location != user.zone_selected)
-		return FALSE
-	if(step_in_progress)
-		return TRUE
-
-	var/try_to_fail = FALSE
-	if(modifiers && modifiers[RIGHT_CLICK])
-		try_to_fail = TRUE
-
-	var/datum/surgery_step/S = get_surgery_step()
-	if(S)
-		var/obj/item/tool = user.get_active_held_item()
-		if(S.try_op(user, target, user.zone_selected, tool, src, try_to_fail))
-			return TRUE
-		if(tool)
-			if(tool.tool_behaviour == TOOL_CAUTERY || (requires_bodypart_type == BODYPART_ROBOTIC && tool.tool_behaviour == TOOL_SCREWDRIVER))
-				// Cancel the surgery if a cautery/screwdriver is used AND it's not the tool used in the next step.
-				attempt_cancel_surgery(src, tool, target, user)
-				return TRUE
-			if(tool.item_flags & SURGICAL_TOOL) //Just because you used the wrong tool it doesn't mean you meant to whack the patient with it
-				to_chat(user, span_warning("This step requires a different tool!"))
-				return TRUE
+/singleton/surgery_step/proc/assess_bodypart(mob/living/user, mob/living/carbon/human/target, target_zone, obj/item/tool)
+	if(istype(target) && target_zone)
+		var/obj/item/organ/external/affected = target.get_organ(target_zone)
+		if(affected)
+			// Check various conditional flags.
+			if(((surgery_candidate_flags & SURGERY_NO_ROBOTIC) && BP_IS_ROBOTIC(affected)) || \
+			 ((surgery_candidate_flags & SURGERY_NO_CRYSTAL) && BP_IS_CRYSTAL(affected))   || \
+			 ((surgery_candidate_flags & SURGERY_NO_STUMP) && affected.is_stump())         || \
+			 ((surgery_candidate_flags & SURGERY_NO_FLESH) && !(BP_IS_ROBOTIC(affected) || BP_IS_CRYSTAL(affected))))
+				return FALSE
+			// Check if the surgery target is accessible.
+			if(BP_IS_ROBOTIC(affected))
+				if(((surgery_candidate_flags & SURGERY_NEEDS_ENCASEMENT) || \
+				 (surgery_candidate_flags & SURGERY_NEEDS_INCISION)      || \
+				 (surgery_candidate_flags & SURGERY_NEEDS_RETRACTED))    && \
+				 affected.hatch_state != HATCH_OPENED)
+					return FALSE
+			else
+				var/open_threshold = 0
+				if(surgery_candidate_flags & SURGERY_NEEDS_INCISION)
+					open_threshold = SURGERY_OPEN
+				else if(surgery_candidate_flags & SURGERY_NEEDS_RETRACTED)
+					open_threshold = SURGERY_RETRACTED
+				else if(surgery_candidate_flags & SURGERY_NEEDS_ENCASEMENT)
+					open_threshold = (affected.encased ? SURGERY_ENCASED : SURGERY_RETRACTED)
+				if(open_threshold && ((strict_access_requirement && affected.how_open() != open_threshold) || \
+				 affected.how_open() < open_threshold))
+					return FALSE
+			// Check if clothing is blocking access
+			var/obj/item/I = target.get_covering_equipped_item_by_zone(target_zone)
+			if(I && (I.item_flags & ITEM_FLAG_THICKMATERIAL))
+				to_chat(user,SPAN_NOTICE("The material covering this area is too thick for you to do surgery through!"))
+				return FALSE
+			return affected
 	return FALSE
 
-/datum/surgery/proc/get_surgery_step()
-	var/step_type = steps[status]
-	return new step_type
+/singleton/surgery_step/proc/assess_surgery_candidate(mob/living/user, mob/living/carbon/human/target, target_zone, obj/item/tool)
+	return ishuman(target)
 
-/datum/surgery/proc/get_surgery_next_step()
-	if(status < steps.len)
-		var/step_type = steps[status + 1]
-		return new step_type
-	else
-		return null
+// does stuff to begin the step, usually just printing messages. Moved germs transfering and bloodying here too
+/singleton/surgery_step/proc/begin_step(mob/living/user, mob/living/carbon/human/target, target_zone, obj/item/tool)
+	var/obj/item/organ/external/affected = target.get_organ(target_zone)
+	if (can_infect && affected)
+		spread_germs_to_organ(affected, user)
+	if(ishuman(user) && prob(60))
+		var/mob/living/carbon/human/H = user
+		if (blood_level)
+			H.bloody_hands(target,0)
+		if (blood_level > 1)
+			H.bloody_body(target,0)
+	if(shock_level)
+		target.shock_stage = max(target.shock_stage, shock_level)
+	if (target.stat == UNCONSCIOUS && prob(20))
+		to_chat(target, SPAN_NOTICE(SPAN_BOLD("... [pick("bright light", "faraway pain", "something moving in you", "soft beeping")] ...")))
+	return
 
-/datum/surgery/proc/complete()
-	SSblackbox.record_feedback("tally", "surgeries_completed", 1, type)
-	qdel(src)
+// does stuff to end the step, which is normally print a message + do whatever this step changes
+/singleton/surgery_step/proc/end_step(mob/living/user, mob/living/carbon/human/target, target_zone, obj/item/tool)
+	return
 
-/datum/surgery/proc/get_probability_multiplier(mob/user, datum/surgery_step/surgery_step, skill_checked = SKILL_PHYSIOLOGY)
-	var/probability = 0.5
-	var/turf/T = get_turf(target)
+// stuff that happens when the step fails
+/singleton/surgery_step/proc/fail_step(mob/living/user, mob/living/carbon/human/target, target_zone, obj/item/tool)
+	return null
 
-	for(var/obj/op_table in T.get_all_contents())
-		var/datum/component/surgery_bed/SB = op_table.GetComponent(/datum/component/surgery_bed)
-		if(SB)
-			probability = SB.success_chance
-			break
+/singleton/surgery_step/proc/success_chance(mob/living/user, mob/living/carbon/human/target, obj/item/tool, target_zone)
+	. = tool_quality(tool)
+	if(user == target)
+		. -= 10
 
-	return probability + success_multiplier + ((user.get_skill(skill_checked) - surgery_step.difficulty) / 10)
+	var/skill_reqs = get_skill_reqs(user, target, tool, target_zone)
+	for(var/skill in skill_reqs)
+		var/penalty = delicate ? 40 : 20
+		. -= max(0, penalty * (skill_reqs[skill] - user.get_skill_value(skill)))
+		if(user.skill_check(skill, SKILL_MASTER))
+			. += 20
 
-/datum/surgery/proc/get_icon()
-	var/mutable_appearance/new_icon = mutable_appearance(icon, icon_state)
-	new_icon.add_overlay(image('icons/misc/surgery_icons.dmi', icon_state = tier))
-	if(requires_bodypart_type == BODYPART_ROBOTIC)
-		new_icon.add_overlay(image('icons/misc/surgery_icons.dmi', "robotic"))
-	return new_icon
+	if(ishuman(user))
+		var/mob/living/carbon/human/H = user
+		. -= round(H.shock_stage * 0.5)
+		if(H.eye_blurry)
+			. -= 20
+		if(H.eye_blind)
+			. -= 60
 
-/datum/surgery/advanced
-	name = "advanced surgery"
-	requires_tech = TRUE
+	if(delicate)
+		if(user.slurring)
+			. -= 10
+		if(!target.lying)
+			. -= 30
+		var/turf/T = get_turf(target)
+		if(locate(/obj/machinery/optable, T))
+			. -= 0
+		else if(locate(/obj/structure/bed, T))
+			. -= 5
+		else if(locate(/obj/structure/roller_bed, T))
+			. -= 5
+		else if(locate(/obj/structure/table, T))
+			. -= 10
+		else if(locate(/obj/rune, T))
+			. -= 10
+	. = max(., 0)
 
-/obj/item/disk/surgery
-	name = "Surgery Procedure Disk"
-	desc = "A disk that contains advanced surgery procedures, must be loaded into an Operating Console."
-	icon_state = "datadisk1"
-	materials = list(/datum/material/iron=300, /datum/material/glass=100)
-	var/list/surgeries
+/proc/spread_germs_to_organ(obj/item/organ/external/E, mob/living/carbon/human/user)
+	if(!istype(user) || !istype(E)) return
 
-/obj/item/disk/surgery/debug
-	name = "Debug Surgery Disk"
-	desc = "A disk that contains all existing surgery procedures."
-	icon_state = "datadisk1"
-	materials = list(/datum/material/iron=300, /datum/material/glass=100)
+	var/germ_level = user.germ_level
+	if(user.gloves)
+		germ_level = user.gloves.germ_level
 
-/obj/item/disk/surgery/debug/Initialize(mapload)
-	. = ..()
-	surgeries = list()
-	var/list/req_tech_surgeries = subtypesof(/datum/surgery)
-	for(var/i in req_tech_surgeries)
-		var/datum/surgery/beep = i
-		if(initial(beep.requires_tech))
-			surgeries += beep
+	E.germ_level = max(germ_level,E.germ_level) //as funny as scrubbing microbes out with clean gloves is - no.
 
-//INFO
-//Check /mob/living/carbon/attackby for how surgery progresses, and also /mob/living/carbon/attack_hand.
-//As of Feb 21 2013 they are in code/modules/mob/living/carbon/carbon.dm, lines 459 and 51 respectively.
-//Other important variables are var/list/surgeries (/mob/living) and var/list/internal_organs (/mob/living/carbon)
-// var/list/bodyparts (/mob/living/carbon/human) is the LIMBS of a Mob.
-//Surgical procedures are initiated by attempt_initiate_surgery(), which is called by surgical drapes and bedsheets.
+/obj/item/proc/do_surgery(mob/living/carbon/M, mob/living/user, fuckup_prob)
 
+	// Check for the Hippocratic oath.
+	if(!istype(M) || user.a_intent == I_HURT)
+		return FALSE
 
-//TODO
-//specific steps for some surgeries (fluff text)
-//more interesting failure options
-//randomised complications
-//more surgeries!
-//add a probability modifier for the state of the surgeon- health, twitching, etc. blindness, god forbid.
-//helper for converting a zone_sel.selecting to body part (for damage)
+	// Check for multi-surgery drifting.
+	var/zone = user.zone_sel.selecting
+	if(LAZYACCESS(M.surgeries_in_progress, zone))
+		to_chat(user, SPAN_WARNING("You can't operate on this area while surgery is already in progress."))
+		return TRUE
 
+	// What surgeries does our tool/target enable?
+	var/list/possible_surgeries
+	var/list/all_surgeries = GET_SINGLETON_SUBTYPE_MAP(/singleton/surgery_step)
+	for(var/singleton in all_surgeries)
+		var/singleton/surgery_step/S = all_surgeries[singleton]
+		if(S.name && S.tool_quality(src) && S.can_use(user, M, zone, src))
+			var/image/radial_button = image(icon = icon, icon_state = icon_state)
+			radial_button.name = S.name
+			LAZYSET(possible_surgeries, S, radial_button)
 
-//RESOLVED ISSUES //"Todo" jobs that have been completed
-//combine hands/feet into the arms - Hands/feet were removed - RR
-//surgeries (not steps) that can be initiated on any body part (corresponding with damage locations) - Call this one done, see possible_locs var - c0
+	// Which surgery, if any, do we actually want to do?
+	var/singleton/surgery_step/S
+	if (user.client && length(possible_surgeries))
+		if (length(possible_surgeries) == 1 && user.get_preference_value(/datum/client_preference/surgery_skip_radial))
+			S = possible_surgeries[1]
+		else
+			S = show_radial_menu(user, M, possible_surgeries, radius = 42, use_labels = TRUE, require_near = TRUE, check_locs = list(src))
+		if (!user.use_sanity_check(M))
+			S = null
+		if (S && !user.skill_check_multiple(S.get_skill_reqs(user, M, src, zone)))
+			S = pick(possible_surgeries)
+
+	var/obj/item/gripper/gripper = user.get_active_hand()
+	// We didn't find a surgery, or decided not to perform one.
+	if(!istype(S))
+		// If we're on an optable, we are protected from some surgery fails. Bypass this for some items (like health analyzers).
+		if((locate(/obj/machinery/optable) in get_turf(M)) && user.a_intent == I_HELP)
+			// Keep track of which tools we know aren't appropriate for surgery on help intent.
+			if(GLOB.surgery_tool_exception_cache[type])
+				return FALSE
+			for(var/tool in GLOB.surgery_tool_exceptions)
+				if(istype(src, tool))
+					GLOB.surgery_tool_exception_cache[type] = TRUE
+					return FALSE
+			to_chat(user, SPAN_WARNING("You aren't sure what you could do to \the [M] with \the [src]."))
+			return TRUE
+
+	// Otherwise we can make a start on surgery!
+	else if(istype(M) && !QDELETED(M) && user.a_intent != I_HURT && (user.get_active_hand() == src || (istype(gripper) && gripper.wrapped == src)))
+		// Double-check this in case it changed between initial check and now.
+		if(zone in M.surgeries_in_progress)
+			to_chat(user, SPAN_WARNING("You can't operate on this area while surgery is already in progress."))
+		else if(S.can_use(user, M, zone, src) && S.is_valid_target(M))
+			var/operation_data = S.pre_surgery_step(user, M, zone, src)
+			if(operation_data)
+				LAZYSET(M.surgeries_in_progress, zone, operation_data)
+				S.begin_step(user, M, zone, src)
+				var/skill_reqs = S.get_skill_reqs(user, M, src, zone)
+				var/duration = user.skill_delay_mult(skill_reqs[1]) * rand(S.min_duration, S.max_duration)
+				if(prob(S.success_chance(user, M, src, zone)) && do_after(user, duration, M, DO_SURGERY))
+					if (S.can_use(user, M, zone, src))
+						S.end_step(user, M, zone, src)
+						handle_post_surgery()
+					else
+						to_chat(user, SPAN_WARNING("The patient lost the target organ before you could finish operating!"))
+
+				else if ((src in user.contents) && user.Adjacent(M))
+					S.fail_step(user, M, zone, src)
+				else
+					to_chat(user, SPAN_WARNING("You must remain close to your patient to conduct surgery."))
+				if(!QDELETED(M))
+					LAZYREMOVE(M.surgeries_in_progress, zone) // Clear the in-progress flag.
+					if(ishuman(M))
+						var/mob/living/carbon/human/H = M
+						H.update_surgery()
+		return TRUE
+	return FALSE
+
+/obj/item/proc/handle_post_surgery()
+	return
+
+/obj/item/stack/handle_post_surgery()
+	use(1)

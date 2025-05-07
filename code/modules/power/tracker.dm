@@ -1,97 +1,82 @@
 //Solar tracker
 
-//Machine that tracks the sun and reports its direction to the solar controllers
+//Machine that tracks the sun and reports it's direction to the solar controllers
 //As long as this is working, solar panels on same powernet will track automatically
 
 /obj/machinery/power/tracker
 	name = "solar tracker"
 	desc = "A solar directional tracker."
-	icon = 'goon/icons/obj/power.dmi'
+	icon = 'icons/obj/machines/power/solar_panels.dmi'
 	icon_state = "tracker"
+	anchored = TRUE
 	density = TRUE
-	use_power = NO_POWER_USE
-	blocks_emissive = EMISSIVE_BLOCK_UNIQUE
-	max_integrity = 250
-	integrity_failure = 0.2
 
 	var/id = 0
-	var/obj/machinery/power/solar_control/control
+	var/sun_angle = 0		// sun angle as set by sun datum
+	var/obj/machinery/power/solar_control/control = null
 
-/obj/machinery/power/tracker/Initialize(mapload, obj/item/solar_assembly/S)
-	. = ..()
+/obj/machinery/power/tracker/New(turf/loc, obj/item/solar_assembly/S)
+	..(loc)
 	Make(S)
 	connect_to_network()
-	RegisterSignal(SSsun, COMSIG_SUN_MOVED, PROC_REF(sun_update))
-
 
 /obj/machinery/power/tracker/Destroy()
 	unset_control() //remove from control computer
-	return ..()
+	..()
 
-//Yog: our solars aren't as overlay based yet
-// /obj/machinery/power/tracker/on_changed_z_level(turf/old_turf, turf/new_turf, same_z_layer, notify_contents)
-// 	. = ..()
-// 	if(same_z_layer)
-// 		return
-// 	SET_PLANE(tracker_dish_edge, PLANE_TO_TRUE(tracker_dish_edge.plane), new_turf)
-// 	SET_PLANE(tracker_dish, PLANE_TO_TRUE(tracker_dish.plane), new_turf)
-
+//set the control of the tracker to a given computer if closer than SOLAR_MAX_DIST
 /obj/machinery/power/tracker/proc/set_control(obj/machinery/power/solar_control/SC)
-	unset_control()
+	if(SC && (get_dist(src, SC) > SOLAR_MAX_DIST))
+		return 0
 	control = SC
-	SC.connected_tracker = src
+	return 1
 
 //set the control of the tracker to null and removes it from the previous control computer if needed
 /obj/machinery/power/tracker/proc/unset_control()
 	if(control)
-		if(control.track == SOLAR_TRACK_AUTO)
-			control.track = SOLAR_TRACK_OFF
 		control.connected_tracker = null
-		control = null
-
-///Tell the controller to turn the solar panels
-/obj/machinery/power/tracker/proc/sun_update(datum/source, azimuth)
-	setDir(angle2dir(azimuth))
-	if(control && control.track == SOLAR_TRACK_AUTO)
-		control.set_panels(azimuth)
+	control = null
 
 /obj/machinery/power/tracker/proc/Make(obj/item/solar_assembly/S)
 	if(!S)
 		S = new /obj/item/solar_assembly(src)
-		S.glass_type = /obj/item/stack/sheet/glass
+		S.glass_type = /obj/item/stack/material/glass
 		S.tracker = 1
 		S.anchored = TRUE
 	S.forceMove(src)
+	update_icon()
 
-/obj/machinery/power/tracker/crowbar_act(mob/user, obj/item/I)
-	playsound(src.loc, 'sound/machines/click.ogg', 50, TRUE)
-	user.visible_message(span_notice("[user] begins to take the glass off [src]."), span_notice("You begin to take the glass off [src]..."))
-	if(I.use_tool(src, user, 50))
-		playsound(src.loc, 'sound/items/deconstruct.ogg', 50, TRUE)
-		user.visible_message(span_notice("[user] takes the glass off [src]."), span_notice("You take the glass off [src]."))
-		deconstruct(TRUE)
-	return TRUE
+//updates the tracker icon and the facing angle for the control computer
+/obj/machinery/power/tracker/proc/set_angle(angle)
+	sun_angle = angle
 
-/obj/machinery/power/tracker/atom_break(damage_flag)
-	. = ..()
-	if(.)
-		playsound(loc, 'sound/effects/glassbr3.ogg', 100, TRUE)
-		unset_control()
+	//set icon dir to show sun illumination
+	set_dir(turn(NORTH, -angle - 22.5))	// 22.5 deg bias ensures, e.g. 67.5-112.5 is EAST
 
-/obj/machinery/power/tracker/deconstruct(disassembled = TRUE)
-	if(!(flags_1 & NODECONSTRUCT_1))
-		if(disassembled)
+	if(powernet && (powernet == control.powernet)) //update if we're still in the same powernet
+		control.cdir = angle
+
+/obj/machinery/power/tracker/use_tool(obj/item/W, mob/living/user, list/click_params)
+	if(isCrowbar(W))
+		playsound(src.loc, 'sound/machines/click.ogg', 50, 1)
+		user.visible_message(SPAN_NOTICE("[user] begins to take the glass off the solar tracker."))
+		if(do_after(user, (W.toolspeed * 5) SECONDS, src, DO_REPAIR_CONSTRUCT))
 			var/obj/item/solar_assembly/S = locate() in src
 			if(S)
-				S.forceMove(loc)
-				S.give_glass(stat & BROKEN)
-		else
-			playsound(src, "shatter", 70, TRUE)
-			new /obj/item/shard(src.loc)
-			new /obj/item/shard(src.loc)
-	qdel(src)
+				S.dropInto(loc)
+				S.give_glass()
+			playsound(src.loc, 'sound/items/Deconstruct.ogg', 50, 1)
+			user.visible_message(SPAN_NOTICE("[user] takes the glass off the tracker."))
+			qdel(src)
+		return TRUE
+
+	return ..()
 
 // Tracker Electronic
 
-/obj/item/electronics/tracker
+/obj/item/tracker_electronics
+
 	name = "tracker electronics"
+	icon = 'icons/obj/doors/door_assembly.dmi'
+	icon_state = "door_electronics"
+	w_class = ITEM_SIZE_SMALL

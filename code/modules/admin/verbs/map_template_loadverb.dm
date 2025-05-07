@@ -1,67 +1,92 @@
-/client/proc/map_template_load()
-	set category = "Misc.Server Debug"
-	set name = "Map template - Place"
+/datum/admins/proc/map_template_load()
+	set category = "Fun"
+	set desc = "Pick a map template to load at your current location. You will be able to confirm bounds before committing."
+	set name = "Map Template - Place"
 
-	var/datum/map_template/template
+	if (!check_rights(R_FUN)) return
 
-	var/map = input(src, "Choose a Map Template to place at your CURRENT LOCATION","Place Map Template") as null|anything in SSmapping.map_templates
+	var/map = input(usr, "Choose a Map Template to place at your CURRENT LOCATION","Place Map Template") as null|anything in SSmapping.map_templates
 	if(!map)
 		return
-	template = SSmapping.map_templates[map]
 
-	var/turf/T = get_turf(mob)
+	var/datum/map_template/template = SSmapping.map_templates[map]
+
+	var/turf/T = get_turf(usr)
 	if(!T)
 		return
+	var/log_name = "([template.name]) in [get_area(T)]"
 
 	var/list/preview = list()
 	for(var/S in template.get_affected_turfs(T,centered = TRUE))
-		var/image/item = image('icons/turf/overlays.dmi',S,"greenOverlay")
-		item.plane = ABOVE_LIGHTING_PLANE
-		preview += item
-	images += preview
-	if(alert(src,"Confirm location.","Template Confirm","Yes","No") == "Yes")
+		preview += image('icons/turf/overlays.dmi',S,"greenOverlay")
+	usr.client.images += preview
+	if(alert(usr,"Confirm location.","Template Confirm","Yes","No") == "Yes")
+		log_and_message_admins("is attempting to place a map template [log_name].")
+		to_chat(usr, "Attempting to place map template [log_name].")
 		if(template.load(T, centered = TRUE))
-			message_admins(span_adminnotice("[key_name_admin(src)] has placed a map template ([template.name]) at [ADMIN_COORDJMP(T)]"))
+			log_and_message_admins("has placed a map template [log_name].")
+			to_chat(usr, "Successfully placed map template [log_name].")
 		else
-			to_chat(src, "Failed to place map", confidential=TRUE)
-	images -= preview
+			log_and_message_admins("has failed to place a map template [log_name].")
+			to_chat(usr, "Failed to place map template [log_name].")
+	usr.client.images -= preview
 
-/client/proc/map_template_upload()
-	set category = "Misc.Server Debug"
-	set name = "Map Template - Upload"
+/datum/admins/proc/map_template_load_new_z()
+	set category = "Fun"
+	set desc = "Pick a map template to load as a new zlevel, or a set of new zlevels if multi-z."
+	set name = "Map Template - Place In New Z"
 
-	var/map = input(src, "Choose a Map Template to upload to template storage","Upload Map Template") as null|file
+	if(!check_rights(R_FUN))
+		return
+	if(GAME_STATE < RUNLEVEL_LOBBY)
+		to_chat(usr, "Please wait for the master controller to initialize before loading maps!")
+		return
+
+	var/map = input(usr, "Choose a Map Template to place on a new zlevel","Place Map Template") as null|anything in SSmapping.map_templates
 	if(!map)
 		return
-	if(copytext("[map]", -4) != ".dmm")//4 == length(".dmm")
-		to_chat(src, span_warning("Filename must end in '.dmm': [map]"), confidential=TRUE)
-		return
-	var/datum/map_template/M
-	switch(tgui_alert(usr, "What kind of map is this?", "Map type", list("Normal", "Shuttle", "Cancel")))
-		if("Normal")
-			M = new /datum/map_template(map, "[map]", TRUE)
-		if("Shuttle")
-			M = new /datum/map_template/shuttle(map, "[map]", TRUE)
-		else
-			return
-	if(!M.cached_map)
-		to_chat(src, span_warning("Map template '[map]' failed to parse properly."), confidential=TRUE)
-		return
 
-	var/datum/map_report/report = M.cached_map.check_for_errors()
-	var/report_link
-	if(report)
-		report.show_to(src)
-		report_link = " - <a href='byond://?src=[REF(report)];[HrefToken(TRUE)];show=1'>validation report</a>"
-		to_chat(src, span_warning("Map template '[map]' <a href='byond://?src=[REF(report)];[HrefToken()];show=1'>failed validation</a>."), confidential=TRUE)
-		if(report.loadable)
-			var/response = tgui_alert(usr, "The map failed validation, would you like to load it anyways?", "Map Errors", list("Cancel", "Upload Anyways"))
-			if(response != "Upload Anyways")
-				return
-		else
-			tgui_alert(usr, "The map failed validation and cannot be loaded.", "Map Errors", list("Oh Darn"))
+	var/datum/map_template/template = SSmapping.map_templates[map]
+	var/log_name = "([template.name]) on a new zlevel"
+
+	if (template.loaded && !(template.template_flags & TEMPLATE_FLAG_ALLOW_DUPLICATES))
+		var/jesus_take_the_wheel = alert(usr, "That template has already been loaded and doesn't want to be loaded again. \
+			Proceeding may unpredictably break things and cause runtimes.", "Confirm load", "Cancel load", "Do you see any cops around?") == "Do you see any cops around?"
+		if (!jesus_take_the_wheel)
 			return
 
-	SSmapping.map_templates[M.name] = M
-	message_admins(span_adminnotice("[key_name_admin(src)] has uploaded a map template '[map]' ([M.width]x[M.height])[report_link]."))
-	to_chat(src, span_notice("Map template '[map]' ready to place ([M.width]x[M.height])"), confidential=TRUE)
+	log_and_message_admins("is attempting to place a map template [log_name].")
+	to_chat(usr, "Attempting to place map template [log_name].")
+	var/new_z_centre = template.load_new_z(FALSE) // Don't skip changeturf
+	if (new_z_centre)
+		log_and_message_admins("has placed a map template [log_name].")
+		to_chat(usr, "Successfully place map template [log_name].")
+	else
+		log_and_message_admins("has failed to place a map template [log_name].")
+		to_chat(usr, "Failed to place map template [log_name].")
+
+/datum/admins/proc/map_template_upload()
+	set category = "Fun"
+	set desc = "Upload a .dmm file to use as a map template. Any unknown types will be skipped!"
+	set name = "Map Template - Upload"
+
+	if (!check_rights(R_FUN)) return
+
+	var/map = input(usr, "Choose a Map Template to upload to template storage","Upload Map Template") as null|file
+	if(!map)
+		return
+	if(copytext("[map]",-4) != ".dmm")
+		to_chat(usr, "Bad map file: [map]")
+		return
+
+	var/datum/map_template/M = new(list(map), "[map]")
+
+	log_and_message_admins("is attempting to upload a map template '[map]''.")
+	to_chat(usr, "Attempting to upload map template '[map]''.")
+	if(M.preload_size())
+		to_chat(usr, "Map template '[map]' ready to place ([M.width]x[M.height]).")
+		SSmapping.map_templates[M.name] = M
+		log_and_message_admins("has uploaded map template '[map]''.")
+	else
+		log_and_message_admins("failed to upload map template '[map]''.")
+		to_chat(usr, "Map template '[map]' failed to load properly")

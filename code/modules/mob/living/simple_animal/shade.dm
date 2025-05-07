@@ -2,64 +2,66 @@
 	name = "Shade"
 	real_name = "Shade"
 	desc = "A bound spirit."
-	gender = PLURAL
-	icon = 'icons/mob/nonhuman-player/cult.dmi'
-	icon_state = "shade_cult"
-	icon_living = "shade_cult"
-	mob_biotypes = MOB_SPIRIT
-	maxHealth = 40
-	health = 40
-	spacewalk = TRUE
-	healable = 0
+	icon = 'icons/mob/mob.dmi'
+	icon_state = "shade"
+	icon_living = "shade"
+	icon_dead = "shade_dead"
+	maxHealth = 50
+	health = 50
+	universal_speak = TRUE
 	speak_emote = list("hisses")
-	emote_hear = list("wails.","screeches.")
 	response_help  = "puts their hand through"
 	response_disarm = "flails at"
 	response_harm   = "punches"
-	speak_chance = 1
-	melee_damage_lower = 5
-	melee_damage_upper = 12
-	attacktext = "metaphysically strikes"
+	natural_weapon = /obj/item/natural_weapon/shade
 	minbodytemp = 0
-	maxbodytemp = INFINITY
-	atmos_requirements = list("min_oxy" = 0, "max_oxy" = 0, "min_tox" = 0, "max_tox" = 0, "min_co2" = 0, "max_co2" = 0, "min_n2" = 0, "max_n2" = 0)
-	speed = -1 //they don't have to lug a body made of runed metal around
-	stop_automated_movement = 1
+	maxbodytemp = 4000
+	min_gas = null
+	max_gas = null
+	speed = -1
 	status_flags = 0
-	faction = list("cult")
+	faction = "cult"
+	supernatural = 1
 	status_flags = CANPUSH
-	movement_type = FLYING
-	loot = list(/obj/item/ectoplasm)
-	del_on_death = TRUE
-	initial_language_holder = /datum/language_holder/construct
 
-/mob/living/simple_animal/shade/death()
-	deathmessage = "lets out a contented sigh as [p_their()] form unwinds."
-	..()
+	bleed_colour = "#181933"
 
-/mob/living/simple_animal/shade/canSuicide()
-	if(istype(loc, /obj/item/soulstone)) //do not suicide inside the soulstone
-		return 0
-	return ..()
+	meat_type =     null
+	meat_amount =   0
+	bone_material = null
+	bone_amount =   0
+	skin_material = null
+	skin_amount =   0
 
-/mob/living/simple_animal/shade/attack_animal(mob/living/simple_animal/M)
-	if(isconstruct(M))
-		var/mob/living/simple_animal/hostile/construct/C = M
-		if(!C.can_repair_constructs)
-			return
-		if(health < maxHealth)
-			adjustHealth(-25)
-			Beam(M,icon_state="sendbeam",time=4)
-			M.visible_message(span_danger("[M] heals \the <b>[src]</b>."), \
-					   span_cult("You heal <b>[src]</b>, leaving <b>[src]</b> at <b>[health]/[maxHealth]</b> health."))
-		else
-			to_chat(M, span_cult("You cannot heal <b>[src]</b>, as [p_theyre()] unharmed!"))
-	else if(src != M)
-		return ..()
+	ai_holder = /datum/ai_holder/simple_animal/retaliate/shade
+	say_list_type = /datum/say_list/shade
 
-/mob/living/simple_animal/shade/attackby(obj/item/O, mob/user, params)  //Marker -Agouri
-	if(istype(O, /obj/item/soulstone))
-		var/obj/item/soulstone/SS = O
-		SS.transfer_soul("SHADE", src, user)
-	else
-		. = ..()
+/obj/item/natural_weapon/shade
+	name = "foul touch"
+	attack_verb = list("drained")
+	damtype = DAMAGE_BURN
+	force = 10
+
+/mob/living/simple_animal/shade/cultify()
+	return
+
+/mob/living/simple_animal/shade/Life()
+	. = ..()
+	OnDeathInLife()
+
+/mob/living/simple_animal/shade/proc/OnDeathInLife()
+	if(stat == 2)
+		new /obj/item/ectoplasm (src.loc)
+		for(var/mob/M in viewers(src, null))
+			if((M.client && !( M.blinded )))
+				M.show_message(SPAN_WARNING("[src] lets out a contented sigh as their form unwinds."))
+				ghostize()
+		qdel(src)
+		return
+
+
+/datum/ai_holder/simple_animal/retaliate/shade
+	hostile = FALSE
+
+/datum/say_list/shade
+	emote_hear = list("wails","screeches")

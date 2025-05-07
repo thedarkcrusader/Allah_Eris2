@@ -1,138 +1,175 @@
-//The effect when you wrap a dead body in gift wrap
-/obj/effect/spresent
-	name = "strange present"
-	desc = "It's a ... present?"
-	icon_state = "strangepresent"
-	density = TRUE
-	anchored = FALSE
+/obj/stop
+	var/victim = null
+	icon_state = "empty"
+	name = "Geas"
+	desc = "You can't resist."
 
-/obj/effect/beam
-	name = "beam"
-	var/def_zone
-	pass_flags = PASSTABLE
+//Paints the wall it spawns on, then dies
+/obj/paint
+	name = "coat of paint"
+	icon = 'icons/effects/effects.dmi'
+	icon_state = "wall_paint_effect"
+	layer = TURF_DETAIL_LAYER
+	blend_mode = BLEND_MULTIPLY
 
-/obj/effect/beam/singularity_act()
-	return
+/obj/paint/Initialize()
+	. = ..()
+	return INITIALIZE_HINT_LATELOAD
 
-/obj/effect/beam/singularity_pull()
-	return
+/obj/paint/LateInitialize(mapload)
+	var/turf/simulated/wall/W = get_turf(src)
+	if(istype(W))
+		if(W.material.wall_flags & MATERIAL_PAINTABLE_MAIN)
+			W.paint_color = color
+		if(W.material.wall_flags & MATERIAL_PAINTABLE_STRIPE)
+			W.stripe_color = color
+		W.update_icon()
+	var/obj/structure/wall_frame/WF = locate() in loc
+	if(WF)
+		WF.paint_color = color
+		WF.stripe_color = color
+		WF.update_icon()
+	qdel(src)
 
-/obj/effect/spawner
-	name = "object spawner"
+/obj/paint/pink
+	color = COLOR_PINK
 
-// Brief explanation:
-// Rather then setting up and then deleting spawners, we block all atomlike setup
-// and do the absolute bare minimum
-// This is with the intent of optimizing mapload
-/obj/effect/spawner/Initialize(mapload)
+/obj/paint/sun
+	color = COLOR_SUN
+
+/obj/paint/red
+	color = COLOR_RED
+
+/obj/paint/silver
+	color = COLOR_SILVER
+
+/obj/paint/black
+	color = COLOR_DARK_GRAY
+
+/obj/paint/green
+	color = COLOR_GREEN_GRAY
+
+/obj/paint/blue
+	color = COLOR_NAVY_BLUE
+
+/obj/paint/ocean
+	color =	COLOR_OCEAN
+
+/obj/paint/palegreengray
+	color =	COLOR_PALE_GREEN_GRAY
+
+/obj/paint/brown
+	color = COLOR_DARK_BROWN
+
+//Stripes the wall it spawns on, then dies
+/obj/paint_stripe
+	name = "stripe of paint"
+	icon = 'icons/effects/effects.dmi'
+	icon_state = "white"
+	layer = TURF_DETAIL_LAYER
+	blend_mode = BLEND_MULTIPLY
+
+/obj/paint_stripe/Initialize()
+	. = ..()
+	return INITIALIZE_HINT_LATELOAD
+
+/obj/paint_stripe/LateInitialize(mapload)
+	var/turf/simulated/wall/W = get_turf(src)
+	if(istype(W))
+		W.stripe_color = color
+		W.update_icon()
+	var/obj/structure/wall_frame/WF = locate() in loc
+	if(WF)
+		WF.stripe_color = color
+		WF.update_icon()
+	qdel(src)
+
+/obj/paint_stripe/green
+	color = COLOR_GREEN_GRAY
+
+/obj/paint_stripe/red
+	color = COLOR_RED_GRAY
+
+/obj/paint_stripe/paleblue
+	color = COLOR_PALE_BLUE_GRAY
+
+/obj/paint_stripe/yellow
+	color = COLOR_BROWN
+
+/obj/paint_stripe/blue
+	color = COLOR_BLUE_GRAY
+
+/obj/paint_stripe/brown
+	color = COLOR_DARK_BROWN
+
+/obj/paint_stripe/mauve
+	color = COLOR_PALE_PURPLE_GRAY
+
+/obj/paint_stripe/white
+	color = COLOR_SILVER
+
+/obj/paint_stripe/gunmetal
+	color = COLOR_GUNMETAL
+
+/obj/gas_setup	//cryogenic
+	icon = 'icons/mob/screen1.dmi'
+	icon_state = "x3"
+	var/tempurature = 70
+	var/pressure = 20* ONE_ATMOSPHERE
+
+/obj/gas_setup/Initialize()
 	SHOULD_CALL_PARENT(FALSE)
-	if(flags_1 & INITIALIZED_1)
-		stack_trace("Warning: [src]([type]) initialized multiple times!")
-	flags_1 |= INITIALIZED_1
-
+	atom_flags |= ATOM_FLAG_INITIALIZED
+	var/obj/machinery/atmospherics/pipe/P = locate() in loc
+	if(P && !P.air_temporary)
+		P.air_temporary = new(P.volume, tempurature)
+		var/datum/gas_mixture/G = P.air_temporary
+		G.adjust_gas(GAS_OXYGEN,((pressure*P.volume)/(R_IDEAL_GAS_EQUATION*temperature)))
 	return INITIALIZE_HINT_QDEL
 
-/obj/effect/spawner/Destroy(force)
-	SHOULD_CALL_PARENT(FALSE)
-	moveToNullspace()
-	return QDEL_HINT_QUEUE
-
-/obj/effect/list_container
-	name = "list container"
-
-/obj/effect/list_container/mobl
-	name = "mobl"
-	var/master = null
-
-	var/list/container = list(  )
-
-/obj/effect/overlay/thermite
-	name = "thermite"
-	desc = "Looks hot."
+/obj/heat
 	icon = 'icons/effects/fire.dmi'
-	icon_state = "2" //what?
-	anchored = TRUE
-	opacity = TRUE
-	density = TRUE
-	layer = FLY_LAYER
+	icon_state = "3"
+	appearance_flags = PIXEL_SCALE | NO_CLIENT_COLOR
+	render_target = HEAT_EFFECT_TARGET
+	mouse_opacity = MOUSE_OPACITY_UNCLICKABLE
 
-/obj/effect/supplypod_selector
-	icon_state = "supplypod_selector"
-	layer = FLY_LAYER
+/// Example of a warp filter
+/obj/effect/warp
+	plane = WARP_EFFECT_PLANE
+	appearance_flags = PIXEL_SCALE | NO_CLIENT_COLOR
+	icon = 'icons/effects/352x352.dmi'
+	icon_state = "singularity_s11"
+	pixel_x = -176
+	pixel_y = -176
+	z_flags = ZMM_IGNORE
 
-//Makes a tile fully lit no matter what
-/obj/effect/fullbright
-	icon = 'icons/effects/alphacolors.dmi'
-	icon_state = "white"
-	plane = LIGHTING_PLANE
-	layer = LIGHTING_ABOVE_ALL
-	blend_mode = BLEND_ADD
+/obj/effect/cold_mist
+	icon = 'icons/effects/tile_effects.dmi'
+	icon_state = "frontfog"
+	layer = FIRE_LAYER
+	alpha = 170
 
-/obj/effect/abstract/marker
-	name = "marker"
-	icon = 'icons/effects/effects.dmi'
-	anchored = TRUE
-	icon_state = "wave3"
-	layer = RIPPLE_LAYER
-
-/obj/effect/abstract/marker/Initialize(mapload)
+/obj/effect/cold_mist/Initialize()
 	. = ..()
-	GLOB.all_abstract_markers += src
+	AddOverlays(image(icon = 'icons/effects/tile_effects.dmi', icon_state = "backfog", layer = BELOW_OBJ_LAYER))
 
-/obj/effect/abstract/marker/Destroy()
-	GLOB.all_abstract_markers -= src
+//Handling it as an overlay is not layering properly with render targets
+/obj/effect/cold_mist_gas_back
+	icon = 'icons/effects/tile_effects.dmi'
+	icon_state = "backfog"
+	layer = BELOW_OBJ_LAYER
+	render_target = COLD_EFFECT_BACK_TARGET
+
+/obj/effect/cold_mist_gas
+	icon = 'icons/effects/tile_effects.dmi'
+	icon_state = "frontfog"
+	render_target = COLD_EFFECT_TARGET
+	layer = FIRE_LAYER
+	appearance_flags = DEFAULT_APPEARANCE_FLAGS | KEEP_TOGETHER
+	var/obj/effect/cold_mist_gas_back/b = null
+
+/obj/effect/cold_mist_gas/Initialize()
 	. = ..()
-
-/obj/effect/abstract/marker/at
-	name = "active turf marker"
-
-
-/obj/effect/dummy/lighting_obj
-	name = "lighting fx obj"
-	desc = "Tell a coder if you're seeing this."
-	icon_state = "nothing"
-	light_color = "#FFFFFF"
-	light_system = MOVABLE_LIGHT
-	light_range = MINIMUM_USEFUL_LIGHT_RANGE
-	blocks_emissive = EMISSIVE_BLOCK_NONE
-	mouse_opacity = MOUSE_OPACITY_TRANSPARENT
-
-/obj/effect/dummy/lighting_obj/Initialize(mapload, range, power, color, duration)
-	. = ..()
-	if(!isnull(range))
-		set_light_range(range)
-	if(!isnull(power))
-		set_light_power(power)
-	if(!isnull(color))
-		set_light_color(color)
-	if(duration)
-		QDEL_IN(src, duration)
-
-/obj/effect/dummy/lighting_obj/moblight
-	name = "mob lighting fx"
-
-/obj/effect/dummy/lighting_obj/moblight/Initialize(mapload, _color, _range, _power, _duration)
-	. = ..()
-	if(!ismob(loc))
-		return INITIALIZE_HINT_QDEL
-	RegisterSignal(src, COMSIG_LIGHT_EATER_ACT, PROC_REF(on_light_eater))
-
-//always block light eater if it tries to apply directly to this
-//moblights should be handled in special ways by everything that grants them
-/obj/effect/dummy/lighting_obj/moblight/proc/on_light_eater(atom/source, datum/light_eater)
-	SIGNAL_HANDLER 
-	return COMPONENT_BLOCK_LIGHT_EATER
-
-/obj/effect/dummy/lighting_obj/moblight/species
-	name = "species lighting"
-
-/obj/effect/dusting_anim
-	icon = 'icons/effects/filters.dmi'
-	icon_state = "nothing"
-	mouse_opacity = MOUSE_OPACITY_TRANSPARENT
-	plane = FLOOR_PLANE
-
-/obj/effect/dusting_anim/Initialize(mapload, id)
-	. = ..()
-	icon_state = "snap3"
-	render_target = "*snap[id]"
+	b = new()
+	add_vis_contents(b)

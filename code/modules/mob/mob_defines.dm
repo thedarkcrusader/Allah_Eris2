@@ -1,265 +1,204 @@
-/**
-  * The mob, usually meant to be a creature of some type
-  *
-  * Has a client attached that is a living person (most of the time), although I have to admit
-  * sometimes it's hard to tell they're sentient
-  *
-  * Has a lot of the creature game world logic, such as health etc
-  */
 /mob
 	density = TRUE
+	plane = DEFAULT_PLANE
 	layer = MOB_LAYER
+
+	appearance_flags = DEFAULT_APPEARANCE_FLAGS | PIXEL_SCALE
 	animate_movement = 2
-	flags_1 = HEAR_1
-	hud_possible = list(ANTAG_HUD)
-	pressure_resistance = 8
-	mouse_drag_pointer = MOUSE_ACTIVE_POINTER
-	throwforce = 10
+	movable_flags = MOVABLE_FLAG_PROXMOVE
+
 	blocks_emissive = EMISSIVE_BLOCK_GENERIC
-	// we never want to hide a turf because it's not lit
-	// We can rely on the lighting plane to handle that for us
-	see_in_dark = 1e6
 
-	/// Whether the context menu is opened with shift-right-click as opposed to right-click
-	var/shift_to_open_context_menu = TRUE
+	virtual_mob = /mob/observer/virtual/mob
 
-	/// Percentage of how much rgb to max the lighting plane at
-	/// This lets us brighten it without washing out color
-	/// Scale from 0-100, reset off update_sight()
-	var/lighting_cutoff = LIGHTING_CUTOFF_VISIBLE
-	// Individual color max for red, we can use this to color darkness without tinting the light
-	var/lighting_cutoff_red = 0
-	// Individual color max for green, we can use this to color darkness without tinting the light
-	var/lighting_cutoff_green = 0
-	// Individual color max for blue, we can use this to color darkness without tinting the light
-	var/lighting_cutoff_blue = 0
-	/// A list of red, green and blue cutoffs
-	/// This is what actually gets applied to the mob, it's modified by things like glasses
-	var/list/lighting_color_cutoffs = null
+	movement_handlers = list(
+		/datum/movement_handler/mob/relayed_movement,
+		/datum/movement_handler/mob/death,
+		/datum/movement_handler/mob/conscious,
+		/datum/movement_handler/mob/eye,
+		/datum/movement_handler/move_relay,
+		/datum/movement_handler/mob/buckle_relay,
+		/datum/movement_handler/mob/delay,
+		/datum/movement_handler/mob/stop_effect,
+		/datum/movement_handler/mob/physically_capable,
+		/datum/movement_handler/mob/physically_restrained,
+		/datum/movement_handler/mob/space,
+		/datum/movement_handler/mob/multiz,
+		/datum/movement_handler/mob/movement
+	)
+
+	var/mob_flags
+	var/last_quick_move_time = 0
+	var/list/client_images = list() // List of images applied to/removed from the client on login/logout
 	var/datum/mind/mind
-	var/static/next_mob_id = 0
-	/// The current client inhabiting this mob. Managed by login/logout
-	/// This exists so we can do cleanup in logout for occasions where a client was transfere rather then destroyed
-	/// We need to do this because the mob on logout never actually has a reference to client
-	/// We also need to clear this var/do other cleanup in client/Destroy, since that happens before logout
-	/// HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
-	var/client/canon_client
 
-	/// List of movement speed modifiers applying to this mob
-	var/list/movespeed_modification				//Lazy list, see mob_movespeed.dm
-	/// The calculated mob speed slowdown based on the modifiers list
-	var/cached_multiplicative_slowdown
-	/// List of action hud items the user has
-	var/list/datum/action/actions = list()
-	/// Actions that belong to this mob used in observers
-	var/list/datum/action/originalactions = list()
-	/// A list of chameleon actions we have specifically
-	/// This can be unified with the actions list
-	var/list/datum/action/item_action/chameleon/chameleon_item_actions
+	var/lastKnownIP = null
+	var/computer_id = null
+	var/last_ckey
 
-	/// Whether a mob is alive or dead. TODO: Move this to living - Nodrak (2019, still here)
-	var/stat = CONSCIOUS
+	var/stat = CONSCIOUS //Whether a mob is alive or dead. TODO: Move this to living - Nodrak
 
-	/* A bunch of this stuff really needs to go under their own defines instead of being globally attached to mob.
+	var/obj/screen/cells = null
+
+	var/obj/screen/hands = null
+	var/obj/screen/pullin = null
+	var/obj/screen/purged = null
+	var/obj/screen/internals = null
+	var/obj/screen/oxygen = null
+	var/obj/screen/i_select = null
+	var/obj/screen/m_select = null
+	var/obj/screen/toxin = null
+	var/obj/screen/fire = null
+	var/obj/screen/bodytemp = null
+	var/obj/screen/healths = null
+	var/obj/screen/throw_icon = null
+	var/obj/screen/nutrition_icon = null
+	var/obj/screen/hydration_icon = null
+	var/obj/screen/pressure = null
+	var/obj/screen/pain = null
+	var/obj/screen/gun/item/item_use_icon = null
+	var/obj/screen/gun/radio/radio_use_icon = null
+	var/obj/screen/gun/move/gun_move_icon = null
+	var/obj/screen/gun/mode/gun_setting_icon = null
+
+	var/obj/screen/movable/ability_master/ability_master = null
+
+	/*A bunch of this stuff really needs to go under their own defines instead of being globally attached to mob.
 	A variable should only be globally attached to turfs/objects/whatever, when it is in fact needed as such.
 	The current method unnecessarily clusters up the variable list, especially for humans (although rearranging won't really clean it up a lot but the difference will be noticable for other mobs).
 	I'll make some notes on where certain variable defines should probably go.
 	Changing this around would probably require a good look-over the pre-existing code.
 	*/
+	var/obj/screen/zone_sel/zone_sel = null
 
-	///How many legs does this mob currently have. Should only be changed through set_num_legs()
-	var/num_legs = 2
-
-	/// The zone this mob is currently targeting
-	var/zone_selected = BODY_ZONE_CHEST
-
-	var/computer_id = null
-	var/list/logging = list()
-
-	/// The machine the mob is interacting with (this is very bad old code btw)
+	var/use_me = 1 //Allows all mobs to use the me verb by default, will have to manually specify they cannot
+	var/damageoverlaytemp = 0
 	var/obj/machinery/machine = null
+	var/poll_answer = 0.0
+	var/sdisabilities = 0	//Carbon
+	var/disabilities = 0	//Carbon
 
-	/// Tick time the mob can next move
+	var/atom/movable/pulling = null
+	var/other_mobs = null
 	var/next_move = null
-
-	/**
-	  * Magic var that stops you moving and interacting with anything
-	  *
-	  * Set when you're being turned into something else and also used in a bunch of places
-	  * it probably shouldn't really be
-	  */
-	var/notransform = null	//Carbon
-
-	/// Is the mob blind
-	var/eye_blind = 0		//Carbon
-	/// Does the mob have blurry sight
-	var/eye_blurry = 0		//Carbon
-	/// What is the mobs real name (name is overridden for disguises etc)
+	var/hand = null
 	var/real_name = null
-	/// Is the mob pixel shifted
-	var/is_shifted = FALSE
-	/// can this mob move freely in space (should be a trait)
-	var/spacewalk = FALSE
+	var/fake_name = null
 
-	/**
-	  * back up of the real name during admin possession
-	  *
-	  * If an admin possesses an object it's real name is set to the admin name and this
-	  * stores whatever the real name was previously. When possession ends, the real name
-	  * is reset to this value
-	  */
+	var/bhunger = 0			//Carbon
+
+	var/druggy = 0			//Carbon
+	/// Positive Integer. The mob's current confusion level. Ticks down every `Fire()` in SSMobs. See `set_confused()`, `mod_confused()`, `clear_confused()`, and `is_confused()`.
+	VAR_PRIVATE/confused = 0
+	var/sleeping = 0		//Carbon
+	var/resting = FALSE			//Carbon
+	var/lying = 0
+	var/lying_prev = 0
+
+	var/radio_interrupt_cooldown = 0
+
+	var/unacidable = FALSE
+	var/list/pinned = list()            // List of things pinning this creature to walls (see living_defense.dm)
+	var/list/embedded = list()          // Embedded items, since simple mobs don't have organs.
+	var/list/languages = list()         // For speaking/listening.
+	var/species_language = null			// For species who want reset to use a specified default.
+	var/only_species_language  = 0		// For species who can only speak their default and no other languages. Does not effect understanding.
+	var/list/speak_emote = list("says") // Verbs used when speaking. Defaults to 'say' if speak_emote is null.
+	var/emote_type = 1		// Define emote default type, 1 for seen emotes, 2 for heard emotes
+	var/facing_dir = null   // Used for the ancient art of moonwalking.
+
 	var/name_archive //For admin things like possession
 
-	/// Default body temperature
-	var/bodytemperature = BODYTEMP_NORMAL	//310.15K / 98.6F
-	var/nutrition = NUTRITION_LEVEL_START_MIN // randomised in Initialize
-	/// Satiation level of the mob
-	var/satiety = 0//Carbon
+	var/timeofdeath = 0
 
-	/// How many ticks this mob has been over reating
-	var/overeatduration = 0		// How long this guy is overeating //Carbon
+	var/bodytemperature = 310.055	//98.7 F
+	var/default_pixel_x = 0
+	var/default_pixel_y = 0
+	var/default_pixel_z = 0
 
-	///Whether grab mode is enabled
-	var/grab_mode = FALSE
-	///Whether combat mode is enabled
-	var/combat_mode = FALSE
-	///Whether combat mode can be toggled
-	var/can_toggle_combat = TRUE
+	var/shakecamera = 0
+	var/a_intent = I_HELP//Living
 
-	/// The movement intent of the mob (run/wal)
-	var/m_intent = MOVE_INTENT_RUN//Living
+	var/singleton/move_intent/move_intent = /singleton/move_intent/walk
+	var/list/move_intents = list(/singleton/move_intent/walk)
 
-	/// The last known IP of the client who was in this mob
-	var/lastKnownIP = null
+	var/singleton/move_intent/default_walk_intent
+	var/singleton/move_intent/default_run_intent
 
-	/// movable atoms buckled to this mob
-	var/atom/movable/buckled = null//Living
-	/// movable atom we are buckled to
-	var/atom/movable/buckling
+	var/obj/buckled = null//Living
+	var/obj/item/l_hand = null//Living
+	var/obj/item/r_hand = null//Living
+	var/obj/item/back = null//Human/Monkey
+	var/obj/item/storage/s_active = null//Carbon
+	var/obj/item/clothing/mask/wear_mask = null//Carbon
 
-	//Hands
-	///What hand is the active hand
-	var/active_hand_index = 1
-	/**
-	  * list of items held in hands
-	  *
-	  * len = number of hands, eg: 2 nulls is 2 empty hands, 1 item and 1 null is 1 full hand
-	  * and 1 empty hand.
-	  *
-	  * NB: contains nulls!
-	  *
-	  * held_items[active_hand_index] is the actively held item, but please use
-	  * get_active_held_item() instead, because OOP
-	  */
-	var/list/held_items = list()
+	var/list/grabbed_by = list()
 
-	//HUD things
-
-	/// Storage component (for mob inventory)
-	var/datum/component/storage/active_storage
-	/// Active hud
-	var/datum/hud/hud_used = null
-	/// I have no idea tbh
-	var/research_scanner = FALSE
-	/// What icon the mob uses for typing indicators
-	var/bubble_icon = BUBBLE_DEFAULT
-
-	/// Is the mob throw intent on
 	var/in_throw_mode = 0
 
-	/// What job does this mob have
-	var/job = null//Living
+//	var/job = null//Living
 
-	/// A list of factions that this mob is currently in, for hostile mob targetting, amongst other things
-	var/list/faction = list("neutral")
+	var/can_pull_size = ITEM_SIZE_NO_CONTAINER // Maximum w_class the mob can pull.
+	var/can_pull_mobs = MOB_PULL_SAME          // Whether or not the mob can pull other mobs.
 
-	/// Can this mob enter shuttles
-	var/move_on_shuttle = 1
+	var/datum/dna/dna = null//Carbon
+	var/list/active_genes=list()
+	var/list/mutations = list() //Carbon -- Doohl
+	//see: setup.dm for list of mutations
 
-	///A weakref to the last mob/living/carbon to push/drag/grab this mob (exclusively used by slimes friend recognition)
-	var/datum/weakref/LAssailant = null
+	var/radiation = 0.0//Carbon
 
-	/// bitflags defining which status effects can be inflicted (replaces canknockdown, canstun, etc)
-	var/status_flags = CANSTUN|CANKNOCKDOWN|CANUNCONSCIOUS|CANPUSH
+	var/voice_name = "unidentifiable voice"
 
-	/// Can they be tracked by the AI?
-	var/digitalcamo = 0
-	///Are they ivisible to the AI?
-	var/digitalinvis = 0
-	///what does the AI see instead of them?
-	var/image/digitaldisguise = null
+// To check if mobs can see shadows or not. By default they can.
+	var/seedarkness = 1
 
-	/// Can they interact with station electronics
-	var/has_unlimited_silicon_privilege = 0
+	var/faction = MOB_FACTION_NEUTRAL //Used for checking whether hostile simple animals will attack you, possibly more stuff later
+	var/last_faction = MOB_FACTION_NEUTRAL
+	var/blinded = null
+	var/ear_deaf = null		//Carbon
 
-	///Used by admins to possess objects. All mobs should have this var
-	var/obj/control_object
+//The last mob/living/carbon to push/drag/grab this mob (mostly used by slimes friend recognition)
+	var/mob/living/carbon/LAssailant = null
 
-	///Calls relay_move() to whatever this is set to when the mob tries to move
-	var/atom/movable/remote_control
+	mouse_drag_pointer = MOUSE_ACTIVE_POINTER
 
-	/**
-	  * The sound made on death
-	  *
-	  * leave null for no sound. used for *deathgasp
-	  */
-	var/deathsound
+	var/update_icon = 1 //Set to 1 to trigger update_icons() at the next life() call
 
-	///the current turf being examined in the stat panel
-	var/turf/listed_turf = null
+	var/status_flags = CANSTUN|CANWEAKEN|CANPARALYSE|CANPUSH	//bitflags defining which status effects can be inflicted (replaces canweaken, canstun, etc)
 
-	///The list of people observing this mob.
-	var/list/observers = null
+	var/area/lastarea = null
 
-	///List of progress bars this mob is currently seeing for actions
-	var/list/progressbars = null	//for stacking do_after bars
+	var/digitalcamo = 0 // Can they be tracked by the AI?
 
-	///List of datums that this has which make use of MouseMove()
-	var/list/mousemove_intercept_objects
+	var/obj/control_object //Used by admins to possess objects. All mobs should have this var
 
-	///Allows a datum to intercept all click calls this mob is the so
-	var/datum/click_intercept
+	//Whether or not mobs can understand other mobtypes. These stay in /mob so that ghosts can hear everything.
+	var/universal_speak = FALSE // Set to TRUE to enable the mob to speak to everyone -- TLE
+	var/universal_understand = FALSE // Set to TRUE to enable the mob to understand everyone, not necessarily speak
 
-	///For storing what do_after's someone has, in case we want to restrict them to only one of a certain do_after at a time
-	var/list/do_afters
+	//If set, indicates that the client "belonging" to this (clientless) mob is currently controlling some other mob
+	//so don't treat them as being SSD even though their client var is null.
+	var/mob/teleop = null
 
-	///THe z level this mob is currently registered in
-	var/registered_z = null
+	var/turf/listed_turf = null  	//the current turf being examined in the stat panel
+	var/list/shouldnt_see = list()	//list of objects that this mob shouldn't see in the stat panel. this silliness is needed because of AI alt+click and cult blood runes
 
-	///Size of the user's memory(IC notes)
-	var/memory_amt = 0
+	var/mob_size = MOB_MEDIUM
 
-	/// Used for tracking last uses of emotes for cooldown purposes
-	var/list/emotes_used
+	var/paralysis = 0
+	var/stunned = 0
+	var/weakened = 0
+	var/drowsyness = 0.0//Carbon
 
-	///Whether the mob is updating glide size when movespeed updates or not
-	var/updating_glide_size = TRUE
+	var/flavor_text = ""
 
-	/// A mock client, provided by tests and friends
-	var/datum/client_interface/mock_client
+	var/datum/skillset/skillset = /datum/skillset
 
-	var/create_area_cooldown
+	var/pronouns = null
 
-	var/sound_environment_override = SOUND_ENVIRONMENT_NONE
+	var/list/additional_vision_handlers = list() //Basically a list of atoms from which additional vision data is retrieved
 
-	var/action_speed_modifier = 1 //Value to multiply action delays by //yogs start: fuck
-
-	var/list/alerts = list() // contains /atom/movable/screen/alert only // On /mob so clientless mobs will throw alerts properly
-
-	///Contains the fullscreen overlays the mob can see (from 'code/_onclick/hud/fullscreen.dm')
-	var/list/screens = list()
-
-	/// Contains the blindspot overlays, if they are in use
-	var/list/datum/weakref/blindspot_overlay
-
-	///The HUD type the mob will gain on Initialize. (from 'code/_onclick/hud/hud.dm')
-	var/hud_type = /datum/hud
-
-	///The client colors the mob is looking at. (from 'code/modules/client/client_color.dm')
-	var/list/client_colours = list()
-
-	///What receives our keyboard inputs. src by default. (from 'code/modules/keybindings/focus.dm')
-	var/datum/focus
-
-	var/fake_client = FALSE // Currently only used for examines
-
+	// Offset the overhead text if necessary.
+	var/offset_overhead_text_x = 0
+	var/offset_overhead_text_y = 0

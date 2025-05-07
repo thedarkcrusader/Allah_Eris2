@@ -5,62 +5,39 @@
 
 /obj/machinery/power/terminal
 	name = "terminal"
+	icon = 'icons/obj/machines/apc.dmi'
 	icon_state = "term"
 	desc = "It's an underfloor wiring terminal for power equipment."
-	layer = WIRE_TERMINAL_LAYER //a bit above wires
-	var/obj/machinery/power/master = null
+	level = ATOM_LEVEL_UNDER_TILE
+	layer = ABOVE_EXPOSED_WIRE_LAYER
+	var/obj/item/stock_parts/power/terminal/master
+	anchored = TRUE
 
+/obj/machinery/power/terminal/New()
+	..()
+	var/turf/T = src.loc
+	if(level==ATOM_LEVEL_UNDER_TILE) hide(!T.is_plating())
+	return
 
-/obj/machinery/power/terminal/Initialize(mapload)
+/obj/machinery/power/terminal/proc/master_machine()
+	var/obj/machinery/machine = master && master.loc
+	if(istype(machine))
+		return machine
+
+/obj/machinery/power/terminal/hide(do_hide)
+	if(do_hide && level == ATOM_LEVEL_UNDER_TILE)
+		layer = WIRE_TERMINAL_LAYER
+	else
+		reset_plane_and_layer()
+
+/obj/machinery/power/terminal/connect_to_network()
 	. = ..()
-	AddElement(/datum/element/undertile, TRAIT_T_RAY_VISIBLE, use_alpha = TRUE)
+	var/obj/machinery/machine = master_machine()
+	if(machine)
+		machine.power_change()
 
-/obj/machinery/power/terminal/Destroy()
-	if(master)
-		master.disconnect_terminal()
-		master = null
-	return ..()
-
-/obj/machinery/power/proc/can_terminal_dismantle()
-	. = FALSE
-
-/obj/machinery/power/apc/can_terminal_dismantle()
-	. = FALSE
-	if(opened)
-		. = TRUE
-
-/obj/machinery/power/smes/can_terminal_dismantle()
-	. = FALSE
-	if(panel_open)
-		. = TRUE
-
-
-/obj/machinery/power/terminal/proc/dismantle(mob/living/user, obj/item/I)
-	if(isturf(loc))
-		var/turf/T = loc
-		if(T.underfloor_accessibility < UNDERFLOOR_INTERACTABLE)
-			to_chat(user, span_warning("You must first expose the power terminal!"))
-			return
-
-	if(master && !master.can_terminal_dismantle())
-		return
-
-	user.visible_message("[user.name] dismantles the power terminal from [master].",
-		span_notice("You begin to cut the cables..."))
-
-	playsound(src.loc, 'sound/items/deconstruct.ogg', 50, 1)
-	if(I.use_tool(src, user, 50))
-		if(master && !master.can_terminal_dismantle())
-			return
-
-		if(prob(50) && electrocute_mob(user, powernet, src, 1, TRUE))
-			do_sparks(5, TRUE, master)
-			return
-
-		new /obj/item/stack/cable_coil(drop_location(), 10)
-		to_chat(user, span_notice("You cut the cables and dismantle the power terminal."))
-		qdel(src)
-
-/obj/machinery/power/terminal/wirecutter_act(mob/living/user, obj/item/I)
-	dismantle(user, I)
-	return TRUE
+/obj/machinery/power/terminal/disconnect_from_network()
+	. = ..()
+	var/obj/machinery/machine = master_machine()
+	if(machine)
+		machine.power_change()

@@ -1,10 +1,10 @@
 {
-	"recommendations": [
-		"gbasood.byond-dm-language-support",
-		"platymuus.dm-langclient",
-		"EditorConfig.EditorConfig",
-		"arcanis.vscode-zipfs",
-		"dbaeumer.vscode-eslint",
-		"anturk.dmi-editor"
-	]
+  "recommendations": [
+    "stylemistake.auto-comment-blocks",
+    "biomejs.biome",
+    "platymuus.dm-langclient",
+    "anturk.dmi-editor",
+    "eamodio.gitlens",
+    "oderwat.indent-rainbow"
+  ]
 }

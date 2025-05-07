@@ -1,56 +1,139 @@
 /obj/item/gun/energy/taser
-	name = "taser gun"
-	desc = "A low-capacity, energy-based stun gun used by security teams to subdue targets at range."
+	name = "electrolaser"
+	desc = "The NT Mk30 NL is a small, low capacity gun used for non-lethal takedowns. Produced by NT, it's actually a licensed version of a W-T design. It can switch between high and low intensity stun shots."
+	icon = 'icons/obj/guns/taser.dmi'
 	icon_state = "taser"
 	item_state = null	//so the human update icon uses the icon_state instead.
-	ammo_type = list(/obj/item/ammo_casing/energy/electrode)
-	ammo_x_offset = 3
+	max_shots = 5
+	projectile_type = /obj/item/projectile/beam/stun
+	combustion = 0
 
-/obj/item/gun/energy/tesla_revolver
-	name = "tesla gun"
-	desc = "An experimental gun based on an experimental engine, it's about as likely to kill its operator as it is the target."
-	icon_state = "tesla"
-	item_state = "tesla"
-	ammo_type = list(/obj/item/ammo_casing/energy/tesla_revolver)
-	can_flashlight = FALSE
-	pin = null
-	shaded_charge = 1
+	firemodes = list(
+		list(mode_name="stun", projectile_type=/obj/item/projectile/beam/stun),
+		list(mode_name="shock", projectile_type=/obj/item/projectile/beam/stun/shock),
+		)
 
-/obj/item/gun/energy/e_gun/advtaser
-	name = "hybrid taser"
-	desc = "A dual-mode taser designed to fire both short-range high-power electrodes and long-range disabler beams."
-	icon_state = "advtaser"
-	ammo_type = list(/obj/item/ammo_casing/energy/electrode, /obj/item/ammo_casing/energy/disabler)
-	ammo_x_offset = 2
+/obj/item/gun/energy/taser/disposable
+	name = "disposable electrolaser"
+	desc = "The NT Mk30 NL is a small, disposable gun used for non-lethal takedowns. This is a cheaper model commonly issued to police forces to supplement their service weapons. It can switch between high and low intensity stun shots."
+	max_shots = 10
+	disposable = TRUE
 
-/obj/item/gun/energy/e_gun/advtaser/cyborg
-	name = "cyborg taser"
-	desc = "An integrated hybrid taser that draws directly from a cyborg's power cell. The weapon contains a limiter to prevent the cyborg's power cell from overheating."
-	can_flashlight = FALSE
-	can_charge = FALSE
-	use_cyborg_cell = TRUE
+/obj/item/gun/energy/taser/carbine
+	name = "electrolaser carbine"
+	desc = "The NT Mk44 NL is a high capacity gun used for non-lethal takedowns. It can switch between high and low intensity stun shots."
+	icon = 'icons/obj/guns/taser_carbine.dmi'
+	icon_state = "tasercarbine"
+	w_class = ITEM_SIZE_LARGE
+	slot_flags = SLOT_BELT|SLOT_BACK
+	one_hand_penalty = 3
+	origin_tech = list(TECH_COMBAT = 4, TECH_MATERIAL = 3, TECH_POWER = 3)
+	force = 8
+	max_shots = 12
+	accuracy = 1
+	projectile_type = /obj/item/projectile/beam/stun/heavy
+	wielded_item_state = "tasercarbine-wielded"
 
-/obj/item/gun/energy/disabler
-	name = "disabler"
-	desc = "The NT-D2 is a self-defense weapon that exhausts organic targets, weakening them until they collapse."
-	icon_state = "disabler"
-	item_state = null
-	ammo_type = list(/obj/item/ammo_casing/energy/disabler)
-	ammo_x_offset = 2
-	can_flashlight = TRUE
-	flight_x_offset = 15
-	flight_y_offset = 10
+	firemodes = list(
+		list(mode_name="stun", projectile_type=/obj/item/projectile/beam/stun/heavy),
+		list(mode_name="shock", projectile_type=/obj/item/projectile/beam/stun/shock/heavy),
+		)
 
-/obj/item/gun/energy/disabler/attack_self(mob/living/user)
-	. = ..()
-	toggle_gunlight()
+/obj/item/gun/energy/taser/mounted
+	name = "mounted electrolaser"
+	self_recharge = 1
+	use_external_power = 1
+	has_safety = FALSE
+
+/obj/item/gun/energy/taser/mounted/cyborg
+	name = "electrolaser"
+	max_shots = 6
+	recharge_time = 10 //Time it takes for shots to recharge (in ticks)
 
 
-/obj/item/gun/energy/disabler/cyborg
-	name = "cyborg disabler"
-	desc = "A cyborg-integrated disabler that self charges."
-	charge_delay = 5
-	can_charge = FALSE
-	selfcharge = TRUE
-	charge_amount = 3
-	ammo_type = list(/obj/item/ammo_casing/energy/disabler/cyborg)
+/obj/item/gun/energy/stunrevolver
+	name = "stun revolver"
+	desc = "An A&M X6 Zeus. Designed by al-Maliki & Mosley, but produced under the wing of the Free Trade Union. Industry spies have been trying to get a hold of the blueprints for half a decade."
+	icon = 'icons/obj/guns/stunrevolver.dmi'
+	icon_state = "stunrevolver"
+	item_state = "stunrevolver"
+	origin_tech = list(TECH_COMBAT = 3, TECH_MATERIAL = 3, TECH_POWER = 2)
+	projectile_type = /obj/item/projectile/energy/electrode
+	max_shots = 6
+	combustion = 0
+
+/obj/item/gun/energy/stunrevolver/rifle
+	name = "stun rifle"
+	desc = "An A&M X10 Thor. A vastly oversized variant of the A&M X6 Zeus. Fires overcharged electrodes to obliterate pain receptors without harming them too much."
+	icon = 'icons/obj/guns/stunrifle.dmi'
+	icon_state = "stunrifle"
+	item_state = "stunrifle"
+	w_class = ITEM_SIZE_HUGE
+	slot_flags = SLOT_BACK
+	one_hand_penalty = 6
+	origin_tech = list(TECH_COMBAT = 4, TECH_MATERIAL = 3, TECH_POWER = 3)
+	force = 10
+	max_shots = 10
+	accuracy = 1
+	projectile_type = /obj/item/projectile/energy/electrode/stunshot
+	wielded_item_state = "stunrifle-wielded"
+
+/obj/item/gun/energy/crossbow
+	name = "mini energy crossbow"
+	desc = "A weapon favored by many mercenary stealth specialists."
+	icon = 'icons/obj/guns/energy_crossbow.dmi'
+	icon_state = "crossbow"
+	w_class = ITEM_SIZE_NORMAL
+	item_state = "crossbow"
+	origin_tech = list(TECH_COMBAT = 2, TECH_MAGNET = 2, TECH_ESOTERIC = 5)
+	matter = list(MATERIAL_STEEL = 2000)
+	slot_flags = SLOT_BELT
+	silenced = TRUE
+	fire_sound = 'sound/weapons/Genhit.ogg'
+	projectile_type = /obj/item/projectile/energy/bolt
+	max_shots = 8
+	self_recharge = 1
+	charge_meter = 0
+	combustion = 0
+
+/obj/item/gun/energy/crossbow/ninja
+	name = "energy dart thrower"
+	projectile_type = /obj/item/projectile/energy/dart
+	max_shots = 5
+
+/obj/item/gun/energy/crossbow/ninja/mounted
+	use_external_power = 1
+	has_safety = FALSE
+
+/obj/item/gun/energy/crossbow/largecrossbow
+	name = "energy crossbow"
+	desc = "A weapon favored by mercenary infiltration teams."
+	w_class = ITEM_SIZE_LARGE
+	force = 10
+	one_hand_penalty = 1
+	matter = list(MATERIAL_STEEL = 200000)
+	projectile_type = /obj/item/projectile/energy/bolt/large
+
+/obj/item/gun/energy/plasmastun
+	name = "plasma pulse projector"
+	desc = "The Mars Military Industries MA21 Selkie is a weapon that uses a laser pulse to ionise the local atmosphere, creating a disorienting pulse of plasma and deafening shockwave as the wave expands."
+	icon = 'icons/obj/guns/plasma_stun.dmi'
+	icon_state = "plasma_stun"
+	item_state = "plasma_stun"
+	origin_tech = list(TECH_COMBAT = 2, TECH_MATERIAL = 2, TECH_POWER = 3)
+	fire_delay = 20
+	max_shots = 4
+	projectile_type = /obj/item/projectile/energy/plasmastun
+	combustion = 0
+
+/obj/item/gun/energy/confuseray
+	name = "disorientator"
+	desc = "The W-T Mk. 4 Disorientator is a small, low capacity, and short-ranged energy projector intended for personal defense with minimal risk of permanent damage or cross-fire."
+	icon = 'icons/obj/guns/confuseray.dmi'
+	icon_state = "confuseray"
+	safety_icon = "safety"
+	origin_tech = list(TECH_COMBAT = 2, TECH_MATERIAL = 2, TECH_POWER = 2)
+	w_class = ITEM_SIZE_SMALL
+	max_shots = 4
+	projectile_type = /obj/item/projectile/beam/confuseray
+	combustion = 0

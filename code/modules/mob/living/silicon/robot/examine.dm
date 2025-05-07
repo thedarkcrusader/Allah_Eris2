@@ -1,54 +1,44 @@
-/mob/living/silicon/robot/examine(mob/user)
-	. = list("<span class='info'>This is [icon2html(src, user)] \a <EM>[src]</EM>!")
-	if(desc)
-		. += "[desc]"
+/mob/living/silicon/robot/examine(mob/user, distance, is_adjacent)
+	var/custom_infix = custom_name ? ", [modtype] [braintype]" : ""
+	. = ..(user, distance, is_adjacent, infix = custom_infix)
 
-	var/obj/act_module = get_active_held_item()
-	if(act_module)
-		. += "It is holding [icon2html(act_module, user)] \a [act_module]."
-	. += status_effect_examines()
-	if (getBruteLoss())
-		if (getBruteLoss() < maxHealth*0.5)
-			. += span_warning("It looks slightly dented.")
+	var/msg = ""
+	var/damage_msg = ""
+	if (src.getBruteLoss())
+		if (src.getBruteLoss() < 75)
+			damage_msg += "It looks slightly dented.\n"
 		else
-			. += span_warning("<B>It looks severely dented!</B>")
-	if (getFireLoss() || getToxLoss())
-		var/overall_fireloss = getFireLoss() + getToxLoss()
-		if (overall_fireloss < maxHealth * 0.5)
-			. += span_warning("It looks slightly charred.")
+			damage_msg += "<B>It looks severely dented!</B>\n"
+	if (src.getFireLoss())
+		if (src.getFireLoss() < 75)
+			damage_msg += "It looks slightly charred.\n"
 		else
-			. += span_warning("<B>It looks severely burnt and heat-warped!</B>")
-	if (health < -maxHealth*0.5)
-		. += span_warning("It looks barely operational.")
-	if (fire_stacks < 0)
-		. += span_warning("It's covered in water.")
-	else if (fire_stacks > 0)
-		. += span_warning("It's coated in something flammable.")
+			damage_msg += "<B>It looks severely burnt and heat-warped!</B>\n"
+	if (damage_msg)
+		msg += SPAN_WARNING(damage_msg)
 
 	if(opened)
-		. += span_warning("Its cover is open and the power cell is [cell ? "installed" : "missing"].")
+		msg += "[SPAN_WARNING("Its cover is open and the power cell is [cell ? "installed" : "missing"].")]\n"
 	else
-		. += "Its cover is closed[locked ? "" : ", and looks unlocked"]."
+		msg += "Its cover is closed.\n"
 
-	if(cell && cell.charge <= 0)
-		. += span_warning("Its battery indicator is blinking red!")
+	if(!has_power)
+		msg += "[SPAN_WARNING("It appears to be running on backup power.")]\n"
 
-	if(is_servant_of_ratvar(src) && get_dist(user, src) <= 1 && !stat) //To counter pseudo-stealth by using headlamps
-		. += span_warning("Its eyes are glowing a blazing yellow!")
-
-	switch(stat)
+	switch(src.stat)
 		if(CONSCIOUS)
-			if(shell)
-				. += "It appears to be an [deployed ? "active" : "empty"] AI shell."
-			else if(!client)
-				. += "It appears to be in stand-by mode." //afk
-		if(UNCONSCIOUS)
-			. += span_warning("It doesn't seem to be responding.")
-		if(DEAD)
-			. += span_deadsay("It looks like its system is corrupted and requires a reset.")
-	. += "</span>"
+			if(!src.client)	msg += "It appears to be in stand-by mode.\n" //afk
+		if(UNCONSCIOUS)		msg += "[SPAN_WARNING("It doesn't seem to be responding.")]\n"
+		if(DEAD)			msg += "[SPAN_CLASS("deadsay", "It looks completely unsalvageable.")]\n"
+	msg += "*---------*"
 
-	. += ..()
+	if(print_flavor_text()) msg += "\n[print_flavor_text()]\n"
 
-/mob/living/silicon/robot/get_examine_string(mob/user, thats = FALSE)
-	return null
+	if (pose)
+		if( findtext(pose,".",length(pose)) == 0 && findtext(pose,"!",length(pose)) == 0 && findtext(pose,"?",length(pose)) == 0 )
+			pose = addtext(pose,".") //Makes sure all emotes end with a period.
+		msg += "\nIt [pose]"
+
+	to_chat(user, msg)
+	user.showLaws(src)
+	return

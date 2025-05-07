@@ -1,286 +1,165 @@
-#define STATE_WRENCHED 1
-#define STATE_WELDED 2
-#define STATE_WIRED 3
-#define STATE_FINISHED 4
-
-/obj/item/wallframe/camera
+/obj/item/camera_assembly
 	name = "camera assembly"
-	desc = "The basic construction for Nanotrasen-Always-Watching-You cameras."
-	icon = 'icons/obj/machines/camera.dmi'
+	desc = "A pre-fabricated security camera kit, ready to be assembled and mounted to a surface."
+	icon = 'icons/obj/structures/cameras.dmi'
 	icon_state = "cameracase"
-	materials = list(/datum/material/iron=400, /datum/material/glass=250)
-	result_path = /obj/structure/camera_assembly
+	w_class = ITEM_SIZE_SMALL
+	anchored = FALSE
 
-/obj/structure/camera_assembly
-	name = "camera assembly"
-	desc = "The basic construction for Nanotrasen-Always-Watching-You cameras."
-	icon = 'icons/obj/machines/camera.dmi'
-	icon_state = "camera_assembly"
-	max_integrity = 150
-	//	Motion, EMP-Proof, X-ray
-	var/obj/item/analyzer/xray_module
-	var/malf_xray_firmware_active //used to keep from revealing malf AI upgrades for user facing isXRay() checks when they use Upgrade Camera Network ability
-								//will be false if the camera is upgraded with the proper parts.
-	var/malf_xray_firmware_present //so the malf upgrade is restored when the normal upgrade part is removed.
-	var/obj/item/stack/sheet/mineral/plasma/emp_module
-	var/malf_emp_firmware_active //used to keep from revealing malf AI upgrades for user facing isEmp() checks after they use Upgrade Camera Network ability
-								//will be false if the camera is upgraded with the proper parts.
-	var/malf_emp_firmware_present //so the malf upgrade is restored when the normal upgrade part is removed.
-	var/obj/item/assembly/prox_sensor/proxy_module
-	var/state = STATE_WRENCHED
+	matter = list(MATERIAL_ALUMINIUM = 700, MATERIAL_GLASS = 300)
 
-/obj/structure/camera_assembly/examine(mob/user)
-	. = ..()
-	//upgrade messages
-	var/has_upgrades
-	if(emp_module)
-		. += "It has electromagnetic interference shielding installed."
-		has_upgrades = TRUE
-	else if(state == STATE_WIRED)
-		. += span_info("It can be shielded against electromagnetic interference with some <b>plasma</b>.")
-	if(xray_module)
-		. += "It has an X-ray photodiode installed."
-		has_upgrades = TRUE
-	else if(state == STATE_WIRED)
-		. += span_info("It can be upgraded with an X-ray photodiode with an <b>analyzer</b>.")
-	if(proxy_module)
-		. += "It has a proximity sensor installed."
-		has_upgrades = TRUE
-	else if(state == STATE_WIRED)
-		. += span_info("It can be upgraded with a <b>proximity sensor</b>.")
+	//	Motion, EMP-Proof, X-Ray
+	var/list/obj/item/possible_upgrades = list(/obj/item/device/assembly/prox_sensor, /obj/item/stack/material/osmium, /obj/item/stock_parts/scanning_module)
+	var/list/upgrades = list()
+	var/camera_name
+	var/camera_network
+	var/state = 0
+	var/busy = 0
+	/*
+				0 = Nothing done to it
+				1 = Wrenched in place
+				2 = Welded in place
+				3 = Wires attached to it (you can now attach/dettach upgrades)
+				4 = Screwdriver panel closed and is fully built (you cannot attach upgrades)
+	*/
 
-	//construction states
+/obj/item/camera_assembly/use_tool(obj/item/W, mob/living/user, list/click_params)
 	switch(state)
-		if(STATE_WRENCHED)
-			. += span_info("You can secure it in place with a <b>welder</b>, or removed with a <b>wrench</b>.")
-		if(STATE_WELDED)
-			. += span_info("You can add <b>wires</b> to it, or <b>unweld</b> it from the wall.")
-		if(STATE_WIRED)
-			if(has_upgrades)
-				. += span_info("You can remove the contained upgrades with a <b>crowbar</b>.")
-			. += span_info("You can complete it with a <b>screwdriver</b>, or <b>unwire</b> it to start removal.")
-		if(STATE_FINISHED)
-			. += span_boldwarning("You shouldn't be seeing this, tell a coder!")
+		if(0)
+			// State 0
+			if(isWrench(W) && isturf(loc))
+				playsound(src.loc, 'sound/items/Ratchet.ogg', 50, 1)
+				to_chat(user, "You wrench the assembly into place.")
+				anchored = TRUE
+				state = 1
+				update_icon()
+				auto_turn()
+				return TRUE
 
-/obj/structure/camera_assembly/Initialize(mapload, ndir, building)
-	. = ..()
-	if(building)
-		setDir(ndir)
-
-/obj/structure/camera_assembly/update_icon_state()
-	. = ..()
-	icon_state = "[xray_module ? "xray" : null][initial(icon_state)]"
-
-/obj/structure/camera_assembly/handle_atom_del(atom/A)
-	if(A == xray_module)
-		xray_module = null
-		update_appearance(UPDATE_ICON)
-		if(malf_xray_firmware_present)
-			malf_xray_firmware_active = malf_xray_firmware_present //re-enable firmware based upgrades after the part is removed.
-		if(istype(loc, /obj/machinery/camera))
-			var/obj/machinery/camera/contained_camera = loc
-			contained_camera.removeXRay(malf_xray_firmware_present) //make sure we don't remove MALF upgrades.
-
-	else if(A == emp_module)
-		emp_module = null
-		if(malf_emp_firmware_present)
-			malf_emp_firmware_active = malf_emp_firmware_present //re-enable firmware based upgrades after the part is removed.
-		if(istype(loc, /obj/machinery/camera))
-			var/obj/machinery/camera/contained_camera = loc
-			contained_camera.removeEmpProof(malf_emp_firmware_present) //make sure we don't remove MALF upgrades
-
-	else if(A == proxy_module)
-		emp_module = null
-		if(istype(loc, /obj/machinery/camera))
-			var/obj/machinery/camera/contained_camera = loc
-			contained_camera.removeMotion()
-
-	return ..()
-
-
-/obj/structure/camera_assembly/Destroy()
-	QDEL_NULL(xray_module)
-	QDEL_NULL(emp_module)
-	QDEL_NULL(proxy_module)
-	return ..()
-
-/obj/structure/camera_assembly/proc/drop_upgrade(obj/item/I)
-	I.forceMove(drop_location())
-	if(I == xray_module)
-		xray_module = null
-		if(malf_xray_firmware_present)
-			malf_xray_firmware_active = malf_xray_firmware_present //re-enable firmware based upgrades after the part is removed.
-		update_appearance(UPDATE_ICON)
-
-	else if(I == emp_module)
-		emp_module = null
-		if(malf_emp_firmware_present)
-			malf_emp_firmware_active = malf_emp_firmware_present //re-enable firmware based upgrades after the part is removed.
-
-	else if(I == proxy_module)
-		proxy_module = null
-
-
-/obj/structure/camera_assembly/attackby(obj/item/W, mob/living/user, params)
-	switch(state)
-		if(STATE_WRENCHED)
-			if(W.tool_behaviour == TOOL_WELDER)
+		if(1)
+			// State 1
+			if(isWelder(W))
 				if(weld(W, user))
-					to_chat(user, span_notice("You weld [src] securely into place."))
-					setAnchored(TRUE)
-					state = STATE_WELDED
-				return
+					to_chat(user, "You weld the assembly securely into place.")
+					anchored = TRUE
+					state = 2
+				return TRUE
 
-		if(STATE_WELDED)
-			if(istype(W, /obj/item/stack/cable_coil))
+			else if(isWrench(W))
+				playsound(src.loc, 'sound/items/Ratchet.ogg', 50, 1)
+				to_chat(user, "You unattach the assembly from its place.")
+				anchored = FALSE
+				update_icon()
+				state = 0
+				return TRUE
+
+		if(2)
+			// State 2
+			if(isCoil(W))
 				var/obj/item/stack/cable_coil/C = W
 				if(C.use(2))
-					to_chat(user, span_notice("You add wires to [src]."))
-					state = STATE_WIRED
+					to_chat(user, SPAN_NOTICE("You add wires to the assembly."))
+					state = 3
 				else
-					to_chat(user, span_warning("You need two lengths of cable to wire a camera!"))
-					return
-				return
+					to_chat(user, SPAN_WARNING("You need 2 coils of wire to wire the assembly."))
+				return TRUE
 
-			else if(W.tool_behaviour == TOOL_WELDER)
-
+			else if(isWelder(W))
 				if(weld(W, user))
-					to_chat(user, span_notice("You unweld [src] from its place."))
-					state = STATE_WRENCHED
-					setAnchored(TRUE)
-				return
+					to_chat(user, "You unweld the assembly from its place.")
+					state = 1
+					anchored = TRUE
+				return TRUE
 
-		if(STATE_WIRED)	// Upgrades!
-			if(istype(W, /obj/item/stack/sheet/mineral/plasma)) //emp upgrade
-				if(emp_module)
-					to_chat(user, span_warning("[src] already contains a [emp_module]!"))
-					return
-				if(!W.use_tool(src, user, 0, amount=1)) //only use one sheet, otherwise the whole stack will be consumed.
-					return
-				emp_module = new(src)
-				if(malf_xray_firmware_active)
-					malf_xray_firmware_active = FALSE //flavor reason: MALF AI Upgrade Camera Network ability's firmware is incompatible with the new part
-														//real reason: make it a normal upgrade so the finished camera's icons and examine texts are restored.
-				to_chat(user, span_notice("You attach [W] into [src]'s inner circuits."))
-				return
+		if(3)
+			// State 3
+			if(isScrewdriver(W))
+				playsound(src.loc, 'sound/items/Screwdriver.ogg', 50, 1)
 
-			else if(istype(W, /obj/item/analyzer)) //xray upgrade
-				if(xray_module)
-					to_chat(user, span_warning("[src] already contains a [xray_module]!"))
-					return
-				if(!user.transferItemToLoc(W, src))
-					return
-				to_chat(user, span_notice("You attach [W] into [src]'s inner circuits."))
-				xray_module = W
-				if(malf_xray_firmware_active)
-					malf_xray_firmware_active = FALSE //flavor reason: MALF AI Upgrade Camera Network ability's firmware is incompatible with the new part
-														//real reason: make it a normal upgrade so the finished camera's icons and examine texts are restored.
-				update_appearance(UPDATE_ICON)
-				return
+				var/input = sanitize(input(usr, "Which networks would you like to connect this camera to? Separate networks with a comma. No Spaces!\nFor example: Exodus,Security,Secret", "Set Network", camera_network ? camera_network : NETWORK_EXODUS))
+				if(!input)
+					to_chat(usr, "No input found please hang up and try your call again.")
+					return TRUE
 
-			else if(istype(W, /obj/item/assembly/prox_sensor)) //motion sensing upgrade
-				if(proxy_module)
-					to_chat(user, span_warning("[src] already contains a [proxy_module]!"))
-					return
-				if(!user.transferItemToLoc(W, src))
-					return
-				to_chat(user, span_notice("You attach [W] into [src]'s inner circuits."))
-				proxy_module = W
-				return
+				var/list/tempnetwork = splittext(input, ",")
+				if(length(tempnetwork) < 1)
+					to_chat(usr, "No network found please hang up and try your call again.")
+					return TRUE
+
+				var/area/camera_area = get_area(src)
+				var/temptag = "[sanitize(camera_area.name)] ([rand(1, 999)])"
+				input = sanitizeSafe(input(usr, "How would you like to name the camera?", "Set Camera Name", camera_name ? camera_name : temptag), MAX_LNAME_LEN)
+
+				state = 4
+				var/obj/machinery/camera/C = new(src.loc)
+				src.forceMove(C)
+				C.assembly = src
+
+				C.auto_turn()
+
+				C.replace_networks(uniquelist(tempnetwork))
+
+				C.c_tag = input
+
+				for(var/i = 5; i >= 0; i -= 1)
+					var/direct = input(user, "Direction?", "Assembling Camera", null) in list("LEAVE IT", "NORTH", "EAST", "SOUTH", "WEST" )
+					if(direct != "LEAVE IT")
+						C.dir = text2dir(direct)
+					if(i != 0)
+						var/confirm = alert(user, "Is this what you want? Chances Remaining: [i]", "Confirmation", "Yes", "No")
+						if(confirm == "Yes")
+							C.update_icon()
+							break
+				return TRUE
+
+			else if(isWirecutter(W))
+				new/obj/item/stack/cable_coil(get_turf(src), 2)
+				playsound(src.loc, 'sound/items/Wirecutter.ogg', 50, 1)
+				to_chat(user, "You cut the wires from the circuits.")
+				state = 2
+				return TRUE
+
+	// Upgrades!
+	if(is_type_in_list(W, possible_upgrades) && !is_type_in_list(W, upgrades) && user.unEquip(W, src)) // Is a possible upgrade and isn't in the camera already.
+		to_chat(user, "You attach \the [W] into the assembly inner circuits.")
+		upgrades += W
+		return TRUE
+
+	// Taking out upgrades
+	if (isCrowbar(W) && length(upgrades))
+		var/obj/U = locate(/obj) in upgrades
+		if(U)
+			to_chat(user, "You unattach an upgrade from the assembly.")
+			playsound(src.loc, 'sound/items/Crowbar.ogg', 50, 1)
+			U.dropInto(loc)
+			upgrades -= U
+		return TRUE
 
 	return ..()
 
-/obj/structure/camera_assembly/crowbar_act(mob/user, obj/item/tool)
-	if(state != STATE_WIRED)
-		return FALSE
-	var/list/droppable_parts = list()
-	if(xray_module)
-		droppable_parts += xray_module
-	if(emp_module)
-		droppable_parts += emp_module
-	if(proxy_module)
-		droppable_parts += proxy_module
-	if(!droppable_parts.len)
-		return
-	var/obj/item/choice = input(user, "Select a part to remove:", src) as null|obj in droppable_parts
-	if(!choice || !user.canUseTopic(src, BE_CLOSE, FALSE, NO_TK))
-		return
-	to_chat(user, span_notice("You remove [choice] from [src]."))
-	drop_upgrade(choice)
-	tool.play_tool_sound(src)
-	return TRUE
+/obj/item/camera_assembly/on_update_icon()
+	if(anchored)
+		icon_state = "camera1"
+	else
+		icon_state = "cameracase"
 
-/obj/structure/camera_assembly/screwdriver_act(mob/user, obj/item/tool)
-	. = ..()
-	if(.)
-		return TRUE
-	if(state != STATE_WIRED)
-		return FALSE
+/obj/item/camera_assembly/attack_hand(mob/user as mob)
+	if(!anchored)
+		..()
 
-	tool.play_tool_sound(src)
-	var/input = stripped_input(user, "Which networks would you like to connect this camera to? Separate networks with a comma. No Spaces!\nFor example: SS13,Security,Secret ", "Set Network", "SS13")
-	if(!input)
-		to_chat(user, span_warning("No input found, please hang up and try your call again!"))
-		return
-	var/list/tempnetwork = splittext(input, ",")
-	if(tempnetwork.len < 1)
-		to_chat(user, span_warning("No network found, please hang up and try your call again!"))
-		return
-	for(var/i in tempnetwork)
-		tempnetwork -= i
-		tempnetwork += lowertext(i)
-	state = STATE_FINISHED
-	var/obj/machinery/camera/C = new(loc, src)
-	forceMove(C)
-	C.setDir(src.dir)
+/obj/item/camera_assembly/proc/weld(obj/item/weldingtool/WT, mob/user)
 
-	C.network = tempnetwork
-	var/area/A = get_area(src)
-	C.c_tag = "[A.name] ([rand(1, 999)])"
-	return TRUE
+	if(busy)
+		return 0
 
-/obj/structure/camera_assembly/wirecutter_act(mob/user, obj/item/I)
-	if(state != STATE_WIRED)
-		return FALSE
+	if(WT.can_use(1, user))
+		to_chat(user, SPAN_NOTICE("You start to weld \the [src].."))
+		playsound(src.loc, 'sound/items/Welder.ogg', 50, 1)
+		busy = 1
+		if(do_after(user, 2 SECONDS, src, DO_REPAIR_CONSTRUCT) && WT.remove_fuel(1, user))
+			playsound(src.loc, 'sound/items/Welder.ogg', 50, 1)
+			busy = 0
+			return 1
 
-	new /obj/item/stack/cable_coil(drop_location(), 2)
-	I.play_tool_sound(src)
-	to_chat(user, span_notice("You cut the wires from the circuits."))
-	state = STATE_WELDED
-	return TRUE
-
-/obj/structure/camera_assembly/wrench_act(mob/user, obj/item/I)
-	if(state != STATE_WRENCHED)
-		return FALSE
-	I.play_tool_sound(src)
-	to_chat(user, span_notice("You detach [src] from its place."))
-	new /obj/item/wallframe/camera(drop_location())
-	//drop upgrades
-	if(xray_module)
-		drop_upgrade(xray_module)
-	if(emp_module)
-		drop_upgrade(emp_module)
-	if(proxy_module)
-		drop_upgrade(proxy_module)
-
-	qdel(src)
-	return TRUE
-
-/obj/structure/camera_assembly/proc/weld(obj/item/weldingtool/W, mob/living/user)
-	if(!W.tool_start_check(user, amount=3))
-		return FALSE
-	to_chat(user, span_notice("You start to weld [src]..."))
-	if(W.use_tool(src, user, 20, amount=3, volume = 50))
-		return TRUE
-	return FALSE
-
-/obj/structure/camera_assembly/deconstruct(disassembled = TRUE)
-	if(!(flags_1 & NODECONSTRUCT_1))
-		new /obj/item/stack/sheet/metal(loc)
-	qdel(src)
-
-
-#undef STATE_WRENCHED
-#undef STATE_WELDED
-#undef STATE_WIRED
-#undef STATE_FINISHED
+	busy = 0
+	return 0

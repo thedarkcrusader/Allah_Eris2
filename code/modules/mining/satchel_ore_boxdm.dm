@@ -2,99 +2,111 @@
 /**********************Ore box**************************/
 
 /obj/structure/ore_box
-	icon = 'icons/obj/mining.dmi'
-	icon_state = "orebox"
+	icon = 'icons/obj/ore_boxes.dmi'
+	icon_state = "orebox0"
 	name = "ore box"
-	desc = "A heavy wooden box, which can be filled with a lot of ores."
+	desc = "A heavy box used for storing ore."
 	density = TRUE
-	pressure_resistance = 5*ONE_ATMOSPHERE
+	var/last_update = 0
+	var/list/stored_ore = list()
 
-/obj/structure/ore_box/attackby(obj/item/W, mob/user, params)
-	if (istype(W, /obj/item/stack/ore))
-		user.transferItemToLoc(W, src)
-	else if(SEND_SIGNAL(W, COMSIG_CONTAINS_STORAGE))
-		SEND_SIGNAL(W, COMSIG_TRY_STORAGE_TAKE_TYPE, /obj/item/stack/ore, src)
-		to_chat(user, span_notice("You empty the ore in [W] into \the [src]."))
-	else
-		return ..()
 
-/obj/structure/ore_box/crowbar_act(mob/living/user, obj/item/tool)
-	if(istype(tool, /obj/item/mecha_parts/mecha_equipment/hydraulic_clamp))
-		return FALSE // prevent accidentally prying it apart when trying to pick it up
-	if(tool.use_tool(src, user, 50, volume=50))
-		user.visible_message("[user] pries \the [src] apart.",
-			span_notice("You pry apart \the [src]."),
-			span_italics("You hear splitting wood."))
-		deconstruct(TRUE, user)
-	return TRUE
+/obj/structure/ore_box/use_tool(obj/item/tool, mob/user, list/click_params)
+	// Ore - Insert ore
+	if (istype(tool, /obj/item/ore))
+		if (!user.unEquip(tool, src))
+			FEEDBACK_UNEQUIP_FAILURE(user, tool)
+			return TRUE
+		update_ore_count()
+		user.visible_message(
+			SPAN_NOTICE("\The [user] puts \a [tool] in \the [src]."),
+			SPAN_NOTICE("You put \the [tool] in \the [src].")
+		)
+		return TRUE
 
-/obj/structure/ore_box/examine(mob/living/user)
-	if(Adjacent(user) && istype(user))
-		ui_interact(user)
+	// Storage - Bulk insert ore
+	if (istype(tool, /obj/item/storage))
+		var/obj/item/storage/storage = tool
+		storage.hide_from(user)
+		for (var/obj/item/ore/ore in storage.contents)
+			storage.remove_from_storage(ore, src, TRUE)
+		storage.finish_bulk_removal()
+		update_ore_count()
+		user.visible_message(
+			SPAN_NOTICE("\The [user] empties \a [tool] into \the [src]."),
+			SPAN_NOTICE("You empty \the [tool] into \the [src].")
+		)
+		return TRUE
+
+	return ..()
+
+
+/obj/structure/ore_box/proc/update_ore_count()
+
+	stored_ore = list()
+
+	for(var/obj/item/ore/O in contents)
+
+		if(stored_ore[O.name])
+			stored_ore[O.name]++
+		else
+			stored_ore[O.name] = 1
+
+/obj/structure/ore_box/examine(mob/user)
 	. = ..()
 
-/obj/structure/ore_box/attack_hand(mob/user)
-	. = ..()
-	if(.)
+	// Borgs can now check contents too.
+	if((!istype(user, /mob/living/carbon/human)) && (!istype(user, /mob/living/silicon/robot)))
 		return
-	if(Adjacent(user))
-		ui_interact(user)
 
-/obj/structure/ore_box/attack_robot(mob/user)
-	if(Adjacent(user))
-		ui_interact(user)
-
-/obj/structure/ore_box/proc/dump_box_contents()
-	var/drop = drop_location()
-	for(var/obj/item/stack/ore/O in src)
-		if(QDELETED(O))
-			continue
-		if(QDELETED(src))
-			break
-		O.forceMove(drop)
-		if(TICK_CHECK)
-			stoplag()
-			drop = drop_location()
-
-/obj/structure/ore_box/ui_interact(mob/user, datum/tgui/ui)
-	ui = SStgui.try_update_ui(user, src, ui)
-	if(!ui)
-		ui = new(user, src, "OreBox", name)
-		ui.open()
-
-/obj/structure/ore_box/ui_data()
-	var/contents = list()
-	for(var/obj/item/stack/ore/O in src)
-		contents[O.type] += O.amount
-
-	var/data = list()
-	data["materials"] = list()
-	for(var/type in contents)
-		var/obj/item/stack/ore/O = type
-		var/name = initial(O.name)
-		data["materials"] += list(list("name" = name, "amount" = contents[type], "id" = type))
-
-	return data
-
-/obj/structure/ore_box/ui_act(action, params)
-	if(..())
+	if(!Adjacent(user)) //Can only check the contents of ore boxes if you can physically reach them.
 		return
-	if(!Adjacent(usr))
+
+	add_fingerprint(user)
+
+	if(!length(contents))
+		to_chat(user, "It is empty.")
+		return
+
+	if(world.time > last_update + 10)
+		update_ore_count()
+		last_update = world.time
+
+	to_chat(user, "It holds:")
+	for(var/ore in stored_ore)
+		to_chat(user, "- [stored_ore[ore]] [ore]")
+	return
+
+
+/obj/structure/ore_box/verb/empty_box()
+	set name = "Empty Ore Box"
+	set category = "Object"
+	set src in view(1)
+
+	if(!istype(usr, /mob/living/carbon/human)) //Only living, intelligent creatures with hands can empty ore boxes.
+		to_chat(usr, SPAN_WARNING("You are physically incapable of emptying the ore box."))
+		return
+
+	if( usr.stat || usr.restrained() )
+		return
+
+	if(!Adjacent(usr)) //You can only empty the box if you can physically reach it
+		to_chat(usr, "You cannot reach the ore box.")
 		return
 
 	add_fingerprint(usr)
-	usr.set_machine(src)
-	if(action == "removeall") // TG made this a switch with only one case :thinking:
-		dump_box_contents()
-		to_chat(usr, span_notice("You open the release hatch on the box.."))
 
-/obj/structure/ore_box/deconstruct(disassembled = TRUE, mob/user)
-	var/obj/item/stack/sheet/mineral/wood/WD = new (loc, 4)
-	if(user)
-		WD.add_fingerprint(user)
-	dump_box_contents()
-	qdel(src)
+	if(length(contents) < 1)
+		to_chat(usr, SPAN_WARNING("The ore box is empty"))
+		return
 
-/// Special override for notify_contents = FALSE.
-/obj/structure/ore_box/on_changed_z_level(turf/old_turf, turf/new_turf, same_z_layer, notify_contents = FALSE)
-	return ..()
+	for (var/obj/item/ore/O in contents)
+		O.dropInto(loc)
+	to_chat(usr, SPAN_NOTICE("You empty the ore box"))
+
+/obj/structure/ore_box/ex_act(severity)
+	if(severity == EX_ACT_DEVASTATING || (severity < EX_ACT_LIGHT && prob(50)))
+		for (var/obj/item/ore/O in contents)
+			O.dropInto(loc)
+			O.ex_act(severity++)
+		qdel(src)

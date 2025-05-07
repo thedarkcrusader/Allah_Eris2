@@ -1,470 +1,503 @@
-/*ALL MOB-RELATED DEFINES THAT DON'T BELONG IN ANOTHER FILE GO HERE*/
+// /mob/var/stat things.
+#define CONSCIOUS   0
+#define UNCONSCIOUS 1
+#define DEAD        2
 
-//Misc mob defines
+// Bitflags defining which status effects could be or are inflicted on a mob.
+#define CANSTUN     FLAG_01
+#define CANWEAKEN   FLAG_02
+#define CANPARALYSE FLAG_03
+#define CANPUSH     FLAG_04
+#define PASSEMOTES  FLAG_05  // Mob has a cortical borer or holders inside of it that need to see emotes.
+#define LEAPING     FLAG_06
+#define GODMODE     FLAG_07
+#define FAKEDEATH   FLAG_08  // Replaces stuff like changeling.changeling_fakedeath.
+#define NO_ANTAG    FLAG_09  // Players are restricted from gaining antag roles when occupying this mob
+#define NOTARGET    FLAG_10  // Player is invisible to all simple mobs
 
-//Ready states at roundstart for mob/dead/new_player
-#define PLAYER_NOT_READY 0
-#define PLAYER_READY_TO_PLAY 1
-#define PLAYER_READY_TO_OBSERVE 2
+// Grab Types
+#define GRAB_NORMAL			"normal"
+#define GRAB_NAB			"nab"
+#define GRAB_NAB_SPECIAL	"special nab"
 
-//Game mode list indexes
-#define CURRENT_LIVING_PLAYERS	"living_players_list"
-#define CURRENT_LIVING_ANTAGS	"living_antags_list"
-#define CURRENT_DEAD_PLAYERS	"dead_players_list"
-#define CURRENT_OBSERVERS		"current_observers_list"
+// Grab levels.
+#define NORM_PASSIVE    "normal passive"
+#define NORM_STRUGGLE   "normal struggle"
+#define NORM_AGGRESSIVE "normal aggressive"
+#define NORM_NECK       "normal neck"
+#define NORM_KILL       "normal kill"
 
-//movement intent defines for the m_intent var
-#define MOVE_INTENT_WALK "walk"
-#define MOVE_INTENT_RUN  "run"
+#define NAB_PASSIVE		"nab passive"
+#define NAB_AGGRESSIVE	"nab aggressive"
+#define NAB_KILL		"nab kill"
 
-//Blood volumes, in cL
-#define BLOOD_VOLUME_MAX_LETHAL		2150 // The lethal amount for a good semaritan, based off IRL data about vampires
-#define BLOOD_VOLUME_GENERIC		560 // The default amount of blood in a blooded creature, in cL, based off IRL data about humans
-#define BLOOD_VOLUME_MONKEY			325 // Based on IRL data bout Chimpanzees
-#define BLOOD_VOLUME_XENO			700 // Based off data from my asshole
+#define BORGMESON FLAG_01
+#define BORGTHERM FLAG_02
+#define BORGXRAY  FLAG_03
+#define BORGMATERIAL FLAG_04
 
-#define BLOOD_VOLUME_SLIME_SPLIT	(2.0 * BLOOD_VOLUME_GENERIC) // Amount of blood needed by slimebois for splitting in twain
+#define LEFT  FLAG_01
+#define RIGHT FLAG_02
+#define UNDER FLAG_03
 
-//Blood multiplers -- Multiply the original default value of blood your Carbon has with these in order to get the actual blood tiers
-// i.e.	if(h.blood_volume < initial(h.blood_volume) * BLOOD_OKAY_MULTI) or whatever
-//used by :living/proc/get_blood_state()
-#define BLOOD_MAXIMUM_MULTI 3.6 // 360%
-#define BLOOD_SAFE_MULTI 0.848	// 84.8%
-#define BLOOD_OKAY_MULTI 0.6	// 60%
-#define BLOOD_BAD_MULTI 0.4		// 40%
-#define BLOOD_SURVIVE_MULTI 0.2	// 20%
+// Pulse levels, very simplified.
+#define PULSE_NONE    0   // So !M.pulse checks would be possible.
+#define PULSE_SLOW    1   // <60     bpm
+#define PULSE_NORM    2   //  60-90  bpm
+#define PULSE_FAST    3   //  90-120 bpm
+#define PULSE_2FAST   4   // >120    bpm
+#define PULSE_THREADY 5   // Occurs during hypovolemic shock
+#define GETPULSE_HAND 0   // Less accurate. (hand)
+#define GETPULSE_TOOL 1   // More accurate. (med scanner, sleeper, etc.)
+#define PULSE_MAX_BPM 250 // Highest, readable BPM by machines and humans.
 
-//Blood state enums, again used by get_blood_state()
-#define BLOOD_MAXIMUM 5
-#define BLOOD_SAFE 4
-#define BLOOD_OKAY 3
-#define BLOOD_BAD 2
-#define BLOOD_SURVIVE 1
-#define BLOOD_DEAD 0
+//intent flags
+#define I_HELP		"help"
+#define I_DISARM	"disarm"
+#define I_GRAB		"grab"
+#define I_HURT		"harm"
 
-//Defines to get the actual volumes for these varying states
-//YOGS: Keep in mind that in BYOND, initial() is a non-const function and doesn't work correctly in switch statements!
-#define BLOOD_VOLUME_MAXIMUM(L)		(initial(##L.blood_volume) * BLOOD_MAXIMUM_MULTI)
-#define BLOOD_VOLUME_NORMAL(L)		(initial(##L.blood_volume))
-#define BLOOD_VOLUME_SAFE(L)		(initial(##L.blood_volume) * BLOOD_SAFE_MULTI)
-#define BLOOD_VOLUME_OKAY(L)		(initial(##L.blood_volume) * BLOOD_OKAY_MULTI)
-#define BLOOD_VOLUME_BAD(L)			(initial(##L.blood_volume) * BLOOD_BAD_MULTI)
-#define BLOOD_VOLUME_SURVIVE(L)		(initial(##L.blood_volume) * BLOOD_SURVIVE_MULTI)
+//These are used Bump() code for living mobs, in the mob_bump_flag, mob_swap_flags, and mob_push_flags vars to determine whom can bump/swap with whom.
+#define HUMAN FLAG_01
+#define MONKEY FLAG_02
+#define ALIEN FLAG_03
+#define ROBOT FLAG_04
+#define SLIME FLAG_05
+#define SIMPLE_ANIMAL FLAG_06
+#define HEAVY FLAG_07
+#define ALLMOBS (HUMAN|MONKEY|ALIEN|ROBOT|SLIME|SIMPLE_ANIMAL|HEAVY)
 
-//Sizes of mobs, used by mob/living/var/mob_size
-#define MOB_SIZE_TINY 0
-#define MOB_SIZE_SMALL 1
-#define MOB_SIZE_HUMAN 2
-#define MOB_SIZE_LARGE 3
-#define MOB_SIZE_HUGE 4
+// Robot AI notifications
+#define ROBOT_NOTIFICATION_NEW_UNIT 1
+#define ROBOT_NOTIFICATION_NEW_NAME 2
+#define ROBOT_NOTIFICATION_NEW_MODULE 3
+#define ROBOT_NOTIFICATION_MODULE_RESET 4
 
-//Ventcrawling defines
-#define VENTCRAWLER_NONE   0
-#define VENTCRAWLER_NUDE   1
-#define VENTCRAWLER_ALWAYS 2
+// Appearance change flags
+#define APPEARANCE_ALL FLAGS_ON
+#define APPEARANCE_DNA2 FLAG_01
+#define APPEARANCE_RACE FLAG_02
+#define APPEARANCE_GENDER FLAG_03
+#define APPEARANCE_SKIN FLAG_04
+#define APPEARANCE_HEAD FLAG_05
+#define APPEARANCE_HEAD_COLOR FLAG_06
+#define APPEARANCE_FACE FLAG_07
+#define APPEARANCE_FACE_COLOR FLAG_08
+#define APPEARANCE_ALL_HAIR (APPEARANCE_HEAD | APPEARANCE_HEAD_COLOR | APPEARANCE_FACE | APPEARANCE_FACE_COLOR)
+#define APPEARANCE_EYES FLAG_09
+#define APPEARANCE_LANG FLAG_10
+#define APPEARANCE_PRONOUNS	FLAG_11
 
-//Bloodcrawling defines
-#define BLOODCRAWL 1
-#define BLOODCRAWL_EAT 2
+#define APPEARANCE_LANG_ANY_NUMBER FLAG_21
+#define APPEARANCE_LANG_ANY_ORIGIN FLAG_22
+#define APPEARANCE_SKIP_ALLOW_LIST_CHECK FLAG_23
+#define APPEARANCE_SKIP_RESTRICTED_CHECK FLAG_24
 
-//Mob bio-types
-#define MOB_ORGANIC 	(1<<0)
-#define MOB_INORGANIC 	(1<<1)
-#define MOB_ROBOTIC 	(1<<2)
-#define MOB_UNDEAD		(1<<3)
-#define MOB_HUMANOID 	(1<<4)
-#define MOB_BUG 		(1<<5)
-#define MOB_BEAST		(1<<6)
-#define MOB_EPIC		(1<<7) //megafauna
-#define MOB_REPTILE		(1<<8)
-#define MOB_SPIRIT		(1<<9)
-#define MOB_SPECIAL		(1<<10) //eldritch biggums
+#define APPEARANCE_BASIC (APPEARANCE_GENDER|APPEARANCE_SKIN|APPEARANCE_ALL_HAIR|APPEARANCE_EYES|APPEARANCE_PRONOUNS)
+#define APPEARANCE_COMMON (APPEARANCE_BASIC|APPEARANCE_DNA2|APPEARANCE_RACE|APPEARANCE_LANG)
 
 
-/// All the biotypes that matter
-#define ALL_NON_ROBOTIC (MOB_ORGANIC|MOB_INORGANIC|MOB_UNDEAD)
-#define ALL_BIOTYPES (MOB_ORGANIC|MOB_INORGANIC|MOB_ROBOTIC|MOB_UNDEAD)
+// /sprite_accessory flags
+#define DO_COLORATION_USER 1 //! Allow a user to set their own sprite_accessory color; tattoos, etc
+#define DO_COLORATION_SKIN 2 //! Take a coloration cue from skin tone
+#define DO_COLORATION_HAIR 4 //! Take a coloration cue from hair color
+#define DO_COLORATION_AUTO 6 //! Use hair if available, otherwise skin
 
-// Defines for Species IDs. Used to refer to the name of a species, for things like bodypart names or species preferences.
-#define SPECIES_ABDUCTOR "abductor"
-#define SPECIES_DULLAHAN "dullahan"
-#define SPECIES_ETHEREAL "ethereal"
-#define SPECIES_FELINE "felinid"
-#define SPECIES_FLYPERSON "fly"
-#define SPECIES_HUMAN "human"
 
-#define SPECIES_JELLYPERSON "jelly"
-#define SPECIES_SLIMEPERSON "slime"
-#define SPECIES_LUMINESCENT "lum" //for some reason it's just lum in our codebase and i don't want to break stuff by changing it
-#define SPECIES_STARGAZER "stargazer"
-#define SPECIES_LIZARD "lizard"
-#define SPECIES_LIZARD_ASH "ashlizard"
-#define SPECIES_LIZARD_ASH_SHAMAN "ashlizardshaman"
-#define SPECIES_LIZARD_DRACONID "draconid"
+// Click cooldown
+#define DEFAULT_ATTACK_COOLDOWN 8 //Default timeout for aggressive actions
+#define DEFAULT_QUICK_COOLDOWN  4
 
-#define SPECIES_NIGHTMARE "nightmare"
-#define SPECIES_MOTH "moth"
-#define SPECIES_MUSHROOM "mush"
-#define SPECIES_PLASMAMAN "plasmaman"
-#define SPECIES_PODPERSON "pod"
-#define SPECIES_SHADOW "shadow"
-#define SPECIES_SKELETON "skeleton"
-#define SPECIES_SNAIL "snail"
-#define SPECIES_VAMPIRE "vampire"
-#define SPECIES_ZOMBIE "zombie"
-#define SPECIES_ZOMBIE_INFECTIOUS "memezombie"
-#define SPECIES_ZOMBIE_KROKODIL "krokodil_zombie"
+#define FAST_WEAPON_COOLDOWN 3
+#define DEFAULT_WEAPON_COOLDOWN 5
+#define SLOW_WEAPON_COOLDOWN 7
 
-//Organ defines for carbon mobs
-#define ORGAN_ORGANIC   1
-#define ORGAN_ROBOTIC   2
+#define MIN_SUPPLIED_LAW_NUMBER 15
+#define MAX_SUPPLIED_LAW_NUMBER 50
 
-// Major type
-#define BODYPART_ORGANIC   1
-#define BODYPART_ROBOTIC   2
+// NT's alignment towards the character
+#define COMPANY_LOYAL 			"Loyal"
+#define COMPANY_SUPPORTATIVE	"Supportive"
+#define COMPANY_NEUTRAL 		"Neutral"
+#define COMPANY_SKEPTICAL		"Skeptical"
+#define COMPANY_OPPOSED			"Opposed"
 
-// Minor Type
-#define BODYPART_SUBTYPE_ORGANIC 1
-#define BODYPART_SUBTYPE_ROBOTIC 2
-#define BODYPART_SUBTYPE_IPC 3
+#define COMPANY_ALIGNMENTS		list(COMPANY_LOYAL,COMPANY_SUPPORTATIVE,COMPANY_NEUTRAL,COMPANY_SKEPTICAL,COMPANY_OPPOSED)
 
-#define DEFAULT_BODYPART_ICON_ORGANIC 'icons/mob/human_parts_greyscale.dmi'
-#define DEFAULT_BODYPART_ICON_ROBOTIC 'icons/mob/augmentation/augments.dmi'
+// Defines mob sizes, used by lockers and to determine what is considered a small sized mob, etc.
+#define MOB_LARGE  		40
+#define MOB_MEDIUM 		20
+#define MOB_SMALL 		10
+#define MOB_TINY 		5
+#define MOB_MINISCULE	1
 
-#define MONKEY_BODYPART "monkey"
-#define ALIEN_BODYPART "alien"
-#define LARVA_BODYPART "larva"
-#define DEVIL_BODYPART "devil"
-/*see __DEFINES/inventory.dm for bodypart bitflag defines*/
+// Defines how strong the species is compared to humans. Think like strength in D&D
+#define STR_VHIGH       2
+#define STR_HIGH        1
+#define STR_MEDIUM      0
+#define STR_LOW        -1
+#define STR_VLOW       -2
 
-// Health/damage defines for carbon mobs
-#define HUMAN_MAX_OXYLOSS 3
-#define HUMAN_CRIT_MAX_OXYLOSS (SSmobs.wait/30)
+// Gluttony levels.
+#define GLUT_TINY                FLAG_01  // Eat mobs tiny and smaller
+#define GLUT_SMALLER             FLAG_02  // Eat mobs smaller than we are
+#define GLUT_ANYTHING            FLAG_03  // Eat any mob
+#define GLUT_ITEM_TINY           FLAG_04  // Eat items with a w_class of small or smaller
+#define GLUT_ITEM_NORMAL         FLAG_05  // Eat items with a w_class of normal or smaller
+#define GLUT_ITEM_ANYTHING       FLAG_06  // Eat any item
+#define GLUT_PROJECTILE_VOMIT    FLAG_07  // When vomitting, does it fly out?
 
-#define STAMINA_REGEN_BLOCK_TIME (10 SECONDS)
+// Devour speeds, returned by can_devour()
+#define DEVOUR_SLOW 1
+#define DEVOUR_FAST 2
 
-#define HEAT_DAMAGE_LEVEL_1 2 //Amount of damage applied when your body temperature just passes the 360.15k safety point
-#define HEAT_DAMAGE_LEVEL_2 3 //Amount of damage applied when your body temperature passes the 400K point
-#define HEAT_DAMAGE_LEVEL_3 8 //Amount of damage applied when your body temperature passes the 460K point and you are on fire
+#define TINT_NONE 0
+#define TINT_MODERATE 1
+#define TINT_HEAVY 2
+#define TINT_BLIND 3
 
-#define COLD_DAMAGE_LEVEL_1 0.5 //Amount of damage applied when your body temperature just passes the 260.15k safety point
-#define COLD_DAMAGE_LEVEL_2 1.5 //Amount of damage applied when your body temperature passes the 200K point
-#define COLD_DAMAGE_LEVEL_3 3 //Amount of damage applied when your body temperature passes the 120K point
+#define FLASH_PROTECTION_VULNERABLE -2
+#define FLASH_PROTECTION_REDUCED -1
+#define FLASH_PROTECTION_NONE 0
+#define FLASH_PROTECTION_MINOR 1
+#define FLASH_PROTECTION_MODERATE 2
+#define FLASH_PROTECTION_MAJOR 3
 
-//Note that gas heat damage is only applied once every FOUR ticks.
-#define HEAT_GAS_DAMAGE_LEVEL_1 2 //Amount of damage applied when the current breath's temperature just passes the 360.15k safety point
-#define HEAT_GAS_DAMAGE_LEVEL_2 4 //Amount of damage applied when the current breath's temperature passes the 400K point
-#define HEAT_GAS_DAMAGE_LEVEL_3 8 //Amount of damage applied when the current breath's temperature passes the 1000K point
+#define ANIMAL_SPAWN_DELAY round(config.respawn_delay / 6)
+#define DRONE_SPAWN_DELAY  round(config.respawn_delay / 3)
 
-#define COLD_GAS_DAMAGE_LEVEL_1 0.5 //Amount of damage applied when the current breath's temperature just passes the 260.15k safety point
-#define COLD_GAS_DAMAGE_LEVEL_2 1.5 //Amount of damage applied when the current breath's temperature passes the 200K point
-#define COLD_GAS_DAMAGE_LEVEL_3 3 //Amount of damage applied when the current breath's temperature passes the 120K point
+// Incapacitation flags, used by the mob/proc/incapacitated() proc
+#define INCAPACITATION_NONE FLAGS_OFF
+#define INCAPACITATION_RESTRAINED FLAG_01
+#define INCAPACITATION_BUCKLED_PARTIALLY FLAG_02
+#define INCAPACITATION_BUCKLED_FULLY FLAG_03
+#define INCAPACITATION_STUNNED FLAG_04
+#define INCAPACITATION_FORCELYING FLAG_05
+#define INCAPACITATION_KNOCKOUT FLAG_06
+#define INCAPACITATION_WEAKENED FLAG_07
 
-//Brain Damage defines
-#define BRAIN_DAMAGE_MILD 20
-#define BRAIN_DAMAGE_SEVERE 100
-#define BRAIN_DAMAGE_DEATH 200
+#define INCAPACITATION_UNRESISTING (INCAPACITATION_KNOCKOUT|INCAPACITATION_STUNNED)
+#define INCAPACITATION_DISRUPTED (INCAPACITATION_UNRESISTING|INCAPACITATION_WEAKENED)
+#define INCAPACITATION_KNOCKDOWN (INCAPACITATION_KNOCKOUT|INCAPACITATION_FORCELYING)
+#define INCAPACITATION_DISABLED (INCAPACITATION_KNOCKDOWN|INCAPACITATION_STUNNED)
+#define INCAPACITATION_DEFAULT (INCAPACITATION_RESTRAINED|INCAPACITATION_BUCKLED_FULLY|INCAPACITATION_DISABLED)
+#define INCAPACITATION_ALL (~INCAPACITATION_NONE)
 
-#define BRAIN_TRAUMA_MILD /datum/brain_trauma/mild
-#define BRAIN_TRAUMA_SEVERE /datum/brain_trauma/severe
-#define BRAIN_TRAUMA_SPECIAL /datum/brain_trauma/special
-#define BRAIN_TRAUMA_MAGIC /datum/brain_trauma/magic
+// Organs.
+#define BP_MOUTH    "mouth"
+#define BP_EYES     "eyes"
+#define BP_HEART    "heart"
+#define BP_LUNGS    "lungs"
+#define BP_TRACH	"tracheae"
+#define BP_BRAIN    "brain"
+#define BP_LIVER    "liver"
+#define BP_KIDNEYS  "kidneys"
+#define BP_STOMACH  "stomach"
+#define BP_PLASMA   "plasma vessel"
+#define BP_APPENDIX "appendix"
+#define BP_CELL     "cell"
+#define BP_HIVE     "hive node"
+#define BP_NUTRIENT "nutrient vessel"
+#define BP_ACID     "acid gland"
+#define BP_EGG      "egg sac"
+#define BP_RESIN    "resin spinner"
+#define BP_STRATA   "neural strata"
+#define BP_RESPONSE "response node"
+#define BP_GBLADDER "gas bladder"
+#define BP_POLYP    "polyp segment"
+#define BP_ANCHOR   "anchoring ligament"
+#define BP_PHORON   "phoron filter"
+#define BP_ACETONE  "acetone reactor"
 
-#define TRAUMA_RESILIENCE_BASIC 1      //Curable with chems
-#define TRAUMA_RESILIENCE_SURGERY 2    //Curable with brain surgery
-#define TRAUMA_RESILIENCE_LOBOTOMY 3   //Curable with lobotomy
-#define TRAUMA_RESILIENCE_WOUND 4    //Curable by healing the head wound
-#define TRAUMA_RESILIENCE_MAGIC 5      //Curable only with magic
-#define TRAUMA_RESILIENCE_ABSOLUTE 6   //This is here to stay
+// Vox bits.
+#define BP_HINDTONGUE "hindtongue"
 
-//Limit of traumas for each resilience tier
-#define TRAUMA_LIMIT_BASIC 3
-#define TRAUMA_LIMIT_SURGERY 2
-#define TRAUMA_LIMIT_WOUND 2
-#define TRAUMA_LIMIT_LOBOTOMY 3
-#define TRAUMA_LIMIT_MAGIC 3
-#define TRAUMA_LIMIT_ABSOLUTE INFINITY
+// Robo Organs.
+#define BP_POSIBRAIN         "posibrain"
+#define BP_VOICE             "vocal synthesiser"
+#define BP_STACK             "stack"
+#define BP_OPTICS            "optics"
+#define BP_FLOAT             "floatation disc"
+#define BP_JETS              "maneuvering jets"
+#define BP_COOLING_FINS      "cooling fins"
+#define BP_SYSTEM_CONTROLLER "system controller"
 
-#define BRAIN_DAMAGE_INTEGRITY_MULTIPLIER 0.5
 
-//Surgery Defines
-#define BIOWARE_GENERIC "generic"
-#define BIOWARE_NERVES "nerves"
-#define BIOWARE_CIRCULATION "circulation"
-#define BIOWARE_LIGAMENTS "ligaments"
+/**
+* Augment Slots
+* Flags used by /obj/item/organ/internal/augment/var/augment_slots
+* Augment slots is used to control which body parts an augment may be installed into
+*/
 
-//Health hud screws for carbon mobs
-#define SCREWYHUD_NONE 0
-#define SCREWYHUD_CRIT 1
-#define SCREWYHUD_DEAD 2
-#define SCREWYHUD_HEALTHY 3
+/// The augment can be installed in arms
+#define AUGMENT_ARM FLAG_01
 
-//Moods levels for humans
-#define MOOD_LEVEL_HAPPY4 15
-#define MOOD_LEVEL_HAPPY3 10
-#define MOOD_LEVEL_HAPPY2 6
-#define MOOD_LEVEL_HAPPY1 2
-#define MOOD_LEVEL_NEUTRAL 0
-#define MOOD_LEVEL_SAD1 -3
-#define MOOD_LEVEL_SAD2 -12
-#define MOOD_LEVEL_SAD3 -18
-#define MOOD_LEVEL_SAD4 -25
+/// The augment can be installed in hands
+#define AUGMENT_HAND FLAG_02
 
-// Mob Caps
-#define MAX_WALKINGMUSHROOM 50
+/// The augment can be installed in legs
+#define AUGMENT_LEG FLAG_03
 
-//Sanity levels for humans
-#define SANITY_GREAT 125
-#define SANITY_NEUTRAL 100
-#define SANITY_DISTURBED 75
-#define SANITY_UNSTABLE 50
-#define SANITY_CRAZY 25
-#define SANITY_INSANE 0
+/// The augment can be installed in feet
+#define AUGMENT_FOOT FLAG_04
 
-//Nutrition levels for humans
-#define NUTRITION_LEVEL_FAT 600
-#define NUTRITION_LEVEL_FULL 550
-#define NUTRITION_LEVEL_MOSTLY_FULL 500
-#define NUTRITION_LEVEL_WELL_FED 450
-#define NUTRITION_LEVEL_FED 350
-#define NUTRITION_LEVEL_HUNGRY 250
-#define NUTRITION_LEVEL_STARVING 150
+/// The augment can be installed in the chest
+#define AUGMENT_CHEST FLAG_05
 
-#define NUTRITION_LEVEL_START_MIN 250
-#define NUTRITION_LEVEL_START_MAX 400
+/// The augment can be installed in the lower body
+#define AUGMENT_GROIN FLAG_06
 
-//Disgust levels for humans
-#define DISGUST_LEVEL_MAXEDOUT 150
-#define DISGUST_LEVEL_DISGUSTED 75
-#define DISGUST_LEVEL_VERYGROSS 50
-#define DISGUST_LEVEL_GROSS 25
+/// The augment can be installed in the head
+#define AUGMENT_HEAD FLAG_07
 
-//Used as an upper limit for species that continuously gain nutriment
-#define NUTRITION_LEVEL_ALMOST_FULL 535
+/// The augment can be installed on the chest separately to AUGMENT_CHEST
+#define AUGMENT_ARMOR FLAG_08
 
-//Slime evolution threshold. Controls how fast slimes can split/grow
+/// The augment can be installed in the head separately to AUGMENT_HEAD
+#define AUGMENT_EYES FLAG_09
+
+/// The augment can be installed in the head separately to AUGMENT_HEAD
+#define AUGMENT_FLUFF FLAG_10
+
+
+/**
+* Augment Flags
+* Flags used by /obj/item/organ/internal/augment/var/augment_flags
+* Augment flags provide mixed configuration information about their augment
+*/
+
+/// The augment can be installed in mechanical organs
+#define AUGMENT_MECHANICAL FLAG_01
+
+/// The augment can be installed in biological organs
+#define AUGMENT_BIOLOGICAL FLAG_02
+
+/// The augment can be installed in crystaline organs
+#define AUGMENT_CRYSTALINE FLAG_03
+
+/// The augment is visible on body scanner results
+#define AUGMENT_SCANNABLE FLAG_04
+
+/// The augment is visible via grab inspection
+#define AUGMENT_INSPECTABLE FLAG_05
+
+
+// Limbs.
+#define BP_L_FOOT "l_foot"
+#define BP_R_FOOT "r_foot"
+#define BP_L_LEG  "l_leg"
+#define BP_R_LEG  "r_leg"
+#define BP_L_HAND "l_hand"
+#define BP_R_HAND "r_hand"
+#define BP_L_ARM  "l_arm"
+#define BP_R_ARM  "r_arm"
+#define BP_HEAD   "head"
+#define BP_CHEST  "chest"
+#define BP_GROIN  "groin"
+#define BP_ALL_LIMBS list(BP_CHEST, BP_GROIN, BP_HEAD, BP_L_ARM, BP_R_ARM, BP_L_HAND, BP_R_HAND, BP_L_LEG, BP_R_LEG, BP_L_FOOT, BP_R_FOOT)
+#define BP_BY_DEPTH list(BP_HEAD, BP_L_HAND, BP_R_HAND, BP_L_ARM, BP_R_ARM, BP_L_FOOT, BP_R_FOOT, BP_L_LEG, BP_R_LEG, BP_GROIN, BP_CHEST)
+#define BP_LEGS_FEET list(BP_L_LEG, BP_R_LEG, BP_L_FOOT, BP_R_FOOT)
+#define BP_ARMS_HANDS list(BP_L_ARM, BP_R_ARM, BP_L_HAND, BP_R_HAND)
+
+// Prosthetic helpers.
+#define BP_IS_ROBOTIC(org)  ((org) && ((org).status & ORGAN_ROBOTIC))
+#define BP_IS_ASSISTED(org) ((org) && ((org).status & ORGAN_ASSISTED))
+#define BP_IS_BRITTLE(org)  ((org) && ((org).status & ORGAN_BRITTLE))
+#define BP_IS_CRYSTAL(org)  ((org) && ((org).status & ORGAN_CRYSTAL))
+
+// Limb flag helpers
+#define BP_IS_DEFORMED(org) ((org) && ((org).limb_flags & ORGAN_FLAG_DEFORMED))
+
+#define SYNTH_BLOOD_COLOUR "#030303"
+#define SYNTH_FLESH_COLOUR "#575757"
+
+#define MOB_PULL_NONE 0
+#define MOB_PULL_SMALLER 1
+#define MOB_PULL_SAME 2
+#define MOB_PULL_LARGER 3
+
+//carbon taste sensitivity defines, used in mob/living/carbon/proc/ingest
+#define TASTE_HYPERSENSITIVE 3 //anything below 5%
+#define TASTE_SENSITIVE 2 //anything below 7%
+#define TASTE_NORMAL 1 //anything below 15%
+#define TASTE_DULL 0.5 //anything below 30%
+#define TASTE_NUMB 0.1 //anything below 150%
+
+//Used by show_message() and emotes
+#define VISIBLE_MESSAGE 1
+#define AUDIBLE_MESSAGE 2
+
+//used for getting species temp values
+#define COLD_LEVEL_1 -1
+#define COLD_LEVEL_2 -2
+#define COLD_LEVEL_3 -3
+#define HEAT_LEVEL_1 1
+#define HEAT_LEVEL_2 2
+#define HEAT_LEVEL_3 3
+
+//Synthetic human temperature vals
+#define SYNTH_COLD_LEVEL_1 50
+#define SYNTH_COLD_LEVEL_2 -1
+#define SYNTH_COLD_LEVEL_3 -1
+#define SYNTH_HEAT_LEVEL_1 500
+#define SYNTH_HEAT_LEVEL_2 1000
+#define SYNTH_HEAT_LEVEL_3 2000
+
+#define CORPSE_CAN_REENTER 1
+#define CORPSE_CAN_REENTER_AND_RESPAWN 2
+
+#define SPECIES_HUMAN       "Human"
+#define SPECIES_DIONA       "Diona"
+#define SPECIES_VOX         "Vox"
+#define SPECIES_IPC         "Machine"
+#define SPECIES_UNATHI      "Unathi"
+#define SPECIES_SKRELL      "Skrell"
+#define SPECIES_PROMETHEAN  "Promethean"
+#define SPECIES_ALIEN       "Humanoid"
+#define SPECIES_ADHERENT    "Adherent"
+#define SPECIES_GOLEM       "Golem"
+#define SPECIES_YEOSA       "Yeosa'Unathi"
+#define SPECIES_VATGROWN    "Vat-Grown Human"
+#define SPECIES_SPACER      "Space-Adapted Human"
+#define SPECIES_TRITONIAN   "Tritonian"
+#define SPECIES_GRAVWORLDER "Grav-Adapted Human"
+#define SPECIES_MULE        "Mule"
+#define SPECIES_MONKEY      "Monkey"
+#define SPECIES_NABBER      "Giant Armoured Serpentid"
+#define SPECIES_FARWA       "Farwa"
+#define SPECIES_NEAERA      "Neaera"
+#define SPECIES_STOK        "Stok"
+
+#define UNRESTRICTED_SPECIES list(SPECIES_HUMAN, SPECIES_DIONA, SPECIES_IPC, SPECIES_UNATHI, SPECIES_YEOSA, SPECIES_SKRELL, SPECIES_TRITONIAN, SPECIES_SPACER, SPECIES_VATGROWN, SPECIES_GRAVWORLDER, SPECIES_MULE)
+#define RESTRICTED_SPECIES   list(SPECIES_VOX, SPECIES_ALIEN, SPECIES_GOLEM)
+#define HUMAN_SPECIES        list(SPECIES_HUMAN, SPECIES_VATGROWN, SPECIES_SPACER, SPECIES_GRAVWORLDER, SPECIES_MULE)
+#define PRIMITIVE_SPECIES    list(SPECIES_FARWA, SPECIES_MONKEY, SPECIES_NEAERA, SPECIES_STOK)
+#define SURGERY_CLOSED 0
+#define SURGERY_OPEN 1
+#define SURGERY_RETRACTED 2
+#define SURGERY_ENCASED 3
+
+#define STASIS_MISC     "misc"
+#define STASIS_CRYOBAG  "cryobag"
+#define STASIS_COLD     "cold"
+
+// Aura check result flags for `/obj/aura/proc/aura_check_*()`.
+/// Halts further checking of any other auras on the mob.
+#define AURA_CANCEL FLAG_01
+/// Causes the calling `aura_check()` proc to return `FALSE`.
+#define AURA_FALSE  FLAG_02
+
+// Aura type options for `/mob/living/proc/aura_check()`.
+/// Aura checks for projectile impacts. Generally called by `/obj/item/projectile/proc/attack_mob()`. Results in `/obj/aura/proc/aura_check_bullet()`.
+#define AURA_TYPE_BULLET "Bullet"
+/// Aura checks for physical weapon attacks. Generally called by `/obj/item/proc/use_weapon()`. Results in `/obj/aura/proc/aura_check_weapon()`.
+#define AURA_TYPE_WEAPON "Weapon"
+/// Aura checks for thrown atom impacts. Generally called by `/mob/living/hitby()`. Results in `/obj/aura/proc/aura_check_thrown()`.
+#define AURA_TYPE_THROWN "Thrown"
+/// Aura checks during mob life. Generally called by `/mob/living/Life()`. Results in `/obj/aura/proc/aura_check_life()`.
+#define AURA_TYPE_LIFE   "Life"
+
+#define SPECIES_BLOOD_DEFAULT 560
+
 #define SLIME_EVOLUTION_THRESHOLD 10
 
-//Slime extract crossing. Controls how many extracts is required to feed to a slime to core-cross.
-#define SLIME_EXTRACT_CROSSING_REQUIRED 10
+//Used in mob/proc/get_input
+#define MOB_INPUT_TEXT "text"
+#define MOB_INPUT_MESSAGE "message"
+#define MOB_INPUT_NUM "num"
 
-//Slime commands defines
-#define SLIME_FRIENDSHIP_FOLLOW 			3 //Min friendship to order it to follow
-#define SLIME_FRIENDSHIP_STOPEAT 			5 //Min friendship to order it to stop eating someone
-#define SLIME_FRIENDSHIP_STOPEAT_NOANGRY	7 //Min friendship to order it to stop eating someone without it losing friendship
-#define SLIME_FRIENDSHIP_STOPCHASE			4 //Min friendship to order it to stop chasing someone (their target)
-#define SLIME_FRIENDSHIP_STOPCHASE_NOANGRY	6 //Min friendship to order it to stop chasing someone (their target) without it losing friendship
-#define SLIME_FRIENDSHIP_STAY				3 //Min friendship to order it to stay
-#define SLIME_FRIENDSHIP_ATTACK				8 //Min friendship to order it to attack
+#define MOB_CLIMB_TIME_SMALL (3 SECONDS)
+#define MOB_CLIMB_TIME_MEDIUM (5 SECONDS)
 
-//Sentience types, to prevent things like sentience potions from giving bosses sentience
-#define SENTIENCE_ORGANIC 1
-#define SENTIENCE_ARTIFICIAL 2
-// #define SENTIENCE_OTHER 3 unused
-#define SENTIENCE_MINEBOT 4
-#define SENTIENCE_BOSS 5
+#define MOB_FACTION_NEUTRAL "neutral"
+#define MOB_FACTION_CREW	"crew"
 
-//Mob AI Status
+#define ROBOT_MODULE_TYPE_GROUNDED "grounded"
+#define ROBOT_MODULE_TYPE_FLYING   "flying"
 
-//Hostile simple animals
-//If you add a new status, be sure to add a list for it to the simple_animals global in _globalvars/lists/mobs.dm
-#define AI_ON		1
-#define AI_IDLE		2
-#define AI_OFF		3
-#define AI_Z_OFF	4
+#define RADIO_INTERRUPT_DEFAULT 30
 
-//determines if a mob can smash through it
-#define ENVIRONMENT_SMASH_NONE			0
-#define ENVIRONMENT_SMASH_STRUCTURES	(1<<0) 	//crates, lockers, ect
-#define ENVIRONMENT_SMASH_WALLS			(1<<1)  //walls
-#define ENVIRONMENT_SMASH_RWALLS		(1<<2)	//rwalls
+/// This mob is allergic to holiness
+#define MOB_FLAG_HOLY_BAD FLAG_01
+/// This mob cannot be pinned to walls by sharp objects
+#define MOB_FLAG_UNPINNABLE FLAG_02
 
-// Slip flags, also known as lube flags
-/// The mob will not slip if they're walking intent
-#define NO_SLIP_WHEN_WALKING (1<<0)
-/// Slipping on this will send them sliding a few tiles down
-#define SLIDE (1<<1)
-/// Ice slides only go one tile and don't knock you over, they're intended to cause a "slip chain"
-/// where you slip on ice until you reach a non-slippable tile (ice puzzles)
-#define SLIDE_ICE (1<<2)
-/// [TRAIT_NO_SLIP_WATER] does not work on this slip. ONLY [TRAIT_NO_SLIP_ALL] will
-#define GALOSHES_DONT_HELP (1<<3)
-/// Slip works even if you're already on the ground
-#define SLIP_WHEN_CRAWLING (1<<4)
-/// the mob won't slip if the turf has the TRAIT_TURF_IGNORE_SLIPPERY trait.
-#define SLIPPERY_TURF (1<<5)
+// More refined version of SA_* ""intelligence"" seperators.
+// Now includes bitflags, so to target two classes you just do 'MOB_CLASS_ANIMAL|MOB_CLASS_HUMANOID'
+#define MOB_CLASS_NONE          FLAGS_OFF
+#define MOB_CLASS_PLANT         FLAG_01  // Unused at the moment.
+#define MOB_CLASS_ANIMAL        FLAG_02  // Animals and beasts like spiders, saviks, and bears.
+#define MOB_CLASS_HUMANOID      FLAG_03  // Non-robotic humanoids, including /simple_mob and /carbon/humans and their alien variants.
+#define MOB_CLASS_SYNTHETIC     FLAG_04  // Silicons, mechanical simple mobs, FBPs, and anything else that would pass is_synthetic()
+#define MOB_CLASS_SLIME         FLAG_05  // Everyone's favorite xenobiology specimen (and maybe prometheans?).
+#define MOB_CLASS_ABERRATION    FLAG_06  // Weird shit.
+#define MOB_CLASS_DEMONIC		FLAG_07  // Cult stuff.
+#define MOB_CLASS_BOSS			FLAG_08  // Future megafauna hopefully someday.
+#define MOB_CLASS_ILLUSION		FLAG_09  // Fake mobs, e.g. Technomancer illusions.
+#define MOB_CLASS_PHOTONIC		FLAG_10  // Holographic mobs like holocarp, similar to _ILLUSION, but that make no attempt to hide their true nature.
 
-#define MAX_CHICKENS 50
+#define MOB_CLASS_ALL FLAGS_ON
+
+// For slime commanding.  Higher numbers allow for more actions.
+#define SLIME_COMMAND_OBEY		1 // When disciplined.
+#define SLIME_COMMAND_FACTION	2 // When in the same 'faction'.
+#define SLIME_COMMAND_FRIEND	3 // When befriended with a slime friendship agent.
+
+#define MARKING_TARGET_SKIN 0 // Draw a datum/sprite_accessory/marking to the mob's body, eg. tattoos
+#define MARKING_TARGET_HAIR 1 // Draw a datum/sprite_accessory/marking to the mob's hair, eg. color fades
+#define MARKING_TARGET_HEAD 2 // Draw a datum/sprite_accessory/marking to the mob's head after their hair, eg. ears, horns
+
+// used in /mob/living/carbon/human/can_inject, and by various callers of that proc
+#define CAN_INJECT 1
+#define INJECTION_PORT 2
+#define INJECTION_PORT_DELAY 3 SECONDS // used by injectors to apply delay due to searching for a port on the injectee's suit
 
 
-#define INCORPOREAL_MOVE_BASIC 1
-#define INCORPOREAL_MOVE_SHADOW 2 // leaves a trail of shadows
-#define INCORPOREAL_MOVE_JAUNT 3 // is blocked by holy water/salt
+//used by /proc/do_after
+#define DO_USER_CAN_MOVE     FLAG_01
+#define DO_USER_CAN_TURN     FLAG_02
+#define DO_USER_UNIQUE_ACT   FLAG_03
+#define DO_USER_SAME_HAND    FLAG_04
+#define DO_USER_SAME_ZONE    FLAG_05
+#define DO_TARGET_CAN_MOVE   FLAG_06
+#define DO_TARGET_CAN_TURN   FLAG_07
+#define DO_TARGET_UNIQUE_ACT FLAG_08
+#define DO_SHOW_PROGRESS     FLAG_09
+#define DO_PUBLIC_PROGRESS   FLAG_10
+#define DO_MOVE_CHECKS_TURFS FLAG_11
+#define DO_FAIL_FEEDBACK     FLAG_12
+#define DO_BAR_OVER_USER     FLAG_13 // Forces the progress bar to appear over the user instead of the target
 
-//Secbot and ED209 judgement criteria bitflag values
-#define JUDGE_EMAGGED		(1<<0)
-#define JUDGE_IDCHECK		(1<<1)
-#define JUDGE_WEAPONCHECK	(1<<2)
-#define JUDGE_RECORDCHECK	(1<<3)
-//ED209's ignore monkeys
-#define JUDGE_IGNOREMONKEYS	(1<<4)
+#define DO_BOTH_CAN_MOVE     (DO_USER_CAN_MOVE | DO_TARGET_CAN_MOVE)
+#define DO_BOTH_CAN_TURN     (DO_USER_CAN_TURN | DO_TARGET_CAN_TURN)
+#define DO_BOTH_UNIQUE_ACT   (DO_USER_UNIQUE_ACT | DO_TARGET_UNIQUE_ACT)
+#define DO_DEFAULT           (DO_SHOW_PROGRESS | DO_USER_SAME_HAND | DO_BOTH_CAN_TURN | DO_FAIL_FEEDBACK)
 
-#define MEGAFAUNA_DEFAULT_RECOVERY_TIME 5
+// Preset do_After flags
+#define DO_PUBLIC_UNIQUE     (DO_DEFAULT | DO_PUBLIC_PROGRESS | DO_BOTH_UNIQUE_ACT) // Common flags for actions that should be public and unique
+#define DO_SURGERY           (DO_DEFAULT | DO_PUBLIC_PROGRESS) // Flags for surgery steps. No unique checks to allow multi-surgery steps.
+#define DO_MEDICAL           (DO_DEFAULT | DO_PUBLIC_PROGRESS) // Flags for medical steps. No unique checks to allow multi-bandaging steps.
+#define DO_REPAIR_CONSTRUCT  (DO_DEFAULT | DO_PUBLIC_PROGRESS | DO_TARGET_UNIQUE_ACT) // Flags for repair and construction steps.
+#define DO_EQUIP             (DO_DEFAULT | DO_PUBLIC_PROGRESS | DO_USER_UNIQUE_ACT) // Flags for equipping/unequipping mobs. Set to allow a mob to be targeted by multiple sources, but for a source to only be able to perform one action at a time.
 
-#define SHADOW_SPECIES_DIM_LIGHT 0.2 //light of this intensity suppresses healing and causes very slow burn damage
-#define SHADOW_SPECIES_BRIGHT_LIGHT 0.6 //light of this intensity causes rapid burn damage (high number because movable lights are weird)
-//so the problem is that movable lights ALWAYS have a luminosity of 0.5, regardless of power or distance, so even at the edge of the overlay they still do damage
-//at 0.6 being bright they'll still do damage and disable some abilities, but it won't be weaponized
+#define DO_MISSING_USER      (-1)
+#define DO_MISSING_TARGET    (-2)
+#define DO_INCAPACITATED     (-3)
 
-// Offsets defines
+#define FAKE_INVIS_ALPHA_THRESHOLD 127 // If something's alpha var is at or below this number, certain things will pretend it is invisible.
 
-#define OFFSET_UNIFORM "uniform"
-#define OFFSET_ID "id"
-#define OFFSET_GLOVES "gloves"
-#define OFFSET_GLASSES "glasses"
-#define OFFSET_EARS "ears"
-#define OFFSET_SHOES "shoes"
-#define OFFSET_S_STORE "s_store"
-#define OFFSET_FACEMASK "mask"
-#define OFFSET_HEAD "head"
-#define OFFSET_FACE "face"
-#define OFFSET_BELT "belt"
-#define OFFSET_BACK "back"
-#define OFFSET_SUIT "suit"
-#define OFFSET_NECK "neck"
+#define PRONOUNS_THEY_THEM	"they/them"
+#define PRONOUNS_HE_HIM		"he/him"
+#define PRONOUNS_SHE_HER	"she/her"
+#define PRONOUNS_IT_ITS		"it/its"
+#define PRONOUNS_HE_THEY	"he/they"
+#define PRONOUNS_SHE_THEY	"she/they"
 
-//MINOR TWEAKS/MISC
-#define AGE_MIN				18	//youngest a character can be
-#define AGE_MAX				85	//oldest a character can be
-#define AGE_MINOR			21  //legal age of space drinking and smoking
-#define WIZARD_AGE_MIN		30	//youngest a wizard can be
-#define APPRENTICE_AGE_MIN	29	//youngest an apprentice can be
-#define SHOES_SLOWDOWN		0	//How much shoes slow you down by default. Negative values speed you up
-#define POCKET_STRIP_DELAY	(4 SECONDS) //time taken to search somebody's pockets
-#define DOOR_CRUSH_DAMAGE	15	//the amount of damage that airlocks deal when they crush you
+#define PRONOUNS_ALL list(PRONOUNS_THEY_THEM, PRONOUNS_HE_HIM, PRONOUNS_SHE_HER, PRONOUNS_HE_THEY, PRONOUNS_SHE_THEY, PRONOUNS_IT_ITS)
 
-#define	HUNGER_FACTOR		0.1	//factor at which mob nutrition decreases
-#define	REAGENTS_METABOLISM 0.4	//How many units of reagent are consumed per tick, by default.
-#define REAGENTS_EFFECT_MULTIPLIER (REAGENTS_METABOLISM / 0.4)	// By defining the effect multiplier this way, it'll exactly adjust all effects according to how they originally were with the 0.4 metabolism
+/// Integer (~ticks * SSMobs/wait fire rate). The default maximum value a mob's confused var can be set to.
+#define CONFUSED_MAX 15
 
-// Eye protection
-#define FLASH_PROTECTION_HYPER_SENSITIVE -2
-#define FLASH_PROTECTION_SENSITIVE -1
-#define FLASH_PROTECTION_NONE 0
-#define FLASH_PROTECTION_FLASH 1
-#define FLASH_PROTECTION_WELDER 2
-
-// Roundstart trait system
-
-#define MAX_QUIRKS 6 //The maximum amount of quirks one character can have at roundstart
-
-// AI Toggles
-#define AI_CAMERA_LUMINOSITY	5
-#define AI_VOX // Comment out if you don't want VOX to be enabled and have players download the voice sounds.
-
-// /obj/item/bodypart on_mob_life() retval flag
-#define BODYPART_LIFE_UPDATE_HEALTH (1<<0)
-
-#define MAX_REVIVE_FIRE_DAMAGE 180
-#define MAX_REVIVE_BRUTE_DAMAGE 180
-
-#define HUMAN_FIRE_STACK_ICON_NUM	3
-
-#define GRAB_PIXEL_SHIFT_PASSIVE 6
-#define GRAB_PIXEL_SHIFT_AGGRESSIVE 12
-#define GRAB_PIXEL_SHIFT_NECK 16
-
-#define PULL_PRONE_SLOWDOWN 1.5
-#define HUMAN_CARRY_SLOWDOWN 0.35
-
-//Flags that control what things can spawn species (whitelist)
-//Badmin magic mirror
-#define MIRROR_BADMIN (1<<0)
-//Standard magic mirror (wizard)
-#define MIRROR_MAGIC  (1<<1)
-//Pride ruin mirror
-#define MIRROR_PRIDE  (1<<2)
-//Race swap wizard event
-#define RACE_SWAP     (1<<3)
-//ERT spawn template (avoid races that don't function without correct gear)
-#define ERT_SPAWN     (1<<4)
-//xenobio black crossbreed
-#define SLIME_EXTRACT (1<<5)
-//Wabbacjack staff projectiles
-#define WABBAJACK     (1<<6)
-
-#define SLEEP_CHECK_DEATH(X) sleep(X); if(QDELETED(src) || stat == DEAD) return;
-
-// recent examine defines
-/// How long it takes for an examined atom to be removed from recent_examines. Should be the max of the below time windows
-#define RECENT_EXAMINE_MAX_WINDOW 2 SECONDS
-/// If you examine the same atom twice in this timeframe, we call examine_more() instead of examine()
-#define EXAMINE_MORE_WINDOW 1 SECONDS
-/// If you examine another mob who's successfully examined you during this duration of time, you two try to make eye contact. Cute!
-#define EYE_CONTACT_WINDOW 2 SECONDS
-/// If you yawn while someone nearby has examined you within this time frame, it will force them to yawn as well. Tradecraft!
-#define YAWN_PROPAGATION_EXAMINE_WINDOW 2 SECONDS
-
-/// How far away you can be to make eye contact with someone while examining
-#define EYE_CONTACT_RANGE 5
-
-//this should be in the ai defines, but out ai defines are actual ai, not simplemob ai
-#define IS_DEAD_OR_INCAP(source) (source.incapacitated() || source.stat)
-
-#define DOING_INTERACTION(user, interaction_key) (LAZYACCESS(user.do_afters, interaction_key))
-#define DOING_INTERACTION_LIMIT(user, interaction_key, max_interaction_count) ((LAZYACCESS(user.do_afters, interaction_key) || 0) >= max_interaction_count)
-#define DOING_INTERACTION_WITH_TARGET(user, target) (LAZYACCESS(user.do_afters, target))
-#define DOING_INTERACTION_WITH_TARGET_LIMIT(user, target, max_interaction_count) ((LAZYACCESS(user.do_afters, target) || 0) >= max_interaction_count)
-
-///Define for spawning megafauna instead of a mob for cave gen
-#define SPAWN_MEGAFAUNA "bluh bluh huge boss"
-
-///Swarmer flags
-#define SWARMER_LIGHT_ON (1<<0)
-
-#define ACCENT_NONE "None"
-
-// Body position defines.
-/// Mob is standing up, usually associated with lying_angle value of 0.
-#define STANDING_UP 0
-/// Mob is lying down, usually associated with lying_angle values of 90 or 270.
-#define LYING_DOWN 1
-
-/// Possible value of [/atom/movable/buckle_lying]. If set to a different (positive-or-zero) value than this, the buckling thing will force a lying angle on the buckled.
-#define NO_BUCKLE_LYING -1
-
-/// Squashing will not occur if the mob is not lying down (bodyposition is LYING_DOWN)
-#define SQUASHED_SHOULD_BE_DOWN (1<<0)
-/// If present, outright gibs the squashed mob instead of just dealing damage
-#define SQUASHED_SHOULD_BE_GIBBED (1<<1)
-/// If squashing always passes if the mob is dead
-#define SQUASHED_ALWAYS_IF_DEAD (1<<2)
-/// Don't squash our mob if its not located in a turf
-#define SQUASHED_DONT_SQUASH_IN_CONTENTS (1<<3)
-
-// Bitflags for mob dismemberment and gibbing
-/// Mobs will drop a brain
-#define DROP_BRAIN (1<<0)
-/// Mobs will drop organs
-#define DROP_ORGANS (1<<1)
-/// Mobs will drop bodyparts (arms, legs, etc.)
-#define DROP_BODYPARTS (1<<2)
-/// Mobs will drop items
-#define DROP_ITEMS (1<<3)
-
-/// Mobs will drop everything
-#define DROP_ALL_REMAINS (DROP_BRAIN | DROP_ORGANS | DROP_BODYPARTS | DROP_ITEMS)
-
-// Sprites for photocopying butts
-#define BUTT_SPRITE_HUMAN_MALE "human_male"
-#define BUTT_SPRITE_HUMAN_FEMALE "human_female"
-#define BUTT_SPRITE_LIZARD "lizard"
-#define BUTT_SPRITE_QR_CODE "qr_code"
-#define BUTT_SPRITE_XENOMORPH "xeno"
-#define BUTT_SPRITE_DRONE "drone"
-#define BUTT_SPRITE_CAT "cat"
-#define BUTT_SPRITE_FLOWERPOT "flowerpot"
-#define BUTT_SPRITE_GREY "grey"
-#define BUTT_SPRITE_PLASMA "plasma"
-#define BUTT_SPRITE_FUZZY "fuzzy"
-#define BUTT_SPRITE_SLIME "slime"
+///Flags assigned to carbon mobs trait_flags when they're actively having an allergy.
+#define MILD_ALLERGY FLAG_01
+#define SEVERE_ALLERGY FLAG_02

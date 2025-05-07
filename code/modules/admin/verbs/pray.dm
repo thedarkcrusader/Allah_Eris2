@@ -2,100 +2,20 @@
 	set category = "IC"
 	set name = "Pray"
 
-	if(GLOB.say_disabled)	//This is here to try to identify lag problems
-		to_chat(usr, span_danger("Speech is currently admin-disabled."), confidential=TRUE)
-		return
+	sanitize_and_communicate(/singleton/communication_channel/pray, src, msg)
 
-	msg = copytext_char(sanitize(msg), 1, MAX_MESSAGE_LEN)
-	if(!msg)
-		return
-	log_prayer("[src.key]/([src.name]): [msg]")
-	if(usr.client)
-		if(usr.client.prefs.muted & MUTE_PRAY)
-			to_chat(usr, span_danger("You cannot pray (muted)."), confidential=TRUE)
-			return
-		if(src.client.handle_spam_prevention(msg,MUTE_PRAY))
-			return
+/proc/Centcomm_announce(msg, mob/Sender, iamessage)
+	var/mob/intercepted = check_for_interception()
+	msg = SPAN_NOTICE("<b>[SPAN_COLOR("orange", "[uppertext(GLOB.using_map.boss_short)]M[iamessage ? " IA" : ""][intercepted ? "(Intercepted by [intercepted])" : null]:")][key_name(Sender, 1)] (<A HREF='byond://?_src_=holder;adminplayeropts=\ref[Sender]'>PP</A>) (<A HREF='byond://?_src_=vars;Vars=\ref[Sender]'>VV</A>) ([admin_jump_link(Sender)]) (<A HREF='byond://?_src_=holder;secretsadmin=check_antagonist'>CA</A>) (<A HREF='byond://?_src_=holder;BlueSpaceArtillery=\ref[Sender]'>BSA</A>) (<A HREF='byond://?_src_=holder;CentcommReply=\ref[Sender]'>RPLY</A>):</b> [msg]")
+	for(var/client/C as anything in GLOB.admins)
+		if(R_ADMIN & C.holder.rights)
+			to_chat(C, msg)
+			sound_to(C, 'sound/machines/signal.ogg')
 
-	var/mutable_appearance/cross = mutable_appearance('icons/obj/storage.dmi', "bible")
-	var/font_color = "purple"
-	var/prayer_type = "PRAYER"
-	var/deity
-	if(usr.job == "Chaplain")
-		cross.icon_state = "kingyellow"
-		font_color = "blue"
-		prayer_type = "CHAPLAIN PRAYER"
-		if(GLOB.deity)
-			deity = GLOB.deity
-	else if(iscultist(usr))
-		cross.icon_state = "tome"
-		font_color = "red"
-		prayer_type = "CULTIST PRAYER"
-		deity = "Nar'sie"
-	else if(isliving(usr))
-		var/mob/living/L = usr
-		if(HAS_TRAIT(L, TRAIT_SPIRITUAL))
-			cross.icon_state = "holylight"
-			font_color = "blue"
-			prayer_type = "SPIRITUAL PRAYER"
-
-	var/msg_tmp = msg
-	msg = span_adminnotice("[icon2html(cross, GLOB.permissions.admins)]<b><font color=[font_color]>[prayer_type][deity ? " (to [deity])" : ""]: </font>[ADMIN_FULLMONTY(src)] [ADMIN_SC(src)]:</b> [msg]")
-
-	for(var/client/C in GLOB.permissions.admins)
-		if(C.prefs.chat_toggles & CHAT_PRAYER_N_FAX)
-			to_chat(C, msg, confidential=TRUE)
-			if(C.prefs.toggles & SOUND_PRAYER_N_FAX)
-				if(usr.job == "Chaplain")
-					SEND_SOUND(C, sound('sound/effects/pray.ogg', volume=40))
-	to_chat(usr, span_info("You pray to the gods: \"[msg_tmp]\""), confidential=TRUE)
-
-	SSblackbox.record_feedback("tally", "admin_verb", 1, "Prayer") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
-	//log_admin("HELP: [key_name(src)]: [msg]")
-
-/// Used by communications consoles to message CentCom
-/proc/message_centcom(text, mob/sender)
-	var/msg = copytext_char(sanitize(text), 1, MAX_MESSAGE_LEN)
-	msg = span_adminnotice("<b><font color=orange>CENTCOM:</font>[ADMIN_FULLMONTY(sender)] [ADMIN_CENTCOM_REPLY(sender)]:</b> [msg]")
-	to_chat(GLOB.permissions.admins, msg, confidential = TRUE)
-	for(var/obj/machinery/computer/communications/console in GLOB.machines)
-		console.override_cooldown()
-
-/// Used by communications consoles to message the Syndicate
-/proc/message_syndicate(text, mob/sender)
-	var/msg = copytext_char(sanitize(text), 1, MAX_MESSAGE_LEN)
-	msg = span_adminnotice("<b><font color=crimson>SYNDICATE:</font>[ADMIN_FULLMONTY(sender)] [ADMIN_SYNDICATE_REPLY(sender)]:</b> [msg]")
-	to_chat(GLOB.permissions.admins, msg, confidential = TRUE)
-	for(var/obj/machinery/computer/communications/console in GLOB.machines)
-		console.override_cooldown()
-
-/// Used by the red phone to message the Syndicate
-/// Specifies CENTCOM/SYNDICATE: to indicate both receive the message
-/proc/message_redphone_syndicate(text, mob/sender)
-	var/msg = copytext_char(sanitize(text), 1, MAX_MESSAGE_LEN)
-	msg = span_adminnotice("<b><font color=orange>CENTCOM</font>/<font color=crimson>SYNDICATE:</font>[ADMIN_FULLMONTY(sender)] [ADMIN_SYNDICATE_REPLY(sender)]:</b> [msg]")
-	to_chat(GLOB.permissions.admins, msg, confidential = TRUE)
-	for(var/obj/machinery/computer/communications/console in GLOB.machines)
-		console.override_cooldown()
-
-/// Used by communications consoles to request the nuclear launch codes
-/proc/nuke_request(text, mob/sender)
-	var/msg = copytext_char(sanitize(text), 1, MAX_MESSAGE_LEN)
-	msg = span_adminnotice("<b><font color=orange>NUKE CODE REQUEST:</font>[ADMIN_FULLMONTY(sender)] [ADMIN_CENTCOM_REPLY(sender)] [ADMIN_SET_SD_CODE] [ADMIN_SET_BC_CODE]:</b> [msg]")
-	to_chat(GLOB.permissions.admins, msg, confidential = TRUE)
-	for(var/obj/machinery/computer/communications/console in GLOB.machines)
-		console.override_cooldown()
-
-/proc/Clown_announce(text , mob/Sender)
-	var/msg = copytext_char(sanitize(text), 1, MAX_MESSAGE_LEN)
-	msg = span_adminnotice("<b><font color=violet>CLOWN PLANET:</font>[ADMIN_FULLMONTY(Sender)] [ADMIN_SYNDICATE_REPLY(Sender)]:</b> [msg]")
-	to_chat(GLOB.permissions.admins, msg, confidential=TRUE)
-	for(var/obj/machinery/computer/communications/C in GLOB.machines)
-		C.override_cooldown()
-
-/proc/message_redphone_syndicateruin(text, mob/sender) //meant for Syndicate Lavaland and the listening post, doesn't trigger comms console cooldown and marks it as a ghostrole
-	var/msg = copytext_char(sanitize(text), 1, MAX_MESSAGE_LEN)
-	msg = span_adminnotice("<b><font color=crimson>SYNDICATE GHOSTROLE:</font>[ADMIN_FULLMONTY(sender)] [ADMIN_SYNDICATE_REPLY(sender)]:</b> [msg]")
-	to_chat(GLOB.permissions.admins, msg, confidential = TRUE)
-
-
+/proc/Syndicate_announce(msg, mob/Sender)
+	var/mob/intercepted = check_for_interception()
+	msg = SPAN_NOTICE("<b>[SPAN_COLOR("crimson", "ILLEGAL[intercepted ? "(Intercepted by [intercepted])" : null]:")][key_name(Sender, 1)] (<A HREF='byond://?_src_=holder;adminplayeropts=\ref[Sender]'>PP</A>) (<A HREF='byond://?_src_=vars;Vars=\ref[Sender]'>VV</A>) (<A HREF='byond://?_src_=holder;narrateto=\ref[Sender]'>DN</A>) ([admin_jump_link(Sender)]) (<A HREF='byond://?_src_=holder;secretsadmin=check_antagonist'>CA</A>) (<A HREF='byond://?_src_=holder;BlueSpaceArtillery=\ref[Sender]'>BSA</A>) (<A HREF='byond://?_src_=holder'>TAKE</a>) (<A HREF='byond://?_src_=holder;SyndicateReply=\ref[Sender]'>RPLY</A>):</b> [msg]")
+	for(var/client/C as anything in GLOB.admins)
+		if(R_ADMIN & C.holder.rights)
+			to_chat(C, msg)
+			sound_to(C, 'sound/machines/signal.ogg')

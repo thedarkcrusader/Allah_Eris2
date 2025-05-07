@@ -1,188 +1,56 @@
 /obj/item/holosign_creator
 	name = "holographic sign projector"
-	desc = "You shouldn't see this."
-	icon = 'icons/obj/device.dmi'
+	desc = "A handy-dandy holographic projector that displays a janitorial sign."
+	icon = 'icons/obj/janitor_tools.dmi'
 	icon_state = "signmaker"
 	item_state = "electronic"
-	lefthand_file = 'icons/mob/inhands/misc/devices_lefthand.dmi'
-	righthand_file = 'icons/mob/inhands/misc/devices_righthand.dmi'
 	force = 0
-	w_class = WEIGHT_CLASS_SMALL
+	w_class = ITEM_SIZE_SMALL
 	throwforce = 0
 	throw_speed = 3
 	throw_range = 7
-	item_flags = NOBLUDGEON
-	///List of all holosigns currently made.
-	var/list/obj/structure/holosign/signs = list()
-	///The type of holosign to make from this projector.
-	var/obj/structure/holosign/holosign_type = /obj/structure/holosign/wetsign
+	var/list/signs = list()
 	var/max_signs = 10
-	var/creation_time = 0 SECONDS //time to create a holosign in deciseconds.
+	var/creation_time = 0 //time to create a holosign in deciseconds.
+	var/holosign_type = /obj/structure/holosign
 	var/holocreator_busy = FALSE //to prevent placing multiple holo barriers at once
 
-/obj/item/holosign_creator/afterattack(atom/target, mob/user, flag)
+/obj/item/holosign_creator/Destroy()
+	for(var/sign in signs)
+		qdel(sign)
+	signs.Cut()
 	. = ..()
-	if(flag)
-		if(!check_allowed_items(target, 1))
-			return
-		var/turf/T = get_turf(target)
-		var/obj/structure/holosign/H = locate(holosign_type) in T
-		if(H)
-			to_chat(user, span_notice("You use [src] to deactivate [H]."))
-			qdel(H)
-		else
-			if(!T.is_blocked_turf(TRUE)) //can't put hard light on a tile that has dense stuff
-				if(holocreator_busy)
-					to_chat(user, span_notice("[src] is busy creating a hard light barrier."))
-					return
-				if(signs.len < max_signs)
-					playsound(src.loc, 'sound/machines/click.ogg', 20, 1)
-					if(creation_time)
-						holocreator_busy = TRUE
-						if(!do_after(user, creation_time, target))
-							holocreator_busy = FALSE
-							return
-						holocreator_busy = FALSE
-						if(signs.len >= max_signs)
-							return
-						if(T.is_blocked_turf(TRUE)) //don't try to sneak dense stuff on our tile during the wait.
-							return
-					H = new holosign_type(get_turf(target), src)
-					to_chat(user, span_notice("You create \a [H] with [src]."))
-				else
-					to_chat(user, span_notice("[src] is projecting at max capacity!"))
 
-/obj/item/holosign_creator/attack(mob/living/carbon/human/M, mob/user)
-	return
+/obj/item/holosign_creator/use_after(atom/target, mob/living/user, click_parameters)
+	var/turf/T = get_turf(target)
+	if (!T) return FALSE
+	var/obj/structure/holosign/H = locate(holosign_type) in T
+	if (H) return FALSE
+
+	if (!is_blocked_turf(T, TRUE)) //can't put holograms on a tile that has dense stuff
+		if (holocreator_busy)
+			to_chat(user, SPAN_NOTICE("[src] is busy creating a hologram."))
+			return TRUE
+		if (length(signs) < max_signs)
+			playsound(src.loc, 'sound/machines/click.ogg', 20, 1)
+			if(creation_time)
+				holocreator_busy = TRUE
+				if(!do_after(user, creation_time, target, DO_BOTH_UNIQUE_ACT))
+					holocreator_busy = FALSE
+					return TRUE
+				holocreator_busy = FALSE
+				if(length(signs) >= max_signs)
+					return TRUE
+				if(is_blocked_turf(T, TRUE)) //don't try to sneak dense stuff on our tile during the wait.
+					return TRUE
+			H = new holosign_type(get_turf(target), src)
+			to_chat(user, SPAN_NOTICE("You create \a [H] with [src]."))
+		else
+			to_chat(user, SPAN_NOTICE("[src] is projecting at max capacity!"))
+		return TRUE
 
 /obj/item/holosign_creator/attack_self(mob/user)
-	. = ..()
-	if(.)
-		return TRUE
-	if(!signs.len)
-		return FALSE
-	for(var/obj/item/holosign_creator as anything in signs)
-		qdel(holosign_creator)
-	to_chat(user, span_notice("You clear all active hard light barriers."))
-	return TRUE
-
-/obj/item/holosign_creator/janibarrier
-	name = "custodial holobarrier projector"
-	desc = "A holographic projector that creates hard light wet floor barriers. Only works on wet floors."
-	holosign_type = /obj/structure/holosign/barrier/wetsign
-	creation_time = 0.5 SECONDS
-	max_signs = 25
-
-/obj/item/holosign_creator/security
-	name = "security holobarrier projector"
-	desc = "A holographic projector that creates hard light security barriers."
-	icon_state = "signmaker_sec"
-	holosign_type = /obj/structure/holosign/barrier
-	creation_time = 3 SECONDS
-	max_signs = 6
-
-/obj/item/holosign_creator/engineering
-	name = "engineering holobarrier projector"
-	desc = "A holographic projector that creates hard light engineering barriers."
-	icon_state = "signmaker_engi"
-	holosign_type = /obj/structure/holosign/barrier/engineering
-	creation_time = 3 SECONDS
-	max_signs = 6
-
-/obj/item/holosign_creator/atmos
-	name = "ATMOS holofan projector"
-	desc = "A holographic projector that creates hard light barriers that prevent changes in atmosphere conditions."
-	icon_state = "signmaker_atmos"
-	holosign_type = /obj/structure/holosign/barrier/atmos
-	creation_time = 0 SECONDS
-	max_signs = 3
-
-/obj/item/holosign_creator/medical
-	name = "\improper PENLITE barrier projector"
-	desc = "A holographic projector that creates PENLITE hard light barriers. Useful during quarantines since they halt those with malicious diseases."
-	icon_state = "signmaker_med"
-	holosign_type = /obj/structure/holosign/barrier/medical
-	creation_time = 3 SECONDS
-	max_signs = 3
-
-/obj/item/holosign_creator/firstaid
-	name = "medical holobed projector"
-	desc = "A holographic projector that creates first aid holobeds that slows the metabolism of those laying on it and provides a sterile environment for surgery."
-	icon_state = "signmaker_firstaid"
-	holosign_type = /obj/structure/holobed
-	creation_time = 1 SECONDS
-	max_signs = 3
-
-/obj/item/holosign_creator/clown
-	name = "HONK holobanana projector"
-	desc = "A holographic projector that creates hardlight bananas"
-	icon_state = "signmaker_clown"
-	holosign_type = /obj/structure/holosign/holobanana
-	creation_time = 0.69 SECONDS
-	max_signs = 2
-
-/obj/item/holosign_creator/clown/cyborg
-	max_signs = 5
-
-/obj/item/holosign_creator/cyborg
-	name = "Energy Barrier Projector"
-	desc = "A holographic projector that creates fragile energy fields."
-	creation_time = 1.5 SECONDS
-	max_signs = 9
-	holosign_type = /obj/structure/holosign/barrier/cyborg
-	var/shock = FALSE
-
-/obj/item/holosign_creator/cyborg/attack_self(mob/user)
-	if(iscyborg(user))
-		var/mob/living/silicon/robot/R = user
-
-		if(shock)
-			to_chat(user, span_notice("You clear all active hard light barriers, and reset your projector to normal."))
-			holosign_type = /obj/structure/holosign/barrier/cyborg
-			creation_time = 0.5 SECONDS
-			if(signs.len)
-				for(var/H in signs)
-					qdel(H)
-			shock = FALSE
-			return
-		else if(R.emagged && !shock)
-			to_chat(user, span_warning("You clear all active hard light barriers, and overload your energy projector!"))
-			holosign_type = /obj/structure/holosign/barrier/cyborg/hacked
-			creation_time = 3 SECONDS
-			if(signs.len)
-				for(var/H in signs)
-					qdel(H)
-			shock = TRUE
-			return
-		else
-			if(signs.len)
-				for(var/H in signs)
-					qdel(H)
-				to_chat(user, span_notice("You clear all active hard light barriers."))
-	if(signs.len)
+	if(length(signs))
 		for(var/H in signs)
 			qdel(H)
-		to_chat(user, span_notice("You clear all active hard light barriers."))
-
-///Multi-barrier type that allows you to swap between several types of barriers.
-///You can only use one type at a time, you have to clear them to swap to the other.
-/obj/item/holosign_creator/multi
-	name = "multiple holosign projector"
-	///List of all designs that this can choose.
-	var/list/holodesigns = list()
-
-/obj/item/holosign_creator/multi/attack_self(mob/user)
-	. = ..()
-	if(.)
-		return TRUE
-	holosign_type = next_list_item(holosign_type, holodesigns)
-	to_chat(user, span_notice("You switch to [initial(holosign_type.name)]"))
-	return TRUE
-
-/obj/item/holosign_creator/multi/chief_engineer
-	name = "advanced holofan projector"
-	desc = "A holographic projector that creates hard light barriers that prevent changes in atmosphere conditions or engineering barriers."
-	icon_state = "signmaker_atmos"
-	holosign_type = /obj/structure/holosign/barrier/atmos
-	max_signs = 5
-	holodesigns = list(/obj/structure/holosign/barrier/atmos, /obj/structure/holosign/barrier/engineering)
+		to_chat(user, SPAN_NOTICE("You clear all active holograms."))

@@ -1,104 +1,237 @@
-//Added by Jack Rost
 /obj/item/trash
-	icon = 'yogstation/icons/obj/janitor.dmi'
-	lefthand_file = 'icons/mob/inhands/misc/food_lefthand.dmi'
-	righthand_file = 'icons/mob/inhands/misc/food_righthand.dmi'
+	icon = 'icons/obj/trash.dmi'
+	w_class = ITEM_SIZE_SMALL
 	desc = "This is rubbish."
-	w_class = WEIGHT_CLASS_TINY
-	resistance_flags = FLAMMABLE
-	fryable = TRUE
+	var/age = 0
+
+
+/obj/item/trash/Destroy()
+	SSpersistence.forget_value(src, /datum/persistent/filth/trash)
+	return ..()
+
+
+/obj/item/trash/Initialize(mapload, trash_age)
+	. = ..()
+	if (trash_age)
+		age = trash_age
+	SSpersistence.track_value(src, /datum/persistent/filth/trash)
 
 /obj/item/trash/raisins
 	name = "\improper 4no raisins"
-	icon_state= "4no_raisins"
+	icon_state = "4no_raisins"
+
 
 /obj/item/trash/candy
 	name = "candy"
-	icon_state= "candy"
+	icon_state = "candy"
+
+
+/obj/item/trash/proteinbar
+	name = "protein bar"
+	icon_state = "proteinbar"
+
 
 /obj/item/trash/cheesie
-	name = "cheesie honkers"
+	name = "\improper Cheesie Honkers"
 	icon_state = "cheesie_honkers"
+
 
 /obj/item/trash/chips
 	name = "chips"
 	icon_state = "chips"
 
+
 /obj/item/trash/popcorn
 	name = "popcorn"
 	icon_state = "popcorn"
 
+
 /obj/item/trash/sosjerky
-	name = "\improper Scaredy's Private Reserve Beef Jerky"
+	name = "Scaredy's Private Reserve Beef Jerky"
 	icon_state = "sosjerky"
 
+
 /obj/item/trash/syndi_cakes
-	name = "syndi-cakes"
+	name = "syndi cakes"
 	icon_state = "syndi_cakes"
 
-/obj/item/trash/energybar
-	name = "energybar wrapper"
-	icon_state = "energybar"
 
 /obj/item/trash/waffles
-	name = "waffles tray"
+	name = "waffles"
 	icon_state = "waffles"
+
 
 /obj/item/trash/plate
 	name = "plate"
-	desc = "A relic from a forgotten time... I miss eating off of plates..."
 	icon_state = "plate"
-	resistance_flags = NONE
+
+
+/obj/item/trash/snack_bowl
+	name = "snack bowl"
+	icon_state	= "snack_bowl"
+
+/obj/item/trash/snack_bowl/blue
+	icon_state	= "snack_bowl_blue"
 
 /obj/item/trash/pistachios
 	name = "pistachios pack"
 	icon_state = "pistachios_pack"
 
+
 /obj/item/trash/semki
 	name = "semki pack"
 	icon_state = "semki_pack"
 
+
+/obj/item/trash/fishegg
+	name = "caviar can"
+	icon_state = "fisheggs"
+
+
+/obj/item/trash/carpegg
+	name = "caviar can"
+	icon_state = "carpeggs"
+
+
+/obj/item/trash/salo
+	name = "salo pack"
+	icon_state = "salo"
+
+
+/obj/item/trash/croutons
+	name = "suhariki pack"
+	icon_state = "croutons"
+
+
+/obj/item/trash/squid
+	name = "calamari pack"
+	icon_state = "squid"
+
+
+/obj/item/trash/driedfish
+	name = "vobla pack"
+	icon_state = "driedfish"
+
+
 /obj/item/trash/tray
 	name = "tray"
 	icon_state = "tray"
-	resistance_flags = NONE
+
 
 /obj/item/trash/candle
 	name = "candle"
 	icon = 'icons/obj/candle.dmi'
 	icon_state = "candle4"
 
-/obj/item/trash/candle/resin
-	name = "resin candle"
-	icon = 'icons/obj/candle.dmi'
-	icon_state = "resincandle4"
 
-/obj/item/trash/can
-	name = "crushed can"
-	icon_state = "cola"
-	resistance_flags = NONE
-	grind_results = list(/datum/reagent/aluminium = 10)
+/obj/item/trash/liquidfood
+	name = "\improper \"LiquidFood\" MRE"
+	icon_state = "liquidfood"
 
-/obj/item/trash/attack(mob/M, mob/living/user)
-	return
 
-/obj/item/trash/floursack
-	name = "torn flour sack"
-	icon = 'icons/obj/food/containers.dmi'
-	icon_state = "floursad"
-	desc = "Perhaps it shouldn't have been filled with water."
+/obj/item/trash/tastybread
+	name = "bread tube"
+	icon_state = "tastybread"
 
-/obj/item/trash/toritose
-	name = "toritose"
-	icon = 'icons/obj/janitor.dmi'
-	icon_state = "toritoseded"
 
-/obj/item/trash/topkakes
-	name = "top kakes"
-	icon = 'icons/obj/janitor.dmi'
-	icon_state = "topkakesded"
+/obj/item/trash/cubewrapper
+	name = "discarded wrapper"
+	icon_state = "monkeywrap"
 
-/obj/item/trash/vermin
-	name = "vermin bites"
-	icon = 'icons/obj/janitor.dmi'
-	icon_state = "verminded"
+
+/obj/item/trash/beef
+	name = "empty can"
+	icon_state = "beef"
+
+
+/obj/item/trash/beans
+	name = "empty can"
+	icon_state = "beans"
+
+
+/obj/item/trash/tomato
+	name = "empty can"
+	icon_state = "tomato"
+
+
+/obj/item/trash/spinach
+	name = "empty can"
+	icon_state = "spinach"
+
+
+/obj/item/trash/berries
+	name = "empty can"
+	icon_state = "berries"
+
+
+/obj/item/trash/cakewrap
+	name = "wrapper"
+	icon_state = "cakewrap"
+
+
+/obj/item/trash/mochicakewrap
+	name = "wrapper"
+	icon_state = "mochicakewrap"
+
+
+/obj/item/trash/mooncakewrap
+	name = "wrapper"
+	icon_state = "mooncakewrap"
+
+
+/obj/item/trash/tidegobs
+	name = "tide gob bag"
+	icon_state = "tidegobs"
+
+
+/obj/item/trash/saturno
+	name = "\improper saturn-Os bag"
+	icon_state = "saturno"
+
+
+/obj/item/trash/jupiter
+	name = "gello cup"
+	icon_state = "jupiter"
+
+
+/obj/item/trash/pluto
+	name = "rod bag"
+	icon_state = "pluto"
+
+
+/obj/item/trash/venus
+	name = "hot cakes bag"
+	icon_state = "venus"
+
+
+/obj/item/trash/mars
+	name = "frouka box"
+	icon_state = "mars"
+
+
+/obj/item/trash/oort
+	name = "oort rock bag"
+	icon_state = "oort"
+
+
+/obj/item/trash/weebonuts
+	name = "red alert nuts bag"
+	icon_state = "weebonuts"
+
+
+/obj/item/trash/stick
+	name = "stick"
+	desc = "a stick from some snack food item or a lollipop, not even useful as crafting material."
+	icon_state = "stick"
+
+/obj/item/trash/usedplatter
+	name = "dirty platter"
+	icon_state = "usedplatter"
+
+/obj/item/trash/ramiken
+	name = "dirty ramiken"
+	icon_state = "ramiken"
+
+/obj/item/trash/pot
+	name = "empty pot"
+	icon_state = "pot_empty"

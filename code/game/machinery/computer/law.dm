@@ -1,101 +1,60 @@
-
-
 /obj/machinery/computer/upload
-	var/mob/living/silicon/current = null //The target of future law uploads
+	name = "unused upload console"
+	icon_keyboard = "rd_key"
 	icon_screen = "command"
-	time_to_unscrew = 6 SECONDS
+	var/mob/living/silicon/current
 
-/obj/machinery/computer/upload/Initialize(mapload)
-	. = ..()
-	AddComponent(/datum/component/gps, "Encrypted Upload")
-	if(!mapload)
-		//log_silicon("\A [name] was created at [loc_name(src)].")
-		message_admins("\A [name] was created at [ADMIN_VERBOSEJMP(src)].")
-
-/obj/machinery/computer/upload/attackby(obj/item/O, mob/user, params)
+/obj/machinery/computer/upload/use_tool(obj/item/O, mob/living/user, list/click_params)
 	if(istype(O, /obj/item/aiModule))
 		var/obj/item/aiModule/M = O
-		if(upload_check(user))
-			M.install(current.laws, user)
-		else
-			return ..()
+		M.install(src, user)
+		return TRUE
 
-/obj/machinery/computer/upload/proc/upload_check(mob/user)
-	if(stat & (NOPOWER|BROKEN|MAINT))
-		return FALSE
-	if(!current)
-		to_chat(user, span_caution("You haven't selected anything to transmit laws to!"))
-		return FALSE
-	if(!can_upload_to(current))
-		to_chat(user, "[span_caution("Upload failed!")] Check to make sure [current.name] is functioning properly.")
-		current = null
-		return FALSE
-	var/turf/currentloc = get_turf(current)
-	if(currentloc && user.z != currentloc.z)
-		to_chat(user, "[span_caution("Upload failed!")] Unable to establish a connection to [current.name]. You're too far away!")
-		current = null
-		return FALSE
-	return TRUE
-
-/obj/machinery/computer/upload/proc/can_upload_to(mob/living/silicon/S)
-	if(S.stat == DEAD)
-		return FALSE
-	return TRUE
-
-/obj/machinery/computer/upload/AltClick(mob/user)
-	if(user.mind.has_antag_datum(/datum/antagonist/rev/head))
-		to_chat(current, span_danger("Alert. Unregistered lawset upload in progress. Estimated time of completion: 30 seconds."))
-		user.visible_message(span_warning("[user] begins typing on [src]."))
-		to_chat(user, span_warning("You begin to alter the laws of [current] to enable it to assist you in your goals. This will take 30 seconds."))
-		var/obj/item/aiModule/core/full/revolutionary/M = new
-		if(do_after(user, 30 SECONDS, src))
-			if(upload_check(user))
-				M.install(current.laws, user)
-			else
-				to_chat(user, span_warning("The upload fails!"))
-		else
-			to_chat(user, span_warning("You were interrupted!"))
-			user.visible_message(span_warning("[user] stops typing on [src]."))
-		qdel(M)
-	return
+	return ..()
 
 /obj/machinery/computer/upload/ai
 	name = "\improper AI upload console"
 	desc = "Used to upload laws to the AI."
-	circuit = /obj/item/circuitboard/computer/aiupload
+	machine_name = "\improper AI upload console"
+	machine_desc = "Maintains a one-way link to ship-bound AI units, allowing remote modification of their laws."
 
-/obj/machinery/computer/upload/ai/interact(mob/user)
-	current = select_active_ai(user)
-
+/obj/machinery/computer/upload/ai/interface_interact(mob/user)
+	if(!CanInteract(user, DefaultTopicState()))
+		return FALSE
+	current = select_active_ai(user, get_z(src))
 	if (!current)
-		to_chat(user, span_caution("No active AIs detected!"))
+		to_chat(user, "No active AIs detected.")
 	else
 		to_chat(user, "[current.name] selected for law changes.")
+	return TRUE
 
-/obj/machinery/computer/upload/ai/can_upload_to(mob/living/silicon/ai/A)
-	if(!A || !isAI(A))
-		return FALSE
-	if(A.control_disabled)
-		return FALSE
-	return ..()
-
-
-/obj/machinery/computer/upload/borg
+/obj/machinery/computer/upload/robot
 	name = "cyborg upload console"
 	desc = "Used to upload laws to Cyborgs."
-	circuit = /obj/item/circuitboard/computer/borgupload
+	machine_name = "cyborg upload console"
+	machine_desc = "Maintains a one-way link to ship-bound synthetics such as cyborgs and robots, allowing remote modification of their laws."
 
-/obj/machinery/computer/upload/borg/interact(mob/user)
-	current = select_active_free_borg(user)
-
-	if(!current)
-		to_chat(user, span_caution("No active unslaved cyborgs detected!"))
+/obj/machinery/computer/upload/robot/interface_interact(mob/user)
+	if(!CanInteract(user, DefaultTopicState()))
+		return FALSE
+	current = freeborg(get_z(src))
+	if (!current)
+		to_chat(user, "No free cyborgs detected.")
 	else
 		to_chat(user, "[current.name] selected for law changes.")
+	return TRUE
 
-/obj/machinery/computer/upload/borg/can_upload_to(mob/living/silicon/robot/B)
-	if(!B || !iscyborg(B))
-		return FALSE
-	if(B.scrambledcodes || B.emagged)
-		return FALSE
-	return ..()
+
+/proc/freeborg(z)
+	RETURN_TYPE(/mob/living/silicon/robot)
+	var/list/zs = get_valid_silicon_zs(z)
+	var/select = null
+	var/list/borgs = list()
+	for (var/mob/living/silicon/robot/A in GLOB.player_list)
+		if (A.stat == 2 || A.connected_ai || A.scrambledcodes || istype(A,/mob/living/silicon/robot/drone) || !(get_z(A) in zs))
+			continue
+		var/name = "[A.real_name] ([A.modtype] [A.braintype])"
+		borgs[name] = A
+	if (length(borgs))
+		select = input("Unshackled borg signals detected:", "Borg selection", null, null) as null|anything in borgs
+		return borgs[select]

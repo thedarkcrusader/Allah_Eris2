@@ -1,424 +1,588 @@
-#define RESTART_COUNTER_PATH "data/round_counter.txt"
-
-/// Force the log directory to be something specific in the data/logs folder
-#define OVERRIDE_LOG_DIRECTORY_PARAMETER "log-directory"
-/// Prevent the master controller from starting automatically
-#define NO_INIT_PARAMETER "no-init"
-
-GLOBAL_VAR(restart_counter)
-
-/**
-  * World creation
-  *
-  * Here is where a round itself is actually begun and setup, lots of important config changes happen here
-  * * db connection setup
-  * * config loaded from files
-  * * loads admins
-  * * Sets up the dynamic menu system
-  * * and most importantly, calls initialize on the master subsystem, starting the game loop that causes the rest of the game to begin processing and setting up
-  *
-  * Note this happens after the Master subsystem is created (as that is a global datum), this means all the subsystems exist,
-  * but they have not been Initialized at this point, only their New proc has run
-  *
-  * Nothing happens until something moves. ~Albert Einstein
-  *
-  */
-/world/New()
-	//Early profile for auto-profiler - will be stopped on profiler init if necessary.
-#if DM_VERSION >= 513 && DM_BUILD >= 1506
-	world.Profile(PROFILE_START)
-#endif
-
-	SSmetrics.world_init_time = REALTIMEOFDAY
-
-	log_world("World loaded at [time_stamp()]!")
-
-	GLOB.config_error_log = GLOB.world_manifest_log = GLOB.world_pda_log = GLOB.world_job_debug_log = GLOB.sql_error_log = GLOB.world_href_log = GLOB.world_runtime_log = GLOB.world_attack_log = GLOB.world_game_log = "data/logs/config_error.[GUID()].log" //temporary file used to record errors with loading config, moved to log directory once logging is set bl
-
-	make_datum_references_lists()	//initialises global lists for referencing frequently used datums (so that we only ever do it once)
-
-	TgsNew(minimum_required_security_level = TGS_SECURITY_TRUSTED)
-
-	GLOB.revdata = new
-
-	config.Load(params[OVERRIDE_CONFIG_DIRECTORY_PARAMETER])
-
-	init_permissions()
-
-	GLOB.permissions.start()
-
-	//SetupLogs depends on the RoundID, so lets check
-	//DB schema and set RoundID if we can
-	SSdbcore.CheckSchemaVersion()
-	SSdbcore.SetRoundID()
-	SetupLogs()
-
-#ifndef USE_CUSTOM_ERROR_HANDLER
-	world.log = file("[GLOB.log_directory]/dd.log")
-#else
-	if (TgsAvailable())
-		world.log = file("[GLOB.log_directory]/dd.log") //not all runtimes trigger world/Error, so this is the only way to ensure we can see all of them.
-#endif
+#define RECOMMENDED_VERSION 514
+#define FAILED_DB_CONNECTION_CUTOFF 5
+#define THROTTLE_MAX_BURST 15 SECONDS
+#define SET_THROTTLE(TIME, REASON) throttle[1] = base_throttle + (TIME); throttle[2] = (REASON);
 
 
-	load_yogs_stuff() // yogs - Donators
 
-	LoadVerbs(/datum/verbs/menu)
-	if(CONFIG_GET(flag/usewhitelist))
-		load_whitelist()
+var/global/game_id = randhex(8)
 
-	setup_pretty_filter() //yogs
-
-	GLOB.timezoneOffset = world.timezone * 36000
-
-	if(fexists(RESTART_COUNTER_PATH))
-		GLOB.restart_counter = text2num(trim(file2text(RESTART_COUNTER_PATH)))
-		fdel(RESTART_COUNTER_PATH)
-
-	if(NO_INIT_PARAMETER in params)
-		return
-
-	Master.Initialize(10, FALSE, TRUE)
-
-	RunUnattendedFunctions()
-
-/world/proc/RunUnattendedFunctions()
-#ifdef UNIT_TESTS
-	HandleTestRun()
-#endif
-
-/world/proc/HandleTestRun()
-	//trigger things to run the whole process
-	Master.sleep_offline_after_initializations = FALSE
-	SSticker.start_immediately = TRUE
-	CONFIG_SET(number/round_end_countdown, 0)
-	var/datum/callback/cb
-#ifdef UNIT_TESTS
-	cb = CALLBACK(GLOBAL_PROC, GLOBAL_PROC_REF(RunUnitTests))
-#else
-	cb = VARSET_CALLBACK(SSticker, force_ending, TRUE)
-#endif
-	SSticker.OnRoundstart(CALLBACK(GLOBAL_PROC, GLOBAL_PROC_REF(_addtimer), cb, 10 SECONDS))
+GLOBAL_VAR(href_logfile)
 
 
-/world/proc/SetupLogs()
-	var/override_dir = params[OVERRIDE_LOG_DIRECTORY_PARAMETER]
-	if(!override_dir)
-		var/realtime = world.realtime
-		var/texttime = time2text(realtime, "YYYY/MM/DD")
-		GLOB.log_directory = "data/logs/[texttime]/round-"
-		GLOB.picture_logging_prefix = "L_[time2text(realtime, "YYYYMMDD")]_"
-		GLOB.picture_log_directory = "data/picture_logs/[texttime]/round-"
-		if(GLOB.round_id)
-			GLOB.log_directory += "[GLOB.round_id]"
-			GLOB.picture_logging_prefix += "R_[GLOB.round_id]_"
-			GLOB.picture_log_directory += "[GLOB.round_id]"
-		else
-			var/timestamp = replacetext(time_stamp(), ":", ".")
-			GLOB.log_directory += "[timestamp]"
-			GLOB.picture_log_directory += "[timestamp]"
-			GLOB.picture_logging_prefix += "T_[timestamp]_"
-	else
-		GLOB.log_directory = "data/logs/[override_dir]"
-		GLOB.picture_logging_prefix = "O_[override_dir]_"
-		GLOB.picture_log_directory = "data/picture_logs/[override_dir]"
+// Find mobs matching a given string
+//
+// search_string: the string to search for, in params format; for example, "some_key;mob_name"
+// restrict_type: A mob type to restrict the search to, or null to not restrict
+//
+// Partial matches will be found, but exact matches will be preferred by the search
+//
+// Returns: A possibly-empty list of the strongest matches
+/proc/text_find_mobs(search_string, restrict_type = null)
+	var/list/search = params2list(search_string)
+	var/list/ckeysearch = list()
+	for(var/text in search)
+		ckeysearch += ckey(text)
 
-	GLOB.world_game_log = "[GLOB.log_directory]/game.log"
-	GLOB.test_log = "[GLOB.log_directory]/unit_tests.log"
-	GLOB.world_mecha_log = "[GLOB.log_directory]/mecha.log"
-	GLOB.world_virus_log = "[GLOB.log_directory]/virus.log"
-	GLOB.world_cloning_log = "[GLOB.log_directory]/cloning.log"
-	GLOB.world_asset_log = "[GLOB.log_directory]/asset.log"
-	GLOB.world_attack_log = "[GLOB.log_directory]/attack.log"
-	GLOB.world_pda_log = "[GLOB.log_directory]/pda.log"
-	GLOB.world_telecomms_log = "[GLOB.log_directory]/telecomms.log"
-	GLOB.world_uplink_log = "[GLOB.log_directory]/uplink.log"
-	GLOB.world_ntsl_log = "[GLOB.log_directory]/ntsl.log"
-	GLOB.world_manifest_log = "[GLOB.log_directory]/manifest.log"
-	GLOB.world_href_log = "[GLOB.log_directory]/hrefs.log"
-	GLOB.signals_log = "[GLOB.log_directory]/signals.log"
-	GLOB.sql_error_log = "[GLOB.log_directory]/sql.log"
-	GLOB.world_qdel_log = "[GLOB.log_directory]/qdel.log"
-	GLOB.world_map_error_log = "[GLOB.log_directory]/map_errors.log"
-	GLOB.world_storyteller_log = "[GLOB.log_directory]/storyteller.log"
-	GLOB.world_runtime_log = "[GLOB.log_directory]/runtime.log"
-	GLOB.query_debug_log = "[GLOB.log_directory]/query_debug.log"
-	GLOB.world_job_debug_log = "[GLOB.log_directory]/job_debug.log"
-	GLOB.world_paper_log = "[GLOB.log_directory]/paper.log"
-	GLOB.tgui_log = "[GLOB.log_directory]/tgui.log"
+	var/list/match = list()
 
-	GLOB.demo_log = "[GLOB.log_directory]/demo.txt"
-
-	start_log(GLOB.test_log)
-	start_log(GLOB.world_game_log)
-	start_log(GLOB.world_attack_log)
-	start_log(GLOB.world_pda_log)
-	start_log(GLOB.world_telecomms_log)
-	start_log(GLOB.world_manifest_log)
-	start_log(GLOB.world_href_log)
-	start_log(GLOB.world_qdel_log)
-	start_log(GLOB.world_runtime_log)
-	start_log(GLOB.world_job_debug_log)
-	start_log(GLOB.tgui_log)
-
-	GLOB.changelog_hash = md5('html/changelog.html') //for telling if the changelog has changed recently
-	if(fexists(GLOB.config_error_log))
-		fcopy(GLOB.config_error_log, "[GLOB.log_directory]/config_error.log")
-		fdel(GLOB.config_error_log)
-
-	if(GLOB.round_id)
-		log_game("Round ID: [GLOB.round_id]")
-
-	// This was printed early in startup to the world log and config_error.log,
-	// but those are both private, so let's put the commit info in the runtime
-	// log which is ultimately public.
-	log_runtime(GLOB.revdata.get_log_message())
-
-/world/Topic(T, addr, master, key)
-	TGS_TOPIC	//redirect to server tools if necessary
-
-	var/static/list/topic_handlers = TopicHandlers()
-
-	var/list/input = params2list(T)
-	var/datum/world_topic/handler
-	for(var/I in topic_handlers)
-		if(I in input)
-			handler = topic_handlers[I]
-			break
-
-	if((!handler || initial(handler.log)) && config && CONFIG_LOADED && CONFIG_GET(flag/log_world_topic))
-		var/list/params = params2list(T) // Different list from input so it can be sanatized without breaking the rest of the topic
-		if("key" in params)
-			params["key"] = CONFIG_GET(string/comms_key) == params["key"] ? "correct" : "incorrect"
-		log_topic("\"[list2params(params)]\", from:[addr], master:[master], ckey:[key]")
-
-	if(!handler)
-		return
-
-	handler = new handler()
-	return handler.TryRun(input)
-
-/world/proc/AnnouncePR(announcement, list/payload)
-	var/static/list/PRcounts = list()	//PR id -> number of times announced this round
-	var/id = "[payload["pull_request"]["id"]]"
-	if(!PRcounts[id])
-		PRcounts[id] = 1
-	else
-		++PRcounts[id]
-		if(PRcounts[id] > PR_ANNOUNCEMENTS_PER_ROUND)
-			return
-
-	var/final_composed = span_announce("PR: [announcement]")
-	for(var/client/C in GLOB.clients)
-		C.AnnouncePR(final_composed)
-
-/world/proc/FinishTestRun()
-	set waitfor = FALSE
-	var/list/fail_reasons
-	if(GLOB)
-		if(GLOB.total_runtimes != 0)
-			fail_reasons = list(TEST_OUTPUT_RED("Total runtimes: [GLOB.total_runtimes]"))
-#ifdef UNIT_TESTS
-		if(GLOB.failed_any_test)
-			LAZYADD(fail_reasons, TEST_OUTPUT_RED("Unit Tests failed!"))
-#endif
-		if(!GLOB.log_directory)
-			LAZYADD(fail_reasons, TEST_OUTPUT_RED("Missing GLOB.log_directory!"))
-	else
-		fail_reasons = list(TEST_OUTPUT_RED("Missing GLOB!"))
-	if(!fail_reasons)
-		text2file("Success!", "[GLOB.log_directory]/clean_run.lk")
-	else
-		log_world("[TEST_OUTPUT_RED("Test run failed")]!\n[fail_reasons.Join("\n")]")
-	sleep(0) //yes, 0, this'll let Reboot finish and prevent byond memes
-	qdel(src) //shut it down
-
-/world/Reboot(reason = 0, fast_track = FALSE)
-	if (reason || fast_track) //special reboot, do none of the normal stuff
-		if (usr)
-			log_admin("[key_name(usr)] Has requested an immediate world restart via client side debugging tools")
-			message_admins("[key_name_admin(usr)] Has requested an immediate world restart via client side debugging tools")
-		to_chat(world, span_boldannounce("Rebooting World immediately due to host request"))
-	else
-		to_chat(world, span_boldannounce("Rebooting world..."))
-		Master.Shutdown()	//run SS shutdowns
-
-	for(var/boi in GLOB.clients)
-		var/client/C = boi
-		if(isnull(C)) continue //yes so this is useful to prevent nulls from preventing the server from rebooting...
-		sync_logout_with_db(C.connection_number)
-		C?.tgui_panel?.send_roundrestart()
-
-	TgsReboot()
-
-	if(TEST_RUN_PARAMETER in params)
-		FinishTestRun()
-		return
-
-	if(TgsAvailable())
-		var/do_hard_reboot
-		// check the hard reboot counter
-		var/ruhr = CONFIG_GET(number/rounds_until_hard_restart)
-		switch(ruhr)
-			if(-1)
-				do_hard_reboot = FALSE
-			if(0)
-				do_hard_reboot = TRUE
+	for(var/mob/M in SSmobs.mob_list)
+		if(restrict_type && !istype(M, restrict_type))
+			continue
+		var/strings = list(M.name, M.ckey)
+		if(M.mind)
+			strings += M.mind.assigned_role
+			strings += M.mind.special_role
+		if(ishuman(M))
+			var/mob/living/carbon/human/H = M
+			if(H.species)
+				strings += H.species.name
+		for(var/text in strings)
+			if(ckey(text) in ckeysearch)
+				match[M] += 10 // an exact match is far better than a partial one
 			else
-				if(GLOB.restart_counter >= ruhr)
-					do_hard_reboot = TRUE
-				else
-					text2file("[++GLOB.restart_counter]", RESTART_COUNTER_PATH)
-					do_hard_reboot = FALSE
+				for(var/searchstr in search)
+					if(findtext(text, searchstr))
+						match[M] += 1
 
-		if(do_hard_reboot)
-			log_world("World hard rebooted at [time_stamp()]")
-			shutdown_logging() // See comment below.
-			TgsEndProcess()
+	var/maxstrength = 0
+	for(var/mob/M in match)
+		maxstrength = max(match[M], maxstrength)
+	for(var/mob/M in match)
+		if(match[M] < maxstrength)
+			match -= M
 
-	log_world("World rebooted at [time_stamp()]")
-	shutdown_logging() // Past this point, no logging procs can be used, at risk of data loss.
+	return match
+
+
+/proc/stack_trace(msg)
+	CRASH(msg)
+
+
+/proc/enable_debugging(mode, port)
+	CRASH("auxtools not loaded")
+
+
+/proc/auxtools_expr_stub()
+	return
+
+
+#ifndef UNIT_TEST
+/hook/startup/proc/set_visibility()
+	world.update_hub_visibility(config.hub_visible)
+	return TRUE
+#endif
+
+/world/New()
+	var/debug_server = world.GetConfig("env", "AUXTOOLS_DEBUG_DLL")
+	if (debug_server)
+		call_ext(debug_server, "auxtools_init")()
+		enable_debugging()
+
+	SetupLogs()
+	var/date_string = time2text(world.realtime, "YYYY/MM/DD")
+	to_file(global.diary, "[log_end]\n[log_end]\nStarting up. (ID: [game_id]) [time2text(world.timeofday, "hh:mm.ss")][log_end]\n---------------------[log_end]")
+
+	if (config)
+		if (config.server_name)
+			name = "[config.server_name]"
+		if (config.log_runtime)
+			var/runtime_log = file("data/logs/runtime/[date_string]_[time2text(world.timeofday, "hh:mm")]_[game_id].log")
+			to_file(runtime_log, "Game [game_id] starting up at [time2text(world.timeofday, "hh:mm.ss")]")
+			log = runtime_log
+		if (config.log_hrefs)
+			GLOB.href_logfile = file("data/logs/[date_string] hrefs.htm")
+
+	if (byond_version < RECOMMENDED_VERSION)
+		to_world_log("Your server's byond version does not meet the recommended requirements for this server. Please update BYOND")
+	callHook("startup")
+	QDEL_NULL(__global_init)
+	..()
+
+#ifdef UNIT_TEST
+	log_unit_test("Unit Tests Enabled. This will destroy the world when testing is complete.")
+	load_unit_test_changes()
+#endif
+	Master.Initialize(10, FALSE)
+
+
+/world/Del()
 	var/debug_server = world.GetConfig("env", "AUXTOOLS_DEBUG_DLL")
 	if (debug_server)
 		call_ext(debug_server, "auxtools_shutdown")()
-	..()
+	callHook("shutdown")
+	return ..()
 
-/world/Del()
-	shutdown_logging() // makes sure the thread is closed before end, else we terminate
-	var/debug_server = world.GetConfig("env", "AUXTOOLS_DEBUG_DLL")
-	if (debug_server)
-		LIBCALL(debug_server, "auxtools_shutdown")()
-	..()
 
-/world/proc/update_status() //yogs -- Mirrored in the Yogs folder in March 2019. Do not edit, swallow, or submerge in acid
+GLOBAL_LIST_EMPTY(world_topic_throttle)
+GLOBAL_VAR_AS(world_topic_last, world.timeofday)
 
-	var/list/features = list()
 
-	if(GLOB.master_mode)
-		features += GLOB.master_mode
+/world/Topic(T, addr, master, key)
+	to_file(global.diary, "TOPIC: \"[T]\", from:[addr], master:[master], key:[key][log_end]")
 
-	if (!GLOB.enter_allowed)
-		features += "closed"
+	if (GLOB.world_topic_last > world.timeofday)
+		GLOB.world_topic_throttle = list() //probably passed midnight
+	GLOB.world_topic_last = world.timeofday
 
-	var/s = ""
-	var/hostedby
-	if(config)
-		var/server_name = CONFIG_GET(string/servername)
-		if (server_name)
-			s += "<b>[server_name]</b> &#8212; "
-		features += "[CONFIG_GET(flag/norespawn) ? "no " : ""]respawn"
-		if(CONFIG_GET(flag/allow_vote_mode))
-			features += "vote"
-		if(CONFIG_GET(flag/allow_ai))
-			features += "AI allowed"
-		hostedby = CONFIG_GET(string/hostedby)
+	var/list/throttle = GLOB.world_topic_throttle[addr]
+	if (!throttle)
+		GLOB.world_topic_throttle[addr] = throttle = list(0, null)
+	else if (throttle[1] && throttle[1] > world.timeofday + THROTTLE_MAX_BURST)
+		return throttle[2] ? "Throttled ([throttle[2]])" : "Throttled"
 
-	s += "<b>[station_name()]</b>";
-	s += " ("
-	s += "<a href=\"http://\">" //Change this to wherever you want the hub to link to.
-	s += "Default"  //Replace this with something else. Or ever better, delete it and uncomment the game version.
-	s += "</a>"
-	s += ")"
+	var/base_throttle = max(throttle[1], world.timeofday)
+	SET_THROTTLE(3 SECONDS, null)
 
-	var/players = GLOB.clients.len
+	/* * * * * * * *
+	* Public Topic Calls
+	* The following topic calls are available without a comms secret.
+	* * * * * * * */
 
-	var/popcaptext = ""
-	var/popcap = max(CONFIG_GET(number/extreme_popcap), CONFIG_GET(number/hard_popcap), CONFIG_GET(number/soft_popcap))
-	if (popcap)
-		popcaptext = "/[popcap]"
+	if (T == "ping")
+		var/x = 1
+		for (var/client/C)
+			x++
+		return x
 
-	if (players > 1)
-		features += "[players][popcaptext] players"
-	else if (players > 0)
-		features += "[players][popcaptext] player"
+	else if(T == "players")
+		var/n = 0
+		for(var/mob/M in GLOB.player_list)
+			if(M.client)
+				n++
+		return n
 
-	game_state = (CONFIG_GET(number/extreme_popcap) && players >= CONFIG_GET(number/extreme_popcap)) //tells the hub if we are full
+	else if (copytext(T,1,7) == "status")
+		var/input[] = params2list(T)
+		var/list/s = list()
+		s["version"] = config.game_version
+		s["mode"] = PUBLIC_GAME_MODE
+		s["respawn"] = config.abandon_allowed
+		s["enter"] = config.enter_allowed
+		s["vote"] = config.allow_vote_mode
+		s["ai"] = !!length(empty_playable_ai_cores)
+		s["host"] = host ? host : null
 
-	if (!host && hostedby)
-		features += "hosted by <b>[hostedby]</b>"
+		// This is dumb, but spacestation13.com's banners break if player count isn't the 8th field of the reply, so... this has to go here.
+		s["players"] = 0
+		s["stationtime"] = stationtime2text()
+		s["roundduration"] = roundduration2text()
+		s["map"] = replacetext(GLOB.using_map.full_name, "\improper", "") //Done to remove the non-UTF-8 text macros
 
-	if (features)
-		s += ": [jointext(features, ", ")]"
+		var/active = 0
+		var/list/players = list()
+		var/list/admins = list()
+		var/legacy = input["status"] != "2"
+		for(var/client/C in GLOB.clients)
+			if(C.holder)
+				if(C.is_stealthed())
+					continue	//so stealthmins aren't revealed by the hub
+				admins[C.key] = C.holder.rank
+			if(legacy)
+				s["player[length(players)]"] = C.key
+			players += C.key
+			if(istype(C.mob, /mob/living))
+				active++
 
-	status = s
+		s["players"] = length(players)
+		s["admins"] = length(admins)
+		if(!legacy)
+			s["playerlist"] = list2params(players)
+			s["adminlist"] = list2params(admins)
+			s["active_players"] = active
 
-/world/proc/update_hub_visibility(new_visibility)
-	if(new_visibility == GLOB.hub_visibility)
+		return list2params(s)
+
+	else if(T == "manifest")
+		var/list/positions = list()
+		var/list/nano_crew_manifest = nano_crew_manifest()
+		// We rebuild the list in the format external tools expect
+		for(var/dept in nano_crew_manifest)
+			var/list/dept_list = nano_crew_manifest[dept]
+			if(length(dept_list) > 0)
+				positions[dept] = list()
+				for(var/list/person in dept_list)
+					if (person["status"] == "Stored")
+						continue
+					positions[dept][person["name"]] = person["rank"]
+
+		for(var/k in positions)
+			positions[k] = list2params(positions[k]) // converts positions["heads"] = list("Bob"="Captain", "Bill"="CMO") into positions["heads"] = "Bob=Captain&Bill=CMO"
+
+		return list2params(positions)
+
+	else if(T == "revision")
+		var/list/L = list()
+		L["gameid"] = game_id
+		L["dm_version"] = DM_VERSION // DreamMaker version compiled in
+		L["dm_build"] = DM_BUILD // DreamMaker build compiled in
+		L["dd_version"] = world.byond_version // DreamDaemon version running on
+		L["dd_build"] = world.byond_build // DreamDaemon build running on
+
+		if(revdata.revision)
+			L["revision"] = revdata.revision
+			L["branch"] = revdata.branch
+			L["date"] = revdata.date
+		else
+			L["revision"] = "unknown"
+
+		return list2params(L)
+
+	/* * * * * * * *
+	* Admin Topic Calls
+	* The following topic calls are only available if a ban comms secret has been defined, supplied, and is correct.
+	* * * * * * * */
+
+	if(copytext(T,1,14) == "placepermaban")
+		var/input[] = params2list(T)
+		if(!config.ban_comms_password)
+			SET_THROTTLE(10 SECONDS, "Bans Not Enabled")
+			return "Not Enabled"
+		if(input["bankey"] != config.ban_comms_password)
+			SET_THROTTLE(30 SECONDS, "Bad Bans Key")
+			return "Bad Key"
+
+		var/target = ckey(input["target"])
+
+		var/client/C
+		for(var/client/K in GLOB.clients)
+			if(K.ckey == target)
+				C = K
+				break
+		if(!C)
+			return "No client with that name found on server"
+		if(!C.mob)
+			return "Client missing mob"
+
+		if(!_DB_ban_record(input["id"], "0", "127.0.0.1", 1, C.mob, -1, input["reason"]))
+			return "Save failed"
+		ban_unban_log_save("[input["id"]] has permabanned [C.ckey]. - Reason: [input["reason"]] - This is a ban until appeal.")
+		notes_add(target,"[input["id"]] has permabanned [C.ckey]. - Reason: [input["reason"]] - This is a ban until appeal.",input["id"])
+		qdel(C)
+
+	/* * * * * * * *
+	* Secure Topic Calls
+	* The following topic calls are only available if a comms secret has been defined, supplied, and is correct.
+	* * * * * * * */
+
+	if (!config.comms_password)
+		SET_THROTTLE(10 SECONDS, "Comms Not Enabled")
+		return "Not enabled"
+
+	else if(copytext(T,1,5) == "laws")
+		var/input[] = params2list(T)
+		if(input["key"] != config.comms_password)
+			SET_THROTTLE(30 SECONDS, "Bad Comms Key")
+			return "Bad Key"
+
+		var/list/match = text_find_mobs(input["laws"], /mob/living/silicon)
+
+		if(!length(match))
+			return "No matches"
+		else if(length(match) == 1)
+			var/mob/living/silicon/S = match[1]
+			var/info = list()
+			info["name"] = S.name
+			info["key"] = S.key
+
+			if(istype(S, /mob/living/silicon/robot))
+				var/mob/living/silicon/robot/R = S
+				info["master"] = R.connected_ai?.name
+				info["sync"] = R.lawupdate
+
+			if(!S.laws)
+				info["laws"] = null
+				return list2params(info)
+
+			var/list/lawset_parts = list(
+				"ion" = S.laws.ion_laws,
+				"inherent" = S.laws.inherent_laws,
+				"supplied" = S.laws.supplied_laws
+			)
+
+			for(var/law_type in lawset_parts)
+				var/laws = list()
+				for(var/datum/ai_law/L in lawset_parts[law_type])
+					laws += L.law
+				info[law_type] = list2params(laws)
+
+			info["zero"] = S.laws.zeroth_law ? S.laws.zeroth_law.law : null
+
+			return list2params(info)
+
+		else
+			var/list/ret = list()
+			for(var/mob/M in match)
+				ret[M.key] = M.name
+			return list2params(ret)
+
+	else if(copytext(T,1,5) == "info")
+		var/input[] = params2list(T)
+		if(input["key"] != config.comms_password)
+			SET_THROTTLE(30 SECONDS, "Bad Comms Key")
+			return "Bad Key"
+
+		var/list/match = text_find_mobs(input["info"])
+
+		if(!length(match))
+			return "No matches"
+		else if(length(match) == 1)
+			var/mob/M = match[1]
+			var/info = list()
+			info["key"] = M.key
+			info["name"] = M.name == M.real_name ? M.name : "[M.name] ([M.real_name])"
+			info["role"] = M.mind ? (M.mind.assigned_role ? M.mind.assigned_role : "No role") : "No mind"
+			var/turf/MT = get_turf(M)
+			info["loc"] = M.loc ? "[M.loc]" : "null"
+			info["turf"] = MT ? "[MT] @ [MT.x], [MT.y], [MT.z]" : "null"
+			info["area"] = MT ? "[MT.loc]" : "null"
+			info["antag"] = M.mind ? (M.mind.special_role ? M.mind.special_role : "Not antag") : "No mind"
+			info["hasbeenrev"] = M.mind ? M.mind.has_been_rev : "No mind"
+			info["stat"] = M.stat
+			info["type"] = M.type
+			if(isliving(M))
+				var/mob/living/L = M
+				info["damage"] = list2params(list(
+							oxy = L.getOxyLoss(),
+							tox = L.getToxLoss(),
+							fire = L.getFireLoss(),
+							brute = L.getBruteLoss(),
+							clone = L.getCloneLoss(),
+							brain = L.getBrainLoss()
+						))
+				if(ishuman(M))
+					var/mob/living/carbon/human/H = M
+					info["species"] = H.species.name
+				else
+					info["species"] = "non-human"
+			else
+				info["damage"] = "non-living"
+				info["species"] = "non-human"
+			info["gender"] = M.gender
+			return list2params(info)
+		else
+			var/list/ret = list()
+			for(var/mob/M in match)
+				ret[M.key] = M.name
+			return list2params(ret)
+
+	else if(copytext(T,1,9) == "adminmsg")
+		/*
+			We got an adminmsg from IRC bot lets split the input then validate the input.
+			expected output:
+				1. adminmsg = ckey of person the message is to
+				2. msg = contents of message, parems2list requires
+				3. validatationkey = the key the bot has, it should match the gameservers commspassword in it's configuration.
+				4. sender = the ircnick that send the message.
+		*/
+
+
+		var/input[] = params2list(T)
+		if(input["key"] != config.comms_password)
+			SET_THROTTLE(30 SECONDS, "Bad Comms Key")
+			return "Bad Key"
+
+		var/client/C
+		var/req_ckey = ckey(input["adminmsg"])
+
+		for(var/client/K in GLOB.clients)
+			if(K.ckey == req_ckey)
+				C = K
+				break
+		if(!C)
+			return "No client with that name on server"
+
+		var/rank = input["rank"]
+		if(!rank)
+			rank = "Admin"
+		if(rank == "Unknown")
+			rank = "Staff"
+
+		var/message =	SPAN_CLASS("pm", "[rank] PM from <b><a href='byond://?irc_msg=[input["sender"]]'>[input["sender"]]</a></b>: [input["msg"]]")
+		var/amessage =  SPAN_CLASS("staff_pm", "[rank] PM from <a href='byond://?irc_msg=[input["sender"]]'>[input["sender"]]</a> to <b>[key_name(C)]</b> : [input["msg"]]")
+
+		C.received_irc_pm = world.time
+
+		sound_to(C, sound('sound/ui/pm-notify.ogg', volume = 40))
+		to_chat(C, message)
+
+		for(var/client/A as anything in GLOB.admins)
+			if(A != C)
+				to_chat(A, amessage)
+		return "Message Successful"
+
+	else if(copytext(T,1,6) == "notes")
+		/*
+			We got a request for notes from the IRC Bot
+			expected output:
+				1. notes = ckey of person the notes lookup is for
+				2. validationkey = the key the bot has, it should match the gameservers commspassword in it's configuration.
+		*/
+		var/input[] = params2list(T)
+		if(input["key"] != config.comms_password)
+			SET_THROTTLE(30 SECONDS, "Bad Comms Key")
+			return "Bad Key"
+		return show_player_info_irc(ckey(input["notes"]))
+
+	else if(copytext(T,1,4) == "age")
+		var/input[] = params2list(T)
+		if(input["key"] != config.comms_password)
+			SET_THROTTLE(30 SECONDS, "Bad Comms Key")
+			return "Bad Key"
+		var/age = get_player_age(input["age"])
+		if(isnum(age))
+			if(age >= 0)
+				return "[age]"
+			else
+				return "Ckey not found"
+		else
+			return "Database connection failed or not set up"
+
+
+/world/Reboot(reason)
+	/*spawn(0)
+		sound_to(world, sound(pick('sound/AI/newroundsexy.ogg','sound/misc/apcdestroyed.ogg','sound/misc/bangindonk.ogg')))// random end sounds!! - LastyBatsy
+
+		*/
+
+	Master.Shutdown()
+
+	var/datum/chatOutput/chat_output
+	for (var/client/client in GLOB.clients)
+		chat_output = client.chatOutput
+		if (chat_output)
+			chat_output.ehjax_send(data = "roundrestart")
+		if (config.server_address)
+			send_link(client, config.server_address)
+
+	if(config.wait_for_sigusr1_reboot && reason != 3)
+		text2file("foo", "reboot_called")
+		to_world(SPAN_DANGER("World reboot waiting for external scripts. Please be patient."))
 		return
-	GLOB.hub_visibility = new_visibility
-	if(GLOB.hub_visibility)
-		hub_password = "kMZy3U5jJHSiBQjr"
+
+	..(reason)
+
+
+/hook/startup/proc/loadMode()
+	world.load_mode()
+	return 1
+
+/world/proc/load_mode()
+	if(!fexists("data/mode.txt"))
+		return
+
+	var/list/Lines = file2list("data/mode.txt")
+	if(length(Lines))
+		if(Lines[1])
+			SSticker.master_mode = Lines[1]
+			log_misc("Saved mode is '[SSticker.master_mode]'")
+
+/world/proc/save_mode(the_mode)
+	var/F = file("data/mode.txt")
+	fdel(F)
+	to_file(F, the_mode)
+
+
+/world/proc/update_status()
+	if (!config?.hub_visible || !config.hub_entry)
+		return
+	status = config.generate_hub_entry()
+
+
+/world/proc/SetupLogs()
+	GLOB.log_directory = "data/logs/[time2text(world.realtime, "YYYY/MM/DD")]/round-"
+	if(game_id)
+		GLOB.log_directory += "[game_id]"
 	else
-		hub_password = "SORRYNOPASSWORD"
-
-/**
- * Handles incresing the world's maxx var and intializing the new turfs and assigning them to the global area.
- * If map_load_z_cutoff is passed in, it will only load turfs up to that z level, inclusive.
- * This is because maploading will handle the turfs it loads itself.
- */
-/world/proc/increase_max_x(new_maxx, map_load_z_cutoff = maxz)
-	if(new_maxx <= maxx)
-		return
-	var/old_max = world.maxx
-	maxx = new_maxx
-	if(!map_load_z_cutoff)
-		return
-	var/area/global_area = GLOB.areas_by_type[world.area] // We're guaranteed to be touching the global area, so we'll just do this
-	LISTASSERTLEN(global_area.turfs_by_zlevel, map_load_z_cutoff, list())
-	for (var/zlevel in 1 to map_load_z_cutoff)
-		var/list/to_add = block(
-			locate(old_max + 1, 1, zlevel),
-			locate(maxx, maxy, zlevel))
-
-		global_area.turfs_by_zlevel[zlevel] += to_add
+		GLOB.log_directory += "[replacetext(time_stamp(), ":", ".")]"
 
 
-/world/proc/increase_max_y(new_maxy, map_load_z_cutoff = maxz)
-	if(new_maxy <= maxy)
-		return
-	var/old_maxy = maxy
-	maxy = new_maxy
-	if(!map_load_z_cutoff)
-		return
-	var/area/global_area = GLOB.areas_by_type[world.area] // We're guarenteed to be touching the global area, so we'll just do this
-	LISTASSERTLEN(global_area.turfs_by_zlevel, map_load_z_cutoff, list())
-	for (var/zlevel in 1 to map_load_z_cutoff)
-		var/list/to_add = block(
-			locate(1, old_maxy + 1, 1),
-			locate(maxx, maxy, map_load_z_cutoff))
-		global_area.turfs_by_zlevel[zlevel] += to_add
+var/global/failed_db_connections = 0
+var/global/failed_old_db_connections = 0
 
-/world/proc/incrementMaxZ()
-	maxz++
-	SSmobs.MaxZChanged()
-	SSidlenpcpool.MaxZChanged()
-	world.refresh_atmos_grid()
+/hook/startup/proc/connectDB()
+	if(!setup_database_connection())
+		to_world_log("Your server failed to establish a connection with the feedback database.")
+	else
+		to_world_log("Feedback database connection established.")
+	return 1
 
-/world/proc/change_fps(new_value = 20)
-	if(new_value <= 0)
-		CRASH("change_fps() called with [new_value] new_value.")
-	if(fps == new_value)
-		return //No change required.
+/proc/setup_database_connection()
+	if (!sqlenabled)
+		return 0
+	if(failed_db_connections > FAILED_DB_CONNECTION_CUTOFF)	//If it failed to establish a connection more than 5 times in a row, don't bother attempting to conenct anymore.
+		return 0
+	if(!dbcon)
+		dbcon = new()
+	var/user = sqlfdbklogin
+	var/pass = sqlfdbkpass
+	var/db = sqlfdbkdb
+	var/address = sqladdress
+	var/port = sqlport
+	dbcon.Connect("dbi:mysql:[db]:[address]:[port]","[user]","[pass]")
+	. = dbcon.IsConnected()
+	if ( . )
+		failed_db_connections = 0	//If this connection succeeded, reset the failed connections counter.
+	else
+		failed_db_connections++		//If it failed, increase the failed connections counter.
+		to_world_log(dbcon.ErrorMsg())
+	return .
 
-	fps = new_value
-	on_tickrate_change()
+//This proc ensures that the connection to the feedback database (global variable dbcon) is established
+/proc/establish_db_connection()
+	if (!sqlenabled)
+		return 0
+	if(failed_db_connections > FAILED_DB_CONNECTION_CUTOFF)
+		return 0
+	if(!dbcon || !dbcon.IsConnected())
+		return setup_database_connection()
+	else
+		return 1
 
 
-/world/proc/change_tick_lag(new_value = 0.5)
-	if(new_value <= 0)
-		CRASH("change_tick_lag() called with [new_value] new_value.")
-	if(tick_lag == new_value)
-		return //No change required.
+/hook/startup/proc/connectOldDB()
+	if(!setup_old_database_connection())
+		to_world_log("Your server failed to establish a connection with the SQL database.")
+	else
+		to_world_log("SQL database connection established.")
+	return 1
 
-	tick_lag = new_value
-	on_tickrate_change()
+//These two procs are for the old database, while it's being phased out. See the tgstation.sql file in the SQL folder for more information.
+/proc/setup_old_database_connection()
+	if (!sqlenabled)
+		return 0
+	if(failed_old_db_connections > FAILED_DB_CONNECTION_CUTOFF)	//If it failed to establish a connection more than 5 times in a row, don't bother attempting to conenct anymore.
+		return 0
+	if(!dbcon_old)
+		dbcon_old = new()
+	var/user = sqllogin
+	var/pass = sqlpass
+	var/db = sqldb
+	var/address = sqladdress
+	var/port = sqlport
 
+	dbcon_old.Connect("dbi:mysql:[db]:[address]:[port]","[user]","[pass]")
+	. = dbcon_old.IsConnected()
+	if ( . )
+		failed_old_db_connections = 0	//If this connection succeeded, reset the failed connections counter.
+	else
+		failed_old_db_connections++		//If it failed, increase the failed connections counter.
+		to_world_log(dbcon.ErrorMsg())
+	return .
 
-/world/proc/on_tickrate_change()
-	SStimer?.reset_buckets()
+//This proc ensures that the connection to the feedback database (global variable dbcon) is established
+/proc/establish_old_db_connection()
+	if (!sqlenabled)
+		return 0
+	if(failed_old_db_connections > FAILED_DB_CONNECTION_CUTOFF)
+		return 0
 
-/world/proc/refresh_atmos_grid()
+	if(!dbcon_old || !dbcon_old.IsConnected())
+		return setup_old_database_connection()
+	else
+		return 1
 
-#undef NO_INIT_PARAMETER
-#undef OVERRIDE_LOG_DIRECTORY_PARAMETER
-#undef RESTART_COUNTER_PATH
+#undef RECOMMENDED_VERSION
+#undef FAILED_DB_CONNECTION_CUTOFF
+#undef THROTTLE_MAX_BURST
+#undef SET_THROTTLE

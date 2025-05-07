@@ -1,42 +1,25 @@
-/mob/living/simple_animal/hostile/lizard
+/mob/living/simple_animal/passive/lizard
 	name = "lizard"
 	desc = "A cute tiny lizard."
+	icon = 'icons/mob/simple_animal/critter.dmi'
 	icon_state = "lizard"
 	icon_living = "lizard"
-	icon_dead = "lizard_dead"
+	icon_dead = "lizard-dead"
 	speak_emote = list("hisses")
 	health = 5
 	maxHealth = 5
-	faction = list("Lizard")
-	attacktext = "bites"
-	melee_damage_lower = 1
-	melee_damage_upper = 2
+	natural_weapon = /obj/item/natural_weapon/bite/weak
 	response_help  = "pets"
 	response_disarm = "shoos"
 	response_harm   = "stomps on"
-	ventcrawler = VENTCRAWLER_ALWAYS
+	holder_type = /obj/item/holder/small
+	mob_size = MOB_MINISCULE
+	possession_candidate = TRUE
+	can_escape = TRUE
+	pass_flags = PASS_FLAG_TABLE
 	density = FALSE
-	pass_flags = PASSTABLE | PASSMOB
-	mob_size = MOB_SIZE_SMALL
-	mob_biotypes = MOB_ORGANIC|MOB_BEAST|MOB_REPTILE
-	gold_core_spawnable = FRIENDLY_SPAWN
-	obj_damage = 0
-	can_be_held = TRUE
-	environment_smash = ENVIRONMENT_SMASH_NONE
-	var/static/list/edibles = typecacheof(list(/mob/living/simple_animal/butterfly, /mob/living/simple_animal/cockroach)) //list of atoms, however turfs won't affect AI, but will affect consumption.
 
-/mob/living/simple_animal/hostile/lizard/CanAttack(atom/the_target)//Can we actually attack a possible target?
-	if(see_invisible < the_target.invisibility)//Target's invisible to us, forget it
-		return FALSE
-	if(is_type_in_typecache(the_target,edibles))
-		return TRUE
-	return FALSE
-
-/mob/living/simple_animal/hostile/lizard/AttackingTarget()
-	if(is_type_in_typecache(target,edibles)) //Makes sure player lizards only consume edibles.
-		visible_message("[name] consumes [target] in a single gulp.", span_notice("You consume [target] in a single gulp!"))
-		QDEL_NULL(target) //Nom
-		adjustBruteLoss(-2)
-		return TRUE
-	else
-		return ..()
+	meat_amount = 1
+	bone_amount = 1
+	skin_amount = 1
+	skin_material = MATERIAL_SKIN_LIZARD

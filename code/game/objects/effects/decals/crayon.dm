@@ -1,44 +1,24 @@
-/obj/effect/decal/cleanable/crayon
+/obj/decal/cleanable/crayon
 	name = "rune"
-	desc = "Graffiti. Damn kids."
+	desc = "A rune drawn in crayon."
 	icon = 'icons/effects/crayondecal.dmi'
-	icon_state = "rune1"
-	gender = NEUTER
-	plane = GAME_PLANE //makes the graffiti visible over a wall.
-	mergeable_decal = FALSE
-	var/do_icon_rotate = TRUE
-	var/rotation = 0
-	var/paint_colour = "#FFFFFF"
+	weather_sensitive = FALSE
 
-/obj/effect/decal/cleanable/crayon/attack_hand(mob/living/user)
-	. = ..()
-	if(.)
-		return
-	if(name != "rune")
-		return
-	if(!iscultist(user))
-		to_chat(user, span_warning("You aren't able to understand the words of [src]."))
-		return
-	to_chat(user, span_danger("This is a crude mockery of the divine art you spill with blood."))
-
-/obj/effect/decal/cleanable/crayon/Initialize(mapload, main, type, e_name, graf_rot, alt_icon = null)
-	. = ..()
-	if(e_name)
-		name = e_name
-	desc = "A [name] vandalizing the station."
-	if(alt_icon)
-		icon = alt_icon
-	if(type)
-		icon_state = type
-	if(graf_rot)
-		rotation = graf_rot
-	if(rotation && do_icon_rotate)
-		var/matrix/M = matrix()
-		M.Turn(rotation)
-		src.transform = M
-	if(main)
-		paint_colour = main
-	add_atom_colour(paint_colour, FIXED_COLOUR_PRIORITY)
-
-/obj/effect/decal/cleanable/crayon/NeverShouldHaveComeHere(turf/T)
-	return isgroundlessturf(T)
+/obj/decal/cleanable/crayon/New(location, main = "#ffffff", shade = "#000000", type = "rune")
+	..()
+	name = type
+	desc = "A [type] drawn in crayon."
+	switch (type)
+		if ("rune")
+			type = "rune[rand(1, 6)]"
+		if ("graffiti")
+			type = pick("amyjon", "face", "matt", "revolution", "engie", "guy", "end", "dwarf", "uboa")
+		if ("defector graffiti")
+			type = pick("fleet", "fifthfleet", "deathtoterra", "downwithec", "kr514")
+	var/icon/mainOverlay = new/icon('icons/effects/crayondecal.dmi',"[type]", 2.1)
+	var/icon/shadeOverlay = new/icon('icons/effects/crayondecal.dmi',"[type]s", 2.1)
+	mainOverlay.Blend(main,ICON_ADD)
+	shadeOverlay.Blend(shade,ICON_ADD)
+	AddOverlays(mainOverlay)
+	AddOverlays(shadeOverlay)
+	add_hiddenprint(usr)

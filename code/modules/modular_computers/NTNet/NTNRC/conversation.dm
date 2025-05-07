@@ -1,4 +1,4 @@
-#define MAX_CHANNELS 1000
+var/global/ntnrc_uid = 0
 
 /datum/ntnet_conversation
 	var/id = null
@@ -7,36 +7,29 @@
 	var/list/messages = list()
 	var/list/clients = list()
 	var/password
-	var/static/ntnrc_uid = 0
+	var/source_z
 
-/datum/ntnet_conversation/New()
-	id = ntnrc_uid + 1
-	if(id > MAX_CHANNELS)
-		qdel(src)
-		return
-	ntnrc_uid = id
-	if(SSmodular_computers)
-		SSmodular_computers.chat_channels += src
+/datum/ntnet_conversation/New(_z)
+	source_z = _z
+	id = ntnrc_uid
+	ntnrc_uid++
+	if(ntnet_global)
+		ntnet_global.chat_channels.Add(src)
 	..()
 
-/datum/ntnet_conversation/Destroy()
-	if(SSmodular_computers)
-		SSmodular_computers.chat_channels.Remove(src)
-	return ..()
-
 /datum/ntnet_conversation/proc/add_message(message, username)
-	message = "[station_time_timestamp()] [username]: [message]"
+	message = "[stationtime2text()] [username]: [message]"
 	messages.Add(message)
 	trim_message_list()
 
 /datum/ntnet_conversation/proc/add_status_message(message)
-	messages.Add("[station_time_timestamp()] -!- [message]")
+	messages.Add("[stationtime2text()] -!- [message]")
 	trim_message_list()
 
 /datum/ntnet_conversation/proc/trim_message_list()
-	if(messages.len <= 50)
+	if(length(messages) <= 50)
 		return
-	messages = messages.Copy(messages.len-50 ,0)
+	messages.Cut(1, (length(messages)-49))
 
 /datum/ntnet_conversation/proc/add_client(datum/computer_file/program/chatclient/C)
 	if(!istype(C))
@@ -56,7 +49,7 @@
 	// Channel operator left, pick new operator
 	if(C == operator)
 		operator = null
-		if(clients.len)
+		if(length(clients))
 			var/datum/computer_file/program/chatclient/newop = pick(clients)
 			changeop(newop)
 
@@ -68,9 +61,7 @@
 
 /datum/ntnet_conversation/proc/change_title(newtitle, datum/computer_file/program/chatclient/client)
 	if(operator != client)
-		return FALSE // Not Authorised
+		return 0 // Not Authorised
 
 	add_status_message("[client.username] has changed channel title from [title] to [newtitle]")
 	title = newtitle
-
-#undef MAX_CHANNELS

@@ -2,24 +2,21 @@
 //This proc is the most basic of the procs. All it does is make a new mob on the same tile and transfer over a few variables.
 //Returns the new mob
 //Note that this proc does NOT do MMI related stuff!
-/mob/proc/change_mob_type(new_type = null, turf/location = null, new_name = null as text|null, delete_old_mob = FALSE)
+/mob/proc/change_mob_type(new_type = null, turf/location = null, new_name = null as text, delete_old_mob = 0 as num, subspecies)
 
-	if(isnewplayer(src))
-		to_chat(usr, span_danger("Cannot convert players who have not entered yet."))
+	if(istype(src,/mob/new_player))
+		to_chat(usr, SPAN_WARNING("Cannot convert players who have not entered yet."))
 		return
 
 	if(!new_type)
 		new_type = input("Mob type path:", "Mob type") as text|null
 
-	if(istext(new_type))
-		new_type = text2path(new_type)
-
 	if( !ispath(new_type) )
 		to_chat(usr, "Invalid type path (new_type = [new_type]) in change_mob_type(). Contact a coder.")
 		return
 
-	if(ispath(new_type, /mob/dead/new_player))
-		to_chat(usr, span_danger("Cannot convert into a new_player mob type."))
+	if( new_type == /mob/new_player )
+		to_chat(usr, SPAN_WARNING("cannot convert into a new_player mob type."))
 		return
 
 	var/mob/M
@@ -34,26 +31,25 @@
 		return
 
 	if( istext(new_name) )
-		M.name = new_name
+		M.SetName(new_name)
 		M.real_name = new_name
+		M.fake_name=null
 	else
-		M.name = src.name
+		M.SetName(src.name)
 		M.real_name = src.real_name
 
-	if(has_dna() && M.has_dna())
-		var/mob/living/carbon/C = src
-		var/mob/living/carbon/D = M
-		C.dna.transfer_identity(D)
-		D.updateappearance(mutcolor_update=1, mutations_overlay_update=1)
-	else if(ishuman(M))
-		var/mob/living/carbon/human/H = M
-		client.prefs.apply_prefs_to(H, TRUE)
-		H.dna.update_dna_identity()
+	if(src.dna)
+		M.dna = src.dna.Clone()
 
-	if(mind && isliving(M))
-		mind.transfer_to(M, 1) // second argument to force key move to new mob
-	else
+	if(mind)
+		mind.transfer_to(M)
+
+	if(key)
 		M.key = key
+
+	if(subspecies && istype(M,/mob/living/carbon/human))
+		var/mob/living/carbon/human/H = M
+		H.set_species(subspecies)
 
 	if(delete_old_mob)
 		QDEL_IN(src, 1)

@@ -1,69 +1,83 @@
-/obj/item/computer_hardware/ai_slot
-	name = "intelliCard interface slot"
-	desc = "A module allowing this computer to interface with most common intelliCard modules. Necessary for some programs to run properly."
-	power_usage = 100 //W
-	icon_state = "card_mini"
-	w_class = WEIGHT_CLASS_NORMAL
-	device_type = MC_AI
-	expansion_hw = TRUE
-
+/// A wrapper that allows the computer to contain an inteliCard.
+/obj/item/stock_parts/computer/ai_slot
+	name = "inteliCard slot"
+	desc = "An IIS interlink with connection uplinks that allow the device to interface with most common inteliCard models. Too large to fit into tablets. Uses a lot of power when active."
+	icon_state = "aislot"
+	hardware_size = 1
+	critical = FALSE
+	power_usage = 100
+	origin_tech = list(TECH_POWER = 2, TECH_DATA = 3)
+	external_slot = TRUE
 	var/obj/item/aicard/stored_card
-	var/locked = FALSE
+	var/power_usage_idle = 100
+	var/power_usage_occupied = 2 KILOWATTS
 
-///What happens when the intellicard is removed (or deleted) from the module, through try_eject() or not.
-/obj/item/computer_hardware/ai_slot/Exited(atom/A, atom/newloc)
-	if(A == stored_card)
-		stored_card = null
+/obj/item/stock_parts/computer/ai_slot/update_power_usage()
+	if(!stored_card || !stored_card.carded_ai)
+		power_usage = power_usage_idle
+	else
+		power_usage = power_usage_occupied
+	..()
+
+/obj/item/stock_parts/computer/ai_slot/use_tool(obj/item/W, mob/living/user, list/click_params)
+	if ((. = ..()))
+		return TRUE
+	if(istype(W, /obj/item/aicard))
+		if(stored_card)
+			to_chat(user, "\The [src] is already occupied.")
+			return TRUE
+		if(!user.unEquip(W, src))
+			FEEDBACK_UNEQUIP_FAILURE(user, W)
+			return TRUE
+		do_insert_ai(user, W)
+		return TRUE
+	if(isScrewdriver(W) && stored_card)
+		to_chat(user, "You manually remove \the [stored_card] from \the [src].")
+		do_eject_ai(user)
+		return TRUE
+
+/obj/item/stock_parts/computer/ai_slot/Destroy()
+	if(stored_card)
+		do_eject_ai()
 	return ..()
 
-/obj/item/computer_hardware/ai_slot/examine(mob/user)
-	. = ..()
-	if(stored_card)
-		. += "There appears to be an intelliCard loaded. There appears to be a pinhole protecting a manual eject button. A screwdriver could probably press it."
+/obj/item/stock_parts/computer/ai_slot/verb/eject_ai(mob/user)
+	set name = "Eject AI"
+	set category = "Object"
+	set src in view(1)
 
-/obj/item/computer_hardware/ai_slot/try_insert(obj/item/I, mob/living/user = null)
-	if(!holder)
-		return FALSE
+	if(!user)
+		user = usr
 
-	if(!istype(I, /obj/item/aicard))
-		return FALSE
-
-	if(stored_card)
-		to_chat(user, span_warning("You try to insert \the [I] into \the [src], but the slot is occupied."))
-		return FALSE
-	if(user && !user.transferItemToLoc(I, src))
-		return FALSE
-
-	stored_card = I
-	to_chat(user, span_notice("You insert \the [I] into \the [src]."))
-
-	return TRUE
-
-
-/obj/item/computer_hardware/ai_slot/try_eject(mob/living/user = null,forced = FALSE)
-	if(!stored_card)
-		to_chat(user, span_warning("There is no card in \the [src]."))
-		return FALSE
-
-	if(locked && !forced)
-		to_chat(user, span_warning("Safeties prevent you from removing the card until reconstruction is complete..."))
-		return FALSE
-
-	if(stored_card)
-		to_chat(user, span_notice("You remove [stored_card] from [src]."))
-		locked = FALSE
-		if(user)
-			user.put_in_hands(stored_card)
-		else
-			stored_card.forceMove(drop_location())
-
-		return TRUE
-	return FALSE
-
-/obj/item/computer_hardware/ai_slot/attackby(obj/item/I, mob/living/user)
-	if(..())
+	if(!CanPhysicallyInteract(user))
+		to_chat(user, SPAN_WARNING("You can't reach it."))
 		return
-	if(I.tool_behaviour == TOOL_SCREWDRIVER)
-		to_chat(user, span_notice("You press down on the manual eject button with \the [I]."))
-		try_eject(,user,1)
+
+	var/obj/item/stock_parts/computer/ai_slot/device = src
+	if (!istype(device))
+		device = locate() in src
+
+	if(!device.stored_card)
+		to_chat(user, "There is no intellicard connected to \the [src].")
 		return
+
+	device.do_eject_ai(user)
+
+/obj/item/stock_parts/computer/ai_slot/proc/do_eject_ai(mob/user)
+	if (stored_card)
+		stored_card.dropInto(get_turf(loc))
+	stored_card = null
+
+	loc.verbs -= /obj/item/stock_parts/computer/ai_slot/verb/eject_ai
+
+	update_power_usage()
+
+/obj/item/stock_parts/computer/ai_slot/proc/do_insert_ai(mob/user, obj/item/aicard/card)
+	if (stored_card)
+		do_eject_ai(user)
+	stored_card = card
+
+	if(isobj(loc))
+		loc.verbs += /obj/item/stock_parts/computer/ai_slot/verb/eject_ai
+
+	update_power_usage()

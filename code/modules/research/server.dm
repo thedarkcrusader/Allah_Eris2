@@ -1,133 +1,129 @@
-/// Default master server machine state. Use a special screwdriver to get to the next state.
-#define HDD_PANEL_CLOSED 0
-/// Front master server HDD panel has been removed. Use a special crowbar to get to the next state.
-#define HDD_PANEL_OPEN 1
-/// Master server HDD has been pried loose and is held in by only cables. Use a special set of wirecutters to finish stealing the objective.
-#define HDD_PRIED 2
-/// Master server HDD has been cut loose.
-#define HDD_CUT_LOOSE 3
-/// The ninja has blown the HDD up.
-#define HDD_OVERLOADED 4
-
-/obj/machinery/rnd/server
-	name = "\improper R&D Server"
-	desc = "A computer system running a deep neural network that processes arbitrary information to produce data useable in the development of new technologies. In layman's terms, it makes research points."
-	icon = 'icons/obj/machines/research.dmi'
-	icon_state = "RD-server-on"
-	var/datum/techweb/stored_research
-	var/heat_health = 100
-	//Code for point mining here.
-	var/working = TRUE			//temperature should break it.
-	var/research_disabled = FALSE
+/obj/machinery/r_n_d/server
+	name = "\improper R&D server"
+	icon = 'icons/obj/machines/research/server.dmi'
+	icon_state = "server"
+	base_type = /obj/machinery/r_n_d/server
+	construct_state = /singleton/machine_construction/default/panel_closed
+	machine_name = "\improper R&D server"
+	machine_desc = "A powerful piece of hardware used as the hub of a research matrix, containing every byte of data gleaned from an experiment."
+	var/datum/research/files
+	var/health = 100
+	var/list/id_with_upload = list()	//List of R&D consoles with upload to server access.
+	var/list/id_with_download = list()	//List of R&D consoles with download from server access.
+	var/id_with_upload_string = ""		//String versions for easy editing in map editor.
+	var/id_with_download_string = ""
 	var/server_id = 0
-	var/base_mining_income = 2
-	var/current_temp = 0
-	var/heat_gen = 1
-	var/heating_power = 40000
-	var/delay = 5
-	var/temp_tolerance_low = 0
-	var/temp_tolerance_high = T20C
-	var/temp_penalty_coefficient = 0.5	//1 = -1 points per degree above high tolerance. 0.5 = -0.5 points per degree above high tolerance.
-	req_access = list(ACCESS_RD) //ONLY THE R&D CAN CHANGE SERVER SETTINGS.
+	var/produces_heat = 1
+	idle_power_usage = 800
+	var/delay = 10
+	req_access = list(access_rd) //Only the R&D can change server settings.
 
-/obj/machinery/rnd/server/Initialize(mapload)
-	. = ..()
-	name += " [num2hex(rand(1,65535), -1)]" //gives us a random four-digit hex number as part of the name. Y'know, for fluff.
-	SSresearch.servers |= src
-	stored_research = SSresearch.science_tech
-	var/obj/item/circuitboard/machine/B = new /obj/item/circuitboard/machine/rdserver(null)
-	B.apply_default_parts(src)
-	current_temp = get_env_temp()
-	update_appearance(UPDATE_ICON)
 
-/obj/machinery/rnd/server/Destroy()
-	SSresearch.servers -= src
+/obj/machinery/r_n_d/server/Destroy()
+	QDEL_NULL(files)
 	return ..()
 
-/obj/machinery/rnd/server/RefreshParts()
+
+/obj/machinery/r_n_d/server/Initialize()
+	. = ..()
+	if(!files)
+		files = new /datum/research(src)
+	var/list/temp_list
+	if(!length(id_with_upload))
+		temp_list = list()
+		temp_list = splittext(id_with_upload_string, ";")
+		for(var/N in temp_list)
+			id_with_upload += text2num(N)
+	if(!length(id_with_download))
+		temp_list = list()
+		temp_list = splittext(id_with_download_string, ";")
+		for(var/N in temp_list)
+			id_with_download += text2num(N)
+	update_icon()
+
+
+/obj/machinery/r_n_d/server/operable()
+	return !inoperable(MACHINE_STAT_EMPED)
+
+
+/obj/machinery/r_n_d/server/on_update_icon()
+	ClearOverlays()
+	if (operable())
+		AddOverlays(list(
+			"server_on",
+			"server_lights_on",
+			emissive_appearance(icon, "server_lights_on"),
+		))
+	else
+		AddOverlays(list(
+			"server_lights_off",
+			emissive_appearance(icon, "server_lights_off")
+		))
+	if (panel_open)
+		AddOverlays("server_panel")
+
+
+/obj/machinery/r_n_d/server/RefreshParts()
 	var/tot_rating = 0
 	for(var/obj/item/stock_parts/SP in src)
 		tot_rating += SP.rating
-	heat_gen = initial(src.heat_gen) / max(1, tot_rating)
+	change_power_consumption(initial(idle_power_usage)/max(1, tot_rating), POWER_USE_IDLE)
 
-/obj/machinery/rnd/server/update_icon_state()
-	. = ..()
-	if(panel_open)
-		icon_state = "server_t"
-		return
-	if (stat & EMPED || stat & NOPOWER)
-		icon_state = "RD-server-off"
-		return
-	if (research_disabled)
-		icon_state = "RD-server-halt"
-		return
-	icon_state = "RD-server-on"
 
-/obj/machinery/rnd/server/default_deconstruction_screwdriver(mob/user, icon_state_open, icon_state_closed, obj/item/I)
-	.=..()
-	update_appearance(UPDATE_ICON)
-
-/obj/machinery/rnd/server/power_change()
-	. = ..()
-	refresh_working()
-
-/obj/machinery/rnd/server/process()
-	if(!working)
-		current_temp = -1
-		return
-	var/turf/L = get_turf(src)
-	var/datum/gas_mixture/env
-	if(istype(L))
-		env = L.return_air()
-		// This is from the RD server code.  It works well enough but I need to move over the
-		// sspace heater code so we can caculate power used per tick as well and making this both
-		// exothermic and an endothermic component
-		if(env)
-			var/perc = max((get_env_temp() - temp_tolerance_high), 0) * temp_penalty_coefficient / base_mining_income
-
-			env.adjust_heat(heating_power * perc * heat_gen)
-		else
-			current_temp = env ? env.return_temperature() : -1
-
-/obj/machinery/rnd/server/proc/refresh_working()
-	if(stat & EMPED || research_disabled || stat & NOPOWER)
-		working = FALSE
+/obj/machinery/r_n_d/server/Process()
+	..()
+	var/datum/gas_mixture/environment = loc.return_air()
+	switch(environment.temperature)
+		if(0 to T0C)
+			health = min(100, health + 1)
+		if(T0C to (T20C + 20))
+			health = clamp(health, 0, 100)
+		if((T20C + 20) to (T0C + 70))
+			health = max(0, health - 1)
+	if(health <= 0)
+		files.known_designs = list()
+		for(var/datum/tech/T in files.known_tech)
+			if(prob(1))
+				T.level--
+		files.RefreshResearch()
+	if(delay)
+		delay--
 	else
-		working = TRUE
-	update_appearance(UPDATE_ICON)
+		produce_heat()
+		delay = initial(delay)
+	update_icon()
 
-/obj/machinery/rnd/server/emp_act(severity)
-	. = ..()
-	if(. & EMP_PROTECT_SELF)
+/obj/machinery/r_n_d/server/proc/produce_heat()
+	if(!produces_heat)
 		return
-	stat |= EMPED
-	addtimer(CALLBACK(src, PROC_REF(unemp)), (6 * severity) SECONDS, TIMER_UNIQUE | TIMER_OVERRIDE)
-	refresh_working()
 
-/obj/machinery/rnd/server/proc/unemp()
-	stat &= ~EMPED
-	refresh_working()
+	if(!use_power)
+		return
 
-/obj/machinery/rnd/server/proc/toggle_disable()
-	research_disabled = !research_disabled
-	refresh_working()
+	if(operable()) //Blatently stolen from telecoms
+		var/turf/simulated/L = loc
+		if(istype(L))
+			var/datum/gas_mixture/env = L.return_air()
 
-/obj/machinery/rnd/server/proc/mine()
-	. = base_mining_income
-	var/penalty = max((get_env_temp() - temp_tolerance_high), 0) * temp_penalty_coefficient
-	current_temp = get_env_temp()
-	. = max(. - penalty, 0)
+			var/transfer_moles = 0.25 * env.total_moles
 
-/obj/machinery/rnd/server/proc/get_env_temp()
-	var/turf/L = loc
-	if(isturf(L))
-		return L.return_temperature()
-	return 0
+			var/datum/gas_mixture/removed = env.remove(transfer_moles)
 
-/proc/fix_noid_research_servers()
+			if(removed)
+				var/heat_produced = idle_power_usage	//obviously can't produce more heat than the machine draws from it's power source
+
+				removed.add_thermal_energy(heat_produced)
+
+			env.merge(removed)
+
+/obj/machinery/r_n_d/server/centcom
+	name = "central R&D database"
+	server_id = -1
+
+/obj/machinery/r_n_d/server/centcom/proc/update_connections()
 	var/list/no_id_servers = list()
 	var/list/server_ids = list()
-	for(var/obj/machinery/rnd/server/S in GLOB.machines)
+	for(var/obj/machinery/r_n_d/server/S in SSmachines.machinery)
 		switch(S.server_id)
 			if(-1)
 				continue
@@ -136,7 +132,7 @@
 			else
 				server_ids += S.server_id
 
-	for(var/obj/machinery/rnd/server/S in no_id_servers)
+	for(var/obj/machinery/r_n_d/server/S in no_id_servers)
 		var/num = 1
 		while(!S.server_id)
 			if(num in server_ids)
@@ -146,215 +142,173 @@
 				server_ids += num
 		no_id_servers -= S
 
+/obj/machinery/r_n_d/server/centcom/Process()
+	return PROCESS_KILL //don't need process()
 
 /obj/machinery/computer/rdservercontrol
-	name = "R&D Server Controller"
-	desc = "Used to manage access to research and manufacturing databases."
-	icon_screen = "rdcomp"
+	name = "\improper R&D server controller"
 	icon_keyboard = "rd_key"
+	icon_screen = "rdcomp"
+	light_color = "#a97faa"
+	machine_name = "\improper R&D server control console"
+	machine_desc = "If an R&D server is the heart of a research setup, this is the brain. Any kind of data manipulation on the server happens from this console."
 	var/screen = 0
-	var/obj/machinery/rnd/server/temp_server
+	var/obj/machinery/r_n_d/server/temp_server
 	var/list/servers = list()
 	var/list/consoles = list()
-	req_access = list(ACCESS_RD)
 	var/badmin = 0
-	circuit = /obj/item/circuitboard/computer/rdservercontrol
 
-/obj/machinery/computer/rdservercontrol/Topic(href, href_list)
-	if(..())
-		return
+/obj/machinery/computer/rdservercontrol/CanUseTopic(user)
+	if(!allowed(user) && !emagged)
+		to_chat(user, SPAN_WARNING("You do not have the required access level"))
+		return STATUS_CLOSE
+	return ..()
 
-	add_fingerprint(usr)
-	if (href_list["toggle"])
-		if(allowed(usr) || obj_flags & EMAGGED)
-			var/obj/machinery/rnd/server/S = locate(href_list["toggle"]) in SSresearch.servers
-			S.toggle_disable()
+/obj/machinery/computer/rdservercontrol/OnTopic(user, href_list, state)
+	if(href_list["main"])
+		screen = 0
+		. = TOPIC_REFRESH
+
+	else if(href_list["access"] || href_list["data"] || href_list["transfer"])
+		temp_server = null
+		consoles = list()
+		servers = list()
+		for(var/obj/machinery/r_n_d/server/S in SSmachines.machinery)
+			if(S.server_id == text2num(href_list["access"]) || S.server_id == text2num(href_list["data"]) || S.server_id == text2num(href_list["transfer"]))
+				temp_server = S
+				break
+		if(href_list["access"])
+			screen = 1
+			for(var/obj/machinery/computer/rdconsole/C in SSmachines.machinery)
+				if(C.sync)
+					consoles += C
+		else if(href_list["data"])
+			screen = 2
+		else if(href_list["transfer"])
+			screen = 3
+			for(var/obj/machinery/r_n_d/server/S in SSmachines.machinery)
+				if(S == src)
+					continue
+				servers += S
+		. = TOPIC_REFRESH
+
+	else if(href_list["upload_toggle"])
+		var/num = text2num(href_list["upload_toggle"])
+		if(num in temp_server.id_with_upload)
+			temp_server.id_with_upload -= num
 		else
-			to_chat(usr, span_danger("Access Denied."))
+			temp_server.id_with_upload += num
+		. = TOPIC_REFRESH
 
-	updateUsrDialog()
+	else if(href_list["download_toggle"])
+		var/num = text2num(href_list["download_toggle"])
+		if(num in temp_server.id_with_download)
+			temp_server.id_with_download -= num
+		else
+			temp_server.id_with_download += num
+		. = TOPIC_REFRESH
+
+	else if(href_list["reset_tech"])
+		var/choice = alert(user, "Technology Data Reset", "Are you sure you want to reset this technology to its default data? Data lost cannot be recovered.", "Continue", "Cancel")
+		if(choice == "Continue" && CanUseTopic(user, state))
+			for(var/datum/tech/T in temp_server.files.known_tech)
+				if(T.level > 0 && T.id == href_list["reset_tech"])
+					T.level = 1
+					break
+		temp_server.files.RefreshResearch()
+		. = TOPIC_REFRESH
+
+	else if(href_list["reset_design"])
+		var/choice = alert(user, "Design Data Deletion", "Are you sure you want to delete this design? If you still have the prerequisites for the design, it'll reset to its base reliability. Data lost cannot be recovered.", "Continue", "Cancel")
+		if(choice == "Continue" && CanUseTopic(user, state))
+			for(var/datum/design/D in temp_server.files.known_designs)
+				if(D.id == href_list["reset_design"])
+					temp_server.files.known_designs -= D
+					break
+		temp_server.files.RefreshResearch()
+		. = TOPIC_REFRESH
+
+/obj/machinery/computer/rdservercontrol/interface_interact(mob/user)
+	interact(user)
+	return TRUE
+
+/obj/machinery/computer/rdservercontrol/interact(mob/user)
+	user.set_machine(src)
+	var/dat = ""
+
+	switch(screen)
+		if(0) //Main Menu
+			dat += "Connected Servers:<BR><BR>"
+			var/turf/T = get_turf(src)
+			for(var/obj/machinery/r_n_d/server/S in SSmachines.machinery)
+				var/turf/ST = get_turf(S)
+				if((istype(S, /obj/machinery/r_n_d/server/centcom) && !badmin) || (ST && !AreConnectedZLevels(ST.z, T.z)))
+					continue
+				dat += "[S.name] || "
+				dat += "<A href='byond://?src=\ref[src];access=[S.server_id]'> Access Rights</A> | "
+				dat += "<A href='byond://?src=\ref[src];data=[S.server_id]'>Data Management</A>"
+				if(badmin) dat += " | <A href='byond://?src=\ref[src];transfer=[S.server_id]'>Server-to-Server Transfer</A>"
+				dat += "<BR>"
+
+		if(1) //Access rights menu
+			dat += "[temp_server.name] Access Rights<BR><BR>"
+			dat += "Consoles with Upload Access<BR>"
+			for(var/obj/machinery/computer/rdconsole/C in consoles)
+				var/turf/console_turf = get_turf(C)
+				dat += "* <A href='byond://?src=\ref[src];upload_toggle=[C.id]'>[console_turf.loc]" //FYI, these are all numeric ids, eventually.
+				if(C.id in temp_server.id_with_upload)
+					dat += " (Remove)</A><BR>"
+				else
+					dat += " (Add)</A><BR>"
+			dat += "Consoles with Download Access<BR>"
+			for(var/obj/machinery/computer/rdconsole/C in consoles)
+				var/turf/console_turf = get_turf(C)
+				dat += "* <A href='byond://?src=\ref[src];download_toggle=[C.id]'>[console_turf.loc]"
+				if(C.id in temp_server.id_with_download)
+					dat += " (Remove)</A><BR>"
+				else
+					dat += " (Add)</A><BR>"
+			dat += "<HR><A href='byond://?src=\ref[src];main=1'>Main Menu</A>"
+
+		if(2) //Data Management menu
+			dat += "[temp_server.name] Data ManagementP<BR><BR>"
+			dat += "Known Technologies<BR>"
+			for(var/datum/tech/T in temp_server.files.known_tech)
+				dat += "* [T.name] "
+				dat += "<A href='byond://?src=\ref[src];reset_tech=[T.id]'>(Reset)</A><BR>" //FYI, these are all strings.
+			dat += "Known Designs<BR>"
+			for(var/datum/design/D in temp_server.files.known_designs)
+				dat += "* [D.name] "
+				dat += "<A href='byond://?src=\ref[src];reset_design=[D.id]'>(Delete)</A><BR>"
+			dat += "<HR><A href='byond://?src=\ref[src];main=1'>Main Menu</A>"
+
+		if(3) //Server Data Transfer
+			dat += "[temp_server.name] Server to Server Transfer<BR><BR>"
+			dat += "Send Data to what server?<BR>"
+			for(var/obj/machinery/r_n_d/server/S in servers)
+				dat += "[S.name] <A href='byond://?src=\ref[src];send_to=[S.server_id]'> (Transfer)</A><BR>"
+			dat += "<HR><A href='byond://?src=\ref[src];main=1'>Main Menu</A>"
+	show_browser(user, "<TITLE>R&D Server Control</TITLE><HR>[dat]", "window=server_control;size=575x400")
+	onclose(user, "server_control")
 	return
 
-/obj/machinery/computer/rdservercontrol/ui_interact(mob/user)
-	. = ..()
-	var/list/dat = list()
+/obj/machinery/computer/rdservercontrol/emag_act(remaining_charges, mob/user)
+	if(!emagged)
+		playsound(src.loc, 'sound/effects/sparks4.ogg', 75, 1)
+		emagged = TRUE
+		req_access.Cut()
+		to_chat(user, SPAN_NOTICE("You disable the security protocols."))
+		src.updateUsrDialog()
+		return 1
 
-	dat += "<b>Connected Servers:</b>"
-	dat += "<table><tr><td style='width:25%'><b>Server</b></td><td style='width:25%'><b>Operating Temp</b></td><td style='width:25%'><b>Status</b></td>"
-	for(var/obj/machinery/rnd/server/S in GLOB.machines)
-		dat += "<tr><td style='width:25%'>[S.name]</td><td style='width:25%'>[S.current_temp]</td><td style='width:25%'>[S.stat & EMPED || stat & NOPOWER?"Offline":"<A href='byond://?src=[REF(src)];toggle=[REF(S)]'>([S.research_disabled? "<font color=red>Disabled" : "<font color=lightgreen>Online"]</font>)</A>"]</td><BR>"
-	dat += "</table></br>"
+/obj/machinery/r_n_d/server/robotics
+	name = "robotics R&D server"
+	id_with_upload_string = "1;2;3"
+	id_with_download_string = "1;2;3"
+	server_id = 2
 
-	dat += "<b>Research Log</b></br>"
-	var/datum/techweb/stored_research
-	stored_research = SSresearch.science_tech
-	if(stored_research.research_logs.len)
-		dat += "<table BORDER=\"1\">"
-		dat += "<tr><td><b>Entry</b></td><td><b>Research Name</b></td><td><b>Cost</b></td><td><b>Researcher Name</b></td><td><b>Console Location</b></td></tr>"
-		for(var/i=stored_research.research_logs.len, i>0, i--)
-			dat += "<tr><td>[i]</td>"
-			for(var/j in stored_research.research_logs[i])
-				dat += "<td>[j]</td>"
-			dat +="</tr>"
-		dat += "</table>"
-
-	else
-		dat += "</br>No history found."
-
-	var/datum/browser/popup = new(user, "server_com", src.name, 900, 620)
-	popup.set_content(dat.Join())
-	popup.open()
-
-/obj/machinery/computer/rdservercontrol/attackby(obj/item/D, mob/user, params)
-	. = ..()
-	src.updateUsrDialog()
-
-/obj/machinery/computer/rdservercontrol/emag_act(mob/user, obj/item/card/emag/emag_card)
-	if(obj_flags & EMAGGED)
-		return FALSE
-	playsound(src, "sparks", 75, 1)
-	obj_flags |= EMAGGED
-	to_chat(user, span_notice("You disable the security protocols."))
-	return TRUE
-
-/// Master R&D server. As long as this still exists and still holds the HDD for the theft objective, research points generate at normal speed. Destroy it or an antag steals the HDD? Half research speed.
-/obj/machinery/rnd/server/master
-	var/obj/item/computer_hardware/hard_drive/cluster/hdd_theft/source_code_hdd
-	var/deconstruction_state = HDD_PANEL_CLOSED
-	var/front_panel_screws = 4
-	var/hdd_wires = 6
-
-/obj/machinery/rnd/server/master/Initialize(mapload)
-	. = ..()
-	name = "\improper Master " + name
-	source_code_hdd = new(src)
-	SSresearch.master_servers += src
-
-	add_overlay("RD-server-objective-stripes")
-
-/obj/machinery/rnd/server/master/Destroy()
-	if(source_code_hdd)
-		QDEL_NULL(source_code_hdd)
-
-	SSresearch.master_servers -= src
-
-	return ..()
-
-/obj/machinery/rnd/server/master/examine(mob/user)
-	. = ..()
-
-	switch(deconstruction_state)
-		if(HDD_PANEL_CLOSED)
-			. += "The front panel is closed. You can see some recesses which may have <b>screws</b>."
-		if(HDD_PANEL_OPEN)
-			. += "The front panel is dangling open. The hdd is in a secure housing. Looks like you'll have to <b>pry</b> it loose."
-		if(HDD_PRIED)
-			. += "The front panel is dangling open. The hdd has been pried from its housing. It is still connected by <b>wires</b>."
-		if(HDD_CUT_LOOSE)
-			. += "The front panel is dangling open. All you can see inside are cut wires and mangled metal."
-		if(HDD_OVERLOADED)
-			. += "The front panel is dangling open. The hdd inside is destroyed and the wires are all burned."
-
-/obj/machinery/rnd/server/master/tool_act(mob/living/user, obj/item/tool, tool_type)
-	// Only antags are given the training and knowledge to disassemble this thing.
-	if(is_special_character(user))
-		return ..()
-
-	balloon_alert(user, "you can't find an obvious maintenance hatch!")
-	return TRUE
-
-/obj/machinery/rnd/server/master/attackby(obj/item/attacking_item, mob/user, params)
-	if(istype(attacking_item, /obj/item/computer_hardware/hard_drive/cluster/hdd_theft))
-		switch(deconstruction_state)
-			if(HDD_PANEL_CLOSED)
-				balloon_alert(user, "you can't find a place to insert it!")
-				return TRUE
-			if(HDD_PANEL_OPEN)
-				balloon_alert(user, "you weren't trained to install this!")
-				return TRUE
-			if(HDD_PRIED)
-				balloon_alert(user, "the hdd housing is completely broken, it won't fit!")
-				return TRUE
-			if(HDD_CUT_LOOSE)
-				balloon_alert(user, "the hdd housing is completely broken and all the wires are cut!")
-				return TRUE
-			if(HDD_OVERLOADED)
-				balloon_alert(user, "the inside is scorched and all the wires are burned!")
-				return TRUE
-	return ..()
-
-/obj/machinery/rnd/server/master/screwdriver_act(mob/living/user, obj/item/tool)
-	if(deconstruction_state != HDD_PANEL_CLOSED)
-		return FALSE
-
-	to_chat(user, span_notice("You can see [front_panel_screws] screw\s. You start unscrewing [front_panel_screws == 1 ? "it" : "them"]..."))
-	while(tool.use_tool(src, user, 2 SECONDS, volume=100))
-		front_panel_screws--
-
-		if(front_panel_screws <= 0)
-			deconstruction_state = HDD_PANEL_OPEN
-			to_chat(user, span_notice("You remove the last screw from [src]'s front panel."))
-			add_overlay("RD-server-hdd-panel-open")
-			return TRUE
-		to_chat(user, span_notice("The screw breaks as you remove it. Only [front_panel_screws] left..."))
-	return TRUE
-
-/obj/machinery/rnd/server/master/crowbar_act(mob/living/user, obj/item/tool)
-	if(deconstruction_state != HDD_PANEL_OPEN)
-		return FALSE
-
-	to_chat(user, span_notice("You can see [source_code_hdd] in a secure housing behind the front panel. You begin to pry it loose..."))
-	if(tool.use_tool(src, user, 8 SECONDS, volume=100))
-		to_chat(user, span_notice("You destroy the housing, prying [source_code_hdd] free."))
-		deconstruction_state = HDD_PRIED
-	return TRUE
-
-/obj/machinery/rnd/server/master/wirecutter_act(mob/living/user, obj/item/tool)
-	if(deconstruction_state != HDD_PRIED)
-		return FALSE
-
-	to_chat(user, span_notice("There are [hdd_wires] wire\s connected to [source_code_hdd]. You start cutting [hdd_wires == 1 ? "it" : "them"]..."))
-	while(tool.use_tool(src, user, 2 SECONDS, volume=100))
-		hdd_wires--
-
-		if(hdd_wires <= 0)
-			deconstruction_state = HDD_CUT_LOOSE
-			to_chat(user, span_notice("You cut the final wire and remove [source_code_hdd]."))
-			user.put_in_hands(source_code_hdd)
-			source_code_hdd = null
-			return TRUE
-		to_chat(user, span_notice("You delicately cut the wire. [hdd_wires] wire\s left..."))
-	return TRUE
-
-/obj/machinery/rnd/server/master/on_deconstruction()
-	// If the machine contains a source code HDD, destroying it will negatively impact research speed. Safest to log this.
-	if(source_code_hdd)
-		// If there's a usr, this was likely a direct deconstruction of some sort. Extra logging info!
-		if(usr)
-			var/mob/user = usr
-
-			message_admins("[ADMIN_LOOKUPFLW(user)] deconstructed [ADMIN_JMP(src)], destroying [source_code_hdd] inside.")
-			log_game("[key_name(user)] deconstructed [src], destroying [source_code_hdd] inside.")
-			return ..()
-
-		message_admins("[ADMIN_JMP(src)] has been deconstructed by an unknown user, destroying [source_code_hdd] inside.")
-		log_game("[src] has been deconstructed by an unknown user, destroying [source_code_hdd] inside.")
-
-	return ..()
-
-/// Destroys the source_code_hdd if present and sets the machine state to overloaded, adding the panel open overlay if necessary.
-/obj/machinery/rnd/server/master/proc/overload_source_code_hdd()
-	if(source_code_hdd)
-		QDEL_NULL(source_code_hdd)
-
-	if(deconstruction_state == HDD_PANEL_CLOSED)
-		add_overlay("RD-server-hdd-panel-open")
-
-	front_panel_screws = 0
-	hdd_wires = 0
-	deconstruction_state = HDD_OVERLOADED
-
-#undef HDD_PANEL_CLOSED
-#undef HDD_PANEL_OPEN
-#undef HDD_PRIED
-#undef HDD_CUT_LOOSE
+/obj/machinery/r_n_d/server/core
+	name = "core R&D server"
+	id_with_upload_string = "1;3"
+	id_with_download_string = "1;3"
+	server_id = 1

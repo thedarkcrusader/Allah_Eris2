@@ -1,48 +1,51 @@
-/datum/computer_file
-	///The name of the internal file shown in file management.
-	var/filename = "NewFile"
-	///The type of file format the file is in, placed after filename. PNG, TXT, ect. This would be NewFile.XXX
-	var/filetype = "XXX"
-	///How much GQ storage space the file will take to store. Integers only!
-	var/size = 1
-	///Holder that contains this file.
-	var/obj/item/computer_hardware/hard_drive/holder
-	///Whether the file may be sent to someone via NTNet transfer or other means.
-	var/unsendable = FALSE
-	///Whether the file may be deleted. Setting to TRUE prevents deletion/renaming/etc.
-	var/undeletable = FALSE
-	///The computer file's personal ID
-	var/uid
-	///Static ID to ensure all IDs are unique.
-	var/static/file_uid = 0
+var/global/file_uid = 0
 
-/datum/computer_file/New()
+/datum/computer_file
+	/// Placeholder. Whitespace and most special characters are not allowed.
+	var/filename = "NewFile"
+	/// File full names are [filename].[filetype] so like NewFile.XXX in this case
+	var/filetype = "XXX"
+	/// File size in GQ. Integers only!
+	var/size = 1
+	/// Holder that contains this file.
+	var/obj/item/stock_parts/computer/hard_drive/holder
+	/// Whether the file may be sent to someone via NTNet transfer, email or other means.
+	var/unsendable = FALSE
+	/// Whether the file may be deleted. Setting to TRUE prevents deletion/renaming/etc.
+	var/undeletable = FALSE
+	/// Whether the file is hidden from view in the OS
+	var/hidden = FALSE
+	/// Protects files that should never be edited by the user due to special properties.
+	var/read_only = FALSE
+	/// UID of this file
+	var/uid
+	/// Any metadata the file uses.
+	var/list/metadata
+	/// Paper type to use for printing
+	var/papertype = /obj/item/paper
+
+/datum/computer_file/New(list/md = null)
 	..()
-	uid = file_uid++
+	uid = file_uid
+	file_uid++
+	if(islist(md))
+		metadata = md.Copy()
 
 /datum/computer_file/Destroy()
+	. = ..()
 	if(!holder)
-		return ..()
-
+		return
 	holder.remove_file(src)
-	// holder.holder is the computer that has drive installed. If we are Destroy()ing program that's currently running kill it.
-	if(holder.holder && holder.holder.active_program == src)
-		holder.holder.kill_program(forced = TRUE)
-	holder = null
-	return ..()
 
-// Returns independent copy of this file.
-/datum/computer_file/proc/clone(rename = FALSE)
+/// Returns independent copy of this file.
+/datum/computer_file/proc/clone()
 	var/datum/computer_file/temp = new type
 	temp.unsendable = unsendable
 	temp.undeletable = undeletable
+	temp.hidden = hidden
 	temp.size = size
-	if(rename)
-		temp.filename = filename + "(Copy)"
-	else
-		temp.filename = filename
+	if(metadata)
+		temp.metadata = metadata.Copy()
+	temp.filename = filename
 	temp.filetype = filetype
 	return temp
-
-/datum/computer_file/proc/try_insert(obj/item/inserted_item, mob/living/user = null)
-	return FALSE

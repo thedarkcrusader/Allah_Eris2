@@ -1,117 +1,133 @@
-/obj/item/computer_hardware
-	name = "hardware"
+/obj/item/stock_parts/computer
+	name = "Hardware"
 	desc = "Unknown Hardware."
-	icon = 'icons/obj/module.dmi'
-	icon_state = "std_mod"
+	icon = 'icons/obj/modular_components.dmi'
+	part_flags = PART_FLAG_HAND_REMOVE
 
-	w_class = WEIGHT_CLASS_TINY	// w_class limits which devices can contain this component.
-	// 1: PDAs/Tablets, 2: Laptops, 3-4: Consoles only
-	var/obj/item/modular_computer/holder = null
-	// Computer that holds this hardware, if any.
+	health_max = 100
 
 	/// If the hardware uses extra power, change this.
 	var/power_usage = 0
-	/// If the hardware is turned off set this to 0.
+	/// If the hardware is turned off set this to FALSE.
 	var/enabled = TRUE
-	/// Prevent disabling for important component, like the CPU.
-	var/critical = FALSE
-	/// Prevents direct installation of removable media.
-	var/can_install = TRUE
-	/// Hardware that fits into expansion bays.
-	var/expansion_hw = FALSE
-	/// Whether the hardware is removable or not.
-	var/removable = TRUE
-	/// Current damage level
-	var/damage = 0
-	/// Maximal damage level.
-	var/max_damage = 100
+	/// Prevent disabling for important component, like the HDD.
+	var/critical = 1
+	/// Limits which devices can contain this component. 1: All, 2: Laptops/Consoles, 3: Consoles only
+	var/hardware_size = 1
 	/// "Malfunction" threshold. When damage exceeds this value the hardware piece will semi-randomly fail and do !!FUN!! things
 	var/damage_malfunction = 20
 	/// "Failure" threshold. When damage exceeds this value the hardware piece will not work at all.
 	var/damage_failure = 50
 	/// Chance of malfunction when the component is damaged
 	var/malfunction_probability = 10
-	/// What define is used to qualify this piece of hardware? Important for upgraded versions of the same hardware.
-	var/device_type
+	var/usage_flags = PROGRAM_ALL
+	/// Whether use_tool will be passed on it even with a closed panel
+	var/external_slot
 
-/obj/item/computer_hardware/New(obj/L)
-	..()
-	pixel_x = rand(-8, 8)
-	pixel_y = rand(-8, 8)
-
-/obj/item/computer_hardware/Destroy()
-	if(holder)
-		holder.forget_component(src)
-	return ..()
-
-
-/obj/item/computer_hardware/attackby(obj/item/I, mob/living/user)
-	// Cable coil. Works as repair method, but will probably require multiple applications and more cable.
-	if(istype(I, /obj/item/stack/cable_coil))
-		var/obj/item/stack/S = I
-		if(atom_integrity == max_integrity)
-			to_chat(user, span_warning("\The [src] doesn't seem to require repairs."))
-			return 1
-		if(S.use(1))
-			to_chat(user, span_notice("You patch up \the [src] with a bit of \the [I]."))
-			update_integrity(min(atom_integrity + 10, max_integrity))
-		return 1
-
-	if(try_insert(I, user))
+/obj/item/stock_parts/computer/use_tool(obj/item/W, mob/living/user, list/click_params)
+	// Multitool. Runs diagnostics
+	if(isMultitool(W))
+		to_chat(user, "***** DIAGNOSTICS REPORT *****")
+		to_chat(user, jointext(diagnostics(), "\n"))
+		to_chat(user, "******************************")
 		return TRUE
-
+	// Nanopaste. Repair all damage if present for a single unit.
+	var/obj/item/stack/S = W
+	if(istype(S, /obj/item/stack/nanopaste))
+		if(!health_damaged())
+			to_chat(user, "\The [src] doesn't seem to require repairs.")
+			return TRUE
+		if(S.use(1))
+			to_chat(user, "You apply a bit of \the [W] to \the [src]. It immediately repairs all damage.")
+			revive_health()
+		return TRUE
+	// Cable coil. Works as repair method, but will probably require multiple applications and more cable.
+	if(isCoil(S))
+		if(!health_damaged())
+			to_chat(user, "\The [src] doesn't seem to require repairs.")
+			return TRUE
+		if(S.use(1))
+			to_chat(user, "You patch up \the [src] with a bit of \the [W].")
+			restore_health(10)
+		return TRUE
 	return ..()
 
-/obj/item/computer_hardware/multitool_act(mob/living/user, obj/item/I)
-	to_chat(user, "***** DIAGNOSTICS REPORT *****")
-	diagnostics(user)
-	to_chat(user, "******************************")
-	return TRUE
 
-/// Called on multitool click, prints diagnostic information to the user.
-/obj/item/computer_hardware/proc/diagnostics(mob/user)
-	to_chat(user, "Hardware Integrity Test... (Corruption: [damage]/[max_damage]) [damage > damage_failure ? "FAIL" : damage > damage_malfunction ? "WARN" : "PASS"]")
+/// Returns a list of lines containing diagnostic information for display.
+/obj/item/stock_parts/computer/proc/diagnostics()
+	return list("Hardware Integrity Test... (Corruption: [get_damage_percentage()]%) [is_failing() ? "FAIL" : is_malfunctioning() ? "WARN" : "PASS"]")
+
+/obj/item/stock_parts/computer/Initialize()
+	. = ..()
+	w_class = hardware_size
+
+/obj/item/stock_parts/computer/Destroy()
+	if(istype(loc, /obj/item/modular_computer))
+		var/obj/item/modular_computer/C = loc
+		C.uninstall_component(null, src)
+	return ..()
 
 /// Handles damage checks
-/obj/item/computer_hardware/proc/check_functionality()
-	if(!enabled) // Disabled.
+/obj/item/stock_parts/computer/proc/check_functionality()
+	// Turned off
+	if(!enabled)
 		return FALSE
-
-	if(damage > damage_failure) // Too damaged to work at all.
+	// Too damaged to work at all.
+	if(is_failing())
 		return FALSE
+	// Still working. Well, sometimes...
+	if(malfunction_check())
+		return FALSE
+	// Good to go.
+	return TRUE
 
-	if(damage > damage_malfunction) // Still working. Well, sometimes...
-		if(prob(malfunction_probability))
-			return FALSE
 
-	return TRUE // Good to go.
+/**
+ * Sets the part's health to the failure threshhold, if not already at or below it.
+ */
+/obj/item/stock_parts/computer/proc/set_damage_failure()
+	if (get_damage_value() >= damage_failure)
+		return
+	set_health(get_max_health() - damage_failure)
 
-/obj/item/computer_hardware/examine(mob/user)
-	. = ..()
-	if(damage > damage_failure)
-		. += span_danger("It seems to be severely damaged!")
-	else if(damage > damage_malfunction)
-		. += span_warning("It seems to be damaged!")
-	else if(damage)
-		. += span_notice("It seems to be slightly damaged.")
 
-/// Component-side compatibility check.
-/obj/item/computer_hardware/proc/can_install(obj/item/modular_computer/install_into, mob/living/user = null)
-	return can_install
+/**
+ * Whether or not the stock part's damage has reached the failure threshhold.
+ */
+/obj/item/stock_parts/computer/proc/is_failing()
+	return get_damage_value() >= damage_failure
 
-/// Called when component is installed into PC.
-/obj/item/computer_hardware/proc/on_install(obj/item/modular_computer/install_into, mob/living/user = null)
-	return
 
-/// Called when component is removed from PC.
-/obj/item/computer_hardware/proc/on_remove(obj/item/modular_computer/remove_from, mob/living/user)
-	if(remove_from.physical && !QDELETED(remove_from) && !QDELETED(src))
-		try_eject(forced = TRUE)
+/**
+ * Sets the part's health to the malfunction threshhold, if not already at or below it.
+ */
+/obj/item/stock_parts/computer/proc/set_damage_malfunction()
+	if (get_damage_value() >= damage_malfunction)
+		return
+	set_health(get_max_health() - damage_malfunction)
 
-/// Called when someone tries to insert something in it - paper in printer, card in card reader, etc.
-/obj/item/computer_hardware/proc/try_insert(obj/item/I, mob/living/user = null)
-	return FALSE
 
-/// Called when someone tries to eject something from it - card from card reader, etc.
-/obj/item/computer_hardware/proc/try_eject(slot=0, mob/living/user = null, forced = 0)
-	return FALSE
+/**
+ * Is the component should malfunction this time. Checks before the damage value, and then the probability of malfunction.
+ */
+/obj/item/stock_parts/computer/proc/malfunction_check()
+	if (get_damage_value() < damage_malfunction)
+		return FALSE
+	return prob(malfunction_probability)
+
+
+/**
+ * Whether or not the stock part's damage has reached the malfunction threshhold.
+ */
+/obj/item/stock_parts/computer/proc/is_malfunctioning()
+	return get_damage_value() >= damage_malfunction
+
+
+/// Called when component is disabled/enabled by the OS
+/obj/item/stock_parts/computer/proc/on_disable()
+/obj/item/stock_parts/computer/proc/on_enable(datum/extension/interactive/ntos/os)
+
+/obj/item/stock_parts/computer/proc/update_power_usage()
+	var/datum/extension/interactive/ntos/os = get_extension(loc, /datum/extension/interactive/ntos)
+	if(os)
+		os.recalc_power_usage()

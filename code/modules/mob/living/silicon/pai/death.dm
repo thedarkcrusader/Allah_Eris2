@@ -1,12 +1,13 @@
-/mob/living/silicon/pai/death(gibbed)
-	if(stat == DEAD)
-		return
-	set_stat(DEAD)
-	mobility_flags = NONE
-	update_sight()
-	clear_fullscreens()
-
-	//New pAI's get a brand new mind to prevent meta stuff from their previous life. This new mind causes problems down the line if it's not deleted here.
-	remove_from_alive_mob_list()
+/mob/living/silicon/pai/death(gibbed, deathmessage, show_dead_message)
+	if(card)
+		card.removePersonality()
+		if(gibbed)
+			dropInto(loc.loc)
+			qdel(card)
+		else
+			fold()
+	if(mind)
+		qdel(mind)
+	..(gibbed, deathmessage, "You have suffered a critical system failure, and are dead.")
 	ghostize()
 	qdel(src)

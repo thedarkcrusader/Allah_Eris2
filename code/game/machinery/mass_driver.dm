@@ -1,71 +1,81 @@
+//This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:31
+
 /obj/machinery/mass_driver
 	name = "mass driver"
-	desc = "A miniaturized mass driver, the finest in hydraulic piston technology." // Imagine what an actual mass driver would look like
-	icon = 'icons/obj/stationobjs.dmi'
+	desc = "Shoots things into space."
+	icon = 'icons/obj/structures/massdriver.dmi'
 	icon_state = "mass_driver"
-	circuit = /obj/item/circuitboard/machine/mass_driver
-	use_power = IDLE_POWER_USE
+	anchored = TRUE
 	idle_power_usage = 2
 	active_power_usage = 50
-	var/power = 1
-	var/code = 1
-	var/id = 1
-	var/drive_range = 10
-	var/power_per_obj = 500
 
-/obj/machinery/mass_driver/Initialize(mapload)
-	. = ..()
-	wires = new /datum/wires/mass_driver(src)
+	var/power = 1.0
+	var/code = 1.0
+	var/drive_range = 50 //this is mostly irrelevant since current mass drivers throw into space, but you could make a lower-range mass driver for interstation transport or something I guess.
 
-/obj/machinery/mass_driver/Destroy()
-	QDEL_NULL(wires)
-	. = ..()
-
-/obj/machinery/mass_driver/connect_to_shuttle(mapload, obj/docking_port/mobile/port, obj/docking_port/stationary/dock)
-	id = "[port.shuttle_id]_[id]"
+	uncreated_component_parts = list(
+		/obj/item/stock_parts/radio/receiver,
+		/obj/item/stock_parts/power/apc
+	)
+	public_methods = list(
+		/singleton/public_access/public_method/driver_drive,
+		/singleton/public_access/public_method/driver_drive_delayed
+	)
+	stock_part_presets = list(/singleton/stock_part_preset/radio/receiver/driver = 1)
 
 /obj/machinery/mass_driver/proc/drive(amount)
-	if(stat & (BROKEN|NOPOWER) || panel_open)
+	if(inoperable())
 		return
-	use_power(power_per_obj)
+	use_power_oneoff(500)
 	var/O_limit
 	var/atom/target = get_edge_target_turf(src, dir)
 	for(var/atom/movable/O in loc)
-		if(!O.anchored || ismecha(O))	//Mechs need their launch platforms.
-			if(ismob(O) && !isliving(O))
-				continue
+		if(!O.anchored)
 			O_limit++
 			if(O_limit >= 20)
-				audible_message(span_notice("[src] lets out a screech, it doesn't seem to be able to handle the load."))
+				for(var/mob/M in hearers(src, null))
+					to_chat(M, SPAN_NOTICE("The mass driver lets out a screech, it mustn't be able to handle any more items."))
 				break
-			use_power(power_per_obj)
-			O.throw_at(target, drive_range * power, power)
-	playsound(get_turf(src), 'sound/machines/mass_driver.ogg', 75)
+			use_power_oneoff(500)
+			spawn( 0 )
+				O.throw_at(target, drive_range * power, power)
 	flick("mass_driver1", src)
-
-/obj/machinery/mass_driver/attackby(obj/item/I, mob/living/user, params)
-
-	if(is_wire_tool(I) && panel_open)
-		wires.interact(user)
-		return
-	if(default_deconstruction_screwdriver(user, "mass_driveropen", "mass_driver", I))
-		return
-	if(default_change_direction_wrench(user, I))
-		return
-	if(default_deconstruction_crowbar(I))
-		return
-
-	return ..()
-
-/obj/machinery/mass_driver/RefreshParts()
-	. = ..()
-	for(var/obj/item/stock_parts/capacitor/C in component_parts)
-		drive_range += 10 * C.rating
+	return
 
 /obj/machinery/mass_driver/emp_act(severity)
-	. = ..()
-	if (. & EMP_PROTECT_SELF)
-		return
-	if(stat & (BROKEN|NOPOWER) || panel_open)
+	if(inoperable())
 		return
 	drive()
+	..(severity)
+
+// This is activated by buttons. Delay is to let doors open/close.
+/obj/machinery/mass_driver/proc/delayed_drive()
+	set waitfor = FALSE
+	sleep(2 SECONDS)
+	drive()
+
+/singleton/public_access/public_method/driver_drive
+	name = "launch"
+	desc = "Makes the mass driver launch immediately."
+	call_proc = TYPE_PROC_REF(/obj/machinery/mass_driver, drive)
+
+/singleton/public_access/public_method/driver_drive_delayed
+	name = "delayed launch"
+	desc = "Makes the mass driver launch after a short delay."
+	call_proc = TYPE_PROC_REF(/obj/machinery/mass_driver, delayed_drive)
+
+/singleton/stock_part_preset/radio/receiver/driver
+	frequency = BLAST_DOORS_FREQ
+	receive_and_call = list("button_active" = /singleton/public_access/public_method/driver_drive_delayed)
+
+/obj/machinery/button/mass_driver
+	cooldown = 10 SECONDS // Whole thing with the doors takes a while.
+	stock_part_presets = list(/singleton/stock_part_preset/radio/basic_transmitter/driver_button = 1)
+
+/singleton/stock_part_preset/radio/basic_transmitter/driver_button
+	transmit_on_change = list(
+		"open_door" = /singleton/public_access/public_variable/button_active,
+		"button_active" = /singleton/public_access/public_variable/button_active,
+		"close_door_delayed" = /singleton/public_access/public_variable/button_active
+	)
+	frequency = BLAST_DOORS_FREQ

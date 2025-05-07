@@ -1,249 +1,253 @@
-/obj/item/computer_hardware/hard_drive
-	name = "hard disk drive"
-	desc = "A small HDD, for use in basic computers where power efficiency is desired."
+/**
+  * Important! Avoid editing the content of file objects already saved on a disk,
+  * as this bypasses checks for anything that might prevent saving. Instead,
+  * clone the file, make the changes to the clone, and attempt to save the clone
+  * with the same filename using save_file(). Additional useful procs for data
+  * files in particular are also available.
+  */
+/obj/item/stock_parts/computer/hard_drive
+	name = "basic hard drive"
+	desc = "A small power efficient solid state drive, with 128GQ of storage capacity for use in basic computers where power efficiency is desired."
 	power_usage = 25
-	icon_state = "harddisk_mini"
-	critical = 1
-	w_class = WEIGHT_CLASS_TINY
-	device_type = MC_HDD
+	icon_state = "hdd_normal"
+	hardware_size = 1
+	origin_tech = list(TECH_DATA = 1, TECH_ENGINEERING = 1)
+
 	var/max_capacity = 128
 	var/used_capacity = 0
-	var/list/stored_files = list()		// List of stored files on this drive. DO NOT MODIFY DIRECTLY!
-	///Static list of default programs that come with ALL computers, here so computers don't have to repeat this.
-	///Yog TODO: IT SHOULD BE STATIC BUT IT ISN'T BECAUSE WE HANDLE THE HARD DRIVES AWKWARDLY
-	var/list/datum/computer_file/default_programs = list(
-		/datum/computer_file/program/computerconfig,
-		/datum/computer_file/program/ntnetdownload,
-		/datum/computer_file/program/filemanager,
-	)
+	/// List of stored files on this drive. DO NOT MODIFY DIRECTLY!
+	var/list/stored_files = list()
+	/// Whether drive is protected against changes
+	var/read_only = FALSE
 
-/obj/item/computer_hardware/hard_drive/Initialize(mapload)
+/obj/item/stock_parts/computer/hard_drive/advanced
+	name = "advanced hard drive"
+	desc = "A small hybrid hard drive with 256GQ of storage capacity for use in higher grade computers where balance between power efficiency and capacity is desired."
+	max_capacity = 256
+	origin_tech = list(TECH_DATA = 2, TECH_ENGINEERING = 2)
+	power_usage = 50
+	icon_state = "hdd_advanced"
+	hardware_size = 2
+
+/obj/item/stock_parts/computer/hard_drive/super
+	name = "super hard drive"
+	desc = "A small hard drive with 512GQ of storage capacity for use in cluster storage solutions where capacity is more important than power efficiency."
+	max_capacity = 512
+	origin_tech = list(TECH_DATA = 3, TECH_ENGINEERING = 3)
+	power_usage = 100
+	icon_state = "hdd_super"
+	hardware_size = 2
+
+/obj/item/stock_parts/computer/hard_drive/cluster
+	name = "cluster hard drive"
+	desc = "A large storage cluster consisting of multiple hard drives for usage in high capacity storage systems. Has capacity of 2048 GQ."
+	power_usage = 500
+	origin_tech = list(TECH_DATA = 4, TECH_ENGINEERING = 4)
+	max_capacity = 2048
+	icon_state = "hdd_cluster"
+	hardware_size = 3
+
+/obj/item/stock_parts/computer/hard_drive/small
+	name = "small hard drive"
+	desc = "A small highly efficient solid state drive for portable devices."
+	power_usage = 10
+	origin_tech = list(TECH_DATA = 2, TECH_ENGINEERING = 2)
+	max_capacity = 64
+	icon_state = "hdd_small"
+	hardware_size = 1
+
+/obj/item/stock_parts/computer/hard_drive/micro
+	name = "micro hard drive"
+	desc = "A small micro hard drive for portable devices."
+	power_usage = 2
+	origin_tech = list(TECH_DATA = 1, TECH_ENGINEERING = 1)
+	max_capacity = 32
+	icon_state = "hdd_micro"
+	hardware_size = 1
+
+/obj/item/stock_parts/computer/hard_drive/Initialize()
 	. = ..()
 	install_default_programs()
-
-/obj/item/computer_hardware/hard_drive/Destroy()
-	for(var/file in stored_files)
-		qdel(file)
-	stored_files = null
-	return ..()
-
-/obj/item/computer_hardware/hard_drive/on_remove(obj/item/modular_computer/remove_from, mob/user)
-	remove_from.shutdown_computer()
-
-/obj/item/computer_hardware/hard_drive/proc/install_default_programs()
-	for(var/programs in default_programs)
-		var/datum/computer_file/program_type = new programs
-		store_file(program_type)
-
-/obj/item/computer_hardware/hard_drive/examine(user)
-	. = ..()
-	. += span_notice("It has [max_capacity] GQ of storage capacity.")
-
-/obj/item/computer_hardware/hard_drive/diagnostics(mob/user)
-	..()
-	// 999 is a byond limit that is in place. It's unlikely someone will reach that many files anyway, since you would sooner run out of space.
-	to_chat(user, "NT-NFS File Table Status: [stored_files.len]/999")
-	to_chat(user, "Storage capacity: [used_capacity]/[max_capacity]GQ")
-
-// Use this proc to add file to the drive. Returns the file on success and FALSE on failure. Contains necessary sanity checks.
-/obj/item/computer_hardware/hard_drive/proc/store_file(datum/computer_file/file_storing)
-	if(!can_store_file(file_storing))
-		return FALSE
-
-	if(!check_functionality())
-		return FALSE
-
-	if(!stored_files)
-		return FALSE
-
-	// This file is already stored. Don't store it again.
-	if(file_storing in stored_files)
-		return TRUE
-
-	file_storing.holder = src
-
-	if(istype(file_storing, /datum/computer_file/program))
-		var/datum/computer_file/program/P = file_storing
-		P.computer = holder
-
-	stored_files.Add(file_storing)
 	recalculate_size()
-	return file_storing
 
-// Use this proc to remove file from the drive. Returns TRUE on success and FALSE on failure. Contains necessary sanity checks.
-/obj/item/computer_hardware/hard_drive/proc/remove_file(datum/computer_file/file_removing)
-	if(!file_removing || !istype(file_removing))
-		return FALSE
+/obj/item/stock_parts/computer/hard_drive/diagnostics()
+	. = ..()
+	// 999 is a byond limit that is in place. It's unlikely someone will reach that many files anyway, since you would sooner run out of space.
+	. += "NT-NFS File Table Status: [length(stored_files)]/999"
+	. += "Storage capacity: [used_capacity]/[max_capacity]GQ"
+	. += "Read-only mode: [(read_only ? "ON" : "OFF")]"
 
-	if(!stored_files)
-		return FALSE
-
-	if(!check_functionality())
-		return FALSE
-
-	if(file_removing in stored_files)
-		stored_files -= file_removing
-		recalculate_size()
-		return TRUE
-	return FALSE
-
-// Loops through all stored files and recalculates used_capacity of this drive
-/obj/item/computer_hardware/hard_drive/proc/recalculate_size()
-	var/total_size = 0
-	for(var/datum/computer_file/F in stored_files)
-		total_size += F.size
-
-	used_capacity = total_size
-
-// Checks whether file can be stored on the hard drive. We can only store unique files, so this checks whether we wouldn't get a duplicity by adding a file.
-/obj/item/computer_hardware/hard_drive/proc/can_store_file(datum/computer_file/file_storing)
-	if(!file_storing || !istype(file_storing))
-		return FALSE
-
-	if(file_storing in stored_files)
-		return FALSE
-
-	var/name = file_storing.filename + "." + file_storing.filetype
-	for(var/datum/computer_file/file in stored_files)
-		if((file.filename + "." + file.filetype) == name)
-			return FALSE
-
-	// In the unlikely event someone manages to create that many files.
-	// BYOND is acting weird with numbers above 999 in loops (infinite loop prevention)
-	if(stored_files.len >= 999)
-		return FALSE
-	if((used_capacity + file_storing.size) > max_capacity)
-		return FALSE
-	return TRUE
-
-
-// Tries to find the file by filename. Returns null on failure
-/obj/item/computer_hardware/hard_drive/proc/find_file_by_name(filename)
-	if(!check_functionality())
-		return null
-
+/// Tries to find the file by filename. Returns null on failure
+/obj/item/stock_parts/computer/hard_drive/proc/find_file_by_name(filename)
 	if(!filename)
-		return null
-
-	if(!stored_files)
-		return null
-
+		return
+	if(!check_functionality())
+		return
 	for(var/datum/computer_file/F in stored_files)
 		if(F.filename == filename)
 			return F
-	return null
 
-/obj/item/computer_hardware/hard_drive/try_insert(obj/item/I, mob/living/user)
-	if(!holder)
+/// Use this proc to add Data file to the drive.
+/obj/item/stock_parts/computer/hard_drive/proc/create_data_file(filename, data, file_type = /datum/computer_file/data, list/metadata)
+	if(!filename)
+		return
+
+	var/datum/computer_file/data/F = new file_type(md = metadata)
+	F.filename = filename
+	F.stored_data = data
+	F.calculate_size()
+	return create_file(F)
+
+/// Use this proc to save Data file to the drive.
+/obj/item/stock_parts/computer/hard_drive/proc/save_data_file(filename, data, file_type = /datum/computer_file/data, list/metadata)
+	if(!filename)
+		return
+
+	var/datum/computer_file/data/EF = find_file_by_name(filename)
+	if(!istype(EF))
+		return create_data_file(filename, data, file_type, metadata)
+
+	if(EF.read_only)
+		return
+
+	EF = EF.clone()
+	EF.stored_data = data
+	EF.metadata = metadata && metadata.Copy()
+	EF.calculate_size()
+	return save_file(EF)
+
+/// Use this proc to add data to a Data file on the drive. Unlike using save_data_file directly, this enforces exact file type match with existing file
+/obj/item/stock_parts/computer/hard_drive/proc/update_data_file(filename, new_data, file_type = /datum/computer_file/data, list/metadata, replace_content = FALSE)
+	if(!filename || !new_data)
+		return
+
+	var/datum/computer_file/data/F = find_file_by_name(filename)
+	if(!istype(F, file_type))
+		return create_data_file(filename, new_data, file_type, metadata)
+	else if(F.type != file_type)
+		return
+	else
+		return save_data_file(filename, (replace_content ? new_data : F.stored_data + new_data), file_type, metadata)
+
+/// Use this proc to add file to the drive. Contains necessary sanity checks.
+/obj/item/stock_parts/computer/hard_drive/proc/create_file(datum/computer_file/F)
+	if(!try_create_file(F))
+		return
+	F.holder = src
+	stored_files += F
+	recalculate_size()
+	return F
+
+/// Use this proc to add file or update it if it already exists. Contains necessary sanity checks.
+/obj/item/stock_parts/computer/hard_drive/proc/save_file(datum/computer_file/F)
+	var/datum/computer_file/EF = find_file_by_name(F.filename)
+	if(!istype(EF))
+		return create_file(F)
+
+	if(!can_write_file(F))
+		return
+	if(!can_store_file(F.size, EF.size))
+		return
+	if(F in stored_files)
+		return
+
+	EF.holder = null
+	stored_files -= EF
+	F.holder = src
+	stored_files += F
+	recalculate_size()
+	return F
+
+/// Use this proc to remove file from the drive. Contains necessary sanity checks.
+/obj/item/stock_parts/computer/hard_drive/proc/remove_file(datum/computer_file/F)
+	. = FALSE
+	if(!can_write_file(F))
+		return
+	if(!(F in stored_files))
+		return
+
+	F.holder = null
+	stored_files -= F
+	recalculate_size()
+	return TRUE
+
+/// Use this proc to rename file on the drive. Contains necessary sanity checks.
+/obj/item/stock_parts/computer/hard_drive/proc/rename_file(datum/computer_file/F, filename_new)
+	. = FALSE
+	if(!can_write_file(F))
+		return
+	if(!validate_name(filename_new))
+		return
+
+	var/datum/computer_file/EF = find_file_by_name(filename_new)
+	if(istype(EF))
+		return
+
+	F.filename = filename_new
+	return TRUE
+
+/// Use this proc to check if the file can be created.
+/obj/item/stock_parts/computer/hard_drive/proc/try_create_file(datum/computer_file/F)
+	. = FALSE
+	if(!can_write_file(F))
+		return
+	if(!can_store_file(F.size))
+		return
+	if(!validate_name(F.filename))
+		return
+	if(F in stored_files)
+		return
+
+	var/datum/computer_file/EF = find_file_by_name(F.filename)
+	if(istype(EF))
+		return
+
+	return TRUE
+
+/// Loops through all stored files and recalculates used_capacity of this drive
+/obj/item/stock_parts/computer/hard_drive/proc/recalculate_size()
+	var/total_size = 0
+	for(var/datum/computer_file/F in stored_files)
+		total_size += F.size
+	used_capacity = total_size
+
+/// Checks whether there is space to store file on the hard drive.
+/obj/item/stock_parts/computer/hard_drive/proc/can_store_file(size = 1, replaced_size = 0)
+	// In the unlikely event someone manages to create that many files.
+	// BYOND is acting weird with numbers above 999 in loops (infinite loop prevention)
+	if(length(stored_files) >= 999)
 		return FALSE
+	if(used_capacity + size - replaced_size > max_capacity)
+		return FALSE
+	return TRUE
 
-	for(var/datum/computer_file/file in stored_files)
-		if(file.try_insert(I, user))
-			return TRUE
+/// Checks whether the file can be written to the drive.
+/obj/item/stock_parts/computer/hard_drive/proc/can_write_file(datum/computer_file/F)
+	if(!istype(F))
+		return FALSE
+	if(!check_functionality())
+		return FALSE
+	if(read_only)
+		return FALSE
+	return TRUE
 
-	return FALSE
+/// Validates filename
+/obj/item/stock_parts/computer/hard_drive/proc/validate_name(filename)
+	var/list/badchars = list("/","\\",":","*","?","\"","<",">","|","#",".",","," ")
+	for(var/char in badchars)
+		if(findtext(filename, char))
+			return FALSE
+	return TRUE
 
-/obj/item/computer_hardware/hard_drive/advanced
-	name = "advanced hard disk drive"
-	desc = "A hybrid HDD, for use in higher grade computers where balance between power efficiency and capacity is desired."
-	max_capacity = 256
-	power_usage = 50 					// Hybrid, medium capacity and medium power storage
-	icon_state = "harddisk_mini"
-	w_class = WEIGHT_CLASS_SMALL
+/obj/item/stock_parts/computer/hard_drive/check_functionality()
+	return (..() && stored_files)
 
-/obj/item/computer_hardware/hard_drive/super
-	name = "super hard disk drive"
-	desc = "A high capacity HDD, for use in cluster storage solutions where capacity is more important than power efficiency."
-	max_capacity = 512
-	power_usage = 100					// High-capacity but uses lots of power, shortening battery life. Best used with APC link.
-	icon_state = "harddisk_mini"
-	w_class = WEIGHT_CLASS_SMALL
+/// Installs default programs on the drive
+/obj/item/stock_parts/computer/hard_drive/proc/install_default_programs()
+	create_file(new/datum/computer_file/program/computerconfig(src)) 		// Computer configuration utility, allows hardware control and displays more info than status bar
+	create_file(new/datum/computer_file/program/ntnetdownload(src))			// NTNet Downloader Utility, allows users to download more software from NTNet repository
+	create_file(new/datum/computer_file/program/filemanager(src))			// File manager, allows text editor functions and basic file manipulation.
 
-/obj/item/computer_hardware/hard_drive/cluster
-	name = "cluster hard disk drive"
-	desc = "A large storage cluster consisting of multiple HDDs for usage in dedicated storage systems."
-	power_usage = 500
-	max_capacity = 2048
-	icon_state = "harddisk"
-	w_class = WEIGHT_CLASS_NORMAL
-
-// For tablets, etc. - highly power efficient.
-/obj/item/computer_hardware/hard_drive/small
-	name = "solid state drive"
-	desc = "An efficient SSD for portable devices."
-	power_usage = 10
-	max_capacity = 64
-	icon_state = "ssd_mini"
-	w_class = WEIGHT_CLASS_TINY
-	custom_price = 15
-
-// For silicon integrated tablets.
-/obj/item/computer_hardware/hard_drive/small/integrated/install_default_programs()
-	..()
-	var/datum/computer_file/program/pdamessager/P = store_file(new /datum/computer_file/program/pdamessager(src))
-	var/obj/item/modular_computer/stored = holder
-	if(!stored && istype(loc, /obj/item/modular_computer))
-		stored = loc
-	if(P && istype(stored?.loc, /mob/living/silicon))
-		var/mob/living/silicon/R = stored.loc
-		var/jobname
-		if(R.job)
-			jobname = R.job
-		else if(istype(R, /mob/living/silicon/robot))
-			jobname = "[R.designation ? "[R.designation] " : ""]Cyborg"
-		else if(R.designation)
-			jobname = R.designation
-		else if(istype(R, /mob/living/silicon/ai))
-			jobname = "AI"
-		else if(istype(R, /mob/living/silicon/pai))
-			jobname = "pAI"
-		else
-			jobname = "Silicon"
-		P.username = "[R.real_name] ([jobname])" // This is (and hopefully remains to be) created after silicons are named
-		P.receiving = TRUE
-	if(istype(stored?.loc, /mob/living/silicon/robot)) // RoboTact is for cyborgs only, not AIs
-		store_file(new /datum/computer_file/program/robotact(src))
-
-/obj/item/computer_hardware/hard_drive/small/integrated/pai
-	//does not come with an ntnet store.
-	default_programs = list(
-		/datum/computer_file/program/computerconfig,
-		/datum/computer_file/program/filemanager,
-	)
-
-// Syndicate variant - very slight better
-/obj/item/computer_hardware/hard_drive/small/syndicate
-	desc = "An efficient SSD for portable devices developed by a rival organisation."
-	power_usage = 8
-	max_capacity = 70
-	var/datum/antagonist/traitor/traitor_data // Syndicate hard drive has the user's data baked directly into it on creation
-	default_programs = list(
-		/datum/computer_file/program/computerconfig,
-		/datum/computer_file/program/ntnetdownload/emagged,
-		/datum/computer_file/program/filemanager,
-	)
-
-/// For PDAs, comes pre-equipped with PDA messaging
-/obj/item/computer_hardware/hard_drive/small/pda
-/obj/item/computer_hardware/hard_drive/small/pda/install_default_programs()
-	..()
-	store_file(new/datum/computer_file/program/themeify(src))
-	store_file(new/datum/computer_file/program/pdamessager(src))
-
-/// For tablets given to nuke ops
-/obj/item/computer_hardware/hard_drive/small/nukeops
-	power_usage = 8
-	max_capacity = 70
-	default_programs = list(
-		/datum/computer_file/program/computerconfig,
-		/datum/computer_file/program/ntnetdownload/syndicate,
-		/datum/computer_file/program/filemanager,
-	)
-
-/obj/item/computer_hardware/hard_drive/micro
-	name = "micro solid state drive"
-	desc = "A highly efficient SSD chip for portable devices."
-	power_usage = 2
-	max_capacity = 32
-	icon_state = "ssd_micro"
-	w_class = WEIGHT_CLASS_TINY
+/obj/item/stock_parts/computer/hard_drive/Destroy()
+	stored_files = null
+	return ..()

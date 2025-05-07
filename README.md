@@ -1,74 +1,39 @@
-## Yogstation13 is shutting down
-> [!WARNING]
-Yogstation13 will be permanently shutting down on the 30th of April 2025. See https://forums.yogstation.net/shutdown/ for more information.
+# Baystation [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3.0-orange.svg)](https://opensource.org/licenses/AGPL-3.0) [![CodeQL](https://github.com/baystation12/baystation12/workflows/CodeQL/badge.svg)](https://github.com/Baystation12/Baystation12/actions/workflows/codeql-analysis.yml) [![CI Status](https://github.com/baystation12/baystation12/workflows/Run%20Tests/badge.svg)](https://github.com/Baystation12/Baystation12/actions/workflows/test.yml) [![codebeat badge](https://codebeat.co/badges/8ecb9a34-1bab-4d80-b34d-b16e8b216a03)](https://codebeat.co/projects/github-com-baystation12-baystation12-dev)
 
+[Website](https://baystation.xyz) - [Discord](https://baystation.xyz/discord) - [Code](https://baystation.xyz/github) - [DMDoc](https://dmdoc.baystation.xyz)
 
-## Yogstation codebase
+---
 
-[![Build Status](https://github.com/yogstation13/Yogstation/workflows/Turdis/badge.svg?branch=master)](https://github.com/yogstation13/Yogstation/actions?query=workflow%3ATurdis+branch%3Amaster)
-[![forinfinityandbyond](https://user-images.githubusercontent.com/5211576/29499758-4efff304-85e6-11e7-8267-62919c3688a9.gif)](https://www.reddit.com/r/SS13/comments/5oplxp/what_is_the_main_problem_with_byond_as_an_engine/dclbu1a)
+### CONTRIBUTING GUIDELINES
 
-![badge?](https://forthebadge.com/images/badges/0-percent-optimized.svg)
-![badge????](https://forthebadge.com/images/badges/built-with-resentment.svg)
-![badge.](https://forthebadge.com/images/badges/contains-tasty-spaghetti-code.svg)
-![badge!!!!](https://forthebadge.com/images/badges/contains-technical-debt.svg)
-![badge.....](https://forthebadge.com/images/badges/designed-in-ms-paint.svg)
-![badge:((](https://forthebadge.com/images/badges/made-with-out-pants.svg)
-![badge:D](https://forthebadge.com/images/badges/powered-by-black-magic.svg)
-![badge!](https://forthebadge.com/images/badges/uses-badges.svg)
-![b-a-d-g-e](https://forthebadge.com/images/badges/uses-git.svg)
-![B.A.D.G.E.](https://forthebadge.com/images/badges/you-didnt-ask-for-this.svg)
+**Please refrain from making non code related comments in pull requests on GitHub.** See the Code of Conduct on where you may provide feedback to users.
 
-[**Website**](https://yogstation.net)
+All users are expected to review [/docs/CODE_OF_CONDUCT.md](/docs/CODE_OF_CONDUCT.md) before interacting with the repository or other users.
 
-[**Code**](https://github.com/yogstation13/yogstation)
+---
 
-[**Wiki**](https://wiki.yogstation.net)
+### SECURITY
 
-[**Discord**](https://discord.gg/0keg6hQH05Ha8OfO)
+Please see [/docs/SECURITY.md](/docs/SECURITY.md) for this repository's security policy, and how to report security issues.
 
-[**Yogstation GitHub Guidelines**](https://github.com/yogstation13/Yogstation/blob/master/.github/CONTRIBUTING.md#yogstation-github-guidelines)
+---
 
+### LICENSE
 
- 
-## DOWNLOADING
+The code for Baystation is licensed under the [GNU Affero General Public License v3](https://www.gnu.org/licenses/agpl.html), which can be found in full in [/LICENSE](/LICENSE).
 
-[Downloading](.github/guides/DOWNLOADING.md)
+Code with a git authorship date prior to `1420675200 +0000` (2015/01/08 00:00 GMT) is licensed under the GNU General Public License version 3, which can be found in full in [/docs/GPL3.txt](/docs/GPL3.txt)
 
-[Running a server](.github/guides/RUNNING_A_SERVER.md)
+All code where the authorship dates on or after `1420675200 +0000` is assumed to be licensed under AGPL v3, if you wish to license under GPL v3 please make this clear in the commit message and any added files.
 
-[Maps and Away Missions](.github/guides/MAPS_AND_AWAY_MISSIONS.md)
+If you wish to develop and host this codebase in a closed source manner you may use all commits prior to `1420675200 +0000`, which are licensed under GPL v3.  The major change here is that if you host a server using any code licensed under AGPLv3 you are required to provide full source code for your servers users as well including addons and modifications you have made.
 
-## :exclamation: How to compile :exclamation:
-
-Recently we have changed the way to compile the codebase.
-
-Find `BUILD.bat` here in the root folder of yogstation, and double click it to initiate the build. It consists of multiple steps and might take around 1-5 minutes to compile.
-
-After it finishes, you can then setup the server normally by opening `yogstation.dmb` in DreamDaemon. See further down for instructions
-
-**Building yogstation in DreamMaker directly is now deprecated and might produce errors**, such as `'tgui.bundle.js': cannot find file`.
-
-## CONTRIBUTING
-
-Please see [CONTRIBUTING.md](.github/CONTRIBUTING.md)
-
-## LICENSE
-
-All code after [commit 333c566b88108de218d882840e61928a9b759d8f on 2014/31/12 at 4:38 PM PST](https://github.com/tgstation/tgstation/commit/333c566b88108de218d882840e61928a9b759d8f) is licensed under [GNU AGPL v3](https://www.gnu.org/licenses/agpl-3.0.html).
-
-All code before [commit 333c566b88108de218d882840e61928a9b759d8f on 2014/31/12 at 4:38 PM PST](https://github.com/tgstation/tgstation/commit/333c566b88108de218d882840e61928a9b759d8f) is licensed under [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.html).
-(Including tools unless their readme specifies otherwise.)
-
-See LICENSE and GPLv3.txt for more details.
-
-tgui clientside is licensed as a subproject under the MIT license.
-Font Awesome font files, used by tgui, are licensed under the SIL Open Font License v1.1
-tgui assets are licensed under a [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/).
-The TGS3 API is licensed as a subproject under the MIT license.
-
-See tgui/LICENSE.md for the MIT license.
-See tgui/assets/fonts/SIL-OFL-1.1-LICENSE.md for the SIL Open Font License.
-See the footers of code/\_\_DEFINES/server\_tools.dm, code/modules/server\_tools/st\_commands.dm, and code/modules/server\_tools/st\_inteface.dm for the MIT license.
+See [here](https://www.gnu.org/licenses/why-affero-gpl.html) for more information.
 
 All assets including icons and sound are under a [Creative Commons 3.0 BY-SA license](https://creativecommons.org/licenses/by-sa/3.0/) unless otherwise indicated.
+
+---
+
+### GETTING THE CODE AND INSTALLING
+
+Please see [/docs/installation.md](/docs/installation.md) for instructions on obtaining, installing, updating, and running this code.

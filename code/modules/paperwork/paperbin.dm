@@ -1,183 +1,116 @@
 /obj/item/paper_bin
 	name = "paper bin"
-	desc = "Contains all the paper you'll never need."
-	icon = 'yogstation/icons/obj/bureaucracy.dmi'
+	icon = 'icons/obj/bureaucracy.dmi'
 	icon_state = "paper_bin1"
 	item_state = "sheet-metal"
-	lefthand_file = 'icons/mob/inhands/misc/sheets_lefthand.dmi'
-	righthand_file = 'icons/mob/inhands/misc/sheets_righthand.dmi'
-	throwforce = 0
-	w_class = WEIGHT_CLASS_NORMAL
+	randpixel = 0
+	throwforce = 1
+	w_class = ITEM_SIZE_NORMAL
 	throw_speed = 3
 	throw_range = 7
-	pressure_resistance = 8
-	var/papertype = /obj/item/paper
-	var/total_paper = 30
-	var/list/papers = list()
-	var/obj/item/pen/bin_pen
+	layer = BELOW_OBJ_LAYER
+	var/amount = 30					//How much paper is in the bin.
+	var/list/papers = list()	//List of papers put in the bin for reference.
 
-/obj/item/paper_bin/Initialize(mapload)
-	. = ..()
-	interaction_flags_item &= ~INTERACT_ITEM_ATTACK_HAND_PICKUP
-	if(!mapload)
-		return
-	var/obj/item/pen/P = locate(/obj/item/pen) in src.loc
-	if(P && !bin_pen)
-		P.forceMove(src)
-		bin_pen = P
-		update_appearance(UPDATE_ICON)
 
-/obj/item/paper_bin/Destroy()
-	if(papers)
-		for(var/i in papers)
-			qdel(i)
-		papers = null
-	. = ..()
+/obj/item/paper_bin/MouseDrop(mob/user as mob)
+	if((user == usr && (!( usr.restrained() ) && (!( usr.stat ) && (usr.contents.Find(src) || in_range(src, usr))))))
+		if(!istype(usr, /mob/living/carbon/slime) && !istype(usr, /mob/living/simple_animal))
+			if( !usr.get_active_hand() )		//if active hand is empty
+				var/mob/living/carbon/human/H = user
+				var/obj/item/organ/external/temp = H.organs_by_name[BP_R_HAND]
 
-/obj/item/paper_bin/fire_act(exposed_temperature, exposed_volume)
-	if(total_paper)
-		total_paper = 0
-		update_appearance(UPDATE_ICON)
-	..()
+				if (H.hand)
+					temp = H.organs_by_name[BP_L_HAND]
+				if(temp && !temp.is_usable())
+					to_chat(user, SPAN_NOTICE("You try to move your [temp.name], but cannot!"))
+					return
 
-/obj/item/paper_bin/MouseDrop(atom/over_object)
-	. = ..()
-	var/mob/living/M = usr
-	if(!istype(M) || M.incapacitated() || !Adjacent(M))
-		return
+				to_chat(user, SPAN_NOTICE("You pick up the [src]."))
+				user.put_in_hands(src)
 
-	if(over_object == M)
-		M.put_in_hands(src)
+	return
 
-	else if(istype(over_object, /atom/movable/screen/inventory/hand))
-		var/atom/movable/screen/inventory/hand/H = over_object
-		M.putItemFromInventoryInHandIfPossible(src, H.held_index)
-
-	add_fingerprint(M)
-
-/obj/item/paper_bin/attack_paw(mob/user)
-	return attack_hand(user)
-
-//ATTACK HAND IGNORING PARENT RETURN VALUE
-/obj/item/paper_bin/attack_hand(mob/user)
-	if(isliving(user))
-		var/mob/living/L = user
-		if(!(L.mobility_flags & MOBILITY_PICKUP))
+/obj/item/paper_bin/attack_hand(mob/user as mob)
+	if(ishuman(user))
+		var/mob/living/carbon/human/H = user
+		var/obj/item/organ/external/temp = H.organs_by_name[BP_R_HAND]
+		if (H.hand)
+			temp = H.organs_by_name[BP_L_HAND]
+		if(temp && !temp.is_usable())
+			to_chat(user, SPAN_NOTICE("You try to move your [temp.name], but cannot!"))
 			return
-	user.changeNext_move(CLICK_CD_MELEE)
 	var/response = ""
-	if(bin_pen)
-		var/obj/item/pen/P = bin_pen
-		P.add_fingerprint(user)
-		P.forceMove(user.loc)
-		user.put_in_hands(P)
-		to_chat(user, span_notice("You take [P] out of \the [src]."))
-		bin_pen = null
-		update_appearance(UPDATE_ICON)
-	else if(total_paper >= 1)
-		response = alert(user, "Do you take regular paper, or Carbon copy paper?", "Paper type request", "Regular", "Carbon Copy", "Cancel")
-		if (response != "Regular" && response != "Carbon Copy")
+	if(!length(papers) > 0)
+		response = alert(user, "Do you take regular paper, or Carbon copy paper?", "Paper type request", "Regular", "Carbon-Copy", "Cancel")
+		if (response != "Regular" && response != "Carbon-Copy")
 			add_fingerprint(user)
 			return
-		total_paper--
-		update_appearance(UPDATE_ICON)
-		// If there's any custom paper on the stack, use that instead of creating a new paper.
+	if(amount >= 1)
+		amount--
+		if(amount==0)
+			update_icon()
+
 		var/obj/item/paper/P
-		if(papers.len > 0)
-			P = papers[papers.len]
+		if(length(papers) > 0)	//If there's any custom paper on the stack, use that instead of creating a new paper.
+			P = papers[length(papers)]
 			papers.Remove(P)
 		else
 			if(response == "Regular")
-				P = new papertype(src)
-				if(SSgamemode.holidays && SSgamemode.holidays[APRIL_FOOLS])
-					if(prob(30))
-						P.info = "<font face=\"[CRAYON_FONT]\" color=\"red\"><b>HONK HONK HONK HONK HONK HONK HONK<br>HOOOOOOOOOOOOOOOOOOOOOONK<br>APRIL FOOLS</b></font>"
-						P.rigged = 1
-			else if (response == "Carbon Copy")
-				P = new /obj/item/paper/carbon(src)
-
-		P.add_fingerprint(user)
-		P.forceMove(user.loc)
+				P = new /obj/item/paper
+			else if (response == "Carbon-Copy")
+				P = new /obj/item/paper/carbon
 		user.put_in_hands(P)
-		to_chat(user, span_notice("You take [P] out of \the [src]."))
+		to_chat(user, SPAN_NOTICE("You take [P] out of the [src]."))
 	else
-		to_chat(user, span_warning("[src] is empty!"))
+		to_chat(user, SPAN_NOTICE("[src] is empty!"))
+
 	add_fingerprint(user)
+	return
+
+
+/obj/item/paper_bin/use_tool(obj/item/i, mob/living/user, list/click_params)
+	if(istype(i, /obj/item/paper))
+		if(!user.unEquip(i, src))
+			FEEDBACK_UNEQUIP_FAILURE(user, i)
+			return TRUE
+		to_chat(user, SPAN_NOTICE("You put \the [i] in \the [src]."))
+		papers.Add(i)
+		update_icon()
+		amount++
+		return TRUE
+
+	if (istype(i, /obj/item/paper_bundle))
+		to_chat(user, SPAN_NOTICE("You loosen \the [i] and add its papers into \the [src]."))
+		var/was_there_a_photo = 0
+		for(var/obj/item/bundleitem in i) //loop through items in bundle
+			if(istype(bundleitem, /obj/item/paper)) //if item is paper, add into the bin
+				papers.Add(bundleitem)
+				update_icon()
+				amount++
+			else if(istype(bundleitem, /obj/item/photo)) //if item is photo, drop it on the ground
+				was_there_a_photo = 1
+				bundleitem.dropInto(user.loc)
+				bundleitem.reset_plane_and_layer()
+		qdel(i)
+		if(was_there_a_photo)
+			to_chat(user, SPAN_NOTICE("The photo cannot go into \the [src]."))
+		return TRUE
+
 	return ..()
 
-/obj/item/paper_bin/attackby(obj/item/I, mob/user, params)
-	if(istype(I, /obj/item/paper))
-		var/obj/item/paper/P = I
-		if(!user.transferItemToLoc(P, src))
-			return
-		to_chat(user, span_notice("You put [P] in [src]."))
-		papers.Add(P)
-		total_paper++
-		update_appearance(UPDATE_ICON)
-	else if(istype(I, /obj/item/pen) && !bin_pen)
-		var/obj/item/pen/P = I
-		if(!user.transferItemToLoc(P, src))
-			return
-		to_chat(user, span_notice("You put [P] in [src]."))
-		bin_pen = P
-		update_appearance(UPDATE_ICON)
-	else
-		return ..()
 
-/obj/item/paper_bin/examine(mob/user)
+/obj/item/paper_bin/examine(mob/user, distance)
 	. = ..()
-	if(total_paper)
-		. += "It contains [total_paper > 1 ? "[total_paper] papers" : " one paper"]."
-	else
-		. += "It doesn't contain anything."
+	if(distance <= 1)
+		if(amount)
+			to_chat(user, SPAN_NOTICE("There " + (amount > 1 ? "are [amount] papers" : "is one paper") + " in the bin."))
+		else
+			to_chat(user, SPAN_NOTICE("There are no papers in the bin."))
 
-/obj/item/paper_bin/update_icon_state()
-	. = ..()
-	if(total_paper < 1)
+
+/obj/item/paper_bin/on_update_icon()
+	if(amount < 1)
 		icon_state = "paper_bin0"
 	else
-		icon_state = "[initial(icon_state)]"
-
-/obj/item/paper_bin/update_overlays()
-	. = ..()
-	if(bin_pen)
-		. += mutable_appearance(bin_pen.icon, bin_pen.icon_state)
-
-/obj/item/paper_bin/construction
-	name = "construction paper bin"
-	desc = "Contains all the paper you'll never need, IN COLOR!"
-	icon_state = "paper_binc"
-	papertype = /obj/item/paper/construction
-
-/obj/item/paper_bin/bundlenatural
-	name = "natural paper bundle"
-	desc = "A bundle of paper created using traditional methods."
-	icon_state = "paper_bundle"
-	papertype = /obj/item/paper/natural
-	resistance_flags = FLAMMABLE
-
-/obj/item/paper_bin/bundlenatural/attack_hand(mob/user)
-	..()
-	if(total_paper < 1)
-		qdel(src)
-
-/obj/item/paper_bin/bundlenatural/fire_act(exposed_temperature, exposed_volume)
-	qdel(src)
-
-/obj/item/paper_bin/bundlenatural/attackby(obj/item/W, mob/user)
-	if(W.is_sharp())
-		to_chat(user, span_notice("You snip \the [src], spilling paper everywhere."))
-		var/turf/T = get_turf(src.loc)
-		while(total_paper > 0)
-			total_paper--
-			var/obj/item/paper/P
-			if(papers.len > 0)
-				P = papers[papers.len]
-				papers -= P
-			else
-				P = new papertype()
-				P.forceMove(T)
-			CHECK_TICK
-		qdel(src)
-	else
-		..()
+		icon_state = "paper_bin1"

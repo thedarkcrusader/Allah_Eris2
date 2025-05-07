@@ -1,431 +1,408 @@
+#define HUMAN_EATING_NO_ISSUE		0
+#define HUMAN_EATING_NBP_MOUTH		1
+#define HUMAN_EATING_BLOCKED_MOUTH	2
 
-/mob/living/carbon/human/restrained(ignore_grab)
-	. = ((wear_suit && wear_suit.breakouttime) || ..())
+#define add_clothing_protection(A)	\
+	var/obj/item/clothing/C = A; \
+	flash_protection += C.flash_protection; \
+	equipment_tint_total += C.tint;
 
+/mob/living/carbon/human/can_eat(food, feedback = 1)
+	var/list/status = can_eat_status()
+	if(status[1] == HUMAN_EATING_NO_ISSUE)
+		return 1
+	if(feedback)
+		if(status[1] == HUMAN_EATING_NBP_MOUTH)
+			to_chat(src, "Where do you intend to put \the [food]? You don't have a mouth!")
+		else if(status[1] == HUMAN_EATING_BLOCKED_MOUTH)
+			to_chat(src, SPAN_WARNING("\The [status[2]] is in the way!"))
+	return 0
 
-/mob/living/carbon/human/canBeHandcuffed()
-	if(get_num_arms(FALSE) >= 2)
-		return TRUE
-	return FALSE
+/mob/living/carbon/human/can_force_feed(feeder, food, feedback = 1)
+	var/list/status = can_eat_status()
+	if(status[1] == HUMAN_EATING_NO_ISSUE)
+		return 1
+	if(feedback)
+		if(status[1] == HUMAN_EATING_NBP_MOUTH)
+			to_chat(feeder, "Where do you intend to put \the [food]? \The [src] doesn't have a mouth!")
+		else if(status[1] == HUMAN_EATING_BLOCKED_MOUTH)
+			to_chat(feeder, SPAN_WARNING("\The [status[2]] is in the way!"))
+	return 0
 
-//gets assignment from ID or ID inside PDA or PDA itself
-//Useful when player do something with computers
-/mob/living/carbon/human/proc/get_assignment(if_no_id = "No id", if_no_job = "No job", hand_first = TRUE)
-	var/obj/item/card/id/id = get_idcard(hand_first)
-	if(id)
-		. = id.assignment
+/mob/living/carbon/human/proc/can_eat_status()
+	if(!check_has_mouth())
+		return list(HUMAN_EATING_NBP_MOUTH)
+	var/obj/item/blocked = check_mouth_coverage()
+	if(blocked)
+		return list(HUMAN_EATING_BLOCKED_MOUTH, blocked)
+	return list(HUMAN_EATING_NO_ISSUE)
+
+#undef HUMAN_EATING_NO_ISSUE
+#undef HUMAN_EATING_NBP_MOUTH
+#undef HUMAN_EATING_BLOCKED_MOUTH
+
+/mob/living/carbon/human/proc/update_equipment_vision()
+	flash_protection = 0
+	equipment_tint_total = 0
+	equipment_see_invis	= 0
+	equipment_vision_flags = 0
+	equipment_prescription = 0
+	equipment_light_protection = 0
+	equipment_darkness_modifier = 0
+	equipment_overlays.Cut()
+
+	if(istype(glasses, /obj/item/clothing/glasses))
+		process_prescription(glasses)
+
+	var/binoc_check
+	if(client)
+		binoc_check = client.view == world.view
 	else
-		return if_no_id
-	if(!.)
-		return if_no_job
+		binoc_check = TRUE
 
-//gets name from ID or ID inside PDA or PDA itself
-//Useful when player do something with computers
-/mob/living/carbon/human/proc/get_authentification_name(if_no_id = "Unknown")
-	var/obj/item/card/id/id = get_idcard(FALSE)
-	if(id)
-		return id.registered_name
-	var/obj/item/modular_computer/tablet/tablet = wear_id
-	if(istype(tablet))
-		return tablet.name
-	return if_no_id
+	if ((!client || client.eye == src || client.eye == loc || client.eye == z_eye) && binoc_check) // !client is so the unit tests function
+		if(istype(src.head, /obj/item/clothing/head))
+			add_clothing_protection(head)
+		if(istype(src.glasses, /obj/item/clothing/glasses))
+			process_glasses(glasses)
+		process_visor(head, glasses)
+		if(istype(src.wear_mask, /obj/item/clothing/mask))
+			add_clothing_protection(wear_mask)
+		if(istype(back,/obj/item/rig))
+			process_rig(back)
 
-//repurposed proc. Now it combines get_id_name() and get_face_name() to determine a mob's name variable. Made into a separate proc as it'll be useful elsewhere
-/mob/living/carbon/human/get_visible_name()
-	var/face_name = get_face_name("")
-	var/id_name = get_id_name("")
-	if(name_override)
-		return name_override
-	if(face_name)
-		if(id_name && (id_name != face_name))
-			return "[face_name] (as [id_name])"
-		return face_name
-	if(id_name)
-		return id_name
-	return "Unknown"
+/mob/living/carbon/human/proc/process_prescription(obj/item/clothing/glasses/G)
+	if(G)
+		equipment_prescription += G.prescription
 
-//Returns "Unknown" if facially disfigured and real_name if not. Useful for setting name when Fluacided or when updating a human's name variable
-/mob/living/carbon/human/proc/get_face_name(if_no_face="Unknown")
-	if( wear_mask && (wear_mask.flags_inv&HIDEFACE) )	//Wearing a mask which hides our face, use id-name if possible
-		return if_no_face
-	if( head && (head.flags_inv&HIDEFACE) )
-		return if_no_face		//Likewise for hats
-	var/obj/item/bodypart/O = get_bodypart(BODY_ZONE_HEAD)
-	if( !O || (HAS_TRAIT(src, TRAIT_DISFIGURED)) || (O.brutestate+O.burnstate)>2 || cloneloss>50 || !real_name )	//disfigured. use id-name if possible
-		return if_no_face
-	return real_name
+/mob/living/carbon/human/proc/process_glasses(obj/item/clothing/glasses/G)
+	if(G?.active)
+		equipment_darkness_modifier += G.darkness_view
+		equipment_vision_flags |= G.vision_flags
+		equipment_light_protection += G.light_protection
+		if(G.overlay)
+			equipment_overlays |= G.overlay
+		if(G.see_invisible >= 0)
+			if(equipment_see_invis)
+				equipment_see_invis = min(equipment_see_invis, G.see_invisible)
+			else
+				equipment_see_invis = G.see_invisible
 
-//gets name from ID or PDA itself, ID inside PDA doesn't matter
-//Useful when player is being seen by other mobs
-/mob/living/carbon/human/proc/get_id_name(if_no_id = "Unknown")
-	var/obj/item/storage/wallet/wallet = wear_id
-	var/obj/item/card/id/id = wear_id
-	var/obj/item/modular_computer/tablet/tablet = wear_id
-	if(istype(wallet))
-		id = wallet.front_id
+		add_clothing_protection(G)
+		G.process_hud(src)
 
-	if(istype(id))
-		. = id.registered_name
-	else if(istype(tablet))
-		var/obj/item/computer_hardware/card_slot/card_slot = tablet.all_components[MC_CARD]
-		if(card_slot?.stored_card)
-			. = card_slot.stored_card.registered_name
-	if(!.)
-		. = if_no_id	//to prevent null-names making the mob unclickable
-	return
+/mob/living/carbon/human/proc/process_visor(obj/item/clothing/head/hat, obj/item/clothing/glasses/eyewear)
+	remove_client_color(/datum/client_color/monochrome)
+	remove_client_color(/datum/client_color/nvg)
+	if (istype(hat))
+		for(var/obj/item/clothing/accessory/glassesmod/mod in hat.accessories)
+			if (mod?.active)
+				equipment_darkness_modifier += mod.darkness_view
+				equipment_vision_flags |= mod.vision_flags
+				equipment_light_protection += mod.light_protection
+				if (mod.overlay)
+					equipment_overlays |= mod.overlay
+				if (mod.see_invisible >= 0)
+					if (equipment_see_invis)
+						equipment_see_invis = min(equipment_see_invis, mod.see_invisible)
+					else
+						equipment_see_invis = mod.see_invisible
+				if (mod.thermals)
+					//this breaks if more than one thermal accessory is worn at once
+					add_client_color(/datum/client_color/monochrome)
+				if (mod.nvg)
+					//this breaks if more than one nvg accessory is worn at once
+					add_client_color(/datum/client_color/nvg)
+				add_clothing_protection(mod)
+				mod.process_hud(src)
+	if (istype(eyewear))
+		for(var/obj/item/clothing/accessory/glassesmod/mod in eyewear.accessories)
+			if (mod?.active)
+				equipment_darkness_modifier += mod.darkness_view
+				equipment_vision_flags |= mod.vision_flags
+				equipment_light_protection += mod.light_protection
+				if (mod.overlay)
+					equipment_overlays |= mod.overlay
+				if (mod.see_invisible >= 0)
+					if (equipment_see_invis)
+						equipment_see_invis = min(equipment_see_invis, mod.see_invisible)
+					else
+						equipment_see_invis = mod.see_invisible
+				if (mod.thermals)
+					//this breaks if more than one thermal accessory is worn at once
+					add_client_color(/datum/client_color/monochrome)
+				if (mod.nvg)
+					//this breaks if more than one nvg accessory is worn at once
+					add_client_color(/datum/client_color/nvg)
+				add_clothing_protection(mod)
+				mod.process_hud(src)
+	src.update_client_color()
 
-//Gets ID card from a human. If hand_first is false the one in the id slot is prioritized, otherwise inventory slots go first.
-/mob/living/carbon/human/get_idcard(hand_first = TRUE)
-	//Check hands
-	var/obj/item/card/id/id_card
-	var/obj/item/held_item
-	held_item = get_active_held_item()
-	if(held_item) //Check active hand
-		id_card = held_item.GetID()
-	if(!id_card) //If there is no id, check the other hand
-		held_item = get_inactive_held_item()
-		if(held_item)
-			id_card = held_item.GetID()
+/mob/living/carbon/human/proc/process_rig(obj/item/rig/O)
+	if(O.visor && O.visor.active && O.visor.vision && O.visor.vision.glasses && (!O.helmet || (head && O.helmet == head)))
+		process_glasses(O.visor.vision.glasses)
 
-	if(id_card)
-		if(hand_first)
-			return id_card
-		else
-			. = id_card
-
-	//Check inventory slots
-	if(wear_id)
-		id_card = wear_id.GetID()
-		if(id_card)
-			return id_card
-	else if(belt)
-		id_card = belt.GetID()
-		if(id_card)
-			return id_card
-
-/mob/living/carbon/human/get_id_in_hand()
-	var/obj/item/held_item = get_active_held_item()
-	if(!held_item)
-		return
-	return held_item.GetID()
-
-/mob/living/carbon/human/IsAdvancedToolUser()
-	if(HAS_TRAIT(src, TRAIT_MONKEYLIKE))
-		return FALSE
-	return TRUE//Humans can use guns and such
-
-/mob/living/carbon/human/reagent_check(datum/reagent/R)
-	return dna.species.handle_chemicals(R,src)
-	// if it returns 0, it will run the usual on_mob_life for that reagent. otherwise, it will stop after running handle_chemicals for the species.
-
-
-/mob/living/carbon/human/can_track(mob/living/user)
-	if(wear_id && istype(wear_id.GetID(), /obj/item/card/id/syndicate))
-		return 0
-	if(istype(head, /obj/item/clothing/head))
-		var/obj/item/clothing/head/hat = head
-		if(hat.blockTracking)
-			return 0
-
-	return ..()
-
-/mob/living/carbon/human/can_use_guns(obj/item/G)
+/mob/living/carbon/human/fully_replace_character_name(new_name, in_depth = TRUE)
+	var/old_name = real_name
 	. = ..()
+	if(!. || !in_depth)
+		return
 
-	if(G.trigger_guard == TRIGGER_GUARD_NORMAL)
-		if(src.dna.check_mutation(HULK))
-			to_chat(src, span_warning("Your meaty finger is much too large for the trigger guard!"))
-			return FALSE
-		if(HAS_TRAIT(src, TRAIT_NOGUNS))
-			to_chat(src, span_warning("Your fingers don't fit in the trigger guard!"))
-			return FALSE
-	if(mind?.martial_art?.no_guns && !(G.type in mind?.martial_art?.gun_exceptions)) //great dishonor to famiry
-		to_chat(src, span_warning(mind.martial_art.no_gun_message))
-		return FALSE
-	return .
+	var/datum/computer_file/report/crew_record/R = get_crewmember_record(old_name)
+	if(R)
+		R.set_name(new_name)
 
-/mob/living/carbon/human/proc/get_bank_account()
-	RETURN_TYPE(/datum/bank_account)
-	var/datum/bank_account/account
-	var/obj/item/card/id/I = get_idcard()
+	//update our pda and id if we have them on our person
+	var/list/searching = GetAllContents(searchDepth = 3)
+	var/search_id = 1
+	var/search_pda = 1
 
-	if(I && I.registered_account)
-		account = I.registered_account
-		return account
+	for(var/A in searching)
+		if(search_id && istype(A,/obj/item/card/id))
+			var/obj/item/card/id/ID = A
+			if(ID.registered_name == old_name)
+				ID.registered_name = new_name
+				search_id = 0
+		else if(search_pda && istype(A,/obj/item/modular_computer/pda))
+			var/obj/item/modular_computer/pda/PDA = A
+			if(findtext(PDA.name, old_name))
+				PDA.SetName(replacetext(PDA.name, old_name, new_name))
+				search_pda = 0
 
+	if(wearing_rig && wearing_rig.update_visible_name)
+		wearing_rig.visible_name = real_name
+
+
+//Get species or synthetic temp if the mob is a FBP. Used when a synthetic type human mob is exposed to a temp check.
+//Essentially, used when a synthetic human mob should act diffferently than a normal type mob.
+/mob/living/carbon/human/proc/getSpeciesOrSynthTemp(temptype)
+	switch(temptype)
+		if(COLD_LEVEL_1)
+			return isSynthetic()? SYNTH_COLD_LEVEL_1 : species.cold_level_1
+		if(COLD_LEVEL_2)
+			return isSynthetic()? SYNTH_COLD_LEVEL_2 : species.cold_level_2
+		if(COLD_LEVEL_3)
+			return isSynthetic()? SYNTH_COLD_LEVEL_3 : species.cold_level_3
+		if(HEAT_LEVEL_1)
+			return isSynthetic()? SYNTH_HEAT_LEVEL_1 : species.heat_level_1
+		if(HEAT_LEVEL_2)
+			return isSynthetic()? SYNTH_HEAT_LEVEL_2 : species.heat_level_2
+		if(HEAT_LEVEL_3)
+			return isSynthetic()? SYNTH_HEAT_LEVEL_3 : species.heat_level_3
+
+/mob/living/carbon/human/proc/getCryogenicFactor(bodytemperature)
+	if(isSynthetic())
+		return 0
+	if(!species)
+		return 0
+
+	if(bodytemperature > species.cold_level_1)
+		return 0
+	else if(bodytemperature > species.cold_level_2)
+		. = 5 * (1 - (bodytemperature - species.cold_level_2) / (species.cold_level_1 - species.cold_level_2))
+		. = max(2, .)
+	else if(bodytemperature > species.cold_level_3)
+		. = 20 * (1 - (bodytemperature - species.cold_level_3) / (species.cold_level_2 - species.cold_level_3))
+		. = max(5, .)
+	else
+		. = 80 * (1 - bodytemperature / species.cold_level_3)
+		. = max(20, .)
+	if(istype(loc, /obj/machinery/atmospherics/unary/cryo_cell))
+		var/obj/machinery/atmospherics/unary/cryo_cell/cryo = loc
+		if(cryo.current_stasis_mult)
+			var/gcf_stasis_mult = cryo.current_stasis_mult
+			. = . * gcf_stasis_mult
+	return round(.)
+
+/mob/living/carbon/human
+	var/next_sonar_ping = 0
+
+/mob/living/carbon/human/proc/sonar_ping()
+	set name = "Listen In"
+	set desc = "Allows you to listen in to movement and noises around you."
+	set category = "IC"
+
+	if(incapacitated())
+		to_chat(src, SPAN_WARNING("You need to recover before you can use this ability."))
+		return
+	if(world.time < next_sonar_ping)
+		to_chat(src, SPAN_WARNING("You need another moment to focus."))
+		return
+	if(is_deaf() || is_below_sound_pressure(get_turf(src)))
+		to_chat(src, SPAN_WARNING("You are for all intents and purposes currently deaf!"))
+		return
+	next_sonar_ping += 10 SECONDS
+	var/heard_something = FALSE
+	to_chat(src, SPAN_NOTICE("You take a moment to listen in to your environment..."))
+	for(var/mob/living/L in range(client.view, src))
+		var/turf/T = get_turf(L)
+		if(!T || L == src || L.stat == DEAD || is_below_sound_pressure(T))
+			continue
+		heard_something = TRUE
+		var/image/ping_image = image(icon = 'icons/effects/effects.dmi', icon_state = "sonar_ping", loc = src)
+		ping_image.plane = EFFECTS_ABOVE_LIGHTING_PLANE
+		ping_image.layer = BEAM_PROJECTILE_LAYER
+		ping_image.pixel_x = (T.x - src.x) * WORLD_ICON_SIZE
+		ping_image.pixel_y = (T.y - src.y) * WORLD_ICON_SIZE
+		image_to(src, ping_image)
+		spawn(8)
+			qdel(ping_image)
+		var/feedback = list("There are noises of movement ")
+		var/direction = get_dir(src, L)
+		if(direction)
+			feedback += "towards the [dir2text(direction)], "
+			switch(get_dist(src, L) / client.view)
+				if(0 to 0.2)
+					feedback += "very close by."
+				if(0.2 to 0.4)
+					feedback += "close by."
+				if(0.4 to 0.6)
+					feedback += "some distance away."
+				if(0.6 to 0.8)
+					feedback += "further away."
+				else
+					feedback += "far away."
+		else // No need to check distance if they're standing right on-top of us
+			feedback += "right on top of you."
+		to_chat(src, SPAN_NOTICE(jointext(feedback,null)))
+	if(!heard_something)
+		to_chat(src, SPAN_NOTICE("You hear no movement but your own."))
+
+/mob/living/carbon/human/reset_layer()
+	if(hiding)
+		layer = HIDING_MOB_LAYER
+	else if(lying)
+		layer = LYING_HUMAN_LAYER
+	else
+		..()
+
+/mob/living/carbon/human/proc/has_headset_in_ears()
+	return istype(get_equipped_item(slot_l_ear), /obj/item/device/radio/headset) || istype(get_equipped_item(slot_r_ear), /obj/item/device/radio/headset)
+
+/mob/living/carbon/human/welding_eyecheck()
+	var/obj/item/organ/internal/eyes/E = src.internal_organs_by_name[species.vision_organ]
+	if(!E)
+		return
+	var/safety = eyecheck()
+	switch(safety)
+		if(FLASH_PROTECTION_MODERATE)
+			to_chat(src, SPAN_WARNING("Your eyes sting a little."))
+			E.damage += rand(1, 2)
+			if(E.damage > 12)
+				eye_blurry += rand(3,6)
+		if(FLASH_PROTECTION_MINOR)
+			to_chat(src, SPAN_WARNING("Your eyes stings!"))
+			E.damage += rand(1, 4)
+			if(E.damage > 10)
+				eye_blurry += rand(3,6)
+				E.damage += rand(1, 4)
+		if(FLASH_PROTECTION_NONE)
+			to_chat(src, SPAN_WARNING("Your eyes burn!"))
+			E.damage += rand(2, 4)
+			if(E.damage > 10)
+				E.damage += rand(4,10)
+		if(FLASH_PROTECTION_REDUCED)
+			to_chat(src, SPAN_DANGER("Your equipment intensifies the welder's glow. Your eyes itch and burn severely."))
+			eye_blurry += rand(12,20)
+			E.damage += rand(12, 16)
+	if(safety<FLASH_PROTECTION_MAJOR)
+		if(E.damage > 10)
+			to_chat(src, SPAN_WARNING("Your eyes are really starting to hurt. This can't be good for you!"))
+		if (E.damage >= E.min_bruised_damage)
+			to_chat(src, SPAN_DANGER("You go blind!"))
+			eye_blind = 5
+			eye_blurry = 5
+			disabilities |= NEARSIGHTED
+			spawn(100)
+				disabilities &= ~NEARSIGHTED
+
+/mob/living/carbon/human/proc/make_grab(mob/living/carbon/human/attacker, mob/living/carbon/human/victim, grab_tag)
+	var/obj/item/grab/G
+	if(!grab_tag)
+		G = new attacker.current_grab_type(attacker, victim)
+	else
+		var/obj/item/grab/given_grab_type = all_grabobjects[grab_tag]
+		G = new given_grab_type(attacker, victim)
+	if(QDELETED(G))
+		return 0
+	return 1
+
+/mob/living/carbon/human
+	var/list/cloaking_sources
+
+// Returns true if, and only if, the human has gone from uncloaked to cloaked
+/mob/living/carbon/human/proc/add_cloaking_source(datum/cloaking_source)
+	var/has_uncloaked = clean_cloaking_sources()
+	LAZYDISTINCTADD(cloaking_sources, weakref(cloaking_source))
+
+	// We don't present the cloaking message if the human was already cloaked just before cleanup.
+	if(!has_uncloaked && LAZYLEN(cloaking_sources) == 1)
+		update_icons()
+		src.visible_message(SPAN_WARNING("\The [src] seems to disappear before your eyes!"), SPAN_NOTICE("You feel completely invisible."))
+		return TRUE
 	return FALSE
 
-/mob/living/carbon/human/get_policy_keywords()
-	. = ..()
-	. += "[dna.species.type]"
+#define CLOAK_APPEAR_OTHER SPAN_WARNING("\The [src] appears from thin air!")
+#define CLOAK_APPEAR_SELF SPAN_NOTICE("You have re-appeared.")
 
-/mob/living/carbon/human/can_see_reagents()
-	. = ..()
-	if(.) //No need to run through all of this if it's already true.
-		return
-	if(isclothing(glasses) && (glasses.clothing_flags & SCAN_REAGENTS))
+// Returns true if, and only if, the human has gone from cloaked to uncloaked
+/mob/living/carbon/human/proc/remove_cloaking_source(datum/cloaking_source)
+	var/was_cloaked = LAZYLEN(cloaking_sources)
+	clean_cloaking_sources()
+	LAZYREMOVE(cloaking_sources, weakref(cloaking_source))
+
+	if(was_cloaked && !LAZYLEN(cloaking_sources))
+		update_icons()
+		visible_message(CLOAK_APPEAR_OTHER, CLOAK_APPEAR_SELF)
 		return TRUE
-	if(isclothing(head) && (head.clothing_flags & SCAN_REAGENTS))
-		return TRUE
-	if(isclothing(wear_mask) && (wear_mask.clothing_flags & SCAN_REAGENTS))
-		return TRUE
-	if(HAS_TRAIT(src, TRAIT_SEE_REAGENTS))
-		return TRUE
+	return FALSE
 
-/// When we're joining the game in [/mob/dead/new_player/proc/create_character], we increment our scar slot then store the slot in our mind datum.
-/mob/living/carbon/human/proc/increment_scar_slot()
-	var/check_ckey = ckey || client?.ckey
-	if(!check_ckey || !mind || !client?.prefs.read_preference(/datum/preference/toggle/persistent_scars))
-		return
+// Returns true if the human is cloaked, otherwise false (technically returns the number of cloaking sources)
+/mob/proc/is_cloaked()
+	return FALSE
 
-	var/path = "data/player_saves/[check_ckey[1]]/[check_ckey]/scars.sav"
-	var/index = mind.current_scar_slot_index
-	if(!index)
-		if(fexists(path))
-			var/savefile/F = new /savefile(path)
-			index = F["current_scar_index"] || 1
-		else
-			index = 1
+/mob/living/carbon/human/is_cloaked()
+	if(clean_cloaking_sources())
+		update_icons()
+		visible_message(CLOAK_APPEAR_OTHER, CLOAK_APPEAR_SELF)
+	return LAZYLEN(cloaking_sources)
 
-	mind.current_scar_slot_index = (index % PERSISTENT_SCAR_SLOTS) + 1 || 1
+#undef CLOAK_APPEAR_OTHER
+#undef CLOAK_APPEAR_SELF
 
-/// For use formatting all of the scars this human has for saving for persistent scarring, returns a string with all current scars/missing limb amputation scars for saving or loading purposes
-/mob/living/carbon/human/proc/format_scars()
-	var/list/missing_bodyparts = get_missing_limbs()
-	if(!all_scars && !length(missing_bodyparts))
-		return
-	var/scars = ""
-	for(var/i in missing_bodyparts)
-		var/datum/scar/scaries = new
-		scars += "[scaries.format_amputated(i)]"
-	for(var/i in all_scars)
-		var/datum/scar/iter_scar = i
-		if(!iter_scar.fake)
-			scars += "[iter_scar.format()];"
-	return scars
+// Returns true if the human is cloaked by the given source
+/mob/living/carbon/human/proc/is_cloaked_by(cloaking_source)
+	return LAZYISIN(cloaking_sources, weakref(cloaking_source))
 
-/// Takes a single scar from the persistent scar loader and recreates it from the saved data
-/mob/living/carbon/human/proc/load_scar(scar_line, specified_char_index)
-	var/list/scar_data = splittext(scar_line, "|")
-	if(LAZYLEN(scar_data) != SCAR_SAVE_LENGTH)
-		return // invalid, should delete
-	var/version = text2num(scar_data[SCAR_SAVE_VERS])
-	if(!version || version < SCAR_CURRENT_VERSION) // get rid of old scars
-		return
-	if(specified_char_index && (mind?.original_character_slot_index != specified_char_index))
-		return
-	var/obj/item/bodypart/the_part = get_bodypart("[scar_data[SCAR_SAVE_ZONE]]")
-	var/datum/scar/scaries = new
-	return scaries.load(the_part, scar_data[SCAR_SAVE_VERS], scar_data[SCAR_SAVE_DESC], scar_data[SCAR_SAVE_PRECISE_LOCATION], text2num(scar_data[SCAR_SAVE_SEVERITY]), text2num(scar_data[SCAR_SAVE_BIOLOGY]), text2num(scar_data[SCAR_SAVE_CHAR_SLOT]))
-
-/// Read all the scars we have for the designated character/scar slots, verify they're good/dump them if they're old/wrong format, create them on the user, and write the scars that passed muster back to the file
-/mob/living/carbon/human/proc/load_persistent_scars()
-	if(!ckey || !mind?.original_character_slot_index || !client?.prefs.read_preference(/datum/preference/toggle/persistent_scars))
-		return
-
-	var/path = "data/player_saves/[ckey[1]]/[ckey]/scars.sav"
-	var/loaded_char_slot = client.prefs.default_slot
-
-	if(!loaded_char_slot || !fexists(path))
-		return FALSE
-	var/savefile/F = new /savefile(path)
-	if(!F)
-		return
-
-	var/char_index = mind.original_character_slot_index
-	var/scar_index = mind.current_scar_slot_index || F["current_scar_index"] || 1
-
-	var/scar_string = F["scar[char_index]-[scar_index]"]
-	var/valid_scars = ""
-
-	for(var/scar_line in splittext(sanitize_text(scar_string), ";"))
-		if(load_scar(scar_line, char_index))
-			valid_scars += "[scar_line];"
-
-	WRITE_FILE(F["scar[char_index]-[scar_index]"], sanitize_text(valid_scars))
-
-/// Save any scars we have to our designated slot, then write our current slot so that the next time we call [/mob/living/carbon/human/proc/increment_scar_slot] (the next round we join), we'll be there
-/mob/living/carbon/human/proc/save_persistent_scars(nuke=FALSE)
-	if(!ckey || !mind?.original_character_slot_index || !client?.prefs.read_preference(/datum/preference/toggle/persistent_scars))
-		return
-
-	var/path = "data/player_saves/[ckey[1]]/[ckey]/scars.sav"
-	var/savefile/F = new /savefile(path)
-	var/char_index = mind.original_character_slot_index
-	var/scar_index = mind.current_scar_slot_index || F["current_scar_index"] || 1
-
-	if(nuke)
-		WRITE_FILE(F["scar[char_index]-[scar_index]"], "")
-		return
-
-	for(var/k in all_wounds)
-		var/datum/wound/iter_wound = k
-		iter_wound.remove_wound() // so we can get the scars for open wounds
-
-	var/valid_scars = format_scars()
-	WRITE_FILE(F["scar[char_index]-[scar_index]"], sanitize_text(valid_scars))
-	WRITE_FILE(F["current_scar_index"], sanitize_integer(scar_index))
-
-/mob/living/carbon/human/get_biological_state()
-	return dna.species.get_biological_state()
-
-/mob/living/carbon/human/proc/get_punchdamagehigh()	//Gets the total maximum punch damage
-	return dna.species.punchdamagehigh + physiology.punchdamagehigh_bonus + (get_skill(SKILL_FITNESS) / 2)
-
-/mob/living/carbon/human/proc/get_punchdamagelow()	//Gets the total minimum punch damage
-	return dna.species.punchdamagelow + physiology.punchdamagelow_bonus + get_skill(SKILL_FITNESS)
-
-/mob/living/carbon/human/proc/get_punchstunchance()	//Gets the total chance to knock down someone
-	return dna.species.punchstunchance + physiology.punchstunchance_bonus
-
-/// Fully randomizes everything according to the given flags.
-/mob/living/carbon/human/proc/randomize_human_appearance(randomize_flags = ALL)
-	var/datum/preferences/preferences = new
-
-	for (var/datum/preference/preference as anything in get_preferences_in_priority_order())
-		if (!preference.included_in_randomization_flags(randomize_flags))
-			continue
-
-		if (preference.is_randomizable())
-			preferences.write_preference(preference, preference.create_random_value(preferences))
-
-/proc/visually_duplicate_human(mob/living/carbon/human/copied_human_mob, dropdel = FALSE)
-	if(!istype(copied_human_mob))
+// Returns true if this operation caused the mob to go from cloaked to uncloaked
+/mob/living/carbon/human/proc/clean_cloaking_sources()
+	if(!cloaking_sources)
 		return FALSE
 
-	var/mob/living/carbon/human/new_human_mob = new copied_human_mob.type // in case it's a special type with special inits
+	var/list/rogue_entries = list()
+	for(var/entry in cloaking_sources)
+		var/weakref/W = entry
+		if(!W.resolve())
+			cloaking_sources -= W
+			rogue_entries += W
 
-	if(copied_human_mob.dna?.species)
-		INVOKE_ASYNC(new_human_mob, TYPE_PROC_REF(/mob,set_species), new copied_human_mob.dna.species.type)
-		new_human_mob.dna.features = LAZYCOPY(copied_human_mob.dna.features)
+	if(length(rogue_entries)) // These entries did not cleanup after themselves before being destroyed
+		var/rogue_entries_as_string = jointext(map(rogue_entries, GLOBAL_PROC_REF(log_info_line)), ", ")
+		crash_with("[log_info_line(src)] - Following cloaking entries were removed during cleanup: [rogue_entries_as_string]")
 
-	new_human_mob.real_name = copied_human_mob.name
-	new_human_mob.name = copied_human_mob.name
-	new_human_mob.gender = copied_human_mob.gender
-	new_human_mob.eye_color = copied_human_mob.eye_color
-	var/obj/item/organ/eyes/organ_eyes = new_human_mob.getorgan(/obj/item/organ/eyes)
-	if(organ_eyes)
-		organ_eyes.eye_color = copied_human_mob.eye_color
-		organ_eyes.old_eye_color = copied_human_mob.eye_color
-	new_human_mob.hair_color = copied_human_mob.hair_color
-	new_human_mob.facial_hair_color = copied_human_mob.facial_hair_color
-	new_human_mob.skin_tone = copied_human_mob.skin_tone
-	new_human_mob.hair_style = copied_human_mob.hair_style
-	new_human_mob.facial_hair_style = copied_human_mob.facial_hair_style
-	new_human_mob.underwear = copied_human_mob.underwear
-	new_human_mob.undershirt = copied_human_mob.undershirt
-	new_human_mob.socks = copied_human_mob.socks
-	new_human_mob.update_body()
-	new_human_mob.update_hair()
-	new_human_mob.update_body_parts()
+	UNSETEMPTY(cloaking_sources)
+	return !cloaking_sources // If cloaking_sources wasn't initially null but is now, we've uncloaked
 
-	// Clothes for humans
-	if(copied_human_mob.w_uniform)
-		visually_duplicate_and_equip_item(copied_human_mob.w_uniform, ITEM_SLOT_ICLOTHING, new_human_mob, dropdel)
-	if(copied_human_mob.wear_suit)
-		visually_duplicate_and_equip_item(copied_human_mob.wear_suit, ITEM_SLOT_OCLOTHING, new_human_mob, dropdel)
-	if(copied_human_mob.s_store)
-		visually_duplicate_and_equip_item(copied_human_mob.s_store, ITEM_SLOT_SUITSTORE, new_human_mob, dropdel)
-	if(copied_human_mob.back)
-		visually_duplicate_and_equip_item(copied_human_mob.back, ITEM_SLOT_BACK, new_human_mob, dropdel)
-	if(copied_human_mob.belt)
-		visually_duplicate_and_equip_item(copied_human_mob.belt, ITEM_SLOT_BELT, new_human_mob, dropdel)
-	if(copied_human_mob.wear_mask)
-		visually_duplicate_and_equip_item(copied_human_mob.wear_mask, ITEM_SLOT_MASK, new_human_mob, dropdel)
-	if(copied_human_mob.wear_neck)
-		visually_duplicate_and_equip_item(copied_human_mob.wear_neck, ITEM_SLOT_NECK, new_human_mob, dropdel)
-	if(copied_human_mob.ears)
-		visually_duplicate_and_equip_item(copied_human_mob.ears, ITEM_SLOT_EARS, new_human_mob, dropdel)
-	if(copied_human_mob.glasses)
-		visually_duplicate_and_equip_item(copied_human_mob.glasses, ITEM_SLOT_EYES, new_human_mob, dropdel)
-	if(copied_human_mob.gloves)
-		visually_duplicate_and_equip_item(copied_human_mob.gloves, ITEM_SLOT_GLOVES, new_human_mob, dropdel)
-	if(copied_human_mob.shoes)
-		visually_duplicate_and_equip_item(copied_human_mob.shoes, ITEM_SLOT_FEET, new_human_mob, dropdel)
-	if(copied_human_mob.head)
-		visually_duplicate_and_equip_item(copied_human_mob.head, ITEM_SLOT_HEAD, new_human_mob, dropdel)
-	if(copied_human_mob.wear_id)
-		visually_duplicate_and_equip_item(copied_human_mob.wear_id, ITEM_SLOT_ID, new_human_mob, dropdel)
-		new_human_mob.sec_hud_set_ID()
+/mob/living/carbon/human/set_sdisability(sdisability)
+	if(isSynthetic())
+		return // Can't cure disabilites, so don't give them.
+	..()
 
-	for(var/obj/item/implant/implant_instance in copied_human_mob.implants)
-		var/obj/item/implant/implant_copy
-		if(istype(implant_instance, /obj/item/implant/dusting/iaa))
-			implant_copy = new /obj/item/implant/dusting/iaa/fake ()
-		else 
-			implant_copy = new implant_instance.type
-		if(!implant_copy)
-			continue //if somehow it doesn't create a copy, don't runtime
-		implant_copy.implant(new_human_mob, null, TRUE)
-		if(dropdel)
-			QDEL_IN(implant_copy, 7 SECONDS)
+/mob/living/carbon/human/proc/has_meson_effect()
+	. = FALSE
+	for(var/obj/screen/equipment_screen in equipment_overlays) // check through our overlays to see if we have any source of the meson overlay
+		if (equipment_screen.icon_state == "meson_hud")
+			return TRUE
 
-	if(dropdel)
-		for(var/organ in new_human_mob.internal_organs)
-			QDEL_IN(organ, 7 SECONDS)
-
-	copied_human_mob.sec_hud_set_implants()
-
-	return new_human_mob
-
-/proc/visually_duplicate_and_equip_item(obj/item/item_instance, slot, mob/living/carbon/human/new_human_mob, dropdel = FALSE)
-	var/obj/item/item_copy = new item_instance.type
-
-	// Update ID + HUD
-	if(istype(item_instance, /obj/item/card/id))
-		var/obj/item/card/id/id_copy = item_copy
-		var/obj/item/card/id/id_instance = item_instance
-		id_copy.registered_name = id_instance.registered_name
-		id_copy.assignment = id_instance.assignment
-		id_copy.originalassignment = id_instance.originalassignment
-
-	// Update ID + HUD but if it's in a PDA
-	if(istype(item_instance, /obj/item/modular_computer/tablet))
-		var/obj/item/modular_computer/tablet/tablet_copy = item_copy
-		var/obj/item/modular_computer/tablet/tablet_instance = item_instance
-		tablet_copy.finish_color = tablet_instance.finish_color
-		var/obj/item/computer_hardware/card_slot/card_slot = tablet_instance.all_components[MC_CARD]
-		if(card_slot?.stored_card)
-			var/obj/item/card/id/id_copy = new card_slot.stored_card.type
-			var/obj/item/card/id/id_instance = card_slot.stored_card
-			id_copy.registered_name = id_instance.registered_name
-			id_copy.assignment = id_instance.assignment
-			id_copy.originalassignment = id_instance.originalassignment
-			var/obj/item/computer_hardware/card_slot/card_slot_copy = tablet_copy.all_components[MC_CARD]
-			if(!card_slot_copy)
-				card_slot_copy = new
-				tablet_copy.install_component(card_slot_copy)
-			id_copy.forceMove(card_slot_copy)
-			card_slot_copy.stored_card = id_copy
-
-			tablet_copy.update_label()
-
-
-	// Update damaged clothing
-	if(isclothing(item_instance))
-		var/obj/item/clothing/cloth_copy = item_copy
-		var/obj/item/clothing/cloth_instance = item_instance
-		cloth_copy.damaged_clothes = cloth_instance.damaged_clothes
-
-	// Swap the lights, don't want the seccies following our trail of light!
-	if(dropdel && item_instance.light_on)
-		item_instance.set_light_on(FALSE)
-		item_copy.set_light_on(TRUE)
-
-	// In case of chameleon clothes or otherwise
-	item_copy.name = item_instance.name
-	item_copy.icon = item_instance.icon
-	item_copy.icon_state = item_instance.icon_state
-	item_copy.item_state = item_instance.item_state
-
-	if(HAS_BLOOD_DNA(item_instance))
-		var/datum/component/forensics/detective_work = item_instance.GetComponent(/datum/component/forensics)
-		item_copy.add_blood_DNA(detective_work.blood_DNA) // authentic lol
-
-	item_copy.update_icon(UPDATE_OVERLAYS)
-
-	// So you can attempt to take off the clothes to prevent meta, but they will be deleted anyways
-	if(dropdel)
-		item_copy.item_flags |= DROPDEL
-
-	new_human_mob.equip_to_slot_if_possible(item_copy, slot, TRUE, TRUE, TRUE, TRUE, TRUE) // he's TRUE you know
+/mob/living/carbon/human/proc/is_in_pocket(obj/item/I)
+	return I in list(l_store, r_store)

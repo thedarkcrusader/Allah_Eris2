@@ -1,15 +1,18 @@
 /obj/structure/closet/secure_closet/hydroponics
 	name = "botanist's locker"
-	req_access = list(ACCESS_HYDROPONICS)
-	icon_state = "hydro"
+	req_access = list(access_hydroponics)
+	closet_appearance = /singleton/closet_appearance/secure_closet/hydroponics
 
-/obj/structure/closet/secure_closet/hydroponics/PopulateContents()
-	..()
-	new /obj/item/storage/bag/plants/portaseeder(src)
-	new /obj/item/plant_analyzer(src)
-	new /obj/item/radio/headset/headset_srv(src)
-	new /obj/item/cultivator(src)
-	new /obj/item/hatchet(src)
-	new /obj/item/storage/box/disks_plantgene(src)
-	new /obj/item/scythe(src)
-	new /obj/item/grenade/chem_grenade/antiweed(src)
+/obj/structure/closet/secure_closet/hydroponics/WillContain()
+	return list(
+		new /datum/atom_creator/weighted(list(/obj/item/clothing/suit/apron, /obj/item/clothing/suit/apron/overalls)),
+		/obj/item/storage/plants,
+		/obj/item/clothing/under/rank/hydroponics,
+		/obj/item/device/scanner/plant,
+		/obj/item/device/radio/headset/headset_service,
+		/obj/item/clothing/mask/bandana/botany,
+		/obj/item/material/minihoe,
+		/obj/item/material/hatchet,
+		/obj/item/wirecutters/clippers,
+		/obj/item/reagent_containers/spray/plantbgone,
+	)

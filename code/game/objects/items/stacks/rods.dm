@@ -1,105 +1,78 @@
-GLOBAL_LIST_INIT(rod_recipes, list ( \
-	new/datum/stack_recipe("grille", /obj/structure/grille, 2, time = 10, one_per_turf = TRUE, on_floor = FALSE), \
-	new/datum/stack_recipe("table frame", /obj/structure/table_frame, 2, time = 10, one_per_turf = 1, on_floor = 1), \
-	new/datum/stack_recipe("scooter frame", /obj/item/scooter_frame, 10, time = 25, one_per_turf = 0), \
-	new/datum/stack_recipe("linen bin", /obj/structure/bedsheetbin/empty, 2, time = 5, one_per_turf = 0), \
-	new/datum/stack_recipe("railing", /obj/structure/railing, 3, time = 18, window_checks = TRUE), \
-	new/datum/stack_recipe("railing corner", /obj/structure/railing/corner, 3, time = 18, window_checks = TRUE), \
-	// yogs start
-	null, \
-	new/datum/stack_recipe("fore port spacepod frame", /obj/item/pod_parts/pod_frame/fore_port, 15, time = 30, one_per_turf = 0), \
-	new/datum/stack_recipe("fore starboard spacepod frame", /obj/item/pod_parts/pod_frame/fore_starboard, 15, time = 30, one_per_turf = 0), \
-	new/datum/stack_recipe("aft port spacepod frame", /obj/item/pod_parts/pod_frame/aft_port, 15, time = 30, one_per_turf = 0), \
-	new/datum/stack_recipe("catwalk floor tile", /obj/item/stack/tile/catwalk_tile, 1, 4, 20), \
-	new/datum/stack_recipe("aft starboard spacepod frame", /obj/item/pod_parts/pod_frame/aft_starboard, 15, time = 30, one_per_turf = 0), \
-	// yogs end
-	))
-
-/obj/item/stack/rods
-	name = "metal rod"
-	desc = "Some rods. Can be used for building or something."
-	singular_name = "metal rod"
-	icon_state = "rods"
-	item_state = "rods"
-	flags_1 = CONDUCT_1
-	w_class = WEIGHT_CLASS_NORMAL
-	force = 9
-	throwforce = 10
-	throw_speed = 3
-	throw_range = 7
-	materials = list(/datum/material/iron=1000)
-	max_amount = 50
-	merge_type = /obj/item/stack/rods
+/obj/item/stack/material/rods
+	name = "rod"
+	desc = "Some rods. Can be used for building, or something."
+	singular_name = "rod"
+	plural_name = "rods"
+	icon_state = "rod"
+	base_state = "rod"
+	plural_icon_state = "rod-mult"
+	max_icon_state = "rod-max"
+	w_class = ITEM_SIZE_LARGE
+	attack_cooldown = 21
+	melee_accuracy_bonus = -20
+	throw_speed = 5
+	throw_range = 20
+	max_amount = 100
+	base_parry_chance = 15
 	attack_verb = list("hit", "bludgeoned", "whacked")
-	hitsound = 'sound/weapons/grenadelaunch.ogg'
-	novariants = TRUE
-	matter_amount = 2
+	lock_picking_level = 3
+	matter_multiplier = 0.5
+	material_flags = USE_MATERIAL_COLOR
+	stacktype = /obj/item/stack/material/rods
+	default_type = MATERIAL_STEEL
 
-/obj/item/stack/rods/suicide_act(mob/living/carbon/user)
-	user.visible_message(span_suicide("[user] begins to stuff \the [src] down [user.p_their()] throat! It looks like [user.p_theyre()] trying to commit suicide!"))//it looks like theyre ur mum
-	return BRUTELOSS
+/obj/item/stack/material/rods/ten
+	amount = 10
 
-/obj/item/stack/rods/Initialize(mapload, new_amount, merge = TRUE)
+/obj/item/stack/material/rods/fifty
+	amount = 50
+
+/obj/item/stack/material/rods/cyborg
+	name = "metal rod synthesizer"
+	desc = "A device that makes metal rods."
+	gender = NEUTER
+	matter = null
+	uses_charge = 1
+	charge_costs = list(500)
+
+/obj/item/stack/material/rods/Initialize()
 	. = ..()
+	update_icon()
+	throwforce = round(0.25*material.get_edge_damage())
+	force = round(0.5*material.get_blunt_damage())
 
-	recipes = GLOB.rod_recipes
-	update_appearance(UPDATE_ICON)
+/obj/item/stack/material/rods/use_tool(obj/item/W, mob/living/user, list/click_params)
+	if(isWelder(W))
+		var/obj/item/weldingtool/WT = W
 
-/obj/item/stack/rods/update_icon_state()
-	. = ..()
-	var/amount = get_amount()
-	if((amount <= 5) && (amount > 0))
-		icon_state = "rods-[amount]"
-	else
-		icon_state = "rods"
+		if(material.ignition_point)
+			to_chat(user, SPAN_WARNING("You can't weld this material into sheets."))
+			return TRUE
 
-/obj/item/stack/rods/attackby(obj/item/W, mob/user, params)
-	if(W.tool_behaviour == TOOL_WELDER)
-		if(get_amount() < 2)
-			to_chat(user, span_warning("You need at least two rods to do this!"))
-			return
+		if(!can_use(2))
+			to_chat(user, SPAN_WARNING("You need at least two rods to do this."))
+			return TRUE
 
-		if(W.use_tool(src, user, 0, volume=40))
-			var/obj/item/stack/sheet/metal/new_item = new(usr.loc)
-			user.visible_message("[user.name] shaped [src] into metal with [W].", \
-						 span_notice("You shape [src] into metal with [W]."), \
-						 span_italics("You hear welding."))
-			var/obj/item/stack/rods/R = src
+		if(WT.remove_fuel(1,user))
+			var/obj/item/stack/material/new_item = material.place_sheet(usr.loc)
+			new_item.add_to_stacks(usr)
+			user.visible_message(
+				SPAN_NOTICE("\The [user] welds \the [src] into \a [material.sheet_singular_name]."),
+				SPAN_NOTICE("You weld \the [src] into \a [material.sheet_singular_name].")
+				)
+			var/obj/item/stack/material/rods/R = src
 			src = null
-			var/replace = (user.get_inactive_held_item()==R)
+			var/replace = (user.get_inactive_hand()==R)
 			R.use(2)
 			if (!R && replace)
 				user.put_in_hands(new_item)
+			return TRUE
 
-	else if(istype(W, /obj/item/reagent_containers/food/snacks))
-		var/obj/item/reagent_containers/food/snacks/S = W
-		if(S.w_class > WEIGHT_CLASS_SMALL)
-			to_chat(user, span_warning("The ingredient is too big for [src]!"))
-		else
-			amount -= 1
-			var/obj/item/reagent_containers/food/snacks/customizable/A = new/obj/item/reagent_containers/food/snacks/customizable/kebab(get_turf(src))
-			if (amount == 0)
-				A.initialize_custom_food(src, S, user)
-			else
-				A.initialize_custom_food(src, S, user, TRUE)
-				update_appearance(UPDATE_ICON)
-	else
-		return ..()
-
-/obj/item/stack/rods/cyborg
-	materials = list()
-	is_cyborg = 1
-	cost = 250
-
-/obj/item/stack/rods/cyborg/Initialize(mapload, new_amount, merge)
-	AddElement(/datum/element/update_icon_blocker)
 	return ..()
 
-/obj/item/stack/rods/ten
-	amount = 10
+/obj/item/stack/material/rods/attack_self(mob/user as mob)
+	src.add_fingerprint(user)
 
-/obj/item/stack/rods/twentyfive
-	amount = 25
+	if(!isturf(user.loc)) return 0
 
-/obj/item/stack/rods/fifty
-	amount = 50
+	place_grille(user, user.loc, src)

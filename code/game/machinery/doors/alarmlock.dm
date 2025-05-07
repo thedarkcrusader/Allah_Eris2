@@ -1,43 +1,45 @@
 /obj/machinery/door/airlock/alarmlock
-	name = "glass alarm airlock"
-	icon = 'icons/obj/doors/airlocks/station2/glass.dmi'
-	overlays_file = 'icons/obj/doors/airlocks/station2/overlays.dmi'
-	opacity = FALSE
-	assemblytype = /obj/structure/door_assembly/door_assembly_public
+
+	name = "Glass Alarm Airlock"
+	icon = 'icons/obj/doors/Doorglass.dmi'
+	opacity = 0
 	glass = TRUE
 
 	var/datum/radio_frequency/air_connection
-	var/air_frequency = FREQ_ATMOS_ALARMS
+	var/air_frequency = 1437
 	autoclose = FALSE
 
-/obj/machinery/door/airlock/alarmlock/Initialize(mapload)
-	. = ..()
+/obj/machinery/door/airlock/alarmlock/New()
+	..()
 	air_connection = new
 
 /obj/machinery/door/airlock/alarmlock/Destroy()
-	SSradio.remove_object(src,air_frequency)
-	air_connection = null
-	return ..()
+	if(radio_controller)
+		radio_controller.remove_object(src,air_frequency)
+	..()
 
-/obj/machinery/door/airlock/alarmlock/Initialize(mapload)
+/obj/machinery/door/airlock/alarmlock/Initialize()
 	. = ..()
-	SSradio.remove_object(src, air_frequency)
-	air_connection = SSradio.add_object(src, air_frequency, RADIO_TO_AIRALARM)
+	radio_controller.remove_object(src, air_frequency)
+	air_connection = radio_controller.add_object(src, air_frequency, RADIO_TO_AIRALARM)
 	open()
+
 
 /obj/machinery/door/airlock/alarmlock/receive_signal(datum/signal/signal)
 	..()
-	if(stat & (NOPOWER|BROKEN))
+	if(inoperable())
 		return
 
 	var/alarm_area = signal.data["zone"]
 	var/alert = signal.data["alert"]
 
-	if(alarm_area == get_area_name(src))
+	var/area/our_area = get_area(src)
+
+	if(alarm_area == our_area.name)
 		switch(alert)
-			if(ATMOS_ALARM_SEVERE)
+			if("severe")
 				autoclose = TRUE
 				close()
-			if(ATMOS_ALARM_MINOR, ATMOS_ALARM_CLEAR)
+			if("minor", "clear")
 				autoclose = FALSE
 				open()

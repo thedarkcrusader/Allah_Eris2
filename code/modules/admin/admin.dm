@@ -1,455 +1,716 @@
 
+var/global/BSACooldown = 0
+var/global/floorIsLava = 0
+
+
 ////////////////////////////////
 /proc/message_admins(msg)
-	msg = span_admin("<span class=\"prefix\">ADMIN LOG:</span> <span class=\"message\">[msg]</span>")
-	to_chat(GLOB.permissions.admins,
-		type = MESSAGE_TYPE_ADMINLOG,
-		html = msg,
-		confidential = TRUE)
-
-/proc/relay_msg_admins(msg)
-	msg = span_admin("<span class=\"prefix\">RELAY:</span> <span class=\"message\">[msg]</span>")
-	to_chat(GLOB.permissions.admins,
-		type = MESSAGE_TYPE_ADMINLOG,
-		html = msg,
-		confidential = TRUE)
-
-
+	msg = SPAN_CLASS("log_message", "[SPAN_CLASS("prefix", "ADMIN LOG:")] [SPAN_CLASS("message", msg)]")
+	log_adminwarn(msg)
+	for(var/client/C as anything in GLOB.admins)
+		if(R_ADMIN & C.holder.rights)
+			to_chat(C, msg)
+/proc/message_staff(msg)
+	msg = SPAN_CLASS("log_message", "[SPAN_CLASS("prefix", "STAFF LOG:")] [SPAN_CLASS("message", msg)]")
+	log_adminwarn(msg)
+	for(var/client/C as anything in GLOB.admins)
+		if(C && C.holder && (R_INVESTIGATE & C.holder.rights))
+			to_chat(C, msg)
+/proc/msg_admin_attack(text) //Toggleable Attack Messages
+	log_attack(text)
+	var/rendered = SPAN_CLASS("log_message", "[SPAN_CLASS("prefix", "ATTACK:")] [SPAN_CLASS("message", text)]")
+	for(var/client/C as anything in GLOB.admins)
+		if(check_rights(R_INVESTIGATE, 0, C))
+			if(C.get_preference_value(/datum/client_preference/staff/show_attack_logs) == GLOB.PREF_SHOW)
+				var/msg = rendered
+				to_chat(C, msg)
+/proc/admin_notice(message, rights)
+	for(var/mob/M in SSmobs.mob_list)
+		if(check_rights(rights, 0, M))
+			to_chat(M, message)
 ///////////////////////////////////////////////////////////////////////////////////////////////Panels
 
-/datum/admins/proc/show_player_panel(mob/M in GLOB.mob_list)
-	set category = "Misc.Unused"
+/datum/admins/proc/show_player_panel(mob/M in SSmobs.mob_list)
+	set category = null
 	set name = "Show Player Panel"
 	set desc="Edit player (respawn, ban, heal, etc)"
 
-	if(!check_rights())
-		return
-
-	log_admin("[key_name(usr)] checked the individual player panel for [key_name(M)][isobserver(usr)?"":" while in game"].")
-
 	if(!M)
-		to_chat(usr, "You seem to be selecting a mob that doesn't exist anymore.", confidential=TRUE)
+		to_chat(usr, "You seem to be selecting a mob that doesn't exist anymore.")
+		return
+	if (!istype(src,/datum/admins))
+		src = usr.client.holder
+	if (!istype(src,/datum/admins))
+		to_chat(usr, "Error: you are not an admin!")
 		return
 
-	if(M.oobe_client) //yogs start
-		if(M.oobe_client.mob)
-			.(M.oobe_client.mob) //using . because show_player_panel(M.oobe_client.mob) caused "Runtime in admin.dm,30: undefined proc or verb /client/Show Player Panel()."
-		else
-			to_chat(usr, span_warning("Cannot open player panel because [key_name(M)] has (a)ghosted, but does not appear to have a mob."), confidential=TRUE)
-		return //yogs end
-
-	var/body = "<html><head><meta charset='UTF-8'><title>Options for [M.key]</title></head>"
+	var/body = "<html><head><title>Options for [M.key]</title></head>"
 	body += "<body>Options panel for <b>[M]</b>"
+	var/last_ckey = LAST_CKEY(M)
 	if(M.client)
 		body += " played by <b>[M.client]</b> "
-		body += "\[<A href='byond://?_src_=holder;[HrefToken()];editrights=[(GLOB.permissions.admin_datums[M.client.ckey] || GLOB.permissions.deadmins[M.client.ckey]) ? "rank" : "add"];key=[M.key]'>[M.client.holder ? M.client.holder.rank_name() : "Player"]</A>\]"
-		if(CONFIG_GET(flag/use_exp_tracking))
-			body += "\[<A href='byond://?_src_=holder;[HrefToken()];getplaytimewindow=[REF(M)]'>" + M.client.get_exp_living() + "</a> | "
-			body += " <A href='byond://?_src_=holder;[HrefToken()];toggleexempt=[REF(M.client)]'>Toggle Exempt</a>\]"
+		body += "\[<A href='byond://?src=\ref[src];editrights=show'>[M.client.holder ? M.client.holder.rank : "Player"]</A>\]"
+	else if(last_ckey)
+		body += " (last occupied by ckey <b>[last_ckey]</b>)"
 
-	if(isnewplayer(M))
+	if(istype(M, /mob/new_player))
 		body += " <B>Hasn't Entered Game</B> "
 	else
-		body += " \[<A href='byond://?_src_=holder;[HrefToken()];revive=[REF(M)]'>Heal</A>\] "
+		body += " \[<A href='byond://?src=\ref[src];revive=\ref[M]'>Heal</A>\] "
+
+	var/mob/living/exosuit/E = M
+	if(istype(E) && E.pilots)
+		body += "<br><b>Exosuit pilots:</b><br>"
+		for(var/mob/living/pilot in E.pilots)
+			body += "[pilot] "
+			body += " \[<A href='byond://?src=\ref[src];pilot=\ref[pilot]'>link</a>\]<br>"
+
+	var/inactivity_time = M.client ? time_to_readable(M.client.inactivity) : null
+
+	var/logout_time = null
+	if (!isnull(M.logout_time))
+		logout_time = time_to_readable(world.time - M.logout_time)
+
+	body += {"
+		<br><br>\[
+		<a href='byond://?_src_=vars;Vars=\ref[M]'>VV</a> -
+		<a href='byond://?src=\ref[src];traitor=\ref[M]'>TP</a> -
+		<a href='byond://?src=\ref[usr];priv_msg=\ref[M]'>PM</a> -
+		<a href='byond://?src=\ref[src];narrateto=\ref[M]'>DN</a> -
+		[admin_jump_link(M, src)]\] <br>
+		<b>Mob type:</b> [M.type]<br>
+		<b>Inactivity time:</b> [inactivity_time ? "[inactivity_time]" : "Logged out"]<br/>
+		<b>Logout time:</b> [logout_time ? "[logout_time] ago" : "N/A"]<br/><br/>
+		<A href='byond://?src=\ref[src];paralyze=\ref[M]'>PARALYZE</A> |
+		<A href='byond://?src=\ref[src];boot2=\ref[M]'>Kick</A> |
+		<A href='byond://?_src_=holder;warn=[last_ckey]'>Warn</A> |
+		<A href='byond://?src=\ref[src];newban=\ref[M];last_key=[last_ckey]'>Ban</A> |
+		<A href='byond://?src=\ref[src];jobban2=\ref[M]'>Jobban</A> |
+		<A href='byond://?src=\ref[src];notes=show;mob=\ref[M]'>Notes</A> |
+		<A HREF='byond://?src=\ref[src];connections=\ref[M]'>Check Connections</A> |
+		<A HREF='byond://?src=\ref[src];bans=\ref[M]'>Check Bans</A> |
+	"}
+	if (M.ckey)
+		body += {"<a target="_blank" href="https://www.byond.com/members/[M.ckey]">View Byond Account</a> | "}
+
+	if (!istype(M, /mob/new_player) && !istype(M, /mob/observer))
+		body += "<A HREF='byond://?src=\ref[src];cryo=\ref[M]'>Cryo Character</A> | "
+		body += "<A HREF='byond://?src=\ref[src];equip_loadout=\ref[M]'>Equip Loadout</A> | "
 
 	if(M.client)
-		body += "<br>\[<b>First Seen:</b> [M.client.player_join_date]\]\[<b>Byond account registered on:</b> [M.client.account_join_date]\]"
-		body += "<br><br><b>CentCom Galactic Ban DB: </b> "
-		if(CONFIG_GET(string/centcom_ban_db))
-			body += "<a href='byond://?_src_=holder;[HrefToken()];centcomlookup=[M.client.ckey]'>Search</a>"
-		else
-			body += "<i>Disabled</i>"
-		body += "<br><br><b>Show related accounts by:</b> "
-		body += "\[ <a href='byond://?_src_=holder;[HrefToken()];showrelatedacc=cid;client=[REF(M.client)]'>CID</a> | "
-		body += "<a href='byond://?_src_=holder;[HrefToken()];showrelatedacc=ip;client=[REF(M.client)]'>IP</a> \]"
-		var/rep = 0
-		rep += SSpersistence.antag_rep[M.ckey]
-		body += "<br><br>Antagonist reputation: [rep]"
-		body += "<br><a href='byond://?_src_=holder;[HrefToken()];modantagrep=add;mob=[REF(M)]'>\[increase\]</a> "
-		body += "<a href='byond://?_src_=holder;[HrefToken()];modantagrep=subtract;mob=[REF(M)]'>\[decrease\]</a> "
-		body += "<a href='byond://?_src_=holder;[HrefToken()];modantagrep=set;mob=[REF(M)]'>\[set\]</a> "
-		body += "<a href='byond://?_src_=holder;[HrefToken()];modantagrep=zero;mob=[REF(M)]'>\[zero\]</a>"
-		var/full_version = "Unknown"
-		if(M.client.byond_version)
-			full_version = "[M.client.byond_version].[M.client.byond_build ? M.client.byond_build : "xxx"]"
-		body += "<br>\[<b>Byond version:</b> [full_version]\]<br>"
-
-
-	body += "<br><br>\[ "
-	body += "<a href='byond://?_src_=vars;[HrefToken()];Vars=[REF(M)]'>VV</a> - "
-	if(M.mind)
-		body += "<a href='byond://?_src_=holder;[HrefToken()];traitor=[REF(M)]'>TP</a> - "
-	else
-		body += "<a href='byond://?_src_=holder;[HrefToken()];initmind=[REF(M)]'>Init Mind</a> - "
-	if (iscyborg(M))
-		body += "<a href='byond://?_src_=holder;[HrefToken()];borgpanel=[REF(M)]'>BP</a> - "
-	body += "<a href='byond://?priv_msg=[M.ckey]'>PM</a> - "
-	body += "<a href='byond://?_src_=holder;[HrefToken()];subtlemessage=[REF(M)]'>SM</a> - "
-	if (ishuman(M) && M.mind)
-		body += "<a href='byond://?_src_=holder;[HrefToken()];HeadsetMessage=[REF(M)]'>HM</a> - "
-	body += "<a href='byond://?_src_=holder;[HrefToken()];adminplayerobservefollow=[REF(M)]'>FLW</a> - "
-	//Default to client logs if available
-	var/source = LOGSRC_MOB
-	if(M.client)
-		source = LOGSRC_CLIENT
-	body += "<a href='byond://?_src_=holder;[HrefToken()];individuallog=[REF(M)];log_src=[source]'>LOGS</a>\] <br>"
-
-	body += "<b>Mob type</b> = [M.type]<br><br>"
-
-	body += "<A href='byond://?_src_=holder;[HrefToken()];boot2=[REF(M)]'>Kick</A> | "
-	if(M.client)
-		body += "<A href='byond://?_src_=holder;[HrefToken()];newbankey=[M.key];newbanip=[M.client.address];newbancid=[M.client.computer_id]'>Ban</A> | "
-	else
-		body += "<A href='byond://?_src_=holder;[HrefToken()];newbankey=[M.key]'>Ban</A> | "
-
-	body += "<A href='byond://?_src_=holder;[HrefToken()];showmessageckey=[M.ckey]'>Notes | Messages | Watchlist</A> | "
-	if(M.client)
-		body += "| <A href='byond://?_src_=holder;[HrefToken()];sendtoprison=[REF(M)]'>Prison</A> | "
-		body += "\ <A href='byond://?_src_=holder;[HrefToken()];sendbacktolobby=[REF(M)]'>Send back to Lobby</A> | "
+		body += "<A HREF='byond://?src=\ref[src];sendtoprison=\ref[M]'>Prison</A> | "
+		body += "<A HREF='byond://?src=\ref[src];reloadsave=\ref[M]'>Reload Save</A> | "
+		body += "<A HREF='byond://?src=\ref[src];reloadchar=\ref[M]'>Reload Character</A> | "
 		var/muted = M.client.prefs.muted
-		body += "<br><b>Mute: </b> "
-		body += "\[<A href='byond://?_src_=holder;[HrefToken()];mute=[M.ckey];mute_type=[MUTE_IC]'><font color='[(muted & MUTE_IC)?"red":"blue"]'>IC</font></a> | "
-		body += "<A href='byond://?_src_=holder;[HrefToken()];mute=[M.ckey];mute_type=[MUTE_OOC]'><font color='[(muted & MUTE_OOC)?"red":"blue"]'>OOC</font></a> | "
-		body += "<A href='byond://?_src_=holder;[HrefToken()];mute=[M.ckey];mute_type=[MUTE_PRAY]'><font color='[(muted & MUTE_PRAY)?"red":"blue"]'>PRAY</font></a> | "
-		body += "<A href='byond://?_src_=holder;[HrefToken()];mute=[M.ckey];mute_type=[MUTE_ADMINHELP]'><font color='[(muted & MUTE_ADMINHELP)?"red":"blue"]'>ADMINHELP</font></a> | "
-		body += "<A href='byond://?_src_=holder;[HrefToken()];mute=[M.ckey];mute_type=[MUTE_MENTORHELP]'><font color='[(muted & MUTE_MENTORHELP)?"red":"blue"]'>MENTORHELP</font></a> | "
-		body += "<A href='byond://?_src_=holder;[HrefToken()];mute=[M.ckey];mute_type=[MUTE_DEADCHAT]'><font color='[(muted & MUTE_DEADCHAT)?"red":"blue"]'>DEADCHAT</font></a>\]"
-		body += "(<A href='byond://?_src_=holder;[HrefToken()];mute=[M.ckey];mute_type=[MUTE_ALL]'><font color='[(muted & MUTE_ALL)?"red":"blue"]'>toggle all</font></a>)"
-		body += "<A href='byond://?_src_=holder;[HrefToken()];afreeze=[REF(M)];'><font color='[M.client.afreeze ? "red":"blue"]'>FREEZE</font></a>" //yogs - adminfreezing
+		body += {"<br><b>Mute: </b>
+			\[<A href='byond://?src=\ref[src];mute=\ref[M];mute_type=[MUTE_IC]'><span style='font-color: [(muted & MUTE_IC)?"red":"blue"]'>IC</span></a> |
+			<A href='byond://?src=\ref[src];mute=\ref[M];mute_type=[MUTE_OOC]'><span style='font-color: [(muted & MUTE_OOC)?"red":"blue"]'>OOC</span></a> |
+			<A href='byond://?src=\ref[src];mute=\ref[M];mute_type=[MUTE_AOOC]'><span style='font-color: [(muted & MUTE_AOOC)?"red":"blue"]'>AOOC</span></a> |
+			<A href='byond://?src=\ref[src];mute=\ref[M];mute_type=[MUTE_PRAY]'><span style='font-color: [(muted & MUTE_PRAY)?"red":"blue"]'>PRAY</span></a> |
+			<A href='byond://?src=\ref[src];mute=\ref[M];mute_type=[MUTE_ADMINHELP]'><span style='font-color: [(muted & MUTE_ADMINHELP)?"red":"blue"]'>ADMINHELP</span></a> |
+			<A href='byond://?src=\ref[src];mute=\ref[M];mute_type=[MUTE_DEADCHAT]'><span style='font-color: [(muted & MUTE_DEADCHAT)?"red":"blue"]'>DEADCHAT</span></a>\]
+			(<A href='byond://?src=\ref[src];mute=\ref[M];mute_type=[MUTE_ALL]'><span style='font-color: [(muted & MUTE_ALL)?"red":"blue"]'>toggle all</span></a>)
+		"}
+		body += "<br><br><b>Staff Warning:</b> [M.client.staffwarn ? M.client.staffwarn : "No"]<br>"
+		if (!M.client.staffwarn)
+			body += "<A href='byond://?src=\ref[src];setstaffwarn=\ref[M]'>Set StaffWarn</A>"
+		else
+			body += "<A href='byond://?src=\ref[src];removestaffwarn=\ref[M]'>Remove StaffWarn</A>"
+
+	body += {"<br><br>
+		<A href='byond://?src=\ref[src];jumpto=\ref[M]'><b>Jump to</b></A> |
+		<A href='byond://?src=\ref[src];getmob=\ref[M]'>Get</A>
+		<br><br>
+		[check_rights(R_ADMIN|R_MOD,0) ? "<A href='byond://?src=\ref[src];traitor=\ref[M]'>Traitor panel</A> | " : "" ]
+		[check_rights(R_INVESTIGATE,0) ? "<A href='byond://?src=\ref[src];skillpanel=\ref[M]'>Skill panel</A>" : "" ]
+	"}
+
+	if(M.mind)
+		body += "<br><br>"
+		body += "<b>Goals:</b>"
+		body += "<br>"
+		body += "[jointext(M.mind.summarize_goals(FALSE, TRUE, src), "<br>")]"
+		body += "<br>"
+		body += "<a href='byond://?src=\ref[M.mind];add_goal=1'>Add Random Goal</a>"
 
 	body += "<br><br>"
-	body += "<A href='byond://?_src_=holder;[HrefToken()];jumpto=[REF(M)]'><b>Jump to</b></A> | "
-	body += "<A href='byond://?_src_=holder;[HrefToken()];getmob=[REF(M)]'>Get</A> | "
-	body += "<A href='byond://?_src_=holder;[HrefToken()];sendmob=[REF(M)]'>Send To</A>"
-
-	body += "<br><br>"
-	body += "<A href='byond://?_src_=holder;[HrefToken()];traitor=[REF(M)]'>Traitor panel</A> | "
-	body += "<A href='byond://?_src_=holder;[HrefToken()];narrateto=[REF(M)]'>Narrate to</A> | "
-	body += "<A href='byond://?_src_=holder;[HrefToken()];subtlemessage=[REF(M)]'>Subtle message</A> | "
-	body += "<A href='byond://?_src_=holder;[HrefToken()];languagemenu=[REF(M)]'>Language Menu</A>"
-
-	body += "<br><br>"
-	body += "<A href='byond://?_src_=holder;[HrefToken()];antag_token_give=[M.ckey]'>Give Antag Token</A> | "
-	body += "<A href='byond://?_src_=holder;[HrefToken()];antag_token_redeem=[M.ckey]'>Redeem Antag Token</A> | "
-	body += "<A href='byond://?_src_=holder;[HrefToken()];searchAntagTokenByKey=[M.ckey]'>See Antag Tokens</A>"
+	body += "<b>Psionics:</b><br/>"
+	if(isliving(M))
+		var/mob/living/psyker = M
+		if(psyker.psi)
+			body += "<a href='byond://?src=\ref[psyker.psi];remove_psionics=1'>Remove psionics.</a><br/><br/>"
+			body += "<a href='byond://?src=\ref[psyker.psi];trigger_psi_latencies=1'>Trigger latencies.</a><br/>"
+		body += "<table width = '100%'>"
+		for(var/faculty in list(PSI_COERCION, PSI_PSYCHOKINESIS, PSI_REDACTION, PSI_ENERGISTICS))
+			var/singleton/psionic_faculty/faculty_singleton = SSpsi.get_faculty(faculty)
+			var/faculty_rank = psyker.psi ? psyker.psi.get_rank(faculty) : 0
+			body += "<tr><td><b>[faculty_singleton.name]</b></td>"
+			for(var/i = 1 to LAZYLEN(GLOB.psychic_ranks_to_strings))
+				var/psi_title = GLOB.psychic_ranks_to_strings[i]
+				if(i == faculty_rank)
+					psi_title = "<b>[psi_title]</b>"
+				body += "<td><a href='byond://?src=\ref[psyker.mind];set_psi_faculty_rank=[i];set_psi_faculty=[faculty]'>[psi_title]</a></td>"
+			body += "</tr>"
+		body += "</table>"
 
 	if (M.client)
-		if(!isnewplayer(M))
+		if(!istype(M, /mob/new_player))
 			body += "<br><br>"
 			body += "<b>Transformation:</b>"
 			body += "<br>"
 
-			//Human
-			if(ishuman(M))
-				body += "<B>Human</B> | "
-			else
-				body += "<A href='byond://?_src_=holder;[HrefToken()];humanone=[REF(M)]'>Humanize</A> | "
-
 			//Monkey
-			if(ismonkey(M))
+			if(issmall(M))
 				body += "<B>Monkeyized</B> | "
 			else
-				body += "<A href='byond://?_src_=holder;[HrefToken()];monkeyone=[REF(M)]'>Monkeyize</A> | "
+				body += "<A href='byond://?src=\ref[src];monkeyone=\ref[M]'>Monkeyize</A> | "
 
 			//Corgi
 			if(iscorgi(M))
 				body += "<B>Corgized</B> | "
 			else
-				body += "<A href='byond://?_src_=holder;[HrefToken()];corgione=[REF(M)]'>Corgize</A> | "
+				body += "<A href='byond://?src=\ref[src];corgione=\ref[M]'>Corgize</A> | "
 
 			//AI / Cyborg
 			if(isAI(M))
-				body += "<B>Is an AI | </B> "
-				body += "<A href='byond://?_src_=holder;[HrefToken()];checkAIDash=[REF(M)]'>Access AI Dashboard | </A>"
+				body += "<B>Is an AI</B> "
 			else if(ishuman(M))
-				body += "<A href='byond://?_src_=holder;[HrefToken()];makerobot=[REF(M)]'>Make Robot</A> | "
-				body += "<A href='byond://?_src_=holder;[HrefToken()];makealien=[REF(M)]'>Make Alien</A> | "
-				body += "<A href='byond://?_src_=holder;[HrefToken()];makeslime=[REF(M)]'>Make Slime</A> | "
-				body += "<A href='byond://?_src_=holder;[HrefToken()];makeblob=[REF(M)]'>Make Blob</A> | "
+				body += {"<A href='byond://?src=\ref[src];makeai=\ref[M]'>Make AI</A> |
+					<A href='byond://?src=\ref[src];makerobot=\ref[M]'>Make Robot</A> |
+					<A href='byond://?src=\ref[src];makealien=\ref[M]'>Make Alien</A> |
+					<A href='byond://?src=\ref[src];makeslime=\ref[M]'>Make Slime</A> |
+					<A href='byond://?src=\ref[src];makezombie=\ref[M]'>Make Zombie</A> |
+				"}
 
 			//Simple Animals
 			if(isanimal(M))
-				body += "<A href='byond://?_src_=holder;[HrefToken()];makeanimal=[REF(M)]'>Re-Animalize</A> | "
+				body += "<A href='byond://?src=\ref[src];makeanimal=\ref[M]'>Re-Animalize</A> | "
 			else
-				body += "<A href='byond://?_src_=holder;[HrefToken()];makeanimal=[REF(M)]'>Animalize</A> | "
+				body += "<A href='byond://?src=\ref[src];makeanimal=\ref[M]'>Animalize</A> | "
 
-			body += "<br><br>"
-			body += "<b>Rudimentary transformation:</b><font size=2><br>These transformations only create a new mob type and copy stuff over. They do not take into account MMIs and similar mob-specific things. The buttons in 'Transformations' are preferred, when possible.</font><br>"
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=observer;mob=[REF(M)]'>Observer</A> | "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];makeai=[REF(M)]'>Make AI</A> | "
-			body += "\[ Alien: <A href='byond://?_src_=holder;[HrefToken()];simplemake=drone;mob=[REF(M)]'>Drone</A>, "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=hunter;mob=[REF(M)]'>Hunter</A>, "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=sentinel;mob=[REF(M)]'>Sentinel</A>, "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=praetorian;mob=[REF(M)]'>Praetorian</A>, "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=queen;mob=[REF(M)]'>Queen</A>, "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=larva;mob=[REF(M)]'>Larva</A> \] "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=human;mob=[REF(M)]'>Human</A> "
-			body += "\[ slime: <A href='byond://?_src_=holder;[HrefToken()];simplemake=slime;mob=[REF(M)]'>Baby</A>, "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=adultslime;mob=[REF(M)]'>Adult</A> \] "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=monkey;mob=[REF(M)]'>Monkey</A> | "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=robot;mob=[REF(M)]'>Cyborg</A> | "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=cat;mob=[REF(M)]'>Cat</A> | "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=runtime;mob=[REF(M)]'>Runtime</A> | "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=corgi;mob=[REF(M)]'>Corgi</A> | "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=ian;mob=[REF(M)]'>Ian</A> | "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=crab;mob=[REF(M)]'>Crab</A> | "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=coffee;mob=[REF(M)]'>Coffee</A> | "
-			body += "\[ Construct: <A href='byond://?_src_=holder;[HrefToken()];simplemake=constructarmored;mob=[REF(M)]'>Juggernaut</A> , "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=constructbuilder;mob=[REF(M)]'>Artificer</A> , "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=constructwraith;mob=[REF(M)]'>Wraith</A> \] "
-			body += "<A href='byond://?_src_=holder;[HrefToken()];simplemake=shade;mob=[REF(M)]'>Shade</A>"
-			body += "<br>"
+			// DNA2 - Admin Hax
+			if(M.dna && iscarbon(M))
+				body += "<br><br>"
+				body += "<b>DNA Blocks:</b><br><table border='0'><tr><th>&nbsp;</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th>"
+				var/bname
+				for(var/block=1;block<=DNA_SE_LENGTH;block++)
+					if(((block-1)%5)==0)
+						body += "</tr><tr><th>[block-1]</th>"
+					bname = assigned_blocks[block]
+					body += "<td>"
+					if(bname)
+						var/bstate=M.dna.GetSEState(block)
+						var/bcolor="[(bstate)?"#006600":"#ff0000"]"
+						body += "<A href='byond://?src=\ref[src];togmutate=\ref[M];block=[block]' style='color:[bcolor];'>[bname]</A><sub>[block]</sub>"
+					else
+						body += "[block]"
+					body+="</td>"
+				body += "</tr></table>"
 
+			body += {"<br><br>
+				<b>Rudimentary transformation:</b>[FONT_NORMAL("<br>These transformations only create a new mob type and copy stuff over. They do not take into account MMIs and similar mob-specific things. The buttons in 'Transformations' are preferred, when possible.")]<br>
+				<A href='byond://?src=\ref[src];simplemake=observer;mob=\ref[M]'>Observer</A> |
+				\[ Xenos: <A href='byond://?src=\ref[src];simplemake=larva;mob=\ref[M]'>Larva</A>
+				\[ Crew: <A href='byond://?src=\ref[src];simplemake=human;mob=\ref[M]'>Human</A>
+				<A href='byond://?src=\ref[src];simplemake=human;species=Unathi;mob=\ref[M]'>Unathi</A>
+				<A href='byond://?src=\ref[src];simplemake=human;species=Skrell;mob=\ref[M]'>Skrell</A>
+				<A href='byond://?src=\ref[src];simplemake=human;species=Vox;mob=\ref[M]'>Vox</A> \] | \[
+				<A href='byond://?src=\ref[src];simplemake=nymph;mob=\ref[M]'>Nymph</A>
+				<A href='byond://?src=\ref[src];simplemake=human;species='Diona';mob=\ref[M]'>Diona</A> \] |
+				\[ slime: <A href='byond://?src=\ref[src];simplemake=slime;mob=\ref[M]'>Baby</A>,
+				<A href='byond://?src=\ref[src];simplemake=adultslime;mob=\ref[M]'>Adult</A> \]
+				<A href='byond://?src=\ref[src];simplemake=monkey;mob=\ref[M]'>Monkey</A> |
+				<A href='byond://?src=\ref[src];simplemake=robot;mob=\ref[M]'>Cyborg</A> |
+				<A href='byond://?src=\ref[src];simplemake=cat;mob=\ref[M]'>Cat</A> |
+				<A href='byond://?src=\ref[src];simplemake=runtime;mob=\ref[M]'>Runtime</A> |
+				<A href='byond://?src=\ref[src];simplemake=corgi;mob=\ref[M]'>Corgi</A> |
+				<A href='byond://?src=\ref[src];simplemake=ian;mob=\ref[M]'>Ian</A> |
+				<A href='byond://?src=\ref[src];simplemake=crab;mob=\ref[M]'>Crab</A> |
+				<A href='byond://?src=\ref[src];simplemake=coffee;mob=\ref[M]'>Coffee</A> |
+				\[ Construct: <A href='byond://?src=\ref[src];simplemake=constructarmoured;mob=\ref[M]'>Armoured</A> ,
+				<A href='byond://?src=\ref[src];simplemake=constructbuilder;mob=\ref[M]'>Builder</A> ,
+				<A href='byond://?src=\ref[src];simplemake=constructwraith;mob=\ref[M]'>Wraith</A> \]
+				<A href='byond://?src=\ref[src];simplemake=shade;mob=\ref[M]'>Shade</A>
+				<br>
+			"}
+	body += {"<br><br>
+			<b>Other actions:</b>
+			<br>
+			<A href='byond://?src=\ref[src];forcespeech=\ref[M]'>Forcesay</A> |
+			<a href='byond://?src=\ref[src];cloneother=\ref[M]'>Clone Other</a>
+			"}
 	if (M.client)
-		body += "<br><br>"
-		body += "<b>Other actions:</b>"
-		body += "<br>"
-		body += "<A href='byond://?_src_=holder;[HrefToken()];forcespeech=[REF(M)]'>Forcesay</A> | "
-		body += "<A href='byond://?_src_=holder;[HrefToken()];tdome1=[REF(M)]'>Thunderdome 1</A> | "
-		body += "<A href='byond://?_src_=holder;[HrefToken()];tdome2=[REF(M)]'>Thunderdome 2</A> | "
-		body += "<A href='byond://?_src_=holder;[HrefToken()];tdomeadmin=[REF(M)]'>Thunderdome Admin</A> | "
-		body += "<A href='byond://?_src_=holder;[HrefToken()];tdomeobserve=[REF(M)]'>Thunderdome Observer</A> | "
+		body += {" |
+			<A href='byond://?src=\ref[src];tdome1=\ref[M]'>Thunderdome 1</A> |
+			<A href='byond://?src=\ref[src];tdome2=\ref[M]'>Thunderdome 2</A> |
+			<A href='byond://?src=\ref[src];tdomeadmin=\ref[M]'>Thunderdome Admin</A> |
+			<A href='byond://?src=\ref[src];tdomeobserve=\ref[M]'>Thunderdome Observer</A> |
+		"}
+	// language toggles
+	body += "<br><br><b>Languages:</b><br>"
+	var/f = 1
+	for(var/k in all_languages)
+		var/datum/language/L = all_languages[k]
+		if(!(L.flags & INNATE))
+			if(!f) body += " | "
+			else f = 0
+			if(L in M.languages)
+				body += "<a href='byond://?src=\ref[src];toglang=\ref[M];lang=[html_encode(k)]' style='color:#006600'>[k]</a>"
+			else
+				body += "<a href='byond://?src=\ref[src];toglang=\ref[M];lang=[html_encode(k)]' style='color:#ff0000'>[k]</a>"
 
-	body += usr.client.YogsPPoptions(M) // YOGS - Player panel stuff, big PP
-	body += "<br>"
-	body += "</body></html>"
+	body += {"<br>
+		</body></html>
+	"}
 
-	usr << browse(body, "window=adminplayeropts-[REF(M)];size=550x515")
-	SSblackbox.record_feedback("tally", "admin_verb", 1, "Player Panel") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+	show_browser(usr, body, "window=adminplayeropts;size=550x515")
+
+
+/datum/player_info/var/author // admin who authored the information
+/datum/player_info/var/rank //rank of admin who made the notes
+/datum/player_info/var/content // text content of the information
+/datum/player_info/var/timestamp // Because this is bloody annoying
+/// Round ID of the note
+/datum/player_info/var/game_id
+
+#define PLAYER_NOTES_ENTRIES_PER_PAGE 50
+/datum/admins/proc/PlayerNotes()
+	set category = "Admin"
+	set name = "Player Notes"
+	if (!istype(src,/datum/admins))
+		src = usr.client.holder
+	if (!istype(src,/datum/admins))
+		to_chat(usr, "Error: you are not an admin!")
+		return
+	PlayerNotesPage()
+
+/datum/admins/proc/PlayerNotesPage(filter_term)
+	var/list/dat = list()
+	dat += "<B>Player notes</B><HR>"
+	var/savefile/S=new("data/player_notes.sav")
+	var/list/note_keys
+	from_save(S, note_keys)
+
+	if(filter_term)
+		for(var/t in note_keys)
+			if(findtext(lowertext(t), lowertext(filter_term)))
+				continue
+			note_keys -= t
+
+	dat += "<center><b>Search term:</b> <a href='byond://?src=\ref[src];notes=set_filter'>[filter_term ? filter_term : "-----"]</a></center><hr>"
+
+	if(!note_keys)
+		dat += "No notes found."
+	else
+		dat += "<table>"
+		note_keys = sortList(note_keys)
+		for(var/t in note_keys)
+			dat += "<tr><td><a href='byond://?src=\ref[src];notes=show;ckey=[t]'>[t]</a></td></tr>"
+		dat += "</table><br>"
+
+	var/datum/browser/popup = new(usr, "player_notes", "Player Notes", 400, 400)
+	popup.set_content(jointext(dat, null))
+	popup.open()
+
+
+/datum/admins/proc/player_has_info(key)
+	var/target = ckey(key)
+	var/savefile/info = new("data/player_saves/[copytext_char(target, 1, 2)]/[target]/info.sav")
+	var/list/infos
+	from_save(info, infos)
+	if (!length(infos))
+		return FALSE
+	return TRUE
+
+
+/proc/html_page(title, list/body, list/head)
+	return {"\
+		<!doctype html>
+		<html lang="en">\
+		<head>\
+			<meta charset="UTF-8">\
+			<meta name="viewport" content="width=device-width,initial-scale=1">\
+			<link rel="icon" href="data:,">\
+			[head ? (islist(head) ? jointext(head, null) : head) : ""]\
+			<title>[title]</title>\
+		</head>\
+		<body>[body ? (islist(body) ? jointext(body, null) : body) : ""]</body>\
+		</html>\
+	"}
+
+
+/proc/html_page_common(title, list/body, list/head)
+	var/list/prefix = list(
+		{"<link rel="stylesheet" href="common.css">"},
+		"<style>html, body { padding: 8px; font-family: Verdana, Geneva, sans-serif; }</style>"
+	)
+	return html_page(title, body, head ? prefix + head : prefix)
+
+
+/datum/admins/proc/show_player_info(target as text)
+	set category = "Admin"
+	set name = "Show Player Info"
+	if (!target)
+		return
+	if (!istext(target))
+		return
+	target = ckey(target)
+	var/client/user = resolve_client(usr)
+	if (!check_rights(R_INVESTIGATE, TRUE, user))
+		return
+	var/datum/admins/handler = user.holder
+	var/client/subject
+	for (var/client/client as anything in GLOB.clients)
+		if (client.ckey == target)
+			subject = client
+			break
+	var/list/body = list()
+	body += {"\
+		<div style="text-align: center;">\
+			<b>Player Age</b>: [subject ? subject.player_age : "Not Connected"]\
+			<hr>\
+			<a href="byond://?src=\ref[handler];add_player_info=[target]">Add Comment</a>\
+		</div>\
+		<hr>\
+	"}
+	var/list/infos
+	var/savefile = new /savefile ("data/player_saves/[copytext_char(target, 1, 2)]/[target]/info.sav")
+	from_save(savefile, infos)
+	if (!infos)
+		body += {"<div style="text-align: center; font-style: italic;">No comments saved.</div>"}
+	for (var/i = length(infos) to 1 step -1)
+		var/datum/player_info/comment = infos[i]
+		var/remove_button = ""
+		if (comment.author == user.key || check_rights(R_HOST, FALSE, user))
+			remove_button = {"<a href="byond://?src=\ref[handler];remove_player_info=[target];remove_index=[i]">Remove</a>"}
+		body += {"\
+			<div style="text-align: right; margin-bottom: 8px;">\
+				<div style="text-align: left; border: 1px dashed #808080; padding: 2px;">[comment.content]</div>\
+				<div style="text-align: right;">\
+					<b>[comment.author || "(not recorded)"]</b>, \
+					<b>[comment.rank || "(not recorded)"]</b>, \
+					on <b>[comment.timestamp || "(not recorded)"]</b>\
+					[comment.game_id ? "<br>Round ID: <b>[comment.game_id]</b>" : null]\
+				</div>\
+				[remove_button]\
+			</div>\
+		"}
+	send_rsc(user, 'html/browser/common.css', "common.css")
+	show_browser(user, html_page_common("Player Info: [target]", body), "window=showplayernotes;size=480x480;")
 
 
 /datum/admins/proc/access_news_network() //MARKER
-	set category = "Admin.Round Interaction"
-	set name = "Access Newscaster"
+	set category = "Fun"
+	set name = "Access Newscaster Network"
 	set desc = "Allows you to view, add and edit news feeds."
 
-	if (!istype(src, /datum/admins))
+	if (!istype(src,/datum/admins))
 		src = usr.client.holder
-	if (!istype(src, /datum/admins))
-		to_chat(usr, "Error: you are not an admin!", confidential=TRUE)
+	if (!istype(src,/datum/admins))
+		to_chat(usr, "Error: you are not an admin!")
 		return
+
+	var/datum/feed_network/torch_network = news_network[1] //temp change until the UI can be updated to support switching networks.
+
 	var/dat
-	dat = text("<HEAD><meta charset='UTF-8'><TITLE>Admin Newscaster</TITLE></HEAD><H3>Admin Newscaster Unit</H3>")
+	dat = text("<HEAD><TITLE>Admin Newscaster</TITLE></HEAD><H3>Admin Newscaster Unit</H3>")
 
 	switch(admincaster_screen)
 		if(0)
-			dat += "Welcome to the admin newscaster.<BR> Here you can add, edit and censor every newspiece on the network."
-			dat += "<BR>Feed channels and stories entered through here will be uneditable and handled as official news by the rest of the units."
-			dat += "<BR>Note that this panel allows full freedom over the news network, there are no constrictions except the few basic ones. Don't break things!</FONT>"
-			if(GLOB.news_network.wanted_issue.active)
-				dat+= "<HR><A href='byond://?src=[REF(src)];[HrefToken()];ac_view_wanted=1'>Read Wanted Issue</A>"
-			dat+= "<HR><BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_create_channel=1'>Create Feed Channel</A>"
-			dat+= "<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_view=1'>View Feed Channels</A>"
-			dat+= "<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_create_feed_story=1'>Submit new Feed story</A>"
-			dat+= "<BR><BR><A href='byond://?src=[REF(usr)];[HrefToken()];mach_close=newscaster_main'>Exit</A>"
+			dat += {"Welcome to the admin newscaster.<BR> Here you can add, edit and censor every newspiece on the network.
+				<BR>Feed channels and stories entered through here will be uneditable and handled as official news by the rest of the units.
+				<BR>Note that this panel allows full freedom over the news network, there are no constrictions except the few basic ones. Don't break things!
+			"}
+			if(torch_network.wanted_issue)
+				dat+= "<HR><A href='byond://?src=\ref[src];ac_view_wanted=1'>Read Wanted Issue</A>"
+
+			dat+= {"<HR><BR><A href='byond://?src=\ref[src];ac_create_channel=1'>Create Feed Channel</A>
+				<BR><A href='byond://?src=\ref[src];ac_view=1'>View Feed Channels</A>
+				<BR><A href='byond://?src=\ref[src];ac_create_feed_story=1'>Submit new Feed story</A>
+				<BR><BR><A href='byond://?src=\ref[usr];mach_close=newscaster_main'>Exit</A>
+			"}
+
 			var/wanted_already = 0
-			if(GLOB.news_network.wanted_issue.active)
+			if(torch_network.wanted_issue)
 				wanted_already = 1
-			dat+="<HR><B>Feed Security functions:</B><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_menu_wanted=1'>[(wanted_already) ? ("Manage") : ("Publish")] \"Wanted\" Issue</A>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_menu_censor_story=1'>Censor Feed Stories</A>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_menu_censor_channel=1'>Mark Feed Channel with Nanotrasen D-Notice (disables and locks the channel).</A>"
-			dat+="<BR><HR><A href='byond://?src=[REF(src)];[HrefToken()];ac_set_signature=1'>The newscaster recognises you as:<BR> <FONT COLOR='green'>[src.admin_signature]</FONT></A>"
+
+			dat+={"<HR><B>Feed Security functions:</B><BR>
+				<BR><A href='byond://?src=\ref[src];ac_menu_wanted=1'>[(wanted_already) ? ("Manage") : ("Publish")] \"Wanted\" Issue</A>
+				<BR><A href='byond://?src=\ref[src];ac_menu_censor_story=1'>Censor Feed Stories</A>
+				<BR><A href='byond://?src=\ref[src];ac_menu_censor_channel=1'>Mark Feed Channel with [GLOB.using_map.company_name] D-Notice (disables and locks the channel.</A>
+				<BR><HR><A href='byond://?src=\ref[src];ac_set_signature=1'>The newscaster recognises you as:<BR> [SPAN_COLOR("green", src.admincaster_signature)]</A>
+			"}
 		if(1)
-			dat+= "Station Feed Channels<HR>"
-			if( !length(GLOB.news_network.network_channels) )
+			dat+= "Feed Channels<HR>"
+			if( !length(torch_network.network_channels) )
 				dat+="<I>No active channels found...</I>"
 			else
-				for(var/datum/newscaster/feed_channel/CHANNEL in GLOB.news_network.network_channels)
+				for(var/datum/feed_channel/CHANNEL in torch_network.network_channels)
 					if(CHANNEL.is_admin_channel)
-						dat+="<B><FONT style='BACKGROUND-COLOR: LightGreen'><A href='byond://?src=[REF(src)];ac_show_channel=[REF(CHANNEL)]'>[CHANNEL.channel_name]</A></FONT></B><BR>"
+						dat+="<B><span style='background-color: LightGreen'><A href='byond://?src=\ref[src];ac_show_channel=\ref[CHANNEL]'>[CHANNEL.channel_name]</A></span></B><BR>"
 					else
-						dat+="<B><A href='byond://?src=[REF(src)];[HrefToken()];ac_show_channel=[REF(CHANNEL)]'>[CHANNEL.channel_name]</A> [(CHANNEL.censored) ? ("<FONT COLOR='red'>***</FONT>") : ""]<BR></B>"
-			dat+="<BR><HR><A href='byond://?src=[REF(src)];[HrefToken()];ac_refresh=1'>Refresh</A>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Back</A>"
+						dat+="<B><A href='byond://?src=\ref[src];ac_show_channel=\ref[CHANNEL]'>[CHANNEL.channel_name]</A> [(CHANNEL.censored) ? (SPAN_COLOR("red", "***")) : null ]<BR></B>"
+			dat+={"<BR><HR><A href='byond://?src=\ref[src];ac_refresh=1'>Refresh</A>
+				<BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Back</A>
+			"}
+
 		if(2)
-			dat+="Creating new Feed Channel..."
-			dat+="<HR><B><A href='byond://?src=[REF(src)];[HrefToken()];ac_set_channel_name=1'>Channel Name</A>:</B> [src.admincaster_feed_channel.channel_name]<BR>"
-			dat+="<B><A href='byond://?src=[REF(src)];[HrefToken()];ac_set_signature=1'>Channel Author</A>:</B> <FONT COLOR='green'>[src.admin_signature]</FONT><BR>"
-			dat+="<B><A href='byond://?src=[REF(src)];[HrefToken()];ac_set_channel_lock=1'>Will Accept Public Feeds</A>:</B> [(src.admincaster_feed_channel.locked) ? ("NO") : ("YES")]<BR><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_submit_new_channel=1'>Submit</A><BR><BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Cancel</A><BR>"
+			dat+={"
+				Creating new Feed Channel...
+				<HR><B><A href='byond://?src=\ref[src];ac_set_channel_name=1'>Channel Name</A>:</B> [src.admincaster_feed_channel.channel_name]<BR>
+				<B><A href='byond://?src=\ref[src];ac_set_signature=1'>Channel Author</A>:</B> [SPAN_COLOR("green", src.admincaster_signature)]<BR>
+				<B><A href='byond://?src=\ref[src];ac_set_channel_lock=1'>Will Accept Public Feeds</A>:</B> [(src.admincaster_feed_channel.locked) ? ("NO") : ("YES")]<BR><BR>
+				<BR><A href='byond://?src=\ref[src];ac_submit_new_channel=1'>Submit</A><BR><BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Cancel</A><BR>
+			"}
 		if(3)
-			dat+="Creating new Feed Message..."
-			dat+="<HR><B><A href='byond://?src=[REF(src)];[HrefToken()];ac_set_channel_receiving=1'>Receiving Channel</A>:</B> [src.admincaster_feed_channel.channel_name]<BR>" //MARK
-			dat+="<B>Message Author:</B> <FONT COLOR='green'>[src.admin_signature]</FONT><BR>"
-			dat+="<B><A href='byond://?src=[REF(src)];[HrefToken()];ac_set_new_message=1'>Message Body</A>:</B> [src.admincaster_feed_message.returnBody(-1)] <BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_submit_new_message=1'>Submit</A><BR><BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Cancel</A><BR>"
+			dat+={"
+				Creating new Feed Message...
+				<HR><B><A href='byond://?src=\ref[src];ac_set_channel_receiving=1'>Receiving Channel</A>:</B> [src.admincaster_feed_channel.channel_name]<BR>" //MARK
+				<B>Message Author:</B> [SPAN_COLOR("green", src.admincaster_signature)]<BR>
+				<B><A href='byond://?src=\ref[src];ac_set_new_message=1'>Message Body</A>:</B> [src.admincaster_feed_message.body] <BR>
+				<BR><A href='byond://?src=\ref[src];ac_submit_new_message=1'>Submit</A><BR><BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Cancel</A><BR>
+			"}
 		if(4)
-			dat+="Feed story successfully submitted to [src.admincaster_feed_channel.channel_name].<BR><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Return</A><BR>"
+			dat+={"
+					Feed story successfully submitted to [src.admincaster_feed_channel.channel_name].<BR><BR>
+					<BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Return</A><BR>
+				"}
 		if(5)
-			dat+="Feed Channel [src.admincaster_feed_channel.channel_name] created successfully.<BR><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Return</A><BR>"
+			dat+={"
+				Feed Channel [src.admincaster_feed_channel.channel_name] created successfully.<BR><BR>
+				<BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Return</A><BR>
+			"}
 		if(6)
-			dat+="<B><FONT COLOR='maroon'>ERROR: Could not submit Feed story to Network.</B></FONT><HR><BR>"
+			dat+="<B>[SPAN_COLOR("maroon", "ERROR: Could not submit Feed story to Network.</B>")]<HR><BR>"
 			if(src.admincaster_feed_channel.channel_name=="")
-				dat+="<FONT COLOR='maroon'>Invalid receiving channel name.</FONT><BR>"
-			if(src.admincaster_feed_message.returnBody(-1) == "" || src.admincaster_feed_message.returnBody(-1) == "\[REDACTED\]")
-				dat+="<FONT COLOR='maroon'>Invalid message body.</FONT><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[3]'>Return</A><BR>"
+				dat+="[SPAN_COLOR("maroon", "Invalid receiving channel name.")]<BR>"
+			if(src.admincaster_feed_message.body == "" || src.admincaster_feed_message.body == "\[REDACTED\]")
+				dat+="[SPAN_COLOR("maroon", "Invalid message body.")]<BR>"
+			dat+="<BR><A href='byond://?src=\ref[src];ac_setScreen=[3]'>Return</A><BR>"
 		if(7)
-			dat+="<B><FONT COLOR='maroon'>ERROR: Could not submit Feed Channel to Network.</B></FONT><HR><BR>"
+			dat+="<B>[SPAN_COLOR("maroon", "ERROR: Could not submit Feed Channel to Network.</B>")]<HR><BR>"
 			if(src.admincaster_feed_channel.channel_name =="" || src.admincaster_feed_channel.channel_name == "\[REDACTED\]")
-				dat+="<FONT COLOR='maroon'>Invalid channel name.</FONT><BR>"
+				dat+="[SPAN_COLOR("maroon", "Invalid channel name.")]<BR>"
 			var/check = 0
-			for(var/datum/newscaster/feed_channel/FC in GLOB.news_network.network_channels)
+			for(var/datum/feed_channel/FC in torch_network.network_channels)
 				if(FC.channel_name == src.admincaster_feed_channel.channel_name)
 					check = 1
 					break
 			if(check)
-				dat+="<FONT COLOR='maroon'>Channel name already in use.</FONT><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[2]'>Return</A><BR>"
+				dat+="[SPAN_COLOR("maroon", "Channel name already in use.")]<BR>"
+			dat+="<BR><A href='byond://?src=\ref[src];ac_setScreen=[2]'>Return</A><BR>"
 		if(9)
-			dat+="<B>[admincaster_feed_channel.channel_name]: </B><FONT SIZE=1>\[created by: <FONT COLOR='maroon'>[admincaster_feed_channel.returnAuthor(-1)]</FONT>\]</FONT><HR>"
+			dat+="<B>[src.admincaster_feed_channel.channel_name]: </B>[FONT_SMALL("\[created by: [SPAN_COLOR("maroon", src.admincaster_feed_channel.author)]\]")]<HR>"
 			if(src.admincaster_feed_channel.censored)
-				dat+="<FONT COLOR='red'><B>ATTENTION: </B></FONT>This channel has been deemed as threatening to the welfare of the station, and marked with a Nanotrasen D-Notice.<BR>"
-				dat+="No further feed story additions are allowed while the D-Notice is in effect.</FONT><BR><BR>"
+				dat+={"
+					[SPAN_COLOR("red", "<B>ATTENTION: </B>")]This channel has been deemed as threatening to the welfare of the [station_name()], and marked with a [GLOB.using_map.company_name] D-Notice.<BR>
+					No further feed story additions are allowed while the D-Notice is in effect.<BR><BR>
+				"}
 			else
-				if( !length(src.admincaster_feed_channel.messages) )
+				if( !length(admincaster_feed_channel.messages) )
 					dat+="<I>No feed messages found in channel...</I><BR>"
 				else
 					var/i = 0
-					for(var/datum/newscaster/feed_message/MESSAGE in src.admincaster_feed_channel.messages)
+					for(var/datum/feed_message/MESSAGE in src.admincaster_feed_channel.messages)
 						i++
-						dat+="-[MESSAGE.returnBody(-1)] <BR>"
+						dat+="-[MESSAGE.body] <BR>"
 						if(MESSAGE.img)
-							usr << browse_rsc(MESSAGE.img, "tmp_photo[i].png")
+							send_rsc(usr, MESSAGE.img, "tmp_photo[i].png")
 							dat+="<img src='tmp_photo[i].png' width = '180'><BR><BR>"
-						dat+="<FONT SIZE=1>\[Story by <FONT COLOR='maroon'>[MESSAGE.returnAuthor(-1)]</FONT>\]</FONT><BR>"
-						dat+="[MESSAGE.comments.len] comment[MESSAGE.comments.len > 1 ? "s" : ""]:<br>"
-						for(var/datum/newscaster/feed_comment/comment in MESSAGE.comments)
-							dat+="[comment.body]<br><font size=1>[comment.author] [comment.time_stamp]</font><br>"
-						dat+="<br>"
-			dat+="<BR><HR><A href='byond://?src=[REF(src)];[HrefToken()];ac_refresh=1'>Refresh</A>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[1]'>Back</A>"
+						dat+="[FONT_SMALL("\[Story by [SPAN_COLOR("maroon", MESSAGE.author)]\]")]<BR>"
+			dat+={"
+				<BR><HR><A href='byond://?src=\ref[src];ac_refresh=1'>Refresh</A>
+				<BR><A href='byond://?src=\ref[src];ac_setScreen=[1]'>Back</A>
+			"}
 		if(10)
-			dat+="<B>Nanotrasen Feed Censorship Tool</B><BR>"
-			dat+="<FONT SIZE=1>NOTE: Due to the nature of news Feeds, total deletion of a Feed Story is not possible.<BR>"
-			dat+="Keep in mind that users attempting to view a censored feed will instead see the \[REDACTED\] tag above it.</FONT>"
-			dat+="<HR>Select Feed channel to get Stories from:<BR>"
-			if(!length(GLOB.news_network.network_channels))
+			dat+={"
+				<B>[GLOB.using_map.company_name] Feed Censorship Tool</B><BR>
+				<span style='font-size: 10px'>NOTE: Due to the nature of news Feeds, total deletion of a Feed Story is not possible.<BR>
+				Keep in mind that users attempting to view a censored feed will instead see the \[REDACTED\] tag above it.</span>
+				<HR>Select Feed channel to get Stories from:<BR>
+			"}
+			if(!length(torch_network.network_channels))
 				dat+="<I>No feed channels found active...</I><BR>"
 			else
-				for(var/datum/newscaster/feed_channel/CHANNEL in GLOB.news_network.network_channels)
-					dat+="<A href='byond://?src=[REF(src)];[HrefToken()];ac_pick_censor_channel=[REF(CHANNEL)]'>[CHANNEL.channel_name]</A> [(CHANNEL.censored) ? ("<FONT COLOR='red'>***</FONT>") : ""]<BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Cancel</A>"
+				for(var/datum/feed_channel/CHANNEL in torch_network.network_channels)
+					dat+="<A href='byond://?src=\ref[src];ac_pick_censor_channel=\ref[CHANNEL]'>[CHANNEL.channel_name]</A> [(CHANNEL.censored) ? (SPAN_COLOR("red", "***")) : null ]<BR>"
+			dat+="<BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Cancel</A>"
 		if(11)
-			dat+="<B>Nanotrasen D-Notice Handler</B><HR>"
-			dat+="<FONT SIZE=1>A D-Notice is to be bestowed upon the channel if the handling Authority deems it as harmful for the station's"
-			dat+="morale, integrity or disciplinary behaviour. A D-Notice will render a channel unable to be updated by anyone, without deleting any feed"
-			dat+="stories it might contain at the time. You can lift a D-Notice if you have the required access at any time.</FONT><HR>"
-			if(!length(GLOB.news_network.network_channels))
+			dat+={"
+				<B>[GLOB.using_map.company_name] D-Notice Handler</B><HR>
+				<span style='font-size: 10px'>A D-Notice is to be bestowed upon the channel if the handling Authority deems it as harmful for the [station_name()]'s
+				morale, integrity or disciplinary behaviour. A D-Notice will render a channel unable to be updated by anyone, without deleting any feed
+				stories it might contain at the time. You can lift a D-Notice if you have the required access at any time.</span><HR>
+			"}
+			if(!length(torch_network.network_channels))
 				dat+="<I>No feed channels found active...</I><BR>"
 			else
-				for(var/datum/newscaster/feed_channel/CHANNEL in GLOB.news_network.network_channels)
-					dat+="<A href='byond://?src=[REF(src)];[HrefToken()];ac_pick_d_notice=[REF(CHANNEL)]'>[CHANNEL.channel_name]</A> [(CHANNEL.censored) ? ("<FONT COLOR='red'>***</FONT>") : ""]<BR>"
+				for(var/datum/feed_channel/CHANNEL in torch_network.network_channels)
+					dat+="<A href='byond://?src=\ref[src];ac_pick_d_notice=\ref[CHANNEL]'>[CHANNEL.channel_name]</A> [(CHANNEL.censored) ? (SPAN_COLOR("red", "***")) : null ]<BR>"
 
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Back</A>"
+			dat+="<BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Back</A>"
 		if(12)
-			dat+="<B>[src.admincaster_feed_channel.channel_name]: </B><FONT SIZE=1>\[ created by: <FONT COLOR='maroon'>[src.admincaster_feed_channel.returnAuthor(-1)]</FONT> \]</FONT><BR>"
-			dat+="<FONT SIZE=2><A href='byond://?src=[REF(src)];[HrefToken()];ac_censor_channel_author=[REF(src.admincaster_feed_channel)]'>[(src.admincaster_feed_channel.authorCensor) ? ("Undo Author censorship") : ("Censor channel Author")]</A></FONT><HR>"
-
-			if( !length(src.admincaster_feed_channel.messages) )
+			dat+={"
+				<B>[src.admincaster_feed_channel.channel_name]: </B>[FONT_SMALL("\[ created by: [SPAN_COLOR("maroon", src.admincaster_feed_channel.author)] \]")]<BR>
+				[FONT_NORMAL("<A href='byond://?src=\ref[src];ac_censor_channel_author=\ref[src.admincaster_feed_channel]'>[(src.admincaster_feed_channel.author=="\[REDACTED\]") ? ("Undo Author censorship") : ("Censor channel Author")]</A>")]<HR>
+			"}
+			if( !length(admincaster_feed_channel.messages) )
 				dat+="<I>No feed messages found in channel...</I><BR>"
 			else
-				for(var/datum/newscaster/feed_message/MESSAGE in src.admincaster_feed_channel.messages)
-					dat+="-[MESSAGE.returnBody(-1)] <BR><FONT SIZE=1>\[Story by <FONT COLOR='maroon'>[MESSAGE.returnAuthor(-1)]</FONT>\]</FONT><BR>"
-					dat+="<FONT SIZE=2><A href='byond://?src=[REF(src)];[HrefToken()];ac_censor_channel_story_body=[REF(MESSAGE)]'>[(MESSAGE.bodyCensor) ? ("Undo story censorship") : ("Censor story")]</A>  -  <A href='byond://?src=[REF(src)];[HrefToken()];ac_censor_channel_story_author=[REF(MESSAGE)]'>[(MESSAGE.authorCensor) ? ("Undo Author Censorship") : ("Censor message Author")]</A></FONT><BR>"
-					dat+="[MESSAGE.comments.len] comment[MESSAGE.comments.len > 1 ? "s" : ""]: <a href='byond://?src=[REF(src)];[HrefToken()];ac_lock_comment=[REF(MESSAGE)]'>[MESSAGE.locked ? "Unlock" : "Lock"]</a><br>"
-					for(var/datum/newscaster/feed_comment/comment in MESSAGE.comments)
-						dat+="[comment.body] <a href='byond://?src=[REF(src)];[HrefToken()];ac_del_comment=[REF(comment)];ac_del_comment_msg=[REF(MESSAGE)]'>X</a><br><font size=1>[comment.author] [comment.time_stamp]</font><br>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[10]'>Back</A>"
+				for(var/datum/feed_message/MESSAGE in src.admincaster_feed_channel.messages)
+					dat+={"
+						-[MESSAGE.body] <BR>[FONT_SMALL("\[Story by [SPAN_COLOR("maroon", MESSAGE.author)]\]")]<BR>
+						[FONT_NORMAL("<A href='byond://?src=\ref[src];ac_censor_channel_story_body=\ref[MESSAGE]'>[(MESSAGE.body == "\[REDACTED\]") ? ("Undo story censorship") : ("Censor story")]</A>  -  <A href='byond://?src=\ref[src];ac_censor_channel_story_author=\ref[MESSAGE]'>[(MESSAGE.author == "\[REDACTED\]") ? ("Undo Author Censorship") : ("Censor message Author")]</A>")]<BR>
+					"}
+			dat+="<BR><A href='byond://?src=\ref[src];ac_setScreen=[10]'>Back</A>"
 		if(13)
-			dat+="<B>[src.admincaster_feed_channel.channel_name]: </B><FONT SIZE=1>\[ created by: <FONT COLOR='maroon'>[src.admincaster_feed_channel.returnAuthor(-1)]</FONT> \]</FONT><BR>"
-			dat+="Channel messages listed below. If you deem them dangerous to the station, you can <A href='byond://?src=[REF(src)];[HrefToken()];ac_toggle_d_notice=[REF(src.admincaster_feed_channel)]'>Bestow a D-Notice upon the channel</A>.<HR>"
+			dat+={"
+				<B>[src.admincaster_feed_channel.channel_name]: </B>[FONT_SMALL("\[ created by: [SPAN_COLOR("maroon", src.admincaster_feed_channel.author)] \]")]<BR>
+				Channel messages listed below. If you deem them dangerous to the [station_name()], you can <A href='byond://?src=\ref[src];ac_toggle_d_notice=\ref[src.admincaster_feed_channel]'>Bestow a D-Notice upon the channel</A>.<HR>
+			"}
 			if(src.admincaster_feed_channel.censored)
-				dat+="<FONT COLOR='red'><B>ATTENTION: </B></FONT>This channel has been deemed as threatening to the welfare of the station, and marked with a Nanotrasen D-Notice.<BR>"
-				dat+="No further feed story additions are allowed while the D-Notice is in effect.</FONT><BR><BR>"
+				dat+={"
+					[SPAN_COLOR("red", "<B>ATTENTION: </B>")]This channel has been deemed as threatening to the welfare of the [station_name()], and marked with a [GLOB.using_map.company_name] D-Notice.<BR>
+					No further feed story additions are allowed while the D-Notice is in effect.<BR><BR>
+				"}
 			else
-				if( !length(src.admincaster_feed_channel.messages) )
+				if( !length(admincaster_feed_channel.messages) )
 					dat+="<I>No feed messages found in channel...</I><BR>"
 				else
-					for(var/datum/newscaster/feed_message/MESSAGE in src.admincaster_feed_channel.messages)
-						dat+="-[MESSAGE.returnBody(-1)] <BR><FONT SIZE=1>\[Story by <FONT COLOR='maroon'>[MESSAGE.returnAuthor(-1)]</FONT>\]</FONT><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[11]'>Back</A>"
+					for(var/datum/feed_message/MESSAGE in src.admincaster_feed_channel.messages)
+						dat+="-[MESSAGE.body] <BR>[FONT_SMALL("\[Story by [SPAN_COLOR("maroon", MESSAGE.author)]\]")]<BR>"
+
+			dat+="<BR><A href='byond://?src=\ref[src];ac_setScreen=[11]'>Back</A>"
 		if(14)
 			dat+="<B>Wanted Issue Handler:</B>"
 			var/wanted_already = 0
 			var/end_param = 1
-			if(GLOB.news_network.wanted_issue.active)
+			if(torch_network.wanted_issue)
 				wanted_already = 1
 				end_param = 2
 			if(wanted_already)
-				dat+="<FONT SIZE=2><BR><I>A wanted issue is already in Feed Circulation. You can edit or cancel it below.</FONT></I>"
-			dat+="<HR>"
-			dat+="<A href='byond://?src=[REF(src)];[HrefToken()];ac_set_wanted_name=1'>Criminal Name</A>: [src.admincaster_wanted_message.criminal] <BR>"
-			dat+="<A href='byond://?src=[REF(src)];[HrefToken()];ac_set_wanted_desc=1'>Description</A>: [src.admincaster_wanted_message.body] <BR>"
+				dat+="[FONT_NORMAL("<BR><I>A wanted issue is already in Feed Circulation. You can edit or cancel it below.")]</I>"
+			dat+={"
+				<HR>
+				<A href='byond://?src=\ref[src];ac_set_wanted_name=1'>Criminal Name</A>: [src.admincaster_feed_message.author] <BR>
+				<A href='byond://?src=\ref[src];ac_set_wanted_desc=1'>Description</A>: [src.admincaster_feed_message.body] <BR>
+			"}
 			if(wanted_already)
-				dat+="<B>Wanted Issue created by:</B><FONT COLOR='green'>[GLOB.news_network.wanted_issue.scannedUser]</FONT><BR>"
+				dat+="<B>Wanted Issue created by:</B>[SPAN_COLOR("green", " [torch_network.wanted_issue.backup_author]")]<BR>"
 			else
-				dat+="<B>Wanted Issue will be created under prosecutor:</B><FONT COLOR='green'>[src.admin_signature]</FONT><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_submit_wanted=[end_param]'>[(wanted_already) ? ("Edit Issue") : ("Submit")]</A>"
+				dat+="<B>Wanted Issue will be created under prosecutor:</B>[SPAN_COLOR("green", " [src.admincaster_signature]")]<BR>"
+			dat+="<BR><A href='byond://?src=\ref[src];ac_submit_wanted=[end_param]'>[(wanted_already) ? ("Edit Issue") : ("Submit")]</A>"
 			if(wanted_already)
-				dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_cancel_wanted=1'>Take down Issue</A>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Cancel</A>"
+				dat+="<BR><A href='byond://?src=\ref[src];ac_cancel_wanted=1'>Take down Issue</A>"
+			dat+="<BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Cancel</A>"
 		if(15)
-			dat+="<FONT COLOR='green'>Wanted issue for [src.admincaster_wanted_message.criminal] is now in Network Circulation.</FONT><BR><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Return</A><BR>"
+			dat+={"
+				[SPAN_COLOR("green", "Wanted issue for [src.admincaster_feed_message.author] is now in Network Circulation.")]<BR><BR>
+				<BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Return</A><BR>
+			"}
 		if(16)
-			dat+="<B><FONT COLOR='maroon'>ERROR: Wanted Issue rejected by Network.</B></FONT><HR><BR>"
-			if(src.admincaster_wanted_message.criminal =="" || src.admincaster_wanted_message.criminal == "\[REDACTED\]")
-				dat+="<FONT COLOR='maroon'>Invalid name for person wanted.</FONT><BR>"
-			if(src.admincaster_wanted_message.body == "" || src.admincaster_wanted_message.body == "\[REDACTED\]")
-				dat+="<FONT COLOR='maroon'>Invalid description.</FONT><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Return</A><BR>"
+			dat+="<B>[SPAN_COLOR("maroon", "ERROR: Wanted Issue rejected by Network.</B>")]<HR><BR>"
+			if(src.admincaster_feed_message.author =="" || src.admincaster_feed_message.author == "\[REDACTED\]")
+				dat+="[SPAN_COLOR("maroon", "Invalid name for person wanted.")]<BR>"
+			if(src.admincaster_feed_message.body == "" || src.admincaster_feed_message.body == "\[REDACTED\]")
+				dat+="[SPAN_COLOR("maroon", "Invalid description.")]<BR>"
+			dat+="<BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Return</A><BR>"
 		if(17)
-			dat+="<B>Wanted Issue successfully deleted from Circulation</B><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Return</A><BR>"
+			dat+={"
+				<B>Wanted Issue successfully deleted from Circulation</B><BR>
+				<BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Return</A><BR>
+			"}
 		if(18)
-			dat+="<B><FONT COLOR ='maroon'>-- STATIONWIDE WANTED ISSUE --</B></FONT><BR><FONT SIZE=2>\[Submitted by: <FONT COLOR='green'>[GLOB.news_network.wanted_issue.scannedUser]</FONT>\]</FONT><HR>"
-			dat+="<B>Criminal</B>: [GLOB.news_network.wanted_issue.criminal]<BR>"
-			dat+="<B>Description</B>: [GLOB.news_network.wanted_issue.body]<BR>"
-			dat+="<B>Photo:</B>: "
-			if(GLOB.news_network.wanted_issue.img)
-				usr << browse_rsc(GLOB.news_network.wanted_issue.img, "tmp_photow.png")
+			dat+={"
+				[SPAN_COLOR("maroon", "<B>-- STATIONWIDE WANTED ISSUE --</B>")]<BR>[FONT_NORMAL("\[Submitted by: [SPAN_COLOR("green", torch_network.wanted_issue.backup_author)]\]")]<HR>
+				<B>Criminal</B>: [torch_network.wanted_issue.author]<BR>
+				<B>Description</B>: [torch_network.wanted_issue.body]<BR>
+				<B>Photo:</B>:
+			"}
+			if(torch_network.wanted_issue.img)
+				send_rsc(usr, torch_network.wanted_issue.img, "tmp_photow.png")
 				dat+="<BR><img src='tmp_photow.png' width = '180'>"
 			else
 				dat+="None"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Back</A><BR>"
+			dat+="<BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Back</A><BR>"
 		if(19)
-			dat+="<FONT COLOR='green'>Wanted issue for [src.admincaster_wanted_message.criminal] successfully edited.</FONT><BR><BR>"
-			dat+="<BR><A href='byond://?src=[REF(src)];[HrefToken()];ac_setScreen=[0]'>Return</A><BR>"
+			dat+={"
+				[SPAN_COLOR("green", "Wanted issue for [src.admincaster_feed_message.author] successfully edited.")]<BR><BR>
+				<BR><A href='byond://?src=\ref[src];ac_setScreen=[0]'>Return</A><BR>
+			"}
 		else
 			dat+="I'm sorry to break your immersion. This shit's bugged. Report this bug to Agouri, polyxenitopalidou@gmail.com"
 
-	usr << browse(dat, "window=admincaster_main;size=400x600")
+//	log_debug("Channelname: [src.admincaster_feed_channel.channel_name] [src.admincaster_feed_channel.author]")
+//	log_debug("Msg: [src.admincaster_feed_message.author] [src.admincaster_feed_message.body]")
+
+	show_browser(usr, dat, "window=admincaster_main;size=400x600")
 	onclose(usr, "admincaster_main")
 
 
+
+/datum/admins/proc/Jobbans()
+	if(!check_rights(R_BAN))	return
+
+	var/dat = "<B>Job Bans!</B><HR><table>"
+	for(var/t in jobban_keylist)
+		var/r = t
+		if( findtext(r,"##") )
+			r = copytext( r, 1, findtext(r,"##") )//removes the description
+		dat += text("<tr><td>[t] (<A href='byond://?src=\ref[src];removejobban=[r]'>unban</A>)</td></tr>")
+	dat += "</table>"
+	show_browser(usr, dat, "window=ban;size=400x400")
+
 /datum/admins/proc/Game()
-	if(!check_rights(0))
-		return
+	if(!check_rights(0))	return
 
 	var/dat = {"
-		<HTML><HEAD><meta charset='UTF-8'></HEAD><BODY>
 		<center><B>Game Panel</B></center><hr>\n
+		<A href='byond://?src=\ref[src];c_mode=1'>Change Game Mode</A><br>
 		"}
+	if(SSticker.master_mode == "secret")
+		dat += "<A href='byond://?src=\ref[src];f_secret=1'>(Force Secret Mode)</A><br>"
 
 	dat += {"
-		<A href='byond://?src=[REF(src)];[HrefToken()];create_object=1'>Create Object</A><br>
-		<A href='byond://?src=[REF(src)];[HrefToken()];quick_create_object=1'>Quick Create Object</A><br>
-		<A href='byond://?src=[REF(src)];[HrefToken()];create_turf=1'>Create Turf</A><br>
-		<A href='byond://?src=[REF(src)];[HrefToken()];create_mob=1'>Create Mob</A><br>
+		<BR>
+		<A href='byond://?src=\ref[src];create_object=1'>Create Object</A><br>
+		<A href='byond://?src=\ref[src];create_turf=1'>Create Turf</A><br>
+		<A href='byond://?src=\ref[src];create_mob=1'>Create Mob</A><br>
+		<br><A href='byond://?src=\ref[src];vsc=airflow'>Edit Airflow Settings</A><br>
+		<A href='byond://?src=\ref[src];vsc=phoron'>Edit Phoron Settings</A><br>
+		<A href='byond://?src=\ref[src];vsc=default'>Choose a default ZAS setting</A><br>
 		"}
 
-	if(marked_datum && istype(marked_datum, /atom))
-		dat += "<A href='byond://?src=[REF(src)];[HrefToken()];dupe_marked_datum=1'>Duplicate Marked Datum</A><br>"
+	show_browser(usr, dat, "window=admin2;size=210x280")
+	return
 
-	dat += "</BODY></HTML>"
+/datum/admins/proc/Secrets(datum/admin_secret_category/active_category = null)
+	if(!check_rights(0))	return
 
-	var/datum/browser/browser = new(usr, "admin2", "Game Panel", 240, 280)
-	browser.set_content(dat)
-	browser.open()
+	// Print the header with category selection buttons.
+	var/dat = "<B>The first rule of adminbuse is: you don't talk about the adminbuse.</B><HR>"
+	for(var/datum/admin_secret_category/category in admin_secrets.categories)
+		if(!category.can_view(usr))
+			continue
+		if(active_category == category)
+			dat += SPAN_CLASS("linkOn", category.name)
+		else
+			dat += "<A href='byond://?src=\ref[src];admin_secrets_panel=\ref[category]'>[category.name]</A> "
+	dat += "<HR>"
+
+	// If a category is selected, print its description and then options
+	if(istype(active_category) && active_category.can_view(usr))
+		if(active_category.desc)
+			dat += "<I>[active_category.desc]</I><BR>"
+		for(var/datum/admin_secret_item/item in active_category.items)
+			if(!item.can_view(usr))
+				continue
+			dat += "<A href='byond://?src=\ref[src];admin_secrets=\ref[item]'>[item.name()]</A><BR>"
+		dat += "<BR>"
+
+	var/datum/browser/popup = new(usr, "secrets", "Secrets", 550, 500)
+	popup.set_content(dat)
+	popup.open()
 	return
 
 /////////////////////////////////////////////////////////////////////////////////////////////////admins2.dm merge
@@ -458,570 +719,973 @@
 
 /datum/admins/proc/restart()
 	set category = "Server"
-	set name = "Reboot World"
-	set desc="Restarts the world immediately"
+	set name = "Restart"
+	set desc="Restarts the world"
 	if (!usr.client.holder)
 		return
-
-	var/list/options = list("Regular Restart")
-	if(check_rights(R_SERVER, FALSE))
-		options += list("Hard Restart (No Delay/Feeback Reason)", "Hardest Restart (No actions, just reboot)")
-		if(world.TgsAvailable())
-			options += "Server Restart (Kill and restart DD)";
-
-	var/rebootconfirm
-	if(SSticker.admin_delay_notice)
-		if(alert(usr, "Are you sure? An admin has already delayed the round end for the following reason: [SSticker.admin_delay_notice]", "Confirmation", "Yes", "No") == "Yes")
-			rebootconfirm = TRUE
-	else
-		rebootconfirm = TRUE
-	if(rebootconfirm)
-		var/result = input(usr, "Select reboot method", "World Reboot", options[1]) as null|anything in options
-		if(result)
-			SSblackbox.record_feedback("tally", "admin_verb", 1, "Reboot World") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
-			var/init_by = "Initiated by [usr.client.holder.fakekey ? "Admin" : usr.key]."
-			switch(result)
-				if("Regular Restart")
-					SSticker.Reboot(init_by, "admin reboot - by [usr.key] [usr.client.holder.fakekey ? "(stealth)" : ""]", 10 SECONDS, check_rights(R_SERVER, FALSE)) // Force if they have +SERVER
-				if("Hard Restart (No Delay, No Feeback Reason)")
-					to_chat(world, "World reboot - [init_by]")
-					world.Reboot()
-				if("Hardest Restart (No actions, just reboot)")
-					to_chat(world, "Hard world reboot - [init_by]")
-					world.Reboot(fast_track = TRUE)
-				if("Server Restart (Kill and restart DD)")
-					to_chat(world, "Server restart - [init_by]")
-					world.TgsEndProcess()
-
-/datum/admins/proc/end_round()
-	set category = "Server"
-	set name = "End Round"
-	set desc = "Attempts to produce a round end report and then restart the server organically."
-
-	if (!usr.client.holder)
-		return
-	var/confirm = tgui_alert(usr, "End the round and  restart the game world?", "End Round", list("Yes", "Cancel"))
+	var/confirm = alert("Restart the game world?", "Restart", "Yes", "Cancel")
 	if(confirm == "Cancel")
 		return
 	if(confirm == "Yes")
-		SSticker.force_ending = 1
-		SSblackbox.record_feedback("tally", "admin_verb", 1, "End Round") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+		to_world("[SPAN_DANGER("Restarting world!")] [SPAN_NOTICE("Initiated by [usr.key]!")]")
+		log_admin("[key_name(usr)] initiated a reboot.")
+
+		sleep(50)
+		world.Reboot()
+
 
 /datum/admins/proc/announce()
-	set category = "Server.Global Messages"
+	set category = "Special Verbs"
 	set name = "Announce"
 	set desc="Announce your desires to the world"
-	if(!check_rights(0))
-		return
+	if(!check_rights(0))	return
 
-	var/message = input("Global message to send:", "Admin Announce", null, null)  as message
+	var/message = input("Global message to send:", "Admin Announce", null, null) as message
+	message = sanitize(message, 500, extra = 0)
 	if(message)
-		if(!check_rights(R_SERVER,0))
-			message = adminscrub(message,500)
-		to_chat(world, "<span class='adminnotice'><b>[usr.client.holder.fakekey ? "Administrator" : usr.key] Announces:</b></span>\n \t [message]")
+		message = replacetext(message, "\n", "<br>") // required since we're putting it in a <p> tag
+		to_world("[SPAN_NOTICE("<b>[usr.key] Announces:</b><p style='text-indent: 50px'>[message]</p>")]")
 		log_admin("Announce: [key_name(usr)] : [message]")
-	SSblackbox.record_feedback("tally", "admin_verb", 1, "Announce") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
 
-/datum/admins/proc/set_admin_notice()
-	set category = "Admin"
-	set name = "Set Admin Notice"
-	set desc ="Set an announcement that appears to everyone who joins the server. Only lasts this round"
-	if(!check_rights(0))
-		return
 
-	var/new_admin_notice = input(src,"Set a public notice for this round. Everyone who joins the server will see it.\n(Leaving it blank will delete the current notice):","Set Notice",GLOB.admin_notice) as message|null
-	if(new_admin_notice == null)
+GLOBAL_VAR_AS(skip_allow_lists, FALSE)
+
+/datum/admins/proc/toggle_allowlists()
+	set category = "Server"
+	set name = "Toggle Allow Lists"
+	if(!check_rights(R_ADMIN))
 		return
-	if(new_admin_notice == GLOB.admin_notice)
-		return
-	if(new_admin_notice == "")
-		message_admins("[key_name(usr)] removed the admin notice.")
-		log_admin("[key_name(usr)] removed the admin notice:\n[GLOB.admin_notice]")
-	else
-		message_admins("[key_name(usr)] set the admin notice.")
-		log_admin("[key_name(usr)] set the admin notice:\n[new_admin_notice]")
-		to_chat(world, "<span class ='adminnotice'><b>Admin Notice:</b>\n \t [new_admin_notice]</span>")
-	SSblackbox.record_feedback("tally", "admin_verb", 1, "Set Admin Notice") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
-	GLOB.admin_notice = new_admin_notice
-	return
+	GLOB.skip_allow_lists = !GLOB.skip_allow_lists
+	var/outcome = GLOB.skip_allow_lists ? "disabled" : "enabled"
+	log_and_message_admins("[key_name(usr)] [outcome] allow lists.")
+
 
 /datum/admins/proc/toggleooc()
 	set category = "Server"
-	set desc="Toggle dis bitch"
+	set desc="Globally Toggles OOC"
 	set name="Toggle OOC"
-	toggle_ooc()
-	log_admin("[key_name(usr)] toggled OOC.")
-	message_admins("[key_name_admin(usr)] toggled OOC.")
-	SSblackbox.record_feedback("nested tally", "admin_toggle", 1, list("Toggle OOC", "[GLOB.ooc_allowed ? "Enabled" : "Disabled"]")) //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+
+	if(!check_rights(R_ADMIN))
+		return
+
+	config.ooc_allowed = !(config.ooc_allowed)
+	if (config.ooc_allowed)
+		to_world("<B>The OOC channel has been globally enabled!</B>")
+	else
+		to_world("<B>The OOC channel has been globally disabled!</B>")
+	log_and_message_admins("toggled OOC.")
+
+/datum/admins/proc/toggleaooc()
+	set category = "Server"
+	set desc="Globally Toggles AOOC"
+	set name="Toggle AOOC"
+
+	if(!check_rights(R_ADMIN))
+		return
+
+	config.aooc_allowed = !(config.aooc_allowed)
+	if (config.aooc_allowed)
+		communicate_broadcast(/singleton/communication_channel/aooc, "The AOOC channel has been globally enabled!", TRUE)
+	else
+		communicate_broadcast(/singleton/communication_channel/aooc, "The AOOC channel has been globally disabled!", TRUE)
+	log_and_message_admins("toggled AOOC.")
+
+/datum/admins/proc/togglelooc()
+	set category = "Server"
+	set desc="Globally Toggles LOOC"
+	set name="Toggle LOOC"
+
+	if(!check_rights(R_ADMIN))
+		return
+
+	config.looc_allowed = !(config.looc_allowed)
+	if (config.looc_allowed)
+		to_world("<B>The LOOC channel has been globally enabled!</B>")
+	else
+		to_world("<B>The LOOC channel has been globally disabled!</B>")
+	log_and_message_admins("toggled LOOC.")
+
+
+/datum/admins/proc/toggledsay()
+	set category = "Server"
+	set desc="Globally Toggles DSAY"
+	set name="Toggle DSAY"
+
+	if(!check_rights(R_ADMIN))
+		return
+
+	config.dsay_allowed = !(config.dsay_allowed)
+	if (config.dsay_allowed)
+		to_world("<B>Deadchat has been globally enabled!</B>")
+	else
+		to_world("<B>Deadchat has been globally disabled!</B>")
+	log_and_message_admins("toggled deadchat.")
 
 /datum/admins/proc/toggleoocdead()
 	set category = "Server"
-	set desc="Toggle dis bitch"
+	set desc="Toggle Dead OOC."
 	set name="Toggle Dead OOC"
-	toggle_dooc()
 
-	log_admin("[key_name(usr)] toggled OOC.")
-	message_admins("[key_name_admin(usr)] toggled Dead OOC.")
-	SSblackbox.record_feedback("nested tally", "admin_toggle", 1, list("Toggle Dead OOC", "[GLOB.dooc_allowed ? "Enabled" : "Disabled"]")) //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+	if(!check_rights(R_ADMIN))
+		return
+
+	config.dooc_allowed = !( config.dooc_allowed )
+	log_admin("[key_name(usr)] toggled Dead OOC.")
+	message_admins("[key_name_admin(usr)] toggled Dead OOC.", 1)
+
+/datum/admins/proc/togglehubvisibility()
+	set category = "Server"
+	set desc="Globally Toggles Hub Visibility"
+	set name="Toggle Hub Visibility"
+
+	if(!check_rights(R_ADMIN))
+		return
+
+	world.update_hub_visibility()
+	var/long_message = "Updated hub visibility. The server is now [config.hub_visible ? "visible" : "invisible"]."
+	if (config.hub_visible && !world.reachable)
+		message_admins("WARNING: The server will not show up on the hub because byond is detecting that a firewall is blocking incoming connections.")
+
+	send_to_admin_discord(EXCOM_MSG_AHELP, "[key_name(src, highlight_special_characters = FALSE)]" + long_message)
+	log_and_message_admins(long_message)
+
+/datum/admins/proc/toggletraitorscaling()
+	set category = "Server"
+	set desc="Toggle traitor scaling"
+	set name="Toggle Traitor Scaling"
+	config.traitor_scaling = !config.traitor_scaling
+	log_admin("[key_name(usr)] toggled Traitor Scaling to [config.traitor_scaling].")
+	message_admins("[key_name_admin(usr)] toggled Traitor Scaling [config.traitor_scaling ? "on" : "off"].", 1)
 
 /datum/admins/proc/startnow()
 	set category = "Server"
 	set desc="Start the round RIGHT NOW"
 	set name="Start Now"
-	if(SSticker.current_state == GAME_STATE_PREGAME || SSticker.current_state == GAME_STATE_STARTUP)
-		if(!SSticker.start_immediately)
-			var/localhost_addresses = list("127.0.0.1", "::1")
-			if(!(isnull(usr.client.address) || (usr.client.address in localhost_addresses)))
-				if(tgui_alert(usr, "Are you sure you want to start the round?","Start Now",list("Start Now","Cancel")) != "Start Now")
-					return FALSE
-			SSticker.start_immediately = TRUE
-			log_admin("[usr.key] has started the game.")
-			var/msg = ""
-			if(SSticker.current_state == GAME_STATE_STARTUP)
-				msg = " (The server is still setting up, but the round will be \
-					started as soon as possible.)"
-			message_admins("<font color='blue'>[usr.key] has started the game.[msg]</font>")
-			SSblackbox.record_feedback("tally", "admin_verb", 1, "Start Now") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
-			return TRUE
-		SSticker.start_immediately = FALSE
-		SSticker.SetTimeLeft(1800)
-		to_chat(world, "<span class='infoplain'><b>The game will start in 180 seconds.</b></span>")
-		SEND_SOUND(world, sound('sound/ai/default/attention.ogg'))
-		message_admins("<font color='blue'>[usr.key] has cancelled immediate game start. Game will start in 180 seconds.</font>")
-		log_admin("[usr.key] has cancelled immediate game start.")
+	if(GAME_STATE < RUNLEVEL_LOBBY)
+		to_chat(usr, FONT_LARGE(SPAN_DANGER("Unable to start the game as it is not yet set up.")))
+		SSticker.start_ASAP = !SSticker.start_ASAP
+		if(SSticker.start_ASAP)
+			to_chat(usr, FONT_LARGE(SPAN_WARNING("The game will begin as soon as possible.")))
+			log_and_message_admins("will begin the game as soon as possible.")
+		else
+			to_chat(usr, FONT_LARGE(SPAN_WARNING("The game will begin as normal.")))
+			log_and_message_admins("will begin the game as normal.")
+		return 0
+	SSticker.start_ASAP = TRUE
+	if(SSticker.start_now())
+		log_and_message_admins("has started the game.")
+		return 1
 	else
-		to_chat(usr, "<font color='red'>Error: Start Now: Game has already started.</font>", confidential=TRUE)
+		to_chat(usr, SPAN_CLASS("bigwarning", "Error: Start Now: Game has already started."))
+		return 0
 
-	return 0
+/datum/admins/proc/endnow()
+	set category = "Server"
+	set desc = "End the round immediately."
+	set name = "End Round"
+
+	var/check = alert("This will immediately end the current round. Are you sure?", "End Game", "Yes", "No") == "Yes"
+
+	if (!check)
+		return
+
+	if (GAME_STATE > RUNLEVEL_LOBBY)
+		SSticker.forced_end = TRUE
+		log_and_message_admins("has ended the round.")
+	else
+		to_chat(usr, FONT_LARGE(SPAN_WARNING("You cannot end the round before it's begun!")))
 
 /datum/admins/proc/toggleenter()
 	set category = "Server"
 	set desc="People can't enter"
 	set name="Toggle Entering"
-	GLOB.enter_allowed = !( GLOB.enter_allowed )
-	if (!( GLOB.enter_allowed ))
-		to_chat(world, "<B>New players may no longer enter the game.</B>")
-		message_admins(span_adminnotice("[key_name_admin(usr)] toggled new player game entering, no players may enter."))
+	config.enter_allowed = !(config.enter_allowed)
+	if (!(config.enter_allowed))
+		to_world("<B>New players may no longer enter the game.</B>")
 	else
-		to_chat(world, "<B>New players may now enter the game.</B>")
-		message_admins(span_adminnotice("[key_name_admin(usr)] toggled new player game entering, players can now enter the game freely."))
-	log_admin("[key_name(usr)] toggled new player game entering.")
+		to_world("<B>New players may now enter the game.</B>")
+	log_and_message_admins("[key_name_admin(usr)] toggled new player game entering.")
 	world.update_status()
-	SSblackbox.record_feedback("nested tally", "admin_toggle", 1, list("Toggle Entering", "[GLOB.enter_allowed ? "Enabled" : "Disabled"]")) //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
-
-/datum/admins/proc/toggleAI()
-	set category = "Server"
-	set desc="People can't be AI"
-	set name="Toggle AI"
-	var/alai = CONFIG_GET(flag/allow_ai)
-	CONFIG_SET(flag/allow_ai, !alai)
-	if (alai)
-		to_chat(world, "<B>The AI job is no longer chooseable.</B>")
-	else
-		to_chat(world, "<B>The AI job is chooseable now.</B>")
-	log_admin("[key_name(usr)] toggled AI allowed.")
-	world.update_status()
-	SSblackbox.record_feedback("nested tally", "admin_toggle", 1, list("Toggle AI", "[!alai ? "Disabled" : "Enabled"]")) //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
 
 /datum/admins/proc/toggleaban()
 	set category = "Server"
 	set desc="Respawn basically"
 	set name="Toggle Respawn"
-	var/new_nores = !CONFIG_GET(flag/norespawn)
-	CONFIG_SET(flag/norespawn, new_nores)
-	if (!new_nores)
-		to_chat(world, "<B>You may now respawn.</B>")
+	config.abandon_allowed = !(config.abandon_allowed)
+	if(config.abandon_allowed)
+		to_world("<B>You may now respawn.</B>")
 	else
-		to_chat(world, "<B>You may no longer respawn :(</B>")
-	message_admins(span_adminnotice("[key_name_admin(usr)] toggled respawn to [!new_nores ? "On" : "Off"]."))
-	log_admin("[key_name(usr)] toggled respawn to [!new_nores ? "On" : "Off"].")
+		to_world("<B>You may no longer respawn :(</B>")
+	log_and_message_admins("toggled respawn to [config.abandon_allowed ? "On" : "Off"].")
 	world.update_status()
-	SSblackbox.record_feedback("nested tally", "admin_toggle", 1, list("Toggle Respawn", "[!new_nores ? "Enabled" : "Disabled"]")) //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
 
 /datum/admins/proc/delay()
 	set category = "Server"
-	set desc="Delay the game"
-	set name="Delay Start/End"
+	set desc="Delay the game start/end"
+	set name="Delay"
 
-	if(!check_rights(R_ADMIN)) //YOGS - R_SERVER -> R_ADMIN
-		return
-
-	if(SSticker.current_state < GAME_STATE_PLAYING)
-		var/newtime = input("Set a new time in seconds. Set -1 for indefinite delay.","Set Delay",round(SSticker.GetTimeLeft()/10)) as num|null
-		if(newtime)
-			newtime = newtime*10
-			SSticker.SetTimeLeft(newtime)
-			if(newtime < 0)
-				to_chat(world, "<b>The game start has been delayed.</b>")
-				log_admin("[key_name(usr)] delayed the round start.")
-				message_admins("[key_name(usr)] delayed the round start.")
-			else
-				to_chat(world, "<b>The game will start in [DisplayTimeText(newtime)].</b>")
-				SEND_SOUND(world, sound('sound/ai/default/attention.ogg'))
-				message_admins("[key_name(usr)] set the pre-game delay to [DisplayTimeText(newtime)].")
-				log_admin("[key_name(usr)] set the pre-game delay to [DisplayTimeText(newtime)].")
-			SSblackbox.record_feedback("tally", "admin_verb", 1, "Delay Game Start") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
-	else
-		if(!SSticker.delay_end)
-			SSticker.admin_delay_notice = input(usr, "Enter a reason for delaying the round end", "Round Delay Reason") as null|text
-			if(isnull(SSticker.admin_delay_notice))
-				return
-		else
-			SSticker.admin_delay_notice = null
+	if(!check_rights(R_SERVER))	return
+	if (GAME_STATE > RUNLEVEL_LOBBY)
 		SSticker.delay_end = !SSticker.delay_end
-		var/reason = SSticker.delay_end ? "for reason: [SSticker.admin_delay_notice]" : ""
-		var/msg = "[SSticker.delay_end ? "delayed" : "undelayed"] the round end [reason]"
-		log_admin("[key_name(usr)] [msg]")
-		message_admins("[key_name_admin(usr)] [msg]")
-		if(SSticker.ready_for_reboot && !SSticker.delay_end) //we undelayed after standard reboot would occur
-			if(tgui_alert(usr,"Restart the round?.","Round restart",list("Yes","No")) == "Yes")
-				SSticker.Reboot(delay = 100, force = TRUE)
-
-/datum/admins/proc/unprison(mob/M in GLOB.mob_list)
-	set category = "Admin.Player Interaction"
-	set name = "Unprison"
-	if (is_centcom_level(M.z))
-		SSjob.SendToLateJoin(M)
-		message_admins("[key_name_admin(usr)] has unprisoned [key_name_admin(M)]")
-		log_admin("[key_name(usr)] has unprisoned [key_name(M)]")
+		log_and_message_admins("[SSticker.delay_end ? "delayed the round end" : "has made the round end normally"].")
+		return //alert("Round end delayed", null, null, null, null, null)
+	SSticker.round_progressing = !SSticker.round_progressing
+	if (!SSticker.round_progressing)
+		to_world("<b>The game start has been delayed.</b>")
+		log_admin("[key_name(usr)] delayed the game.")
 	else
-		tgui_alert(usr, "[M.name] is not prisoned.")
-	SSblackbox.record_feedback("tally", "admin_verb", 1, "Unprison") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+		to_world("<b>The game will start soon.</b>")
+		log_admin("[key_name(usr)] removed the delay.")
+
+/datum/admins/proc/adjump()
+	set category = "Server"
+	set desc="Toggle admin jumping"
+	set name="Toggle Jump"
+	config.allow_admin_jump = !(config.allow_admin_jump)
+	log_and_message_admins("Toggled admin jumping to [config.allow_admin_jump].")
+
+/datum/admins/proc/adspawn()
+	set category = "Server"
+	set desc="Toggle admin spawning"
+	set name="Toggle Spawn"
+	config.allow_admin_spawning = !(config.allow_admin_spawning)
+	log_and_message_admins("toggled admin item spawning to [config.allow_admin_spawning].")
+
+/datum/admins/proc/adrev()
+	set category = "Server"
+	set desc="Toggle admin revives"
+	set name="Toggle Revive"
+	config.allow_admin_rev = !(config.allow_admin_rev)
+	log_and_message_admins("toggled reviving to [config.allow_admin_rev].")
+
+/datum/admins/proc/immreboot()
+	set category = "Server"
+	set desc="Reboots the server post haste"
+	set name="Immediate Reboot"
+	if(!usr.client.holder)	return
+	if( alert("Reboot server?",,"Yes","No") == "No")
+		return
+	to_world("[SPAN_DANGER("Rebooting world!")] [SPAN_NOTICE("Initiated by [usr.key]!")]")
+	log_admin("[key_name(usr)] initiated an immediate reboot.")
+
+	world.Reboot()
+
+/datum/admins/proc/unprison(mob/M in SSmobs.mob_list)
+	set category = "Admin"
+	set name = "Unprison"
+	if (isAdminLevel(M.z))
+		if (config.allow_admin_jump)
+			M.forceMove(pick(GLOB.latejoin))
+			message_admins("[key_name_admin(usr)] has unprisoned [key_name_admin(M)]", 1)
+			log_admin("[key_name(usr)] has unprisoned [key_name(M)]")
+		else
+			alert("Admin jumping disabled")
+	else
+		alert("[M.name] is not prisoned.")
 
 ////////////////////////////////////////////////////////////////////////////////////////////////ADMIN HELPER PROCS
 
+/proc/is_special_character(character) // returns 1 for special characters and 2 for heroes of gamemode
+	if(!SSticker.mode)
+		return 0
+	var/datum/mind/M
+	if (ismob(character))
+		var/mob/C = character
+		M = C.mind
+	else if(istype(character, /datum/mind))
+		M = character
+
+	if(M)
+		if(SSticker.mode.antag_templates && length(SSticker.mode.antag_templates))
+			for(var/datum/antagonist/antag in SSticker.mode.antag_templates)
+				if(antag.is_antagonist(M))
+					return 2
+		if(M.special_role)
+			return 1
+
+	if(isrobot(character))
+		var/mob/living/silicon/robot/R = character
+		if(R.emagged)
+			return 1
+
+	return 0
+
+/datum/admins/proc/mass_debug_closet_icons()
+
+	set name = "Mass Debug Closet Icons"
+	set desc = "Spawn every possible custom closet. Do not do this on live."
+	set category = "Debug"
+
+	if(!check_rights(R_SPAWN))
+		return
+
+	if((input(usr, "Are you sure you want to spawn all these closets?", "So Many Closets") as null|anything in list("No", "Yes")) == "Yes")
+		log_admin("[key_name(usr)] mass-spawned closets (icon debug), if this is a live server you should yell at them.")
+		var/x = 0
+		var/y = 0
+		for(var/check_appearance in typesof(/singleton/closet_appearance))
+			x++
+			if(x > 10)
+				x = 0
+				y++
+			var/turf/T = locate(usr.x+x, usr.y+y, usr.z)
+			if(T)
+				new /obj/structure/closet/debug(T, check_appearance)
+
+/datum/admins/proc/spawn_fruit(seedtype in SSplants.seeds)
+	set category = "Debug"
+	set desc = "Spawn the product of a seed."
+	set name = "Spawn Fruit"
+
+	if(!check_rights(R_SPAWN))	return
+
+	if(!seedtype || !SSplants.seeds[seedtype])
+		return
+	var/datum/seed/S = SSplants.seeds[seedtype]
+	S.harvest(usr,0,0,1)
+	log_admin("[key_name(usr)] spawned [seedtype] fruit at ([usr.x],[usr.y],[usr.z])")
+
+/datum/admins/proc/spawn_custom_item()
+	set category = "Debug"
+	set desc = "Spawn a custom item."
+	set name = "Spawn Custom Item"
+
+	if(!check_rights(R_SPAWN))	return
+
+	var/owner = input("Select a ckey.", "Spawn Custom Item") as null|anything in SScustomitems.custom_items_by_ckey
+	if(!owner|| !SScustomitems.custom_items_by_ckey[owner])
+		return
+
+	var/list/possible_items = list()
+	for(var/datum/custom_item/item in SScustomitems.custom_items_by_ckey[owner])
+		possible_items[item.item_name] = item
+	var/item_to_spawn = input("Select an item to spawn.", "Spawn Custom Item") as null|anything in possible_items
+	if(item_to_spawn && possible_items[item_to_spawn])
+		var/datum/custom_item/item_datum = possible_items[item_to_spawn]
+		item_datum.spawn_item(get_turf(usr))
+
+/datum/admins/proc/check_custom_items()
+
+	set category = "Debug"
+	set desc = "Check the custom item list."
+	set name = "Check Custom Items"
+
+	if(!check_rights(R_SPAWN))	return
+
+	if(!SScustomitems.custom_items_by_ckey)
+		to_chat(usr, "Custom item list is null.")
+		return
+
+	if(!length(SScustomitems.custom_items_by_ckey))
+		to_chat(usr, "Custom item list not populated.")
+		return
+
+	for(var/assoc_key in SScustomitems.custom_items_by_ckey)
+		to_chat(usr, "[assoc_key] has:")
+		var/list/current_items = SScustomitems.custom_items_by_ckey[assoc_key]
+		for(var/datum/custom_item/item in current_items)
+			to_chat(usr, "- name: [item.item_name] icon: [item.item_icon_state] path: [item.item_path] desc: [item.item_desc]")
+
+/datum/admins/proc/spawn_plant(seedtype in SSplants.seeds)
+	set category = "Debug"
+	set desc = "Spawn a spreading plant effect."
+	set name = "Spawn Plant"
+
+	if(!check_rights(R_SPAWN))	return
+
+	if(!seedtype || !SSplants.seeds[seedtype])
+		return
+	new /obj/vine(get_turf(usr), SSplants.seeds[seedtype])
+	log_admin("[key_name(usr)] spawned [seedtype] vines at ([usr.x],[usr.y],[usr.z])")
+
 /datum/admins/proc/spawn_atom(object as text)
-	set category = "Misc.Server Debug"
+	set category = "Debug"
 	set desc = "(atom path) Spawn an atom"
 	set name = "Spawn"
 
-	if(!check_rights(R_SPAWN))
+	if(!check_rights(R_SPAWN))	return
+
+	var/list/types = typesof(/atom)
+	var/list/matches = new()
+
+	for(var/path in types)
+		if(findtext("[path]", object))
+			matches += path
+
+	if(length(matches)==0)
 		return
 
-	var/chosen = pick_closest_path(object)
-	if(!chosen)
-		return
-	var/turf/T = get_turf(usr)
+	var/chosen
+	if(length(matches)==1)
+		chosen = matches[1]
+	else
+		chosen = input("Select an atom type", "Spawn Atom", matches[1]) as null|anything in matches
+		if(!chosen)
+			return
 
-	if(ispath(chosen, /turf))
+	if(ispath(chosen,/turf))
+		var/turf/T = get_turf(usr.loc)
 		T.ChangeTurf(chosen)
 	else
-		var/atom/A = new chosen(T)
-		A.flags_1 |= ADMIN_SPAWNED_1
+		new chosen(usr.loc)
 
-	log_admin("[key_name(usr)] spawned [chosen] at [AREACOORD(usr)]")
-	SSblackbox.record_feedback("tally", "admin_verb", 1, "Spawn Atom") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+	log_and_message_admins("spawned [chosen] at ([usr.x],[usr.y],[usr.z])")
 
-/datum/admins/proc/podspawn_atom(object as text)
-	set category = "Misc.Server Debug"
-	set desc = "(atom path) Spawn an atom via supply drop"
-	set name = "Podspawn"
+/datum/admins/proc/spawn_artifact(effect in subtypesof(/datum/artifact_effect))
+	set category = "Debug"
+	set desc = "(atom path) Spawn an artifact with a specified effect."
+	set name = "Spawn Artifact"
 
-	if(!check_rights(R_SPAWN))
+	if (!check_rights(R_SPAWN))
 		return
 
-	var/chosen = pick_closest_path(object)
-	if(!chosen)
-		return
-	var/turf/T = get_turf(usr)
+	var/obj/machinery/artifact/A
+	var/datum/artifact_trigger/primary_trigger
 
-	if(ispath(chosen, /turf))
-		T.ChangeTurf(chosen)
-	else
-		var/obj/structure/closet/supplypod/centcompod/pod = new()
-		var/atom/A = new chosen(pod)
-		A.flags_1 |= ADMIN_SPAWNED_1
-		new /obj/effect/DPtarget(T, pod)
+	var/datum/artifact_effect/secondary_effect
+	var/datum/artifact_trigger/secondary_trigger
 
-	log_admin("[key_name(usr)] pod-spawned [chosen] at [AREACOORD(usr)]")
-	SSblackbox.record_feedback("tally", "admin_verb", 1, "Podspawn Atom") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+	var/damage_type
 
-/datum/admins/proc/spawn_cargo(object as text)
-	set category = "Misc.Server Debug"
-	set desc = "(atom path) Spawn a cargo crate"
-	set name = "Spawn Cargo"
+	if (ispath(effect))
+		primary_trigger = input(usr, "Choose a trigger", "Choose a trigger") as null | anything in subtypesof(/datum/artifact_trigger)
 
-	if(!check_rights(R_SPAWN))
-		return
+		if (!ispath(primary_trigger))
+			return
 
-	var/chosen = pick_closest_path(object, make_types_fancy(subtypesof(/datum/supply_pack)))
-	if(!chosen)
-		return
-	var/datum/supply_pack/S = new chosen
-	S.admin_spawned = TRUE
-	S.generate(get_turf(usr))
+		var/choice = alert(usr, "Secondary effect?", "Secondary effect", "Yes", "No") == "Yes"
 
-	log_admin("[key_name(usr)] spawned cargo pack [chosen] at [AREACOORD(usr)]")
-	SSblackbox.record_feedback("tally", "admin_verb", 1, "Spawn Cargo") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+		if (choice)
+			secondary_effect = input(usr, "Choose an effect", "Choose effect") as null | anything in subtypesof(/datum/artifact_effect)
 
-/datum/admins/proc/show_traitor_panel(mob/M in GLOB.mob_list)
-	set category = "Admin.Player Interaction"
+			if (!ispath(secondary_effect))
+				return
 
+			secondary_trigger = input(usr, "Choose a trigger", "Choose a trigger") as null | anything in subtypesof(/datum/artifact_trigger)
+
+			if (!ispath(secondary_trigger))
+				return
+
+		var/damage_types = list("Sharp" = DAMAGE_FLAG_SHARP, "Bullet" = DAMAGE_FLAG_BULLET, "Edge" = DAMAGE_FLAG_EDGE, "Laser" = DAMAGE_FLAG_LASER)
+		choice = input(usr, "Choose a damage effect", "Choose Damage Effect") as null | anything in damage_types | "Invincible"
+
+		if (!choice)
+			return
+
+		if (choice != "Invincible")
+			damage_type = damage_types[choice]
+
+
+		A = new(usr.loc)
+		A.my_effect = new effect(A)
+		A.my_effect.trigger = new primary_trigger(A.my_effect)
+		A.damage_type = damage_type
+		A.set_damage_description(damage_type)
+
+		if (secondary_effect)
+			A.secondary_effect = new secondary_effect
+			A.secondary_effect.trigger = new secondary_trigger
+		else
+			QDEL_NULL(A.secondary_effect)
+
+		log_and_message_admins("spawned an artifact with effects [A.my_effect][A.secondary_effect ? ", [A.secondary_effect]" : ""].")
+
+/datum/admins/proc/show_traitor_panel(mob/M in SSmobs.mob_list)
+	set category = "Admin"
 	set desc = "Edit mobs's memory and role"
 	set name = "Show Traitor Panel"
 
-	if(!check_rights(R_ADMIN))
-		return
-
 	if(!istype(M))
-		to_chat(usr, "This can only be used on instances of type /mob", confidential=TRUE)
+		to_chat(usr, "This can only be used on instances of type /mob")
 		return
 	if(!M.mind)
-		to_chat(usr, "This mob has no mind!", confidential=TRUE)
+		to_chat(usr, "This mob has no mind!")
 		return
 
-	M.mind.traitor_panel()
-	SSblackbox.record_feedback("tally", "admin_verb", 1, "Traitor Panel") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+	M.mind.edit_memory()
+
+/datum/admins/proc/show_game_mode()
+	set category = "Admin"
+	set desc = "Show the current round configuration."
+	set name = "Show Game Mode"
+
+	if(!SSticker.mode)
+		alert("Not before roundstart!", "Alert")
+		return
+
+	var/out = "[FONT_LARGE("<b>Current mode: [SSticker.mode.name] (<a href='byond://?src=\ref[SSticker.mode];debug_antag=self'>[SSticker.mode.config_tag]</a>)</b>")]<br/>"
+	out += "<hr>"
+
+	if(SSticker.mode.ert_disabled)
+		out += "<b>Emergency Response Teams:</b> <a href='byond://?src=\ref[SSticker.mode];toggle=ert'>disabled</a>"
+	else
+		out += "<b>Emergency Response Teams:</b> <a href='byond://?src=\ref[SSticker.mode];toggle=ert'>enabled</a>"
+	out += "<br/>"
+
+	if(SSticker.mode.deny_respawn)
+		out += "<b>Respawning:</b> <a href='byond://?src=\ref[SSticker.mode];toggle=respawn'>disallowed</a>"
+	else
+		out += "<b>Respawning:</b> <a href='byond://?src=\ref[SSticker.mode];toggle=respawn'>allowed</a>"
+	out += "<br/>"
+
+	out += "<b>Shuttle delay multiplier:</b> <a href='byond://?src=\ref[SSticker.mode];set=shuttle_delay'>[SSticker.mode.shuttle_delay]</a><br/>"
+
+	if(SSticker.mode.auto_recall_shuttle)
+		out += "<b>Shuttle auto-recall:</b> <a href='byond://?src=\ref[SSticker.mode];toggle=shuttle_recall'>enabled</a>"
+	else
+		out += "<b>Shuttle auto-recall:</b> <a href='byond://?src=\ref[SSticker.mode];toggle=shuttle_recall'>disabled</a>"
+	out += "<br/><br/>"
+
+	if(SSticker.mode.event_delay_mod_moderate)
+		out += "<b>Moderate event time modifier:</b> <a href='byond://?src=\ref[SSticker.mode];set=event_modifier_moderate'>[SSticker.mode.event_delay_mod_moderate]</a><br/>"
+	else
+		out += "<b>Moderate event time modifier:</b> <a href='byond://?src=\ref[SSticker.mode];set=event_modifier_moderate'>unset</a><br/>"
+
+	if(SSticker.mode.event_delay_mod_major)
+		out += "<b>Major event time modifier:</b> <a href='byond://?src=\ref[SSticker.mode];set=event_modifier_severe'>[SSticker.mode.event_delay_mod_major]</a><br/>"
+	else
+		out += "<b>Major event time modifier:</b> <a href='byond://?src=\ref[SSticker.mode];set=event_modifier_severe'>unset</a><br/>"
+
+	out += "<hr>"
+
+	if(SSticker.mode.antag_tags && length(SSticker.mode.antag_tags))
+		out += "<b>Core antag templates:</b></br>"
+		for(var/antag_tag in SSticker.mode.antag_tags)
+			out += "<a href='byond://?src=\ref[SSticker.mode];debug_antag=[antag_tag]'>[antag_tag]</a>.</br>"
+
+	if(SSticker.mode.round_autoantag)
+		out += "<b>Autotraitor <a href='byond://?src=\ref[SSticker.mode];toggle=autotraitor'>enabled</a></b>."
+		if(SSticker.mode.antag_scaling_coeff > 0)
+			out += " (scaling with <a href='byond://?src=\ref[SSticker.mode];set=antag_scaling'>[SSticker.mode.antag_scaling_coeff]</a>)"
+		else
+			out += " (not currently scaling, <a href='byond://?src=\ref[SSticker.mode];set=antag_scaling'>set a coefficient</a>)"
+		out += "<br/>"
+	else
+		out += "<b>Autotraitor <a href='byond://?src=\ref[SSticker.mode];toggle=autotraitor'>disabled</a></b>.<br/>"
+
+	out += "<b>All antag ids:</b>"
+	if(SSticker.mode.antag_templates && length(SSticker.mode.antag_templates))
+		for(var/datum/antagonist/antag in SSticker.mode.antag_templates)
+			antag.update_current_antag_max(SSticker.mode)
+			out += " <a href='byond://?src=\ref[SSticker.mode];debug_antag=[antag.id]'>[antag.id]</a>"
+			out += " ([antag.get_antag_count()]/[antag.cur_max]) "
+			out += " <a href='byond://?src=\ref[SSticker.mode];remove_antag_type=[antag.id]'>\[-\]</a><br/>"
+	else
+		out += " None."
+	out += " <a href='byond://?src=\ref[SSticker.mode];add_antag_type=1'>\[+\]</a><br/>"
+
+	show_browser(usr, out, "window=edit_mode[src]")
 
 
 /datum/admins/proc/toggletintedweldhelmets()
-	set category = "Misc.Server Debug"
+	set category = "Debug"
 	set desc="Reduces view range when wearing welding helmets"
-	set name="Toggle tinted welding helmes"
-	GLOB.tinted_weldhelh = !( GLOB.tinted_weldhelh )
-	if (GLOB.tinted_weldhelh)
-		to_chat(world, "<B>The tinted_weldhelh has been enabled!</B>")
+	set name="Toggle tinted welding helmets."
+	config.welder_vision = !( config.welder_vision )
+	if (config.welder_vision)
+		to_world("<B>Reduced welder vision has been enabled!</B>")
 	else
-		to_chat(world, "<B>The tinted_weldhelh has been disabled!</B>")
-	log_admin("[key_name(usr)] toggled tinted_weldhelh.")
-	message_admins("[key_name_admin(usr)] toggled tinted_weldhelh.")
-	SSblackbox.record_feedback("nested tally", "admin_toggle", 1, list("Toggle Tinted Welding Helmets", "[GLOB.tinted_weldhelh ? "Enabled" : "Disabled"]")) //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+		to_world("<B>Reduced welder vision has been disabled!</B>")
+	log_and_message_admins("toggled welder vision.")
 
 /datum/admins/proc/toggleguests()
 	set category = "Server"
 	set desc="Guests can't enter"
 	set name="Toggle guests"
-	var/new_guest_ban = !CONFIG_GET(flag/guest_ban)
-	CONFIG_SET(flag/guest_ban, new_guest_ban)
-	if (new_guest_ban)
-		to_chat(world, "<B>Guests may no longer enter the game.</B>")
+	config.guests_allowed = !(config.guests_allowed)
+	if (!(config.guests_allowed))
+		to_world("<B>Guests may no longer enter the game.</B>")
 	else
-		to_chat(world, "<B>Guests may now enter the game.</B>")
-	log_admin("[key_name(usr)] toggled guests game entering [!new_guest_ban ? "" : "dis"]allowed.")
-	message_admins(span_adminnotice("[key_name_admin(usr)] toggled guests game entering [!new_guest_ban ? "" : "dis"]allowed."))
-	SSblackbox.record_feedback("nested tally", "admin_toggle", 1, list("Toggle Guests", "[!new_guest_ban ? "Enabled" : "Disabled"]")) //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+		to_world("<B>Guests may now enter the game.</B>")
+	log_admin("[key_name(usr)] toggled guests game entering [config.guests_allowed?"":"dis"]allowed.")
+	log_and_message_admins("toggled guests game entering [config.guests_allowed?"":"dis"]allowed.")
 
-/datum/admins/proc/output_ai_laws() // Yogs -- Overridden in yogstation/code/modules/admin/admin.dm
+/datum/admins/proc/output_ai_laws()
 	var/ai_number = 0
-	for(var/i in GLOB.silicon_mobs)
-		var/mob/living/silicon/S = i
+	for(var/mob/living/silicon/S in SSmobs.mob_list)
 		ai_number++
 		if(isAI(S))
-			to_chat(usr, "<b>AI [key_name(S, usr)]'s laws:</b>", confidential=TRUE)
-		else if(iscyborg(S))
+			to_chat(usr, "<b>AI [key_name(S, usr)]'s laws:</b>")
+		else if(isrobot(S))
 			var/mob/living/silicon/robot/R = S
-			to_chat(usr, "<b>CYBORG [key_name(S, usr)] [R.connected_ai?"(Slaved to: [key_name(R.connected_ai)])":"(Independent)"]: laws:</b>", confidential=TRUE)
+			to_chat(usr, "<b>CYBORG [key_name(S, usr)] [R.connected_ai?"(Slaved to: [R.connected_ai])":"(Independant)"]: laws:</b>")
 		else if (ispAI(S))
-			to_chat(usr, "<b>pAI [key_name(S, usr)]'s laws:</b>", confidential=TRUE)
+			to_chat(usr, "<b>pAI [key_name(S, usr)]'s laws:</b>")
 		else
-			to_chat(usr, "<b>SOMETHING SILICON [key_name(S, usr)]'s laws:</b>", confidential=TRUE)
+			to_chat(usr, "<b>SOMETHING SILICON [key_name(S, usr)]'s laws:</b>")
 
-		if (S.laws == null)
-			to_chat(usr, "[key_name(S, usr)]'s laws are null?? Contact a coder.", confidential=TRUE)
+		if (isnull(S.laws))
+			to_chat(usr, "[key_name(S, usr)]'s laws are null?? Contact a coder.")
 		else
 			S.laws.show_laws(usr)
 	if(!ai_number)
-		to_chat(usr, "<b>No AIs located</b>" , confidential=TRUE)
+		to_chat(usr, "<b>No AIs located</b>")//Just so you know the thing is actually working and not just ignoring you.
 
-/datum/admins/proc/output_all_devil_info()
-	var/devil_number = 0
-	for(var/datum/mind/D in SSgamemode.devils)
-		devil_number++
-		var/datum/antagonist/devil/devil = D.has_antag_datum(/datum/antagonist/devil)
-		to_chat(usr, "Devil #[devil_number]:<br><br>" + devil.printdevilinfo(), confidential=TRUE)
-	if(!devil_number)
-		to_chat(usr, "<b>No Devils located</b>" , confidential=TRUE)
+/datum/admins/proc/show_skills(mob/M)
+	set category = null
+	set name = "Skill Panel"
 
-/datum/admins/proc/output_devil_info(mob/living/M)
-	if(IS_DEVIL(M))
-		var/datum/antagonist/devil/devil = M.mind.has_antag_datum(/datum/antagonist/devil)
-		to_chat(usr, devil.printdevilinfo(), confidential=TRUE)
+	if (!istype(src,/datum/admins))
+		src = usr.client.holder
+	if (!istype(src,/datum/admins))
+		to_chat(usr, "Error: you are not an admin!")
+		return
+
+	if(!M)
+		M = input("Select mob.", "Select mob.") as null|mob in GLOB.player_list
+	if(!istype(M))
+		return
+	var/datum/nano_module/skill_ui/NM = /datum/nano_module/skill_ui
+	if(isadmin(usr))
+		NM = /datum/nano_module/skill_ui/admin //They get the fancy version that lets you change skills and debug stuff.
+	NM = new NM(usr, override = M.skillset)
+	NM.ui_interact(usr)
+
+/client/proc/update_mob_sprite(mob/living/carbon/human/H as mob)
+	set category = "Admin"
+	set name = "Update Mob Sprite"
+	set desc = "Should fix any mob sprite update errors."
+
+	if (!holder)
+		to_chat(src, "Only administrators may use this command.")
+		return
+
+	if(istype(H))
+		H.regenerate_icons()
+
+/proc/get_options_bar(whom, detail = 2, name = 0, link = 1, highlight_special = 1, datum/ticket/ticket = null)
+	if(!whom)
+		return "<b>(*null*)</b>"
+	var/mob/M
+	var/client/C
+	if(istype(whom, /client))
+		C = whom
+		M = C.mob
+	else if(ismob(whom))
+		M = whom
+		C = M.client
 	else
-		to_chat(usr, "<b>[M] is not a devil.", confidential=TRUE)
+		return "<b>(*not a mob*)</b>"
+	switch(detail)
+		if(0)
+			return "<b>[key_name(C, link, name, highlight_special, ticket)]</b>"
 
-/datum/admins/proc/manage_free_slots()
-	if(!check_rights())
-		return
-	var/datum/browser/browser = new(usr, "jobmanagement", "Manage Free Slots", 520)
-	var/list/dat = list()
-	var/count = 0
+		if(1)	//Private Messages
+			return "<b>[key_name(C, link, name, highlight_special, ticket)](<A HREF='byond://?_src_=holder;adminmoreinfo=\ref[M]'>?</A>)</b>"
 
-	if(!SSjob.initialized)
-		tgui_alert(usr, "You cannot manage jobs before the job subsystem is initialized!")
-		return
+		if(2)	//Admins
+			var/ref_mob = "\ref[M]"
+			return "<b>[key_name(C, link, name, highlight_special, ticket)](<A HREF='byond://?_src_=holder;adminmoreinfo=[ref_mob]'>?</A>) (<A HREF='byond://?_src_=holder;adminplayeropts=[ref_mob]'>PP</A>) (<A HREF='byond://?_src_=vars;Vars=[ref_mob]'>VV</A>) (<A HREF='byond://?_src_=holder;narrateto=[ref_mob]'>DN</A>) ([admin_jump_link(M)]) (<A HREF='byond://?_src_=holder;check_antagonist=1'>CA</A>)</b>"
 
-	dat += "<table>"
+		if(3)	//Devs
+			var/ref_mob = "\ref[M]"
+			return "<b>[key_name(C, link, name, highlight_special, ticket)](<A HREF='byond://?_src_=vars;Vars=[ref_mob]'>VV</A>)([admin_jump_link(M)])</b>"
 
-	for(var/j in SSjob.occupations)
-		var/datum/job/job = j
-		count++
-		var/J_title = html_encode(job.title)
-		var/J_opPos = html_encode(job.total_positions - (job.total_positions - job.current_positions))
-		var/J_totPos = html_encode(job.total_positions)
-		dat += "<tr><td>[J_title]:</td> <td>[J_opPos]/[job.total_positions < 0 ? " (unlimited)" : J_totPos]"
+/proc/ishost(client/C)
+	return check_rights(R_HOST, 0, C)
 
-		dat += "</td>"
-		dat += "<td>"
-		if(job.total_positions >= 0)
-			dat += "<A href='byond://?src=[REF(src)];[HrefToken()];customjobslot=[job.title]'>Custom</A> | "
-			dat += "<A href='byond://?src=[REF(src)];[HrefToken()];addjobslot=[job.title]'>Add 1</A> | "
-			if(job.total_positions > job.current_positions)
-				dat += "<A href='byond://?src=[REF(src)];[HrefToken()];removejobslot=[job.title]'>Remove</A> | "
-			else
-				dat += "Remove | "
-			dat += "<A href='byond://?src=[REF(src)];[HrefToken()];unlimitjobslot=[job.title]'>Unlimit</A></td>"
-		else
-			dat += "<A href='byond://?src=[REF(src)];[HrefToken()];limitjobslot=[job.title]'>Limit</A></td>"
-
-	browser.height = min(100 + count * 20, 650)
-	browser.set_content(dat.Join())
-	browser.open()
-
-/datum/admins/proc/create_or_modify_area()
-	set category = "Misc.Server Debug"
-	set name = "Create or modify area"
-	create_area(usr)
-
-/datum/admins/proc/observe_follow(atom/movable/AM)
-	if(!isobserver(owner.mob) && !check_rights(R_ADMIN))
-		return
-	var/can_ghost = TRUE
-	if(!isobserver(owner.mob))
-		can_ghost = owner.admin_ghost()
-
-	if(!can_ghost)
-		return
-	var/mob/dead/observer/A = owner.mob
-	var/mob/living/silicon/ai/I = AM //yogs start - adminfollow now follows AI eyes instead of the core
-	if(istype(I) && I.eyeobj)
-		A.ManualFollow(I.eyeobj)
-	else
-		A.ManualFollow(AM) //yogs stop - adminfollow now follows AI eyes instead of the core
-
+//Prevents SDQL2 commands from changing admin permissions
+/datum/admins/SDQL_update(var_name, new_value)
+	return 0
 
 //
 //
 //ALL DONE
 //*********************************************************************************************************
-//TO-DO:
-//
 //
 
-//RIP ferry snowflakes
+//Returns 1 to let the dragdrop code know we are trapping this event
+//Returns 0 if we don't plan to trap the event
+/datum/admins/proc/cmd_ghost_drag(mob/observer/ghost/frommob, mob/living/tomob)
+	if(!istype(frommob))
+		return //Extra sanity check to make sure only observers are shoved into things
 
-//Kicks all the clients currently in the lobby. The second parameter (kick_only_afk) determins if an is_afk() check is ran, or if all clients are kicked
-//defaults to kicking everyone (afk + non afk clients in the lobby)
-//returns a list of ckeys of the kicked clients
-/proc/kick_clients_in_lobby(message, kick_only_afk = 0)
-	var/list/kicked_client_names = list()
-	for(var/client/C in GLOB.clients)
-		if(isnewplayer(C.mob))
-			if(kick_only_afk && !C.is_afk()) //Ignore clients who are not afk
-				continue
-			if(message)
-				to_chat(C, message, confidential=TRUE)
-			kicked_client_names.Add("[C.key]")
-			qdel(C)
-	return kicked_client_names
-
-//returns 1 to let the dragdrop code know we are trapping this event
-//returns 0 if we don't plan to trap the event
-/datum/admins/proc/cmd_ghost_drag(mob/dead/observer/frommob, mob/tomob)
-
-	//this is the exact two check rights checks required to edit a ckey with vv.
-	if (!check_rights(R_VAREDIT,0) || !check_rights(R_SPAWN|R_DEBUG,0))
+	//Same as assume-direct-control perm requirements.
+	if (!check_rights(R_VAREDIT,0) || !check_rights(R_ADMIN|R_DEBUG,0))
 		return 0
-
 	if (!frommob.ckey)
 		return 0
-
 	var/question = ""
 	if (tomob.ckey)
 		question = "This mob already has a user ([tomob.key]) in control of it! "
 	question += "Are you sure you want to place [frommob.name]([frommob.key]) in control of [tomob.name]?"
-
-	var/ask = tgui_alert(usr, question, "Place ghost in control of mob?", list("Yes", "No"))
+	var/ask = alert(question, "Place ghost in control of mob?", "Yes", "No")
 	if (ask != "Yes")
 		return 1
-
 	if (!frommob || !tomob) //make sure the mobs don't go away while we waited for a response
 		return 1
-
-	tomob.ghostize(0)
-
-	message_admins(span_adminnotice("[key_name_admin(usr)] has put [frommob.key] in control of [tomob.name]."))
-	log_admin("[key_name(usr)] stuffed [frommob.key] into [tomob.name].")
-	SSblackbox.record_feedback("tally", "admin_verb", 1, "Ghost Drag Control")
-
+	if(tomob.client) //No need to ghostize if there is no client
+		tomob.ghostize(0)
+	message_admins(SPAN_CLASS("adminnotice", "[key_name_admin(usr)] has put [frommob.ckey] in control of [tomob.name]."))
+	log_admin("[key_name(usr)] stuffed [frommob.ckey] into [tomob.name].")
 	tomob.ckey = frommob.ckey
+	tomob.teleop = null
 	qdel(frommob)
-
 	return 1
 
-/datum/admins/proc/adminmoreinfo(mob/M)
-	if(!ismob(M))
-		to_chat(usr, "This can only be used on instances of type /mob.", confidential=TRUE)
+/datum/admins/proc/force_antag_latespawn()
+	set category = "Admin"
+	set name = "Force Template Spawn"
+	set desc = "Force an antagonist template to spawn."
+
+	if (!istype(src,/datum/admins))
+		src = usr.client.holder
+	if (!istype(src,/datum/admins))
+		to_chat(usr, "Error: you are not an admin!")
 		return
 
-	var/location_description = ""
-	var/special_role_description = ""
-	var/health_description = ""
-	var/gender_description = ""
-	var/turf/T = get_turf(M)
+	if(GAME_STATE < RUNLEVEL_GAME)
+		to_chat(usr, "Mode has not started.")
+		return
 
-	//Location
-	if(isturf(T))
-		if(isarea(T.loc))
-			location_description = "([M.loc == T ? "at coordinates " : "in [M.loc] at coordinates "] [T.x], [T.y], [T.z] in area <b>[T.loc]</b>)"
+	var/list/all_antag_types = GLOB.all_antag_types_
+	var/antag_type = input("Choose a template.","Force Latespawn") as null|anything in all_antag_types
+	if(!antag_type || !all_antag_types[antag_type])
+		to_chat(usr, "Aborting.")
+		return
+
+	var/datum/antagonist/antag = all_antag_types[antag_type]
+	message_admins("[key_name(usr)] attempting to force latespawn with template [antag.id].")
+	antag.attempt_auto_spawn()
+
+/datum/admins/proc/force_mode_latespawn()
+	set category = "Admin"
+	set name = "Force Mode Spawn"
+	set desc = "Force autotraitor to proc."
+
+	if (!istype(src,/datum/admins))
+		src = usr.client.holder
+	if (!istype(src,/datum/admins) || !check_rights(R_ADMIN))
+		to_chat(usr, "Error: you are not an admin!")
+		return
+
+	if(GAME_STATE < RUNLEVEL_GAME)
+		to_chat(usr, "Mode has not started.")
+		return
+
+	log_and_message_admins("attempting to force mode autospawn.")
+	SSticker.mode.process_autoantag()
+
+/datum/admins/proc/paralyze_mob(mob/living/H as mob in GLOB.player_list)
+	set category = null
+	set name = "Toggle Paralyze"
+	set desc = "Toggles paralyze state, which stuns, blinds and mutes the victim."
+
+	var/msg
+
+	if(!isliving(H))
+		return
+
+	if(check_rights(R_INVESTIGATE))
+		if (!H.admin_paralyzed)
+			H.paralysis = 8000
+			H.admin_paralyzed = TRUE
+			msg = "has paralyzed [key_name(H)]."
+			H.visible_message(SPAN_DEBUG("OOC: \The [H] has been paralyzed by a staff member. Please hold all interactions with them until staff have finished with them."))
+			to_chat(H, SPAN_DEBUG("OOC: You have been paralyzed by a staff member. Please refer to your currently open admin help ticket or, if you don't have one, admin help for assistance."))
 		else
-			location_description = "([M.loc == T ? "at coordinates " : "in [M.loc] at coordinates "] [T.x], [T.y], [T.z])"
+			H.paralysis = 0
+			H.admin_paralyzed = FALSE
+			msg = "has unparalyzed [key_name(H)]."
+			H.visible_message(SPAN_DEBUG("OOC: \The [H] has been released from paralysis by staff. You may resume interactions with them."))
+			to_chat(H, SPAN_DEBUG("OOC: You have been released from paralysis by staff and can return to your game."))
+		log_and_message_staff(msg)
 
-	//Job + antagonist
-	if(M.mind)
-		special_role_description = "Role: <b>[M.mind.assigned_role]</b>; Antagonist: <font color='red'><b>[M.mind.special_role]</b></font>"
+
+/datum/admins/proc/sendFax()
+	set category = "Special Verbs"
+	set name = "Send Fax"
+	set desc = "Sends a fax to this machine"
+
+	// Admin status checks
+	if (!istype(src,/datum/admins))
+		src = usr.client.holder
+	if (!istype(src,/datum/admins))
+		to_chat(usr, "Error: you are not an admin!")
+		return
+
+	// Origin
+	var/list/option_list = GLOB.admin_departments.Copy() + GLOB.alldepartments.Copy() + "(Custom)" + "(Cancel)"
+	var/replyorigin = input(owner, "Please specify who the fax is coming from. Choose '(Custom)' to enter a custom department or '(Cancel) to cancel.", "Fax Origin") as null|anything in option_list
+	if (!replyorigin || replyorigin == "(Cancel)")
+		return
+	if (replyorigin == "(Custom)")
+		replyorigin = input(owner, "Please specify who the fax is coming from.", "Fax Machine Department Tag") as text|null
+		if (!replyorigin)
+			return
+	if (replyorigin == "Unknown" || replyorigin == "(Custom)" || replyorigin == "(Cancel)")
+		to_chat(owner, SPAN_WARNING("Invalid origin selected."))
+		return
+
+	// Destination
+	var/department = input("Choose a destination fax", "Fax Target") as null|anything in GLOB.alldepartments
+
+	// Generate the fax
+	var/obj/item/paper/admin/P = new /obj/item/paper/admin( null ) //hopefully the null loc won't cause trouble for us
+	faxreply = P
+	P.admindatum = src
+	P.origin = replyorigin
+	P.department = department
+	P.destinations = get_fax_machines_by_department(department)
+	P.adminbrowse()
+
+
+/client/proc/check_fax_history()
+	set category = "Special Verbs"
+	set name = "Check Fax History"
+	set desc = "Look up the faxes sent this round."
+
+	var/data = "<center><b>Fax History:</b></center><br>"
+
+	if(GLOB.adminfaxes)
+		for(var/obj/item/item in GLOB.adminfaxes)
+			data += "[item.name] - <a href='byond://?_src_=holder;AdminFaxView=\ref[item]'>view message</a><br>"
 	else
-		special_role_description = "Role: <i>Mind datum missing</i> Antagonist: <i>Mind datum missing</i>"
+		data += "<center>No faxes yet.</center>"
+	show_browser(usr, "<HTML><HEAD><TITLE>Fax History</TITLE></HEAD><BODY>[data]</BODY></HTML>", "window=FaxHistory;size=450x400")
 
-	//Health
-	if(isliving(M))
-		var/mob/living/L = M
-		var/status
-		switch (M.stat)
-			if(CONSCIOUS)
-				status = "Alive"
-			if(SOFT_CRIT)
-				status = "<font color='orange'><b>Dying</b></font>"
-			if(UNCONSCIOUS)
-				status = "<font color='orange'><b>[L.InCritical() ? "Unconscious and Dying" : "Unconscious"]</b></font>"
-			if(DEAD)
-				status = "<font color='red'><b>Dead</b></font>"
-		health_description = "Status = [status]"
-		health_description += "<BR>Oxy: [L.getOxyLoss()] - Tox: [L.getToxLoss()] - Fire: [L.getFireLoss()] - Brute: [L.getBruteLoss()] - Clone: [L.getCloneLoss()] - Brain: [L.getOrganLoss(ORGAN_SLOT_BRAIN)] - Stamina: [L.getStaminaLoss()]"
-	else
-		health_description = "This mob type has no health to speak of."
+/datum/admins/var/obj/item/paper/admin/faxreply // var to hold fax replies in
 
-	//Gender
-	switch(M.gender)
-		if(MALE,FEMALE)
-			gender_description = "[M.gender]"
+/datum/admins/proc/faxCallback(obj/item/paper/admin/P)
+	var/customname = input(src.owner, "Pick a title for the report", "Title") as text|null
+
+	P.SetName("[customname]")
+
+	var/shouldStamp = 1
+	if(!P.sender) // admin initiated
+		switch(alert("Would you like the fax stamped?",, "Yes", "No"))
+			if("No")
+				shouldStamp = 0
+
+	if(shouldStamp)
+		P.stamps += "<hr><i>This paper has been stamped by the [P.origin] Quantum Relay.</i>"
+
+		var/image/stampoverlay = image('icons/obj/bureaucracy.dmi')
+		var/x
+		var/y
+		x = rand(-2, 0)
+		y = rand(-1, 2)
+		P.offset_x += x
+		P.offset_y += y
+		stampoverlay.pixel_x = x
+		stampoverlay.pixel_y = y
+
+		if(!P.ico)
+			P.ico = new
+		P.ico += "paper_stamp-boss"
+		stampoverlay.icon_state = "paper_stamp-boss"
+
+		if(!P.stamped)
+			P.stamped = new
+		P.stamped += /obj/item/stamp/boss
+		P.AddOverlays(stampoverlay)
+
+	var/obj/item/rcvdcopy
+	var/obj/machinery/photocopier/faxmachine/destination = P.destinations[1]
+	rcvdcopy = destination.copy(P, FALSE)
+	rcvdcopy.forceMove(null) //hopefully this shouldn't cause trouble
+	GLOB.adminfaxes += rcvdcopy
+	var/success = send_fax_loop(P, P.department, P.origin)
+
+	if (success)
+		to_chat(src.owner, SPAN_NOTICE("Message reply to transmitted successfully."))
+		if(P.sender) // sent as a reply
+			log_admin("[key_name(src.owner)] replied to a fax message from [key_name(P.sender)]")
+			for(var/client/C as anything in GLOB.admins)
+				if((R_INVESTIGATE) & C.holder.rights)
+					to_chat(C, SPAN_CLASS("log_message", "[SPAN_CLASS("prefix", "FAX LOG:")][key_name_admin(src.owner)] replied to a fax message from [key_name_admin(P.sender)] (<a href='byond://?_src_=holder;AdminFaxView=\ref[rcvdcopy]'>VIEW</a>)"))
 		else
-			gender_description = "<font color='red'><b>[M.gender]</b></font>"
+			log_admin("[key_name(src.owner)] has sent a fax message to [P.department]")
+			for(var/client/C as anything in GLOB.admins)
+				if((R_INVESTIGATE) & C.holder.rights)
+					to_chat(C, SPAN_CLASS("log_message", "[SPAN_CLASS("prefix", "FAX LOG:")][key_name_admin(src.owner)] has sent a fax message to [P.department] (<a href='byond://?_src_=holder;AdminFaxView=\ref[rcvdcopy]'>VIEW</a>)"))
+	else
+		to_chat(src.owner, SPAN_WARNING("Message reply failed."))
 
-	to_chat(src.owner, "<b>Info about [M.name]:</b> ", confidential=TRUE)
-	to_chat(src.owner, "Mob type = [M.type]; Gender = [gender_description] Damage = [health_description]", confidential=TRUE)
-	to_chat(src.owner, "Name = <b>[M.name]</b>; Real_name = [M.real_name]; Mind_name = [M.mind?"[M.mind.name]":""]; Key = <b>[M.key]</b>;", confidential=TRUE)
-	to_chat(src.owner, "Location = [location_description];", confidential=TRUE)
-	to_chat(src.owner, "[special_role_description]", confidential=TRUE)
-	to_chat(src.owner, ADMIN_FULLMONTY_NONAME(M), confidential=TRUE)
+	spawn(100)
+		qdel(P)
+		faxreply = null
+	return
 
-/client/proc/adminGreet(logout)
-	if(SSticker.HasRoundStarted())
-		var/string
-		if(logout && CONFIG_GET(flag/announce_admin_logout))
-			string = pick(
-				"Admin logout: [key_name(src)]")
-		else if(!logout && CONFIG_GET(flag/announce_admin_login) && (prefs.toggles & ANNOUNCE_LOGIN))
-			string = pick(
-				"Admin login: [key_name(src)]")
-		if(string)
-			message_admins("[string]")
+
+/datum/admins/proc/SetRoundLength()
+	set category = "Server"
+	set name = "Set Round Length"
+	set desc = "Set how long before the initial continue vote occurs (in minutes)."
+	if (GAME_STATE > RUNLEVEL_GAME)
+		to_chat(usr, SPAN_WARNING("The game is already ending!"))
+		return
+	var/current = round(round_duration_in_ticks / 600, 0.1)
+	var/response = input(usr, "Time in minutes before the continue vote will occur, or 0 to set to default.\nCurrent time: [current]m") as null | num
+	current = round(round_duration_in_ticks / 600, 0.1)
+	if (!isnum(response))
+		return
+	if (!response)
+		log_and_message_admins("set the time to first continue vote to default.")
+		config.vote_autotransfer_initial = initial(config.vote_autotransfer_initial)
+	else if (response > current)
+		log_and_message_admins("set time to first continue vote to [response] minutes.")
+		config.vote_autotransfer_initial = response
+		SSroundend.vote_check = (round_duration_in_ticks / 600) + response
+	else
+		to_chat(usr, SPAN_WARNING("You cannot set a continue vote time in the past."))
+
+/datum/admins/proc/SetMaximumRoundLength()
+	set category = "Server"
+	set name = "Set Maximum Round Length"
+	set desc = "Set the maximum length of a round in minutes."
+	if (GAME_STATE > RUNLEVEL_GAME)
+		to_chat(usr, SPAN_WARNING("The game is already ending!"))
+		return
+	var/current = round(round_duration_in_ticks / 600, 0.1)
+	var/response = input(usr, "Time in minutes when the round will end, or 0 to disable.\nCurrent time: [current]m") as null | num
+	if (!isnum(response))
+		return
+	if (!response)
+		log_and_message_admins("disabled max round length.")
+		config.maximum_round_length = response
+	else if (response > current)
+		log_and_message_admins("set max round length to [response] minutes.")
+		config.maximum_round_length = response
+	else
+		to_chat(usr, SPAN_WARNING("You cannot set a max round length in the past."))
+
+
+/datum/admins/proc/ToggleContinueVote()
+	set category = "Server"
+	set name = "Toggle Continue Vote"
+	set desc = "Toggle the continue vote on/off. Toggling off will cause round-end to occur when the next continue vote time would be."
+	if (GAME_STATE > RUNLEVEL_GAME)
+		to_chat(usr, SPAN_WARNING("The game is already ending!"))
+		return
+	SSroundend.vote_check = !SSroundend.vote_check
+	if (SSroundend.vote_check)
+		var/interval = config.vote_autotransfer_interval
+		if (!interval)
+			to_chat(usr, SPAN_WARNING("Continue votes not configured."))
+			SSroundend.vote_check = 0
+			return
+		SSroundend.vote_check = (round_duration_in_ticks / 600) + interval
+	log_and_message_admins("toggled continue votes [SSroundend.vote_check ? "ON" : "OFF"]")
+
+
+/datum/admins/proc/togglemoderequirementchecks()
+	set category = "Server"
+	set desc = "Toggle the gamemode requirement checks on/off. Toggling off will allow any gamemode to start regardless of readied players."
+	set name = "Toggle Gamemode Requirement Checks"
+
+	if (GAME_STATE > RUNLEVEL_LOBBY)
+		to_chat(usr, SPAN_WARNING("You cannot change the gamemode requirement checks after the game has started!"))
+		return
+
+	SSticker.skip_requirement_checks = !SSticker.skip_requirement_checks
+	log_and_message_admins("toggled the gamemode requirement checks [SSticker.skip_requirement_checks ? "OFF" : "ON"]")
+
+
+/datum/admins/proc/EnableDevtools()
+	set category = "Debug"
+	set name = "Enable Devtools"
+	set desc = "Self-enable chromium devtools on browser panes."
+	if (!check_rights(R_DEBUG))
+		return
+	winset(usr, "", "browser-options=devtools")

@@ -1,131 +1,123 @@
-/obj/item/computer_hardware/card_slot
-	name = "identification card authentication module"	// \improper breaks the find_hardware_by_name proc
-	desc = "A module allowing this computer to read or write data on ID cards. Necessary for some programs to run properly."
+/obj/item/stock_parts/computer/card_slot
+	name = "\improper RFID card slot"
+	desc = "Slot that allows this computer to write data on RFID cards. Necessary for some programs to run properly."
 	power_usage = 10 //W
-	icon_state = "card_mini"
-	w_class = WEIGHT_CLASS_TINY
-	device_type = MC_CARD
+	critical = FALSE
+	icon_state = "cardreader"
+	hardware_size = 1
+	origin_tech = list(TECH_DATA = 2)
+	usage_flags = PROGRAM_ALL & ~PROGRAM_PDA
+	external_slot = TRUE
+	var/can_write = TRUE
+	var/can_broadcast = FALSE
 
-	var/obj/item/card/id/stored_card
+	var/obj/item/card/id/stored_card = null
 
-///What happens when the ID card is removed (or deleted) from the module, through try_eject() or not.
-/obj/item/computer_hardware/card_slot/Exited(atom/A, atom/newloc)
-	if(A == stored_card)
-		stored_card = null
-		if(holder)
-			if(holder.active_program)
-				holder.active_program.event_idremoved(0)
-			for(var/p in holder.idle_threads)
-				var/datum/computer_file/program/computer_program = p
-				computer_program.event_idremoved(1)
-
-			holder.update_slot_icon()
-
-			if(ishuman(holder.loc))
-				var/mob/living/carbon/human/human_wearer = holder.loc
-				if(human_wearer.wear_id == holder)
-					human_wearer.sec_hud_set_ID()
-	return ..()
-
-/obj/item/computer_hardware/card_slot/Destroy()
-	if(stored_card) //If you didn't expect this behavior for some dumb reason, do something different instead of directly destroying the slot
-		QDEL_NULL(stored_card)
-	return ..()
-
-/obj/item/computer_hardware/card_slot/GetAccess()
-	var/list/total_access
+/obj/item/stock_parts/computer/card_slot/diagnostics()
+	. = ..()
+	. += "[name] status: [stored_card ? "Card Inserted" : "Card Not Present"]\n"
 	if(stored_card)
-		total_access = stored_card.GetAccess()
-	var/obj/item/computer_hardware/card_slot/card_slot2 = holder?.all_components[MC_CARD2] //Best of both worlds
-	if(card_slot2?.stored_card)
-		total_access |= card_slot2.stored_card.GetAccess()
-	return total_access
+		. += "Testing card read...\n"
+		if( is_failing() )
+			. += "...FAILURE!\n"
+		else
+			var/read_string_stability
+			if(check_functionality())
+				read_string_stability = 100
+			else
+				read_string_stability = 100 - malfunction_probability
+			. += "Registered Name: [stars(stored_card.registered_name, read_string_stability)]\n"
+			. += "Registered Assignment: [stars(stored_card.assignment, read_string_stability)]\n"
+			. += "Registered Rank: [stars(stored_card.rank, read_string_stability)]\n"
+			. += "Access Addresses Enabled: \n"
+			var/list/access_list = stored_card.GetAccess()
+			if(!access_list) // "NONE" for empty list
+				. += "NONE"
+			else
+				var/list_of_accesses = list()
+				for(var/access_id in access_list)
+					if(check_functionality()) // Read the access, or show "RD_ERR"
+						var/datum/access/access_information = get_access_by_id(access_id)
+						var/access_type = access_information.access_type
+						if(access_type == ACCESS_TYPE_NONE || access_type == ACCESS_TYPE_SYNDICATE || access_type == ACCESS_TYPE_CENTCOM) // Don't elaborate on these access types.
+							list_of_accesses += "UNKNOWN" // "UNKNOWN"
+						else
+							list_of_accesses += uppertext(access_information.desc)
+					else
+						list_of_accesses += "RD_ERR"
+				. += jointext(list_of_accesses, ", ") + "\n" // Should append a proper, comma separated list.
 
-/obj/item/computer_hardware/card_slot/GetID()
-	if(stored_card)
-		return stored_card
-	return ..()
+/obj/item/stock_parts/computer/card_slot/proc/verb_eject_id()
+	set name = "Remove ID"
+	set category = "Object"
+	set src in view(1)
 
-/obj/item/computer_hardware/card_slot/RemoveID()
-	if(stored_card)
-		. = stored_card
-		if(!try_eject())
-			holder.update_label()
-			return null
-		holder.update_label()
+	if(!CanPhysicallyInteract(usr))
+		to_chat(usr, SPAN_WARNING("You can't reach it."))
 		return
 
-/obj/item/computer_hardware/card_slot/try_insert(obj/item/I, mob/living/user = null)
-	if(!holder)
-		return FALSE
+	var/obj/item/stock_parts/computer/card_slot/device = src
+	if (!istype(device))
+		device = locate() in src
 
-	if(!istype(I, /obj/item/card/id))
-		return FALSE
+	if(!device.stored_card)
+		if(usr)
+			to_chat(usr, "There is no card in \the [src]")
+		return
 
-	if(stored_card)
-		return FALSE
-	if(user)
-		if(!user.transferItemToLoc(I, src))
-			return FALSE
-	else
-		I.forceMove(src)
+	device.eject_id(usr)
 
-	stored_card = I
-	holder.update_label()
-	to_chat(user, "<span class='notice'>You insert \the [I] into \the [expansion_hw ? "secondary":"primary"] [src].</span>")
-	playsound(src, 'sound/machines/terminal_insert_disc.ogg', 50, 0)
-	if(ishuman(user))
-		var/mob/living/carbon/human/H = user
-		H.sec_hud_set_ID()
-
-	holder.update_appearance(UPDATE_ICON)
-	return TRUE
-
-
-/obj/item/computer_hardware/card_slot/try_eject(mob/living/user = null, forced = FALSE)
+/obj/item/stock_parts/computer/card_slot/proc/eject_id(mob/user)
 	if(!stored_card)
-		to_chat(user, span_warning("There are no cards in \the [src]."))
 		return FALSE
 
-	if(user && user.CanReach(src))
+	if(user)
+		to_chat(user, "You remove [stored_card] from [src].")
 		user.put_in_hands(stored_card)
 	else
-		stored_card.forceMove(drop_location())
+		dropInto(loc)
+	stored_card = null
 
-	to_chat(user, "<span class='notice'>You remove the card from \the [src].</span>")
-	playsound(src, 'sound/machines/terminal_insert_disc.ogg', 50, FALSE)
-	holder?.update_appearance(UPDATE_ICON)
+	var/datum/extension/interactive/ntos/os = get_extension(loc, /datum/extension/interactive/ntos)
+	if(os)
+		os.event_idremoved()
+	loc.verbs -= /obj/item/stock_parts/computer/card_slot/proc/verb_eject_id
 	return TRUE
 
-/obj/item/computer_hardware/card_slot/attackby(obj/item/I, mob/living/user)
-	if(..())
-		return
-	if(I.tool_behaviour == TOOL_SCREWDRIVER)
-		if(stored_card)
-			to_chat(user, "<span class='notice'>You press down on the manual eject button with \the [I].</span>")
-			try_eject(user)
-			return
-		swap_slot()
-		to_chat(user, "<span class='notice'>You adjust the connecter to fit into [expansion_hw ? "an expansion bay" : "the primary ID bay"].</span>")
+/obj/item/stock_parts/computer/card_slot/proc/insert_id(obj/item/card/id/I, mob/user)
+	if(!istype(I))
+		return FALSE
 
-/**
-  *Swaps the card_slot hardware between using the dedicated card slot bay on a computer, and using an expansion bay.
-*/
-/obj/item/computer_hardware/card_slot/proc/swap_slot()
-	expansion_hw = !expansion_hw
-	if(expansion_hw)
-		device_type = MC_CARD2
-	else
-		device_type = MC_CARD
-
-/obj/item/computer_hardware/card_slot/examine(mob/user)
-	. = ..()
-	. += "The connector is set to fit into [expansion_hw ? "an expansion bay" : "a computer's primary ID bay"], but can be adjusted with a screwdriver."
 	if(stored_card)
-		. += "There appears to be something loaded in the card slots."
+		to_chat(user, "You try to insert [I] into [src], but its ID card slot is occupied.")
+		return FALSE
 
-/obj/item/computer_hardware/card_slot/secondary
-	name = "auxillary identification card authentication module"	// \improper breaks the find_hardware_by_name proc
-	desc = "A secondary identification card authentication module, allowing this computer to write data on ID cards. Necessary for some programs to run properly."
-	device_type = MC_CARD2
-	expansion_hw = TRUE
+	if(user && !user.unEquip(I, src))
+		return FALSE
+
+	stored_card = I
+	to_chat(user, "You insert [I] into [src].")
+	if(isobj(loc))
+		loc.verbs |= /obj/item/stock_parts/computer/card_slot/proc/verb_eject_id
+	return TRUE
+
+/obj/item/stock_parts/computer/card_slot/use_tool(obj/item/I, mob/living/user, list/click_params)
+	if(!istype(I, /obj/item/card/id))
+		return ..()
+	insert_id(I, user)
+	return TRUE
+
+/obj/item/stock_parts/computer/card_slot/broadcaster // read only
+	name = "\improper RFID card broadcaster"
+	desc = "Reads and broadcasts the RFID signal of an inserted card."
+	can_write = FALSE
+	can_broadcast = TRUE
+
+	usage_flags = PROGRAM_PDA
+
+/obj/item/stock_parts/computer/card_slot/Destroy()
+	if (loc)
+		loc.verbs -= /obj/item/stock_parts/computer/card_slot/proc/verb_eject_id
+	if(stored_card)
+		QDEL_NULL(stored_card)
+	return ..()

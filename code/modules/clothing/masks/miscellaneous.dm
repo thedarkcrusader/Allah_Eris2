@@ -2,391 +2,308 @@
 	name = "muzzle"
 	desc = "To stop that awful noise."
 	icon_state = "muzzle"
-	item_state = "blindfold"
-	flags_cover = MASKCOVERSMOUTH
-	w_class = WEIGHT_CLASS_SMALL
-	gas_transfer_coefficient = 0.9
-	equip_delay_other = 20
-
-/obj/item/clothing/mask/muzzle/attack_paw(mob/user)
-	if(iscarbon(user))
-		var/mob/living/carbon/C = user
-		if(src == C.wear_mask)
-			to_chat(user, span_warning("You need help taking this off!"))
-			return
-	..()
+	item_state = "muzzle"
+	body_parts_covered = FACE
+	w_class = ITEM_SIZE_SMALL
+	gas_transfer_coefficient = 0.90
+	voicechange = 1
 
 /obj/item/clothing/mask/muzzle/tape
-	name = "tape muzzle"
-	icon_state = "tape"
+	name = "length of tape"
+	desc = "It's a robust DIY muzzle!"
+	icon = 'icons/obj/bureaucracy.dmi'
+	icon_state = "tape_cross"
+	item_state = null
+	w_class = ITEM_SIZE_TINY
 
-/obj/item/clothing/mask/muzzle/tape/attack_self(mob/user)
+/obj/item/clothing/mask/muzzle/Initialize()
+	. = ..()
+	say_messages = list("Mmfph!", "Mmmf mrrfff!", "Mmmf mnnf!")
+	say_verbs = list("mumbles", "says")
+
+// Clumsy folks can't take the mask off themselves.
+/obj/item/clothing/mask/muzzle/attack_hand(mob/user as mob)
+	if(user.wear_mask == src && !user.IsAdvancedToolUser())
+		return 0
 	..()
-	user.visible_message(span_notice("You take apart [src]."), span_notice("[user] takes apart [src]."))
-	new /obj/item/stack/tape(user.drop_location())
-	qdel(src)
 
 /obj/item/clothing/mask/surgical
 	name = "sterile mask"
 	desc = "A sterile mask designed to help prevent the spread of diseases."
 	icon_state = "sterile"
 	item_state = "sterile"
-	w_class = WEIGHT_CLASS_TINY
-	flags_inv = HIDEFACE
-	flags_cover = MASKCOVERSMOUTH
-	visor_flags_inv = HIDEFACE
-	visor_flags_cover = MASKCOVERSMOUTH
-	gas_transfer_coefficient = 0.9
-	mutantrace_variation = DIGITIGRADE_VARIATION
-	armor = list(MELEE = 0, BULLET = 0, LASER = 0,ENERGY = 0, BOMB = 0, BIO = 100, RAD = 0, FIRE = 0, ACID = 0)
-	actions_types = list(/datum/action/item_action/adjust)
+	w_class = ITEM_SIZE_TINY
+	body_parts_covered = FACE
+	item_flags = ITEM_FLAG_FLEXIBLEMATERIAL | ITEM_FLAG_WASHER_ALLOWED
+	gas_transfer_coefficient = 0.90
+	permeability_coefficient = 0.01
+	armor = list(
+		bio = ARMOR_BIO_RESISTANT
+		)
+	down_gas_transfer_coefficient = 1
+	down_body_parts_covered = null
+	down_icon_state = "steriledown"
+	pull_mask = 1
 
-/obj/item/clothing/mask/surgical/attack_self(mob/user)
-	adjustmask(user)
 
 /obj/item/clothing/mask/fakemoustache
 	name = "fake moustache"
 	desc = "Warning: moustache is fake."
 	icon_state = "fake-moustache"
+	item_state = "fake-moustache"
 	flags_inv = HIDEFACE
-
-/obj/item/clothing/mask/fakemoustache/italian
-	name = "italian moustache"
-	desc = "Made from authentic Italian moustache hairs. Gives the wearer an irresistable urge to gesticulate wildly."
-	modifies_speech = TRUE
-
-/obj/item/clothing/mask/fakemoustache/italian/handle_speech(datum/source, list/speech_args)
-	var/message = speech_args[SPEECH_MESSAGE]
-	if(message[1] != "*")
-		message = " [message]"
-		var/list/italian_words = strings("italian_replacement.json", "italian")
-
-		for(var/key in italian_words)
-			var/value = italian_words[key]
-			if(islist(value))
-				value = pick(value)
-
-			message = replacetextEx(message, " [uppertext(key)]", " [uppertext(value)]")
-			message = replacetextEx(message, " [capitalize(key)]", " [capitalize(value)]")
-			message = replacetextEx(message, " [key]", " [value]")
-
-		if(prob(3))
-			message += pick(" Ravioli, ravioli, give me the formuoli!"," Mamma-mia!"," Mamma-mia! That's a spicy meat-ball!", " La la la la la funiculi funicula!")
-	speech_args[SPEECH_MESSAGE] = trim(message)
-
-/obj/item/clothing/mask/joy
-	name = "joy mask"
-	desc = "Express your happiness or hide your sorrows with this laughing face with crying tears of joy cutout."
-	icon_state = "joy"
+	body_parts_covered = FLAGS_OFF
+	visible_name = "Scoundrel"
+	w_class = ITEM_SIZE_SMALL
 
 
-GLOBAL_LIST_INIT(cursed_animal_masks, list(
-		/obj/item/clothing/mask/pig/cursed,
-		/obj/item/clothing/mask/frog/cursed,
-		/obj/item/clothing/mask/cowmask/cursed,
-		/obj/item/clothing/mask/horsehead/cursed,
-//		/obj/item/clothing/mask/animal/small/rat/cursed,
-//		/obj/item/clothing/mask/animal/small/fox/cursed,
-//		/obj/item/clothing/mask/animal/small/bee/cursed,
-//		/obj/item/clothing/mask/animal/small/bear/cursed,
-//		/obj/item/clothing/mask/animal/small/bat/cursed,
-//		/obj/item/clothing/mask/animal/small/raven/cursed,
-//		/obj/item/clothing/mask/animal/small/jackal/cursed
-	))
+/obj/item/clothing/mask/fakemoustache/verb/ChangeVisibleName()
+	set name = "Change Visible Name"
+	set src in usr
+	if (usr.incapacitated())
+		return
+	var/response = input(usr, null, "Change Visible Name", visible_name) as null | text
+	response = sanitizeName(response, MAX_NAME_LEN, TRUE, FALSE)
+	if (!response)
+		return
+	if (usr.incapacitated() || !(src in usr))
+		return
+	visible_name = response
+
+
+/obj/item/clothing/mask/snorkel
+	name = "snorkel"
+	desc = "For the Swimming Savant."
+	icon_state = "snorkel"
+	item_state = "snorkel"
+	item_flags = null
+	flags_inv = HIDEFACE
+	body_parts_covered = 0
 
 /obj/item/clothing/mask/pig
 	name = "pig mask"
-	desc = "A rubber pig mask with a built in voice modulator."
+	desc = "A rubber pig mask."
 	icon_state = "pig"
 	item_state = "pig"
-	flags_inv = HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-	clothing_flags = VOICEBOX_TOGGLABLE
-	w_class = WEIGHT_CLASS_SMALL
-	modifies_speech = TRUE
-
-/obj/item/clothing/mask/pig/handle_speech(datum/source, list/speech_args)
-	if(!CHECK_BITFIELD(clothing_flags, VOICEBOX_DISABLED))
-		speech_args[SPEECH_MESSAGE] = pick("Oink!","Squeeeeeeee!","Oink Oink!")
-
-/obj/item/clothing/mask/pig/cursed
-	name = "pig face"
-	desc = "It looks like a mask, but closer inspection reveals it's melded onto this person's face!"
-	flags_inv = HIDEFACIALHAIR
-	clothing_flags = NONE
-
-/obj/item/clothing/mask/pig/cursed/Initialize(mapload)
-	. = ..()
-	ADD_TRAIT(src, TRAIT_NODROP, CURSED_MASK_TRAIT)
-	playsound(get_turf(src), 'sound/magic/pighead_curse.ogg', 50, 1)
-
-///frog mask - reeee!!
-/obj/item/clothing/mask/frog
-	name = "frog mask"
-	desc = "An ancient mask carved in the shape of a frog.<br>Sanity is like gravity: all it needs is a push."
-	icon_state = "frog"
-	item_state = "frog"
-	flags_inv = HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-	w_class = WEIGHT_CLASS_SMALL
-	clothing_flags = VOICEBOX_TOGGLABLE
-	modifies_speech = TRUE
-
-/obj/item/clothing/mask/frog/handle_speech(datum/source, list/speech_args) //whenever you speak
-	if(!CHECK_BITFIELD(clothing_flags, VOICEBOX_DISABLED))
-		if(prob(5)) //sometimes, the angry spirit finds others words to speak.
-			speech_args[SPEECH_MESSAGE] = pick("HUUUUU!!","SMOOOOOKIN'!!","Hello my baby, hello my honey, hello my rag-time gal.", "Feels bad, man.", "GIT DIS GUY OFF ME!!" ,"SOMEBODY STOP ME!!", "NORMIES, GET OUT!!")
-		else
-			speech_args[SPEECH_MESSAGE] = pick("Ree!!", "Reee!!","REEE!!","REEEEE!!") //but its usually just angry gibberish,
-
-/obj/item/clothing/mask/frog/cursed
-	clothing_flags = NONE
-
-/obj/item/clothing/mask/frog/cursed/Initialize(mapload)
-	. = ..()
-	ADD_TRAIT(src, TRAIT_NODROP, CURSED_MASK_TRAIT)
-
-/obj/item/clothing/mask/frog/cursed/equipped(mob/user, slot)
-	var/mob/living/carbon/C = user
-	if(C.wear_mask == src && HAS_TRAIT_FROM(src, TRAIT_NODROP, CURSED_MASK_TRAIT))
-		to_chat(user, span_userdanger("[src] was cursed! Ree!!"))
-	return ..()
-
-/obj/item/clothing/mask/cowmask
-	name = "cow mask"
-	icon = 'icons/mob/clothing/mask/mask.dmi'
-	icon_state = "cowmask"
-	item_state = "cowmask"
-	clothing_flags = VOICEBOX_TOGGLABLE
-	flags_inv = HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-	w_class = WEIGHT_CLASS_SMALL
-	modifies_speech = TRUE
-
-/obj/item/clothing/mask/cowmask/handle_speech(datum/source, list/speech_args)
-	if(!CHECK_BITFIELD(clothing_flags, VOICEBOX_DISABLED))
-		speech_args[SPEECH_MESSAGE] = pick("Moooooooo!","Moo!","Moooo!")
-
-/obj/item/clothing/mask/cowmask/cursed
-	name = "cow face"
-	desc = "It looks like a cow mask, but closer inspection reveals it's melded onto this person's face!"
-	flags_inv = HIDEFACIALHAIR
-	clothing_flags = NONE
-
-/obj/item/clothing/mask/cowmask/cursed/Initialize(mapload)
-	. = ..()
-	ADD_TRAIT(src, TRAIT_NODROP, CURSED_MASK_TRAIT)
-	playsound(get_turf(src), 'sound/magic/cowhead_curse.ogg', 50, 1)
+	flags_inv = HIDEFACE|BLOCKHAIR
+	w_class = ITEM_SIZE_SMALL
+	siemens_coefficient = 0.9
+	body_parts_covered = HEAD|FACE|EYES
 
 /obj/item/clothing/mask/horsehead
 	name = "horse head mask"
 	desc = "A mask made of soft vinyl and latex, representing the head of a horse."
 	icon_state = "horsehead"
 	item_state = "horsehead"
-	flags_inv = HIDEFACE|HIDEHAIR|HIDEFACIALHAIR|HIDEEYES|HIDEEARS
-	w_class = WEIGHT_CLASS_SMALL
-	clothing_flags = VOICEBOX_TOGGLABLE
+	flags_inv = HIDEFACE|BLOCKHAIR
+	body_parts_covered = HEAD|FACE|EYES
+	w_class = ITEM_SIZE_SMALL
+	siemens_coefficient = 0.9
 
-/obj/item/clothing/mask/horsehead/handle_speech(datum/source, list/speech_args)
-	if(!CHECK_BITFIELD(clothing_flags, VOICEBOX_DISABLED))
-		speech_args[SPEECH_MESSAGE] = pick("NEEIIGGGHHHH!", "NEEEIIIIGHH!", "NEIIIGGHH!", "HAAWWWWW!", "HAAAWWW!")
+/obj/item/clothing/mask/horsehead/New()
+	..()
+	// The horse mask doesn't cause voice changes by default, the wizard spell changes the flag as necessary
+	say_messages = list("NEEIIGGGHHHH!", "NEEEIIIIGHH!", "NEIIIGGHH!", "HAAWWWWW!", "HAAAWWW!")
+	say_verbs = list("whinnies", "neighs", "says")
 
-/obj/item/clothing/mask/horsehead/cursed
-	name = "horse face"
-	desc = "It looks like a horse mask, but closer inspection reveals it's melded onto this person's face!"
-	clothing_flags = NONE
-	flags_inv = HIDEFACIALHAIR
 
-/obj/item/clothing/mask/horsehead/cursed/Initialize(mapload)
-	. = ..()
-	ADD_TRAIT(src, TRAIT_NODROP, CURSED_MASK_TRAIT)
-	playsound(get_turf(src), 'sound/magic/horsehead_curse.ogg', 50, 1)
-
-/obj/item/clothing/mask/rat
-	name = "rat mask"
-	desc = "A mask made of soft vinyl and latex, representing the head of a rat."
-	icon_state = "rat"
-	item_state = "rat"
+/obj/item/clothing/mask/ai
+	name = "camera MIU"
+	desc = "Allows for direct mental connection to accessible camera networks."
+	icon_state = "s-ninja"
+	item_state = "s-ninja"
 	flags_inv = HIDEFACE
-	flags_cover = MASKCOVERSMOUTH
-	clothing_flags = MASKINTERNALS
+	item_flags = null
+	body_parts_covered = FACE|EYES
+	action_button_name = "Toggle MUI"
+	origin_tech = list(TECH_DATA = 5, TECH_ENGINEERING = 5)
+	active = FALSE
+	var/mob/observer/eye/cameranet/eye
 
-/obj/item/clothing/mask/rat/fox
-	name = "fox mask"
-	desc = "A mask made of soft vinyl and latex, representing the head of a fox."
-	icon_state = "fox"
-	item_state = "fox"
+/obj/item/clothing/mask/ai/New()
+	eye = new(src)
+	eye.name_sufix = "camera MIU"
+	..()
 
-/obj/item/clothing/mask/rat/bee
-	name = "bee mask"
-	desc = "A mask made of soft vinyl and latex, representing the head of a bee."
-	icon_state = "bee"
-	item_state = "bee"
+/obj/item/clothing/mask/ai/Destroy()
+	if(eye)
+		if(active)
+			disengage_mask(eye.owner)
+		qdel(eye)
+		eye = null
+	..()
 
-/obj/item/clothing/mask/rat/bear
-	name = "bear mask"
-	desc = "A mask made of soft vinyl and latex, representing the head of a bear."
-	icon_state = "bear"
-	item_state = "bear"
-
-/obj/item/clothing/mask/rat/bat
-	name = "bat mask"
-	desc = "A mask made of soft vinyl and latex, representing the head of a bat."
-	icon_state = "bat"
-	item_state = "bat"
-
-/obj/item/clothing/mask/rat/raven
-	name = "raven mask"
-	desc = "A mask made of soft vinyl and latex, representing the head of a raven."
-	icon_state = "raven"
-	item_state = "raven"
-
-/obj/item/clothing/mask/rat/jackal
-	name = "jackal mask"
-	desc = "A mask made of soft vinyl and latex, representing the head of a jackal."
-	icon_state = "jackal"
-	item_state = "jackal"
-
-/obj/item/clothing/mask/rat/tribal
-	name = "tribal mask"
-	desc = "A mask carved out of wood, detailed carefully by hand."
-	icon_state = "bumba"
-	item_state = "bumba"
-
-/obj/item/clothing/mask/bandana
-	name = "botany bandana"
-	desc = "A fine bandana with nanotech lining and a hydroponics pattern."
-	w_class = WEIGHT_CLASS_TINY
-	flags_cover = MASKCOVERSMOUTH
-	flags_inv = HIDEFACE|HIDEFACIALHAIR
-	visor_flags_inv = HIDEFACE|HIDEFACIALHAIR
-	visor_flags_cover = MASKCOVERSMOUTH
-	slot_flags = ITEM_SLOT_MASK
-	adjusted_flags = ITEM_SLOT_HEAD
-	icon_state = "bandbotany"
-	mutantrace_variation = DIGITIGRADE_VARIATION
-
-/obj/item/clothing/mask/bandana/attack_self(mob/user)
-	adjustmask(user)
-
-/obj/item/clothing/mask/bandana/AltClick(mob/user,bypass = FALSE)
-	. = ..()
-	if(iscarbon(user) && !bypass)
-		var/mob/living/carbon/C = user
-		if((C.get_item_by_slot(ITEM_SLOT_HEAD == src)) || (C.get_item_by_slot(ITEM_SLOT_MASK) == src))
-			to_chat(user, span_warning("You can't tie [src] while wearing it!"))
-			return
-	if(slot_flags & ITEM_SLOT_HEAD && !bypass)
-		to_chat(user, span_warning("You must undo [src] before you can tie it into a neckerchief!"))
+/obj/item/clothing/mask/ai/attack_self(mob/user)
+	if(user.incapacitated())
+		return
+	active = !active
+	to_chat(user, SPAN_NOTICE("You [active ? "" : "dis"]engage \the [src]."))
+	if(active)
+		engage_mask(user)
 	else
-		if(user.is_holding(src) || bypass)
-			var/obj/item/clothing/neck/neckerchief/nk = new(src)
-			nk.name = "[name] neckerchief"
-			nk.desc = "[desc] It's tied up like a neckerchief."
-			nk.worn_icon = 'icons/blank.dmi'
-			nk.icon_state = icon_state
-			nk.sourceBandanaType = src.type
-			var/currentHandIndex = user.get_held_index_of_item(src)
-			user.transferItemToLoc(src, null)
-			user.put_in_hand(nk, currentHandIndex)
-			user.visible_message(span_notice("[user] ties [src] up like a neckerchief."), span_notice("You tie [src] up like a neckerchief."))
-			qdel(src)
-		else
-			to_chat(user, span_warning("You must be holding [src] in order to tie it!"))
+		disengage_mask(user)
+
+/obj/item/clothing/mask/ai/equipped(mob/user, slot)
+	..(user, slot)
+	engage_mask(user)
+
+/obj/item/clothing/mask/ai/dropped(mob/user)
+	..()
+	disengage_mask(user)
+
+/obj/item/clothing/mask/ai/proc/engage_mask(mob/user)
+	if(!active)
+		return
+	if(user.get_equipped_item(slot_wear_mask) != src)
+		return
+
+	eye.possess(user)
+	to_chat(eye.owner, SPAN_NOTICE("You feel disorented for a moment as your mind connects to the camera network."))
+
+/obj/item/clothing/mask/ai/proc/disengage_mask(mob/user)
+	if(user == eye.owner)
+		to_chat(eye.owner, SPAN_NOTICE("You feel disorented for a moment as your mind disconnects from the camera network."))
+		eye.release(eye.owner)
+		eye.forceMove(src)
+
+/obj/item/clothing/mask/rubber
+	name = "rubber mask"
+	desc = "A rubber mask."
+	icon_state = "balaclava"
+	flags_inv = HIDEFACE|BLOCKHAIR
+	siemens_coefficient = 0.9
+	body_parts_covered = HEAD|FACE|EYES
+
+/obj/item/clothing/mask/rubber/trasen
+	name = "\improper Jack Trasen mask"
+	desc = "CEO of NanoTrasen corporation. Perfect for scaring the unionizing children."
+	icon_state = "trasen"
+	visible_name = "Jack Trasen"
+
+/obj/item/clothing/mask/rubber/barros
+	name = "\improper Amaya Barros mask"
+	desc = "Current Secretary-General of Sol Cental Government. Not that the real thing would visit this pigsty."
+	icon_state = "barros"
+	visible_name = "Amaya Barros"
+
+/obj/item/clothing/mask/rubber/admiral
+	name = "\improper Admiral Diwali mask"
+	desc = "Admiral that led the infamous last stand at Helios against the Independent Navy in the Gaia conflict. For bridge officers who wish they'd achieve a fraction of that."
+	icon_state = "admiral"
+	visible_name = "Admiral Diwali"
+
+/obj/item/clothing/mask/rubber/turner
+	name = "\improper Charles Turner mask"
+	desc = "Premier of the Gilgamesh Colonial Confederation. Probably shouldn't wear this in front of your veteran uncle."
+	icon_state = "turner"
+	visible_name = "Charles Turner"
+
+/obj/item/clothing/mask/rubber/species
+	name = "human mask"
+	desc = "A rubber human mask."
+	icon_state = "manmet"
+	var/species = SPECIES_HUMAN
+
+/obj/item/clothing/mask/rubber/species/New()
+	..()
+	visible_name = species
+	var/singleton/species/S = GLOB.species_by_name[species]
+	if(istype(S))
+		var/singleton/cultural_info/C = SSculture.get_culture(S.default_cultural_info[TAG_CULTURE])
+		if(istype(C))
+			visible_name = C.get_random_name(pick(MALE,FEMALE))
+
+/obj/item/clothing/mask/rubber/species/cat
+	name = "cat mask"
+	desc = "A rubber cat mask."
+	icon_state = "catmet"
+
+/obj/item/clothing/mask/rubber/species/unathi
+	name = "unathi mask"
+	desc = "A rubber unathi mask."
+	icon_state = "lizmet"
+	species = SPECIES_UNATHI
+
+/obj/item/clothing/mask/rubber/species/skrell
+	name = "skrell mask"
+	desc = "A rubber skrell mask."
+	icon_state = "skrellmet"
+	species = SPECIES_SKRELL
+
+/obj/item/clothing/mask/spirit
+	name = "spirit mask"
+	desc = "An eerie mask of ancient, pitted wood."
+	icon_state = "spirit_mask"
+	item_state = "spirit_mask"
+	flags_inv = HIDEFACE
+	body_parts_covered = FACE|EYES
+
+// Bandanas below
+/obj/item/clothing/mask/bandana
+	name = "bandana"
+	desc = "A soft piece of cloth. Can be worn on the head or face."
+	flags_inv = HIDEFACE
+	slot_flags = SLOT_MASK|SLOT_HEAD
+	body_parts_covered = FACE
+	icon_state = "bandana"
+	item_state = "bandana"
+	item_flags = ITEM_FLAG_FLEXIBLEMATERIAL | ITEM_FLAG_WASHER_ALLOWED
+	w_class = ITEM_SIZE_SMALL
+	use_alt_layer = TRUE
+
+/obj/item/clothing/mask/bandana/equipped(mob/user, slot)
+	switch(slot)
+		if(slot_wear_mask) //Mask is the default for all the settings
+			flags_inv = initial(flags_inv)
+			body_parts_covered = initial(body_parts_covered)
+			icon_state = initial(icon_state)
+			sprite_sheets = list(
+				SPECIES_VOX = 'icons/mob/species/vox/onmob_mask_vox.dmi',
+				SPECIES_UNATHI = 'icons/mob/species/unathi/onmob_mask_unathi.dmi'
+				)
+		if(slot_head)
+			flags_inv = 0
+			body_parts_covered = HEAD
+			icon_state = "[initial(icon_state)]_up"
+			sprite_sheets = list(
+				SPECIES_VOX = 'icons/mob/species/vox/onmob_head_vox.dmi',
+				SPECIES_UNATHI = 'icons/mob/species/unathi/onmob_head_unathi.dmi'
+				)
+
+	return ..()
 
 /obj/item/clothing/mask/bandana/red
-	name = "red bandana"
-	desc = "A fine red bandana with nanotech lining."
-	icon_state = "bandred"
-	mutantrace_variation = DIGITIGRADE_VARIATION
+	color = COLOR_MAROON
 
 /obj/item/clothing/mask/bandana/blue
-	name = "blue bandana"
-	desc = "A fine blue bandana with nanotech lining."
-	icon_state = "bandblue"
-	mutantrace_variation = DIGITIGRADE_VARIATION
+	color = COLOR_NAVY_BLUE
 
-/obj/item/clothing/mask/bandana/green
-	name = "green bandana"
-	desc = "A fine green bandana with nanotech lining."
-	icon_state = "bandgreen"
-	mutantrace_variation = DIGITIGRADE_VARIATION
-
-/obj/item/clothing/mask/bandana/gold
-	name = "gold bandana"
-	desc = "A fine gold bandana with nanotech lining."
-	icon_state = "bandgold"
-	mutantrace_variation = DIGITIGRADE_VARIATION
+/obj/item/clothing/mask/bandana/yellow
+	color = COLOR_YELLOW_GRAY
 
 /obj/item/clothing/mask/bandana/black
-	name = "black bandana"
-	desc = "A fine black bandana with nanotech lining."
-	icon_state = "bandblack"
-	mutantrace_variation = DIGITIGRADE_VARIATION
+	color = COLOR_GRAY20
+
+/obj/item/clothing/mask/bandana/engi
+	name = "engineering bandana"
+	icon_state = "bandorange"
+	item_state = "bandorange"
+	desc = "A soft piece of cloth that can be worn on the head or face. This one is orange and yellow."
+
+/obj/item/clothing/mask/bandana/botany
+	name = "botany bandana"
+	icon_state = "bandbotany"
+	item_state = "bandbotany"
+	desc = "A soft piece of cloth that can be worn on the head or face. This one is green and blue."
+
+/obj/item/clothing/mask/bandana/camo
+	name = "camo bandana"
+	icon_state = "bandcamo"
+	item_state = "bandcamo"
+	desc = "A soft piece of cloth that can be worn on the head or face. This one is camo."
 
 /obj/item/clothing/mask/bandana/skull
 	name = "skull bandana"
-	desc = "A fine black bandana with nanotech lining and a skull emblem."
 	icon_state = "bandskull"
-	mutantrace_variation = DIGITIGRADE_VARIATION
-
-/obj/item/clothing/mask/bandana/durathread
-	name = "durathread bandana"
-	desc =  "A bandana made from durathread, you wish it would provide some protection to its wearer, but it's far too thin..."
-	icon_state = "banddurathread"
-	mutantrace_variation = DIGITIGRADE_VARIATION
-
-/obj/item/clothing/mask/bandana/durathread/tied/Initialize(mapload)
-	. = ..()
-	AltClick(bypass = TRUE)
-
-/obj/item/clothing/mask/mummy
-	name = "mummy mask"
-	desc = "Ancient bandages."
-	icon_state = "mummy_mask"
-	item_state = "mummy_mask"
-	flags_inv = HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-
-/obj/item/clothing/mask/scarecrow
-	name = "sack mask"
-	desc = "A burlap sack with eyeholes."
-	icon_state = "scarecrow_sack"
-	item_state = "scarecrow_sack"
-	flags_inv = HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-
-/obj/item/clothing/mask/gondola
-	name = "gondola mask"
-	desc = "Genuine gondola fur."
-	icon_state = "gondola"
-	item_state = "gondola"
-	flags_inv = HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-	w_class = WEIGHT_CLASS_SMALL
-	modifies_speech = TRUE
-
-/obj/item/clothing/mask/gondola/handle_speech(datum/source, list/speech_args)
-	var/message = speech_args[SPEECH_MESSAGE]
-	if(message[1] != "*")
-		message = " [message]"
-		var/list/spurdo_words = strings("spurdo_replacement.json", "spurdo")
-		for(var/key in spurdo_words)
-			var/value = spurdo_words[key]
-			if(islist(value))
-				value = pick(value)
-			message = replacetextEx(message,regex(uppertext(key),"g"), "[uppertext(value)]")
-			message = replacetextEx(message,regex(capitalize(key),"g"), "[capitalize(value)]")
-			message = replacetextEx(message,regex(key,"g"), "[value]")
-	speech_args[SPEECH_MESSAGE] = trim(message)
-
-/obj/item/clothing/mask/rmask
-	name = "dusty mask"
-	desc = "A face is nothing, it's what's inside that matters."
-	icon_state = "rmask"
-	item_state = "rmaks"
-	flags_inv = HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-	clothing_flags = MASKINTERNALS
-	flags_cover = MASKCOVERSEYES
-
-/obj/item/clothing/mask/pocketcatmask
-	name = "peculiar cat mask"
-	desc = "This mask makes you a little uneasy."
-	icon_state = "pocketmask"
-	item_state = "pocketmask"
-	flags_inv = HIDEFACE|HIDEHAIR|HIDEFACIALHAIR
-	flags_cover = MASKCOVERSEYES
+	item_state = "bandskull"
+	desc = "A soft piece of cloth that can be worn on the head or face. This one is black with a skull on it."

@@ -1,368 +1,255 @@
-#define CARDCON_DEPARTMENT_SERVICE "Service"
-#define CARDCON_DEPARTMENT_SECURITY "Security"
-#define CARDCON_DEPARTMENT_MEDICAL "Medical"
-#define CARDCON_DEPARTMENT_SUPPLY "Supply"
-#define CARDCON_DEPARTMENT_SCIENCE "Science"
-#define CARDCON_DEPARTMENT_ENGINEERING "Engineering"
-#define CARDCON_DEPARTMENT_COMMAND "Command"
-
 /datum/computer_file/program/card_mod
 	filename = "cardmod"
-	filedesc = "ID Card Modification"
-	category = PROGRAM_CATEGORY_EQUIPMENT
+	filedesc = "ID Card Modification Program"
+	nanomodule_path = /datum/nano_module/program/card_mod
 	program_icon_state = "id"
-	extended_desc = "Program for programming employee ID cards to access parts of the station."
-	transfer_access = ACCESS_COMMAND
-	usage_flags = PROGRAM_CONSOLE | PROGRAM_LAPTOP | PROGRAM_TABLET | PROGRAM_PHONE | PROGRAM_PDA
+	program_key_state = "id_key"
+	program_menu_icon = "key"
+	extended_desc = "Program for programming crew ID cards."
+	requires_ntnet = FALSE
 	size = 8
-	tgui_id = "NtosCard"
-	program_icon = "id-card"
+	category = PROG_COMMAND
 
-	var/is_centcom = FALSE
-	var/minor = FALSE
-	var/authenticated = FALSE
-	var/list/region_access
-	var/list/head_subordinates
-	///Which departments this computer has access to. Defined as access regions. null = all departments
-	var/target_dept
+/datum/nano_module/program/card_mod
+	name = "ID card modification program"
+	var/mod_mode = 1
+	var/is_centcom = 0
+	var/show_assignments = 0
 
-	//For some reason everything was exploding if this was static.
-	var/list/sub_managers
+/datum/nano_module/program/card_mod/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1, datum/topic_state/state = GLOB.default_state)
+	var/list/data = host.initial_data()
+	var/obj/item/stock_parts/computer/card_slot/card_slot = program.computer.get_component(PART_CARD)
 
-/datum/computer_file/program/card_mod/New(obj/item/modular_computer/comp)
-	. = ..()
-	sub_managers = list(
-		"[ACCESS_HOP]" = list(
-			"department" = list(CARDCON_DEPARTMENT_SERVICE, CARDCON_DEPARTMENT_COMMAND),
-			"region" = 1,
-			"head" = "Head of Personnel"
-		),
-		"[ACCESS_HOS]" = list(
-			"department" = CARDCON_DEPARTMENT_SECURITY,
-			"region" = 2,
-			"head" = "Head of Security"
-		),
-		"[ACCESS_CMO]" = list(
-			"department" = CARDCON_DEPARTMENT_MEDICAL,
-			"region" = 3,
-			"head" = "Chief Medical Officer"
-		),
-		"[ACCESS_RD]" = list(
-			"department" = CARDCON_DEPARTMENT_SCIENCE,
-			"region" = 4,
-			"head" = "Research Director"
-		),
-		"[ACCESS_CE]" = list(
-			"department" = CARDCON_DEPARTMENT_ENGINEERING,
-			"region" = 5,
-			"head" = "Chief Engineer"
-		)
-	)
+	data["src"] = "\ref[src]"
+	data["station_name"] = station_name()
+	data["manifest"] = html_crew_manifest()
+	data["assignments"] = show_assignments
+	data["have_id_slot"] = !!card_slot
+	data["have_printer"] = program.computer.has_component(PART_PRINTER)
+	data["authenticated"] = program.can_run(user)
+	if(!data["have_id_slot"] || !data["have_printer"])
+		mod_mode = 0 //We can't modify IDs when there is no card reader
+	if(card_slot)
+		var/obj/item/card/id/id_card = card_slot.stored_card
+		data["has_id"] = !!id_card
+		data["id_account_number"] = id_card ? id_card.associated_account_number : null
+		data["id_email_login"] = id_card ? id_card.associated_email_login["login"] : null
+		data["id_email_password"] = id_card ? stars(id_card.associated_email_login["password"], 0) : null
+		data["id_rank"] = id_card && id_card.assignment ? id_card.assignment : "Unassigned"
+		data["id_owner"] = id_card && id_card.registered_name ? id_card.registered_name : "-----"
+		data["id_name"] = id_card ? id_card.name : "-----"
+	data["mmode"] = mod_mode
+	data["centcom_access"] = is_centcom
 
-/datum/computer_file/program/card_mod/proc/authenticate(mob/user, obj/item/card/id/id_card)
-	if(!id_card)
-		return
+	data["command_jobs"] = format_jobs(SSjobs.titles_by_department(COM))
+	data["support_jobs"] = format_jobs(SSjobs.titles_by_department(SPT))
+	data["engineering_jobs"] = format_jobs(SSjobs.titles_by_department(ENG))
+	data["medical_jobs"] = format_jobs(SSjobs.titles_by_department(MED))
+	data["science_jobs"] = format_jobs(SSjobs.titles_by_department(SCI))
+	data["security_jobs"] = format_jobs(SSjobs.titles_by_department(SEC))
+	data["exploration_jobs"] = format_jobs(SSjobs.titles_by_department(EXP))
+	data["service_jobs"] = format_jobs(SSjobs.titles_by_department(SRV))
+	data["supply_jobs"] = format_jobs(SSjobs.titles_by_department(SUP))
+	data["civilian_jobs"] = format_jobs(SSjobs.titles_by_department(CIV))
+	data["centcom_jobs"] = format_jobs(get_all_centcom_jobs())
 
-	if(istype(id_card, /obj/item/card/id/captains_spare/temporary))
-		to_chat(user, span_warning("ERROR: [id_card] is not compatable with this program"))
-		return
-	region_access = list()
-	if(!target_dept && (ACCESS_CHANGE_IDS in id_card.access))
-		minor = FALSE
-		authenticated = TRUE
-		region_access = list(CARDCON_DEPARTMENT_SERVICE, CARDCON_DEPARTMENT_COMMAND, CARDCON_DEPARTMENT_SECURITY, CARDCON_DEPARTMENT_MEDICAL, CARDCON_DEPARTMENT_SCIENCE, CARDCON_DEPARTMENT_ENGINEERING)
-		update_static_data(user)
-		return TRUE
+	data["all_centcom_access"] = is_centcom ? get_accesses(1) : null
+	data["regions"] = get_accesses()
 
-	var/list/head_types = list()
-	for(var/access_text in sub_managers)
-		var/list/info = sub_managers[access_text]
-		var/access = access_text
-		if((access in id_card.access) && ((info["region"] in target_dept) || !length(target_dept)))
-			region_access += info["region"]
-			//I don't even know what I'm doing anymore
-			head_types += info["head"]
+	if(card_slot && card_slot.stored_card)
+		var/obj/item/card/id/id_card = card_slot.stored_card
+		if(is_centcom)
+			var/list/all_centcom_access = list()
+			for(var/access in get_all_centcom_access())
+				all_centcom_access.Add(list(list(
+					"desc" = replacetext(get_centcom_access_desc(access), " ", "&nbsp"),
+					"ref" = access,
+					"allowed" = (access in id_card.access) ? 1 : 0)))
+			data["all_centcom_access"] = all_centcom_access
+		else
+			var/list/regions = list()
+			for(var/i = 1; i <= 8; i++)
+				var/list/accesses = list()
+				for(var/access in get_region_accesses(i))
+					if (get_access_desc(access))
+						accesses.Add(list(list(
+							"desc" = replacetext(get_access_desc(access), " ", "&nbsp"),
+							"ref" = access,
+							"allowed" = (access in id_card.access) ? 1 : 0)))
 
-	head_subordinates = list()
-	if(length(head_types))
-		for(var/j in SSjob.occupations)
-			var/datum/job/job = j
-			for(var/head in head_types)//god why
-				if(head in job.department_head)
-					head_subordinates += job.title
+				regions.Add(list(list(
+					"name" = get_region_accesses_name(i),
+					"accesses" = accesses)))
+			data["regions"] = regions
 
-	if(length(region_access))
-		minor = TRUE
-		authenticated = TRUE
-		update_static_data(user)
-		return TRUE
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
+	if (!ui)
+		ui = new(user, src, ui_key, "identification_computer.tmpl", name, 600, 700, state = state)
+		ui.auto_update_layout = 1
+		ui.set_initial_data(data)
+		ui.open()
 
-	return FALSE
+/datum/nano_module/program/card_mod/proc/format_jobs(list/jobs)
+	var/obj/item/card/id/id_card = program.computer.get_inserted_id()
+	var/list/formatted = list()
+	for(var/job in jobs)
+		formatted.Add(list(list(
+			"display_name" = replacetext(job, " ", "&nbsp"),
+			"target_rank" = id_card && id_card.assignment ? id_card.assignment : "Unassigned",
+			"job" = job)))
 
-/datum/computer_file/program/card_mod/ui_act(action, params)
+	return formatted
+
+/datum/nano_module/program/card_mod/proc/get_accesses(is_centcom = 0)
+	return null
+
+
+/datum/computer_file/program/card_mod/Topic(href, href_list)
 	if(..())
-		return TRUE
-
-	var/obj/item/computer_hardware/card_slot/card_slot
-	var/obj/item/computer_hardware/card_slot/card_slot2
-	var/obj/item/computer_hardware/printer/printer
-	if(computer)
-		card_slot = computer.all_components[MC_CARD]
-		card_slot2 = computer.all_components[MC_CARD2]
-		printer = computer.all_components[MC_PRINT]
-		if(!card_slot || !card_slot2)
-			return
+		return 1
 
 	var/mob/user = usr
-	var/obj/item/card/id/user_id_card = card_slot.stored_card
+	var/obj/item/card/id/user_id_card = user?.GetIdCard()
+	var/obj/item/card/id/id_card = computer?.get_inserted_id()
+	var/datum/nano_module/program/card_mod/module = NM
 
-	var/obj/item/card/id/target_id_card = card_slot2.stored_card
+	if (!user_id_card || !id_card || !module)
+		return
 
-	switch(action)
-		if("PRG_authenticate")
-			if(!computer || !user_id_card)
-				playsound(computer, 'sound/machines/terminal_prompt_deny.ogg', 50, FALSE)
-				return
-			if(authenticate(user, user_id_card))
-				playsound(computer, 'sound/machines/terminal_on.ogg', 50, FALSE)
-				return TRUE
-		if("PRG_logout")
-			authenticated = FALSE
-			playsound(computer, 'sound/machines/terminal_off.ogg', 50, FALSE)
-			return TRUE
-		if("PRG_print")
-			if(!computer || !printer)
-				return
-			if(!authenticated)
-				return
-			var/contents = {"<h4>Access Report</h4>
-						<u>Prepared By:</u> [user_id_card && user_id_card.registered_name ? user_id_card.registered_name : "Unknown"]<br>
-						<u>For:</u> [target_id_card.registered_name ? target_id_card.registered_name : "Unregistered"]<br>
-						<hr>
-						<u>Assignment:</u> [target_id_card.assignment]<br>
-						<u>Access:</u><br>
-						"}
-
-			var/known_access_rights = get_all_accesses()
-			for(var/A in target_id_card.access)
-				if(A in known_access_rights)
-					contents += "  [get_access_desc(A)]"
-
-			if(!printer.print_text(contents,"access report"))
-				to_chat(usr, span_notice("Hardware error: Printer was unable to print the file. It may be out of paper."))
-				return
+	switch(href_list["action"])
+		if("switchm")
+			if(href_list["target"] == "mod")
+				module.mod_mode = 1
+			else if (href_list["target"] == "manifest")
+				module.mod_mode = 0
+		if("togglea")
+			if(module.show_assignments)
+				module.show_assignments = 0
 			else
-				playsound(computer, 'sound/machines/terminal_on.ogg', 50, FALSE)
-				computer.visible_message(span_notice("\The [computer] prints out a paper."))
-			return TRUE
-		if("PRG_eject")
-			if(!computer || !card_slot2)
+				module.show_assignments = 1
+		if("print")
+			if(!authorized(user_id_card))
+				to_chat(usr, SPAN_WARNING("Access denied."))
 				return
-			if(target_id_card)
-				GLOB.data_core.manifest_modify(target_id_card.registered_name, target_id_card.assignment)
-				return card_slot2.try_eject(user)
-			else
-				var/obj/item/I = user.get_active_held_item()
-				if(istype(I, /obj/item/card/id))
-					return card_slot2.try_insert(I)
-			return FALSE
-		if("PRG_terminate")
-			if(!computer || !authenticated)
-				return
-			if(minor)
-				if(!(target_id_card.assignment in head_subordinates) && target_id_card.assignment != "Assistant")
-					return
+			if(computer.has_component(PART_PRINTER)) //This option should never be called if there is no printer
+				if(module.mod_mode)
+					if(can_run(user, 1))
+						var/contents = {"<h4>Access Report</h4>
+									<u>Prepared By:</u> [user_id_card.registered_name ? user_id_card.registered_name : "Unknown"]<br>
+									<u>For:</u> [id_card.registered_name ? id_card.registered_name : "Unregistered"]<br>
+									<hr>
+									<u>Assignment:</u> [id_card.assignment]<br>
+									<u>Account Number:</u> #[id_card.associated_account_number]<br>
+									<u>Email account:</u> [id_card.associated_email_login["login"]]
+									<u>Email password:</u> [stars(id_card.associated_email_login["password"], 0)]
+									<u>Blood Type:</u> [id_card.blood_type]<br><br>
+									<u>Access:</u><br>
+								"}
 
-			target_id_card.access -= get_all_centcom_access() + get_all_accesses()
-			target_id_card.assignment = "Unassigned"
-			target_id_card.originalassignment = null
-			target_id_card.update_label()
-			playsound(computer, 'sound/machines/terminal_prompt_deny.ogg', 50, FALSE)
-			return TRUE
-		if("PRG_edit")
-			if(!computer || !authenticated || !target_id_card)
-				return
-			var/new_name = params["name"]
-			if(!new_name)
-				return
-			target_id_card.registered_name = new_name
-			target_id_card.update_label()
-			playsound(computer, "terminal_type", 50, FALSE)
-			return TRUE
-		if("PRG_assign")
-			if(!computer || !authenticated || !target_id_card)
-				return
-			var/target = params["assign_target"]
-			if(!target)
-				return
+						var/known_access_rights = get_access_ids(ACCESS_TYPE_STATION|ACCESS_TYPE_CENTCOM)
+						for(var/A in id_card.access)
+							if(A in known_access_rights)
+								contents += "  [get_access_desc(A)]"
 
-			if(target == "Custom")
-				var/custom_name = params["custom_name"]
-				if(custom_name)
-					target_id_card.assignment = custom_name
-					target_id_card.update_label()
-			else
-				if(minor && !(target in head_subordinates))
-					return
-				var/list/new_access = list()
-				if(is_centcom)
-					new_access = get_centcom_access(target)
+						if(!computer.print_paper(contents,"access report"))
+							to_chat(usr, SPAN_NOTICE("Hardware error: Printer was unable to print the file. It may be out of paper."))
+							return
 				else
-					var/datum/job/job = SSjob.GetJob(target)
-					if(!job)
-						to_chat(user, span_warning("No class exists for this job: [target]"))
+					var/contents = {"<h4>Crew Manifest</h4>
+									<br>
+									[html_crew_manifest()]
+									"}
+					if(!computer.print_paper(contents, "crew manifest ([stationtime2text()])"))
+						to_chat(usr, SPAN_NOTICE("Hardware error: Printer was unable to print the file. It may be out of paper."))
 						return
-					new_access = job.get_access()
-					if(target_id_card.registered_account)
-						target_id_card.registered_account.account_job = job
-
-				target_id_card.access = list()
-				target_id_card.access |= new_access
-				target_id_card.originalassignment = target
-				target_id_card.assignment = target
-				target_id_card.update_label()
-
-			playsound(computer, 'sound/machines/terminal_prompt_confirm.ogg', 50, FALSE)
-			return TRUE
-		if("PRG_access")
-			if(!computer || !authenticated)
+		if("eject")
+			var/obj/item/stock_parts/computer/card_slot/card_slot = computer.get_component(PART_CARD)
+			if(computer.get_inserted_id())
+				card_slot.eject_id(user)
+			else
+				card_slot.insert_id(user.get_active_hand(), user)
+		if("terminate")
+			if(!authorized(user_id_card))
+				to_chat(usr, SPAN_WARNING("Access denied."))
 				return
-			var/access_type = (params["access_target"])
-			if(access_type in (is_centcom ? get_all_centcom_access() : get_all_accesses()))
-				if(access_type in target_id_card.access)
-					target_id_card.access -= access_type
+			if(computer && can_run(user, 1))
+				id_card.assignment = "Terminated"
+				remove_nt_access(id_card)
+				callHook("terminate_employee", list(id_card))
+		if("edit")
+			if(!authorized(user_id_card))
+				to_chat(usr, SPAN_WARNING("Access denied."))
+				return
+			if(computer && can_run(user, 1))
+				if(href_list["name"])
+					var/temp_name = sanitizeName(input("Enter name.", "Name", id_card.registered_name),allow_numbers=TRUE)
+					if(temp_name)
+						id_card.registered_name = temp_name
+						id_card.formal_name_suffix = initial(id_card.formal_name_suffix)
+						id_card.formal_name_prefix = initial(id_card.formal_name_prefix)
+					else
+						computer.show_error(usr, "Invalid name entered!")
+				else if(href_list["account"])
+					var/account_num = text2num(input("Enter account number.", "Account", id_card.associated_account_number))
+					id_card.associated_account_number = account_num
+				else if(href_list["elogin"])
+					var/email_login = input("Enter email login.", "Email login", id_card.associated_email_login["login"])
+					id_card.associated_email_login["login"] = email_login
+				else if(href_list["epswd"])
+					var/email_password = input("Enter email password.", "Email password")
+					id_card.associated_email_login["password"] = email_password
+		if("assign")
+			if(!authorized(user_id_card))
+				to_chat(usr, SPAN_WARNING("Access denied."))
+				return
+			if(computer && can_run(user, 1) && id_card)
+				var/t1 = href_list["assign_target"]
+				if(t1 == "Custom")
+					var/temp_t = sanitize(input("Enter a custom job assignment.","Assignment", id_card.assignment), 45)
+					//let custom jobs function as an impromptu alt title, mainly for sechuds
+					if(temp_t)
+						id_card.assignment = temp_t
 				else
-					target_id_card.access |= access_type
-				playsound(computer, "terminal_type", 50, FALSE)
-				return TRUE
-		if("PRG_grantall")
-			if(!computer || !authenticated || minor)
-				return
-			target_id_card.access |= (is_centcom ? get_all_centcom_access() : get_all_accesses())
-			playsound(computer, 'sound/machines/terminal_prompt_confirm.ogg', 50, FALSE)
-			return TRUE
-		if("PRG_denyall")
-			if(!computer || !authenticated || minor)
-				return
-			target_id_card.access.Cut()
-			playsound(computer, 'sound/machines/terminal_prompt_deny.ogg', 50, FALSE)
-			return TRUE
-		if("PRG_grantregion")
-			if(!computer || !authenticated)
-				return
-			var/region = (params["region"])
-			if(isnull(region) || (!(region in region_access) && minor))
-				return
-			target_id_card.access |= get_region_accesses(region)
-			playsound(computer, 'sound/machines/terminal_prompt_confirm.ogg', 50, FALSE)
-			return TRUE
-		if("PRG_denyregion")
-			if(!computer || !authenticated)
-				return
-			var/region = (params["region"])
-			if(isnull(region) || (!(region in region_access) && minor))
-				return
-			target_id_card.access -= get_region_accesses(region)
-			playsound(computer, 'sound/machines/terminal_prompt_deny.ogg', 50, FALSE)
-			return TRUE
+					var/list/access = list()
+					if(module.is_centcom)
+						access = get_centcom_access(t1)
+					else
+						var/datum/job/jobdatum = SSjobs.get_by_title(t1)
+						if(!jobdatum)
+							to_chat(usr, SPAN_WARNING("No log exists for this job: [t1]"))
+							return
 
+						access = jobdatum.get_access()
 
+					remove_nt_access(id_card)
+					apply_access(id_card, access)
+					id_card.assignment = t1
+					id_card.rank = t1
 
-/datum/computer_file/program/card_mod/ui_static_data(mob/user)
-	var/list/data = list()
-	data["station_name"] = station_name()
-	data["centcom_access"] = is_centcom
-	data["minor"] = target_dept || minor ? TRUE : FALSE
+				callHook("reassign_employee", list(id_card))
+		if("access")
+			if(href_list["allowed"] && computer && can_run(user, 1) && id_card)
+				var/access_type = href_list["access_target"]
+				var/access_allowed = text2num(href_list["allowed"])
+				if(access_type in get_access_ids(ACCESS_TYPE_STATION|ACCESS_TYPE_CENTCOM))
+					for(var/access in user_id_card.access)
+						var/region_type = get_access_region_by_id(access_type)
+						if(access in GLOB.using_map.access_modify_region[region_type])
+							id_card.access -= access_type
+							if(!access_allowed)
+								id_card.access += access_type
+							break
+	if(id_card)
+		id_card.SetName(text("[id_card.registered_name]'s ID Card ([id_card.assignment])"))
 
-	var/list/departments = target_dept
-	if(is_centcom)
-		departments = list("Centcom" = get_all_centcom_jobs())
-	else if(isnull(departments))
-		departments = list(
-			CARDCON_DEPARTMENT_COMMAND = list("Captain"),//lol
-			CARDCON_DEPARTMENT_ENGINEERING = GLOB.original_engineering_positions,
-			CARDCON_DEPARTMENT_MEDICAL = GLOB.original_medical_positions,
-			CARDCON_DEPARTMENT_SCIENCE = GLOB.original_science_positions,
-			CARDCON_DEPARTMENT_SECURITY = GLOB.original_security_positions,
-			CARDCON_DEPARTMENT_SUPPLY = GLOB.original_supply_positions,
-			CARDCON_DEPARTMENT_SERVICE = GLOB.original_civilian_positions
-		)
-	data["jobs"] = list()
-	for(var/department in departments)
-		var/list/job_list = departments[department]
-		var/list/department_jobs = list()
-		for(var/job in job_list)
-			if(minor && !(job in head_subordinates))
-				continue
-			department_jobs += list(list(
-				"display_name" = replacetext(job, "&nbsp", " "),
-				"job" = job
-			))
-		if(length(department_jobs))
-			data["jobs"][department] = department_jobs
+	SSnano.update_uis(NM)
+	return 1
 
-	var/list/regions = list()
-	for(var/i in 1 to 7)
-		if((minor || target_dept) && !(i in region_access))
-			continue
+/datum/computer_file/program/card_mod/proc/remove_nt_access(obj/item/card/id/id_card)
+	id_card.access -= get_access_ids(ACCESS_TYPE_STATION|ACCESS_TYPE_CENTCOM)
 
-		var/list/accesses = list()
-		for(var/access in get_region_accesses(i))
-			if (get_access_desc(access))
-				accesses += list(list(
-					"desc" = replacetext(get_access_desc(access), "&nbsp", " "),
-					"ref" = access,
-				))
+/datum/computer_file/program/card_mod/proc/apply_access(obj/item/card/id/id_card, list/accesses)
+	id_card.access |= accesses
 
-		regions += list(list(
-			"name" = get_region_accesses_name(i),
-			"regid" = i,
-			"accesses" = accesses
-		))
-
-	data["regions"] = regions
-
-	return data
-
-/datum/computer_file/program/card_mod/ui_data(mob/user)
-	var/list/data = get_header_data()
-
-	var/obj/item/computer_hardware/card_slot/card_slot2
-	var/obj/item/computer_hardware/printer/printer
-
-	if(computer)
-		card_slot2 = computer.all_components[MC_CARD2]
-		printer = computer.all_components[MC_PRINT]
-
-	data["station_name"] = station_name()
-
-	if(computer)
-		data["have_id_slot"] = !!(card_slot2)
-		data["have_printer"] = !!printer
-	else
-		data["have_id_slot"] = FALSE
-		data["have_printer"] = FALSE
-
-	data["authenticated"] = authenticated
-
-	if(computer)
-		var/obj/item/card/id/id_card = card_slot2.stored_card
-		data["has_id"] = !!id_card
-		data["id_name"] = id_card ? id_card.name : "-----"
-		if(id_card)
-			data["id_rank"] = id_card.assignment ? id_card.assignment : "Unassigned"
-			data["id_owner"] = id_card.registered_name ? id_card.registered_name : "-----"
-			data["access_on_card"] = id_card.access
-			data["id_age"] = id_card.registered_age
-
-	return data
-
-
-
-#undef CARDCON_DEPARTMENT_SERVICE
-#undef CARDCON_DEPARTMENT_SECURITY
-#undef CARDCON_DEPARTMENT_MEDICAL
-#undef CARDCON_DEPARTMENT_SCIENCE
-#undef CARDCON_DEPARTMENT_SUPPLY
-#undef CARDCON_DEPARTMENT_ENGINEERING
-#undef CARDCON_DEPARTMENT_COMMAND
+/datum/computer_file/program/card_mod/proc/authorized(obj/item/card/id/id_card)
+	return id_card && (access_change_ids in id_card.access)

@@ -1,123 +1,126 @@
-#define TANK_DISPENSER_CAPACITY 10
-
-/obj/structure/tank_dispenser
-	name = "tank dispenser"
-	desc = "A simple yet bulky storage device for gas tanks. Holds up to 10 oxygen tanks and 10 plasma tanks."
-	icon = 'icons/obj/objects.dmi'
+/obj/structure/dispenser
+	name = "tank storage unit"
+	desc = "A simple yet bulky storage device for gas tanks. Has room for up to ten oxygen tanks, and ten phoron tanks."
+	icon = 'icons/obj/structures/tank_dispenser.dmi'
 	icon_state = "dispenser"
 	density = TRUE
 	anchored = TRUE
-	max_integrity = 300
-	var/oxygentanks = TANK_DISPENSER_CAPACITY
-	var/plasmatanks = TANK_DISPENSER_CAPACITY
+	w_class = ITEM_SIZE_NO_CONTAINER
+	obj_flags = OBJ_FLAG_ANCHORABLE
+	var/oxygentanks = 10
+	var/phorontanks = 10
+	var/list/oxytanks = list()	//sorry for the similar var names
+	var/list/platanks = list()
 
-/obj/structure/tank_dispenser/oxygen
-	plasmatanks = 0
 
-/obj/structure/tank_dispenser/plasma
+/obj/structure/dispenser/oxygen
+	phorontanks = 0
+
+/obj/structure/dispenser/phoron
 	oxygentanks = 0
 
-/obj/structure/tank_dispenser/Initialize(mapload)
+/obj/structure/dispenser/Initialize()
 	. = ..()
-	for(var/i in 1 to oxygentanks)
-		new /obj/item/tank/internals/oxygen(src)
-	for(var/i in 1 to plasmatanks)
-		new /obj/item/tank/internals/plasma(src)
-	update_appearance(UPDATE_ICON)
+	update_icon()
 
-/obj/structure/tank_dispenser/update_overlays()
-	. = ..()
+/obj/structure/dispenser/on_update_icon()
+	ClearOverlays()
 	switch(oxygentanks)
-		if(1 to 3)
-			. += "oxygen-[oxygentanks]"
-		if(4 to TANK_DISPENSER_CAPACITY)
-			. += "oxygen-4"
-	switch(plasmatanks)
-		if(1 to 4)
-			. += "plasma-[plasmatanks]"
-		if(5 to TANK_DISPENSER_CAPACITY)
-			. += "plasma-5"
+		if(1 to 3)	AddOverlays("oxygen-[oxygentanks]")
+		if(4 to INFINITY) AddOverlays("oxygen-4")
+	switch(phorontanks)
+		if(1 to 4)	AddOverlays("phoron-[phorontanks]")
+		if(5 to INFINITY) AddOverlays("phoron-5")
 
-/obj/structure/tank_dispenser/attack_ai(mob/user)
-	. = ..()
-	return ui_interact(user)
+/obj/structure/dispenser/attack_ai(mob/user as mob)
+	if(user.Adjacent(src))
+		return attack_hand(user)
+	..()
 
-/obj/structure/tank_dispenser/attackby(obj/item/I, mob/living/user, params)
-	var/full
-	if(istype(I, /obj/item/tank/internals/plasma))
-		if(plasmatanks < TANK_DISPENSER_CAPACITY)
-			plasmatanks++
-		else
-			full = TRUE
-	else if(istype(I, /obj/item/tank/internals/oxygen))
-		if(oxygentanks < TANK_DISPENSER_CAPACITY)
+/obj/structure/dispenser/attack_hand(mob/user as mob)
+	user.set_machine(src)
+	var/dat = "[src]<br><br>"
+	dat += "Oxygen tanks: [oxygentanks] - [oxygentanks ? "<A href='byond://?src=\ref[src];oxygen=1'>Dispense</A>" : "empty"]<br>"
+	dat += "Phoron tanks: [phorontanks] - [phorontanks ? "<A href='byond://?src=\ref[src];phoron=1'>Dispense</A>" : "empty"]"
+	show_browser(user, dat, "window=dispenser")
+	onclose(user, "dispenser")
+	return
+
+
+/obj/structure/dispenser/use_tool(obj/item/tool, mob/user, list/click_params)
+	// Tank - Insert tank
+	if (istype(tool, /obj/item/tank))
+		// Oxygen Tanks
+		if (is_type_in_list(tool, list(/obj/item/tank/oxygen, /obj/item/tank/air, /obj/item/tank/anesthetic)))
+			if (oxygentanks >= 10)
+				USE_FEEDBACK_FAILURE("\The [src]'s oxygen tank rack is full.")
+				return TRUE
+			if (!user.unEquip(tool, src))
+				FEEDBACK_UNEQUIP_FAILURE(user, tool)
+				return TRUE
+			oxytanks += tool
 			oxygentanks++
-		else
-			full = TRUE
-	else if(I.tool_behaviour == TOOL_WRENCH)
-		default_unfasten_wrench(user, I, time = 20)
+			update_icon()
+			user.visible_message(
+				SPAN_NOTICE("\The [user] adds \a [tool] to \the [src]'s oxygen rack."),
+				SPAN_NOTICE("You add \the [tool] to \the [src]'s oxygen rack.")
+			)
+			return TRUE
+		// Phoron Tanks
+		if (istype(tool, /obj/item/tank/phoron))
+			if (phorontanks >= 10)
+				USE_FEEDBACK_FAILURE("\The [src]'s phoron tank rack is full.")
+				return TRUE
+			if (!user.unEquip(tool, src))
+				FEEDBACK_UNEQUIP_FAILURE(user, tool)
+				return TRUE
+			platanks += tool
+			phorontanks++
+			update_icon()
+			user.visible_message(
+				SPAN_NOTICE("\The [user] adds \a [tool] to \the [src]'s phoron rack."),
+				SPAN_NOTICE("You add \the [tool] to \the [src]'s phoron rack.")
+			)
+			return TRUE
+		// Other tanks
+		USE_FEEDBACK_FAILURE("\The [tool] doesn't fit in any of \the [src]'s racks.")
+		return TRUE
+
+	return ..()
+
+
+/obj/structure/dispenser/Topic(href, href_list)
+	if(usr.stat || usr.restrained())
 		return
-	else if(!user.combat_mode)
-		to_chat(user, span_notice("[I] does not fit into [src]."))
-		return
-	else
-		return ..()
-	if(full)
-		to_chat(user, span_notice("[src] can't hold any more of [I]."))
-		return
-
-	if(!user.transferItemToLoc(I, src))
-		return
-	to_chat(user, span_notice("You put [I] in [src]."))
-	update_appearance(UPDATE_ICON)
-
-/obj/structure/tank_dispenser/ui_state(mob/user)
-	return GLOB.physical_state
-
-/obj/structure/tank_dispenser/ui_interact(mob/user, datum/tgui/ui)
-	ui = SStgui.try_update_ui(user, src, ui)
-	if(!ui)
-		ui = new(user, src, "TankDispenser", name)
-		ui.open()
-
-/obj/structure/tank_dispenser/ui_data(mob/user)
-	var/list/data = list()
-	data["oxygen"] = oxygentanks
-	data["plasma"] = plasmatanks
-
-	return data
-
-/obj/structure/tank_dispenser/ui_act(action, params)
-	if(..())
-		return
-	switch(action)
-		if("plasma")
-			var/obj/item/tank/internals/plasma/tank = locate() in src
-			if(tank && Adjacent(usr))
-				if(iscyborg(usr))
-					usr.transferItemToLoc(tank, src.loc)
+	if(Adjacent(usr))
+		usr.set_machine(src)
+		if(href_list["oxygen"])
+			if(oxygentanks > 0)
+				var/obj/item/tank/oxygen/O
+				if(length(oxytanks) == oxygentanks)
+					O = oxytanks[1]
+					oxytanks.Remove(O)
 				else
-					usr.put_in_hands(tank)
-				plasmatanks--
-			. = TRUE
-		if("oxygen")
-			var/obj/item/tank/internals/oxygen/tank = locate() in src
-			if(tank && Adjacent(usr))
-				if(iscyborg(usr))
-					usr.transferItemToLoc(tank,src.loc)
-				else
-					usr.put_in_hands(tank)
+					O = new /obj/item/tank/oxygen(loc)
+				O.dropInto(loc)
+				to_chat(usr, SPAN_NOTICE("You take [O] out of [src]."))
 				oxygentanks--
-			. = TRUE
-	update_appearance(UPDATE_ICON)
-
-
-/obj/structure/tank_dispenser/deconstruct(disassembled = TRUE)
-	if(!(flags_1 & NODECONSTRUCT_1))
-		for(var/X in src)
-			var/obj/item/I = X
-			I.forceMove(loc)
-		new /obj/item/stack/sheet/metal (loc, 2)
-	qdel(src)
-
-#undef TANK_DISPENSER_CAPACITY
+				update_icon()
+		if(href_list["phoron"])
+			if(phorontanks > 0)
+				var/obj/item/tank/phoron/P
+				if(length(platanks) == phorontanks)
+					P = platanks[1]
+					platanks.Remove(P)
+				else
+					P = new /obj/item/tank/phoron(loc)
+				P.dropInto(loc)
+				to_chat(usr, SPAN_NOTICE("You take [P] out of [src]."))
+				phorontanks--
+				update_icon()
+		add_fingerprint(usr)
+		updateUsrDialog()
+	else
+		close_browser(usr, "window=dispenser")
+		return
+	return

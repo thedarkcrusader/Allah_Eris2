@@ -1,5 +1,3 @@
-
-
 /*
 Destructive Analyzer
 
@@ -7,155 +5,90 @@ It is used to destroy hand-held objects and advance technological research. Cont
 
 Note: Must be placed within 3 tiles of the R&D Console
 */
-/obj/machinery/rnd/destructive_analyzer
+
+/obj/machinery/r_n_d/destructive_analyzer
 	name = "destructive analyzer"
-	desc = "Learn science by destroying things!"
+	desc = "Accessed by a connected core fabricator console, it destroys and analyzes items and materials, recycling materials to any connected protolathe, and progressing the learning matrix of the connected core fabricator console."
 	icon_state = "d_analyzer"
-	circuit = /obj/item/circuitboard/machine/destructive_analyzer
+	icon = 'icons/obj/machines/research/destructive_analyzer.dmi'
+	var/obj/item/loaded_item = null
 	var/decon_mod = 0
 
-/obj/machinery/rnd/destructive_analyzer/RefreshParts()
+	idle_power_usage = 30
+	active_power_usage = 2500
+	construct_state = /singleton/machine_construction/default/panel_closed
+
+	machine_name = "destructive analyzer"
+	machine_desc = "Breaks down objects into their component parts, gaining new information in the process. Part of an R&D network."
+
+/obj/machinery/r_n_d/destructive_analyzer/RefreshParts()
 	var/T = 0
-	for(var/obj/item/stock_parts/S in component_parts)
+	for(var/obj/item/stock_parts/S in src)
 		T += S.rating
-	decon_mod = min(T, 100)
-
-
-/obj/machinery/rnd/destructive_analyzer/proc/ConvertReqString2List(list/source_list)
-	var/list/temp_list = params2list(source_list)
-	for(var/O in temp_list)
-		temp_list[O] = text2num(temp_list[O])
-	return temp_list
-
-/obj/machinery/rnd/destructive_analyzer/disconnect_console()
-	linked_console.linked_destroy = null
+	decon_mod = min(T * 0.1, 3)
 	..()
 
-/obj/machinery/rnd/destructive_analyzer/screwdriver_act(mob/living/user, obj/item/I, modifiers)
-	if(!(modifiers && modifiers[RIGHT_CLICK]))
-		return Insert_Item(I, user)
+/obj/machinery/r_n_d/destructive_analyzer/on_update_icon()
+	ClearOverlays()
+	if(panel_open)
+		AddOverlays("d_analyzer_panel")
+	if(is_powered())
+		if(loaded_item)
+			AddOverlays(emissive_appearance(icon, "d_analyzer_lights_item"))
+		else
+			AddOverlays(emissive_appearance(icon, "[icon_state]_lights"))
+
+/obj/machinery/r_n_d/destructive_analyzer/state_transition(singleton/machine_construction/default/new_state)
+	. = ..()
+	if(istype(new_state) && linked_console)
+		linked_console.linked_destroy = null
+		linked_console = null
+
+/obj/machinery/r_n_d/destructive_analyzer/components_are_accessible(path)
+	return !busy && ..()
+
+/obj/machinery/r_n_d/destructive_analyzer/cannot_transition_to(state_path)
+	if(busy)
+		return SPAN_NOTICE("\The [src] is busy. Please wait for completion of previous operation.")
+	if(loaded_item)
+		return SPAN_NOTICE("There is something already loaded into \the [src]. You must remove it first.")
 	return ..()
 
-/obj/machinery/rnd/destructive_analyzer/Insert_Item(obj/item/O, mob/living/user)
-	if(!user.combat_mode)
-		if(!is_insertion_ready(user))
-			return TRUE
-		if(!user.transferItemToLoc(O, src))
-			to_chat(user, span_warning("\The [O] is stuck to your hand, you cannot put it in the [src.name]!"))
-			return TRUE
-		busy = TRUE
-		loaded_item = O
-		to_chat(user, span_notice("You add the [O.name] to the [src.name]!"))
-		flick("d_analyzer_la", src)
-		addtimer(CALLBACK(src, PROC_REF(finish_loading)), 10)
-		if (linked_console)
-			linked_console.updateUsrDialog()
+/obj/machinery/r_n_d/destructive_analyzer/use_tool(obj/item/O, mob/living/user, list/click_params)
+	if(busy)
+		to_chat(user, SPAN_NOTICE("\The [src] is busy right now."))
 		return TRUE
-	return FALSE
-
-/obj/machinery/rnd/destructive_analyzer/proc/finish_loading()
-	update_appearance(UPDATE_ICON)
-	reset_busy()
-
-/obj/machinery/rnd/destructive_analyzer/update_icon_state()
-	. = ..()
+	if((. = ..()))
+		return
 	if(loaded_item)
-		icon_state = "d_analyzer_l"
-	else
-		icon_state = initial(icon_state)
-
-/obj/machinery/rnd/destructive_analyzer/proc/reclaim_materials_from(obj/item/thing)
-	. = 0
-	var/datum/component/material_container/storage = linked_console?.linked_lathe?.materials.mat_container
-	if(storage) //Also sends salvaged materials to a linked protolathe, if any.
-		for(var/material in thing.materials)
-			var/can_insert = min((storage.max_amount - storage.total_amount), (max(thing.materials[material]*(decon_mod/10), thing.materials[material])))
-			storage.insert_amount_mat(can_insert, material)
-			. += can_insert
-		if (.)
-			linked_console.linked_lathe.materials.silo_log(src, "reclaimed", 1, "[thing.name]", thing.materials)
-
-/obj/machinery/rnd/destructive_analyzer/proc/destroy_item(obj/item/thing, innermode = FALSE)
-	if(QDELETED(thing) || QDELETED(src) || QDELETED(linked_console))
-		return FALSE
-	if(!innermode)
-		flick("d_analyzer_process", src)
-		busy = TRUE
-		addtimer(CALLBACK(src, PROC_REF(reset_busy)), 24)
-		use_power(250)
-		if(thing == loaded_item)
-			loaded_item = null
-		var/list/food = thing.GetDeconstructableContents()
-		for(var/obj/item/innerthing in food)
-			destroy_item(innerthing, TRUE)
-	reclaim_materials_from(thing)
-	for(var/mob/living/M in thing)
-		M.death()
-	if(istype(thing, /obj/item/stack/sheet))
-		var/obj/item/stack/sheet/S = thing
-		if(S.amount > 1 && !innermode)
-			S.amount--
-			loaded_item = S
-		else
-			qdel(S)
-	else
-		qdel(thing)
-	if (!innermode)
-		update_appearance(UPDATE_ICON)
-	return TRUE
-
-/obj/machinery/rnd/destructive_analyzer/proc/user_try_decon_id(id, mob/user)
-	if(!istype(loaded_item) || !istype(linked_console))
-		return FALSE
-
-	if (id && id != RESEARCH_MATERIAL_RECLAMATION_ID)
-		var/datum/techweb_node/TN = SSresearch.techweb_node_by_id(id)
-		if(!istype(TN))
-			return FALSE
-		var/dpath = loaded_item.type
-		var/list/worths = TN.boost_item_paths[dpath]
-		var/list/differences = list()
-		var/list/already_boosted = linked_console.stored_research.boosted_nodes[TN.id]
-		for(var/i in worths)
-			var/used = already_boosted? already_boosted[i] : 0
-			var/value = min(worths[i], TN.research_costs[i]) - used
-			if(value > 0)
-				differences[i] = value
-		if(length(worths) && !length(differences))
-			return FALSE
-		var/choice = input("Are you sure you want to destroy [loaded_item] to [!length(worths) ? "reveal [TN.display_name]" : "boost [TN.display_name] by [json_encode(differences)] point\s"]?") in list("Proceed", "Cancel")
-		if(choice == "Cancel")
-			return FALSE
-		if(QDELETED(loaded_item) || QDELETED(linked_console) || !user.Adjacent(linked_console) || QDELETED(src))
-			return FALSE
-		SSblackbox.record_feedback("nested tally", "item_deconstructed", 1, list("[TN.id]", "[loaded_item.type]"))
-		if(destroy_item(loaded_item))
-			linked_console.stored_research.boost_with_path(SSresearch.techweb_node_by_id(TN.id), dpath)
-
-	else
-		var/list/point_value = techweb_item_point_check(loaded_item)
-		if(linked_console.stored_research.deconstructed_items[loaded_item.type])
-			point_value = list()
-		var/user_mode_string = ""
-		if(length(point_value))
-			user_mode_string = " for [json_encode(point_value)] points"
-		else if(loaded_item.materials.len)
-			user_mode_string = " for material reclamation"
-		var/choice = tgui_alert(usr, "Are you sure you want to destroy [loaded_item][user_mode_string]?",, list("Proceed", "Cancel"))
-		if(choice == "Cancel")
-			return FALSE
-		if(QDELETED(loaded_item) || QDELETED(linked_console) || !user.Adjacent(linked_console) || QDELETED(src))
-			return FALSE
-		var/loaded_type = loaded_item.type
-		if(destroy_item(loaded_item))
-			linked_console.stored_research.add_point_list(point_value)
-			linked_console.stored_research.deconstructed_items[loaded_type] = point_value
-	return TRUE
-
-/obj/machinery/rnd/destructive_analyzer/proc/unload_item()
+		to_chat(user, SPAN_NOTICE("There is something already loaded into \the [src]."))
+		return TRUE
+	if(panel_open)
+		to_chat(user, SPAN_NOTICE("You can't load \the [src] while it's opened."))
+		return TRUE
+	if(!linked_console)
+		to_chat(user, SPAN_NOTICE("\The [src] must be linked to an R&D console first."))
+		return TRUE
 	if(!loaded_item)
-		return FALSE
-	loaded_item.forceMove(get_turf(src))
-	loaded_item = null
-	update_appearance(UPDATE_ICON)
-	return TRUE
+		if(isrobot(user)) //Don't put your module items in there!
+			return FALSE
+		if(!O.origin_tech)
+			to_chat(user, SPAN_NOTICE("This doesn't seem to have a tech origin."))
+			return TRUE
+		if(length(O.origin_tech) == 0 || O.holographic)
+			to_chat(user, SPAN_NOTICE("You cannot deconstruct this item."))
+			return TRUE
+		if(!user.unEquip(O, src))
+			return TRUE
+		busy = 1
+		loaded_item = O
+		to_chat(user, SPAN_NOTICE("You add \the [O] to \the [src]."))
+		icon_state = "d_analyzer_entry"
+		spawn(10)
+			update_icon()
+			busy = 0
+
+			if (linked_console.quick_deconstruct)
+				linked_console.deconstruct(weakref(user))
+
+		return TRUE

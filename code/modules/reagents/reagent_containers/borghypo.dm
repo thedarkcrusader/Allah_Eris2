@@ -1,497 +1,311 @@
-/// All of the default reagent lists for each hypospray (+ hacked variants)
-#define BASE_MEDICAL_REAGENTS list(\
-		/datum/reagent/medicine/dexalin,\
-		/datum/reagent/medicine/c2/aiuri,\
-		/datum/reagent/medicine/c2/libital,\
-		/datum/reagent/medicine/charcoal,\
-		/datum/reagent/medicine/epinephrine,\
-		/datum/reagent/medicine/spaceacillin,\
-		/datum/reagent/medicine/salglu_solution\
-	)
-
-#define EXPANDED_MEDICAL_REAGENTS list(\
-		/datum/reagent/medicine/naloxone,\
-		/datum/reagent/medicine/inacusiate,\
-		/datum/reagent/medicine/mannitol,\
-		/datum/reagent/medicine/mutadone,\
-		/datum/reagent/medicine/oculine,\
-		/datum/reagent/medicine/oxandrolone,\
-		/datum/reagent/medicine/pen_acid,\
-		/datum/reagent/medicine/rezadone,\
-		/datum/reagent/medicine/sal_acid\
-	)
-#define HACKED_MEDICAL_REAGENTS list(\
-		/datum/reagent/toxin/cyanide,\
-		/datum/reagent/toxin/acid/fluacid,\
-		/datum/reagent/toxin/heparin,\
-		/datum/reagent/toxin/lexorin,\
-		/datum/reagent/toxin/mutetoxin,\
-		/datum/reagent/toxin/sodium_thiopental\
-	)
-
-#define BASE_PEACE_REAGENTS list(\
-		/datum/reagent/peaceborg/confuse,\
-		/datum/reagent/peaceborg/tire,\
-		/datum/reagent/pax/peaceborg\
-	)
-#define HACKED_PEACE_REAGENTS list(\
-		/datum/reagent/toxin/cyanide,\
-		/datum/reagent/toxin/fentanyl,\
-		/datum/reagent/toxin/sodium_thiopental,\
-		/datum/reagent/toxin/staminatoxin,\
-		/datum/reagent/toxin/sulfonal\
-	)
-#define BASE_CLOWN_REAGENTS list(\
-		/datum/reagent/consumable/laughter\
-	)
-#define HACKED_CLOWN_REAGENTS list(\
-		/datum/reagent/consumable/superlaughter\
-	)
-#define BASE_SYNDICATE_REAGENTS list(\
-		/datum/reagent/medicine/syndicate_nanites,\
-		/datum/reagent/medicine/potass_iodide,\
-		/datum/reagent/medicine/morphine\
-	)
-
-#define BASE_SERVICE_REAGENTS list(/datum/reagent/consumable/applejuice, /datum/reagent/consumable/banana, /datum/reagent/consumable/coffee/hot,\
-		/datum/reagent/consumable/cream, /datum/reagent/consumable/space_cola/dr_gibb, /datum/reagent/consumable/grenadine,\
-		/datum/reagent/consumable/ice, /datum/reagent/consumable/lemonjuice, /datum/reagent/consumable/lemon_lime,\
-		/datum/reagent/consumable/limejuice, /datum/reagent/consumable/menthol, /datum/reagent/consumable/milk,\
-		/datum/reagent/consumable/nothing, /datum/reagent/consumable/orangejuice, /datum/reagent/consumable/peachjuice,\
-		/datum/reagent/consumable/sodawater, /datum/reagent/consumable/space_cola, /datum/reagent/consumable/space_cola/spacemountainwind,\
-		/datum/reagent/consumable/pwr_game, /datum/reagent/consumable/shamblers, /datum/reagent/consumable/soymilk,\
-		/datum/reagent/consumable/space_up, /datum/reagent/consumable/tea/hot,\
-		/datum/reagent/consumable/tomatojuice, /datum/reagent/consumable/tonic, /datum/reagent/water,\
-		/datum/reagent/consumable/pineapplejuice, /datum/reagent/consumable/sol_dry,\
-		/datum/reagent/consumable/ethanol/ale, /datum/reagent/consumable/ethanol/applejack, /datum/reagent/consumable/ethanol/beer,\
-		/datum/reagent/consumable/ethanol/champagne, /datum/reagent/consumable/ethanol/cognac, /datum/reagent/consumable/ethanol/creme_de_menthe,\
-		/datum/reagent/consumable/ethanol/creme_de_cacao, /datum/reagent/consumable/ethanol/gin, /datum/reagent/consumable/ethanol/kahlua,\
-		/datum/reagent/consumable/ethanol/rum, /datum/reagent/consumable/ethanol/sake, /datum/reagent/consumable/ethanol/tequila,\
-		/datum/reagent/consumable/ethanol/triple_sec, /datum/reagent/consumable/ethanol/vermouth, /datum/reagent/consumable/ethanol/vodka,\
-		/datum/reagent/consumable/ethanol/whiskey, /datum/reagent/consumable/ethanol/wine, /datum/reagent/consumable/ethanol/creme_de_coconut\
-	)
-
-#define EXPANDED_SERVICE_REAGENTS list(\
-		/datum/reagent/consumable/blackpepper,\
-		/datum/reagent/consumable/coco,\
-		/datum/reagent/consumable/cornoil,\
-		/datum/reagent/consumable/corn_starch,\
-		/datum/reagent/consumable/eggyolk,\
-		/datum/reagent/consumable/flour,\
-		/datum/reagent/consumable/rice,\
-		/datum/reagent/consumable/sugar,\
-		/datum/reagent/consumable/sodiumchloride,\
-		/datum/reagent/consumable/vanilla,\
-	)
-
-#define HACKED_SERVICE_REAGENTS list(\
-		/datum/reagent/blood,\
-		/datum/reagent/toxin/carpotoxin,\
-		/datum/reagent/toxin/fakebeer,\
-		/datum/reagent/consumable/ethanol/fernet,\
-	)
-
-#define BASE_STANDARD_REAGENTS list(\
-		/datum/reagent/medicine/epinephrine\
-	)
-
-///Borg Hypospray
 /obj/item/reagent_containers/borghypo
-	name = "cyborg hypospray"
+	name = "robot hypospray"
 	desc = "An advanced chemical synthesizer and injection system, designed for heavy-duty medical equipment."
-	icon = 'icons/obj/syringe.dmi'
+	icon = 'icons/obj/tools/syringe.dmi'
 	item_state = "hypo"
-	lefthand_file = 'icons/mob/inhands/equipment/medical_lefthand.dmi'
-	righthand_file = 'icons/mob/inhands/equipment/medical_righthand.dmi'
 	icon_state = "borghypo"
 	amount_per_transfer_from_this = 5
-	possible_transfer_amounts = list(2,5)
+	volume = 30
+	possible_transfer_amounts = null
+	canremove = FALSE
 
-	/* The maximum volume for each reagent stored in this hypospray
-	 * In most places we add + 1 because we're secretly keeping [max_volume_per_reagent + 1]
-	 * units, so that when this reagent runs out it's not wholesale removed from the reagents
-	 */
-	var/max_volume_per_reagent = 30
-	/// Cell cost for charging a reagent
+	/// Numeric index of the synthesizer in use, or 0 if dispensing from an external container
+	var/mode = 1
+	var/weakref/dispense = null
 	var/charge_cost = 50
-	/// Counts up to the next time we charge
-	var/charge_timer = 0
-	/// Time it takes for shots to recharge (in deciseconds)
-	var/recharge_time = 10 SECONDS
-	/// If the hypospray can go through armor or thick material
-	var/bypass_protection = FALSE
-	/// If this hypospray has been upgraded
-	var/upgraded = FALSE
+	var/charge_tick = 0
+	var/recharge_time = 5 //Time it takes for shots to recharge (in seconds)
 
-	/// The basic reagents that come with this hypo
-	var/list/default_reagent_types
-	/// The expanded suite of reagents that comes from upgrading this hypo
-	var/list/expanded_reagent_types
+	var/list/reagent_ids = list(/datum/reagent/tricordrazine, /datum/reagent/inaprovaline, /datum/reagent/spaceacillin)
+	var/list/reagent_volumes = list()
+	var/list/reagent_names = list()
 
-	/// The reagents we're actually storing
-	var/datum/reagents/stored_reagents
-	/// The reagent we've selected to dispense
-	var/datum/reagent/selected_reagent
-	/// The theme for our UI (hacked hypos get syndicate UI)
-	var/tgui_theme = "ntos"
+/obj/item/reagent_containers/borghypo/surgeon
+	reagent_ids = list(/datum/reagent/inaprovaline, /datum/reagent/bicaridine, /datum/reagent/dexalin, /datum/reagent/tramadol)
 
-/obj/item/reagent_containers/borghypo/Initialize(mapload)
+/obj/item/reagent_containers/borghypo/crisis
+	reagent_ids = list(/datum/reagent/inaprovaline, /datum/reagent/dylovene, /datum/reagent/dexalin, /datum/reagent/tramadol, /datum/reagent/adrenaline)
+
+/obj/item/reagent_containers/borghypo/Initialize()
 	. = ..()
-	stored_reagents = new(new_flags = NO_REACT)
-	stored_reagents.maximum_volume = length(default_reagent_types) * (max_volume_per_reagent + 1)
-	for(var/reagent in default_reagent_types)
-		add_new_reagent(reagent)
+
+	for(var/T in reagent_ids)
+		reagent_volumes[T] = volume
+		var/datum/reagent/R = T
+		reagent_names += initial(R.name)
+
+/obj/item/reagent_containers/borghypo/Initialize()
+	. = ..()
 	START_PROCESSING(SSobj, src)
 
 /obj/item/reagent_containers/borghypo/Destroy()
 	STOP_PROCESSING(SSobj, src)
-	return ..()
-
-/// Every [recharge_time] seconds, recharge some reagents for the cyborg
-/obj/item/reagent_containers/borghypo/process(delta_time)
-	charge_timer += (delta_time SECONDS)
-	if(charge_timer >= recharge_time)
-		regenerate_reagents(default_reagent_types)
-		if(upgraded)
-			regenerate_reagents(expanded_reagent_types)
-		charge_timer -= recharge_time //so if delta_time gives a bunch of extra time, it isn't lost by setting it to 0
-	update_appearance(UPDATE_ICON)
 	. = ..()
+
+/obj/item/reagent_containers/borghypo/Process() //Every [recharge_time] seconds, recharge some reagents for the cyborg+
+	if(++charge_tick < recharge_time)
+		return 0
+	charge_tick = 0
+
+	if(isrobot(loc))
+		var/mob/living/silicon/robot/R = loc
+		if(R && R.cell)
+			for(var/T in reagent_ids)
+				if(reagent_volumes[T] < volume)
+					R.cell.use(charge_cost)
+					reagent_volumes[T] = min(reagent_volumes[T] + 5, volume)
 	return 1
 
-/// Use this to add more chemicals for the borghypo to produce.
-/obj/item/reagent_containers/borghypo/proc/add_new_reagent(datum/reagent/reagent)
-	stored_reagents.add_reagent(reagent, (max_volume_per_reagent + 1))
+/obj/item/reagent_containers/borghypo/use_before(mob/living/M, mob/user)
+	. = FALSE
+	if (!istype(M))
+		return FALSE
 
-/// Regenerate our supply of all reagents (if they're not full already)
-/obj/item/reagent_containers/borghypo/proc/regenerate_reagents(list/reagents_to_regen)
-	if(iscyborg(src.loc))
-		var/mob/living/silicon/robot/cyborg = src.loc
-		if(cyborg && cyborg.cell)
-			for(var/reagent in reagents_to_regen)
-				var/datum/reagent/reagent_to_regen = reagent
-				if(!stored_reagents.has_reagent(reagent_to_regen, max_volume_per_reagent))
-					cyborg.cell.use(charge_cost)
-					stored_reagents.add_reagent(reagent_to_regen, 5)
+	if (mode && !reagent_volumes[reagent_ids[mode]])
+		to_chat(user, SPAN_WARNING("\The [src] is empty."))
+		return TRUE
+	var/obj/item/reagent_containers/container = null
+	if (!mode)
+		container = dispense.resolve()
+		if (!valid_container(user, container))
+			to_chat(user, SPAN_WARNING("Can't find the container to dispense from."))
+			return TRUE
+		if (!container.reagents?.total_volume)
+			to_chat(user, SPAN_WARNING("\The [container] is empty."))
+			return TRUE
 
-/obj/item/reagent_containers/borghypo/attack(mob/living/carbon/injectee, mob/user)
-	if(!istype(injectee))
-		return
-	if(!selected_reagent)
-		to_chat(user, span_notice("Your hypospray has no reagent selected."))
-		return
-	if(!stored_reagents.has_reagent(selected_reagent.type, amount_per_transfer_from_this))
-		to_chat(user, span_notice("Your hypospray is empty of [selected_reagent.name]!"))
-		return
-	if(injectee.can_inject(user, 1, user.zone_selected,bypass_protection))
-		// Prevents overdosing unless combat mode is on.
-		if(!user.combat_mode)
-			for(var/datum/reagent/reagent as anything in stored_reagents.reagent_list)
-				if(reagent.type != selected_reagent.type)
-					continue
-				if(injectee.reagents.has_reagent(reagent.type) && reagent.overdose_threshold)
-					var/datum/reagent/injectee_reagent = injectee.reagents.get_reagent(reagent.type)
-					if(injectee_reagent.overdosed)
-						to_chat(user, span_warning("Injecting [injectee] with more [reagent] would further their overdose."))
-						return
-					if(((injectee.reagents.get_reagent_amount(reagent.type)) + amount_per_transfer_from_this > reagent.overdose_threshold))
-						to_chat(user, span_warning("Injecting [injectee] with more [reagent] would overdose them."))
-						return
-		// This is the in-between where we're storing the reagent we're going to inject the injectee with
-		// because we cannot specify a singular reagent to transfer in trans_to
-		var/datum/reagents/hypospray_injector = new()
-		stored_reagents.remove_reagent(selected_reagent.type, amount_per_transfer_from_this)
-		hypospray_injector.add_reagent(selected_reagent.type, amount_per_transfer_from_this)
+	var/target_zone = user.zone_sel.selecting
+	var/allow = M.can_inject(user, target_zone)
+	if (allow)
+		if (allow == INJECTION_PORT)
+			user.visible_message(SPAN_WARNING("\The [user] begins hunting for an injection port on \the [M]'s suit!"))
+			if (!user.do_skilled(INJECTION_PORT_DELAY, SKILL_MEDICAL, M, do_flags = DO_MEDICAL))
+				return TRUE
+		to_chat(user, SPAN_NOTICE("You inject [M] with the injector."))
+		if (ishuman(M))
+			var/mob/living/carbon/human/H = M
+			H.custom_pain(SPAN_WARNING("You feel a tiny prick!"), 1, TRUE, H.get_organ(user.zone_sel.selecting))
 
-		to_chat(injectee, span_warning("You feel a tiny prick!"))
-		to_chat(user, span_notice("You inject [injectee] with the injector ([selected_reagent.name])."))
+		if (M.reagents)
+			if (mode)
+				var/datum/reagent/R = reagent_ids[mode]
+				var/should_admin_log = initial(R.should_admin_log)
+				var/transferred = min(amount_per_transfer_from_this, reagent_volumes[R])
+				M.reagents.add_reagent(R, transferred)
+				reagent_volumes[R] -= transferred
+				if (should_admin_log)
+					admin_inject_log(user, M, src, R, transferred)
+				to_chat(user, SPAN_NOTICE("[transferred] units injected. [reagent_volumes[R]] units remaining."))
+				return TRUE
+			else
+				var/datum/reagents/R = container.reagents
+				var/should_admin_log = R.should_admin_log()
+				var/contained = R.get_reagents()
+				var/transferred = R.trans_to_mob(M, amount_per_transfer_from_this, CHEM_BLOOD)
+				if (should_admin_log)
+					admin_inject_log(user, M, src, contained, transferred)
+				to_chat(user, SPAN_NOTICE("[transferred] units injected. [R.total_volume] units remaining in \the [container]."))
+				return TRUE
 
-		if(injectee.reagents)
-			hypospray_injector.trans_to(injectee, amount_per_transfer_from_this, transfered_by = user)
-			log_combat(user, injectee, "injected", src, "(CHEMICALS: [selected_reagent])")
-	else
-		to_chat(user, span_notice("[injectee]'s [parse_zone(user.zone_selected)] is blocked!"))
-
-/obj/item/reagent_containers/borghypo/ui_interact(mob/user, datum/tgui/ui)
-	ui = SStgui.try_update_ui(user, src, ui)
-	if(!ui)
-		ui = new(user, src, "BorgHypo", name)
-		ui.open()
-
-/obj/item/reagent_containers/borghypo/ui_data(mob/user)
-	var/list/available_reagents = list()
-	for(var/datum/reagent/reagent in stored_reagents.reagent_list)
-		if(reagent)
-			available_reagents.Add(list(list(
-				"name" = reagent.name,
-				"volume" = round(reagent.volume, 0.01) - 1,
-				"description" = reagent.description,
-			))) // list in a list because Byond merges the first list...
-
-	var/data = list()
-	data["theme"] = tgui_theme
-	data["maxVolume"] = max_volume_per_reagent
-	data["reagents"] = available_reagents
-	data["selectedReagent"] = selected_reagent?.name
-	return data
-
-/obj/item/reagent_containers/borghypo/attack_self(mob/user)
+/obj/item/reagent_containers/borghypo/attack_self(mob/user as mob)
 	ui_interact(user)
 
-/obj/item/reagent_containers/borghypo/ui_act(action, params)
+/obj/item/reagent_containers/borghypo/examine(mob/user, distance)
 	. = ..()
-	if(.)
+	if(distance > 2)
 		return
 
-	for(var/datum/reagent/reagent in stored_reagents.reagent_list)
-		if(reagent.name == action)
-			selected_reagent = reagent
-			. = TRUE
-			playsound(loc, 'sound/effects/pop.ogg', 50, FALSE)
-
-			var/mob/living/silicon/robot/cyborg = src.loc
-			balloon_alert(cyborg, "dispensing [selected_reagent.name]")
-			break
-
-/obj/item/reagent_containers/borghypo/examine(mob/user)
-	. = ..()
-	. += "Currently loaded: [selected_reagent]. [selected_reagent.description]"
-	. += span_notice("<i>Alt+Click</i> to change transfer amount. Currently set to [amount_per_transfer_from_this]u.")
-
-/obj/item/reagent_containers/borghypo/AltClick(mob/living/user)
-	if(user.stat == DEAD || user != loc)
-		return
-	if(possible_transfer_amounts.len)
-		var/i=0
-		for(var/A in possible_transfer_amounts)
-			i++
-			if(A == amount_per_transfer_from_this)
-				if(i<possible_transfer_amounts.len)
-					amount_per_transfer_from_this = possible_transfer_amounts[i+1]
-				else
-					amount_per_transfer_from_this = possible_transfer_amounts[1]
-				balloon_or_message(user, "Transferring [amount_per_transfer_from_this]u", \
-					span_notice("[src]'s transfer amount is now [amount_per_transfer_from_this] units."))
+	if (mode)
+		var/datum/reagent/R = reagent_ids[mode]
+		to_chat(user, SPAN_NOTICE("It is currently producing [initial(R.name)] and has [reagent_volumes[R]] out of [volume] units left."))
+	else
+		var/obj/item/reagent_containers/container = dispense.resolve()
+		if (istype(container))
+			var/datum/reagents/R = container.reagents
+			if (istype(R))
+				to_chat(user, SPAN_NOTICE("It is currently dispensing from \the [container] which has [R.total_volume] out of [R.maximum_volume] units left."))
 				return
+		to_chat(user, SPAN_WARNING("It is currently empty."))
 
-/// Default Medborg Hypospray
-/obj/item/reagent_containers/borghypo/medical
-	default_reagent_types = BASE_MEDICAL_REAGENTS
-	expanded_reagent_types = EXPANDED_MEDICAL_REAGENTS
+/obj/item/reagent_containers/borghypo/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = TRUE)
+	var/data = list()
+	data["selected"] = mode ? reagent_names[mode] : dispense.ref
+	data["synthReagents"] = reagent_names
+	data["bottles"] = list()
 
-/// Upgrade our hypospray to hold even more new reagents!
-/obj/item/reagent_containers/borghypo/medical/proc/upgrade_hypo()
-	upgraded = TRUE
-	// Expand the holder's capacity to allow for our new suite of reagents
-	stored_reagents.maximum_volume += (length(expanded_reagent_types) * (max_volume_per_reagent + 1))
-	for(var/reagent in expanded_reagent_types)
-		var/datum/reagent/reagent_to_add = reagent
-		add_new_reagent(reagent_to_add)
+	var/list/bottles = list()
 
-/// Remove the reagents we got from the expansion, back to our base reagents
-/obj/item/reagent_containers/borghypo/medical/proc/remove_hypo_upgrade()
-	upgraded = FALSE
-	for(var/reagent in expanded_reagent_types)
-		var/datum/reagent/reagent_to_remove = reagent
-		stored_reagents.del_reagent(reagent_to_remove)
-	// Reduce the holder's capacity because we no longer need the room for those reagents
-	stored_reagents.maximum_volume -= (length(expanded_reagent_types) * (max_volume_per_reagent + 1))
+	var/mob/living/silicon/robot/robot = loc
+	if (istype(robot))
+		var/list/equipment = robot.module.equipment
+		for (var/obj/item/reagent_containers/glass/container in equipment)
+			// Will pick up on any containers directly in the loadout, like buckets and legacy robot bottles
+			bottles += container
+		for (var/obj/item/robot_rack/bottle/rack in equipment)
+			// Append contents
+			bottles += rack.held
+		for (var/obj/item/gripper/gripper in equipment)
+			// If the gripper's holding a container, add it in
+			if (istype(gripper.wrapped, /obj/item/reagent_containers/glass))
+				bottles += gripper.wrapped
 
-/obj/item/reagent_containers/borghypo/medical/hacked
-	icon_state = "borghypo_s"
-	tgui_theme = "syndicate"
-	default_reagent_types = HACKED_MEDICAL_REAGENTS
-	expanded_reagent_types = list()
+	for (var/obj/item/reagent_containers/bottle in bottles)
+		var/iconPath = "bottle-\ref[bottle].png"
+		var/icon/flatIcon = getFlatIcon(bottle)
+		flatIcon.Scale(64, 64) // Scale to avoid blurring in the browser
+		send_rsc(user, flatIcon, iconPath)
+		data["bottles"] += list(list( // It's completely ridiculous that this double list thing is necessary
+			"id" = ref(bottle),
+			"icon" = iconPath,
+			"name" = bottle.label_text || bottle.name,
+			"total_volume" = bottle.reagents ? bottle.reagents.total_volume : 0,
+			"maximum_volume" = bottle.reagents ? bottle.reagents.maximum_volume : 0
+		))
 
-/// Peacekeeper hypospray
-/obj/item/reagent_containers/borghypo/peace
-	name = "Peace Hypospray"
-	default_reagent_types = BASE_PEACE_REAGENTS
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
+	if(!ui)
+		var/nbottles = length(bottles)
+		var/width = max(330, nbottles * 165)
+		var/height = min(600, 240 + 10 * length(reagent_ids))
+		ui = new(user, src, ui_key, "borghypo.tmpl", name, width, height)
+		ui.set_initial_data(data)
+		ui.open()
+		ui.auto_update_layout = TRUE
+		ui.set_auto_update(TRUE)
 
-/obj/item/reagent_containers/borghypo/peace/hacked
-	desc = "Everything's peaceful in death!"
-	icon_state = "borghypo_s"
-	tgui_theme = "syndicate"
-	default_reagent_types = HACKED_PEACE_REAGENTS
+/obj/item/reagent_containers/borghypo/OnTopic(mob/user, list/href_list, datum/topic_state/state)
+	var/selection = href_list["selected"]
 
-/// Clownborg hypospray
-/obj/item/reagent_containers/borghypo/clown
-	name = "laughter injector"
-	desc = "Keeps the crew happy and productive!"
-	default_reagent_types = BASE_CLOWN_REAGENTS
+	var/obj/item/reagent_containers/bottle = locate(selection)
+	if (istype(bottle))
+		if (valid_container(user, bottle))
+			mode = 0
+			dispense = weakref(bottle)
+			to_chat(user, SPAN_NOTICE("Dispensing from \the [bottle]."))
+		return TOPIC_REFRESH
 
-/obj/item/reagent_containers/borghypo/clown/hacked
-	desc = "Keeps the crew so happy they don't work!"
-	icon_state = "borghypo_s"
-	tgui_theme = "syndicate"
-	default_reagent_types = HACKED_CLOWN_REAGENTS
+	var/index = reagent_names.Find(selection)
+	if (index)
+		mode = index
+		dispense = null
+		to_chat(user, SPAN_NOTICE("Synthesizer is now producing [selection]."))
+		return TOPIC_REFRESH
 
-/// Standard hypospray
-/obj/item/reagent_containers/borghypo/epi
-	name = "epinephrine injector"
-	desc = "An advanced chemical synthesizer and injection system, designed to stabilize patients."
-	default_reagent_types = BASE_STANDARD_REAGENTS
+	return TOPIC_NOACTION
 
-/// Syndicate medborg hypospray
-/obj/item/reagent_containers/borghypo/syndicate
-	name = "syndicate cyborg hypospray"
-	desc = "An experimental piece of Syndicate technology used to produce powerful restorative nanites used to very quickly restore injuries of all types. \
-		Also metabolizes potassium iodide for radiation poisoning, inacusiate for ear damage and morphine for offense."
-	icon_state = "borghypo_s"
-	tgui_theme = "syndicate"
-	charge_cost = 20
-	recharge_time = 2 SECONDS
-	default_reagent_types = BASE_SYNDICATE_REAGENTS
-	bypass_protection = TRUE
+/**
+* Check the bottle is still accessible.
+* Valid places the bottle could be:
+* * in the robot's active modules (loc == user)
+* * in the robot's inactive modules (loc == user.module)
+* * in a rack or gripper in either of these places
+*/
+/obj/item/reagent_containers/borghypo/proc/valid_container(mob/user, obj/item/reagent_containers/container)
+	var/mob/living/silicon/robot/robot = user
+	return istype(container) && (container.loc == user || container.loc.loc == user || istype(robot) && container.loc.loc == robot.module)
 
-/// Borg Shaker for the serviceborgs
-/obj/item/reagent_containers/borghypo/borgshaker
-	name = "cyborg shaker"
-	desc = "An advanced drink synthesizer and mixer."
-	icon = 'icons/obj/drinks.dmi'
+/obj/item/reagent_containers/borghypo/service
+	name = "cyborg drink synthesizer"
+	desc = "A portable drink dispencer."
+	icon = 'icons/obj/food/drinks/misc.dmi'
 	icon_state = "shaker"
-	possible_transfer_amounts = list(5, 10, 20, 1) // Starts at 5 on purpose.
-	// Lots of reagents all regenerating at once, so the charge cost is lower. They also regenerate faster.
-	charge_cost = 20
-	recharge_time = 3 SECONDS
-	default_reagent_types = BASE_SERVICE_REAGENTS
+	charge_cost = 5
+	recharge_time = 3
+	volume = 60
+	possible_transfer_amounts = "5;10;20;30"
+	reagent_ids = list(
+		/datum/reagent/ethanol/beer,
+		/datum/reagent/ethanol/coffee/kahlua,
+		/datum/reagent/ethanol/whiskey,
+		/datum/reagent/ethanol/wine,
+		/datum/reagent/ethanol/vodka,
+		/datum/reagent/ethanol/gin,
+		/datum/reagent/ethanol/rum,
+		/datum/reagent/ethanol/tequilla,
+		/datum/reagent/ethanol/vermouth,
+		/datum/reagent/ethanol/cognac,
+		/datum/reagent/ethanol/ale,
+		/datum/reagent/ethanol/mead,
+		/datum/reagent/water,
+		/datum/reagent/sugar,
+		/datum/reagent/drink/ice,
+		/datum/reagent/drink/tea,
+		/datum/reagent/drink/tea/icetea,
+		/datum/reagent/drink/space_cola,
+		/datum/reagent/drink/spacemountainwind,
+		/datum/reagent/drink/dr_gibb,
+		/datum/reagent/drink/space_up,
+		/datum/reagent/drink/tonic,
+		/datum/reagent/drink/sodawater,
+		/datum/reagent/drink/lemon_lime,
+		/datum/reagent/drink/juice/orange,
+		/datum/reagent/drink/juice/lime,
+		/datum/reagent/drink/juice/watermelon,
+		/datum/reagent/drink/coffee,
+		/datum/reagent/drink/hot_coco,
+		/datum/reagent/drink/tea/green,
+		/datum/reagent/drink/spacemountainwind,
+		/datum/reagent/ethanol/beer,
+		/datum/reagent/ethanol/coffee/kahlua
+		)
 
-/obj/item/reagent_containers/borghypo/borgshaker/ui_interact(mob/user, datum/tgui/ui)
-	ui = SStgui.try_update_ui(user, src, ui)
-	if(!ui)
-		ui = new(user, src, "BorgShaker", name)
-		ui.open()
+/obj/item/reagent_containers/borghypo/service/use_before(mob/M, mob/user)
+	return FALSE //We don't want the service borg to be able to inject alcohol into blood.
 
-/obj/item/reagent_containers/borghypo/borgshaker/ui_data(mob/user)
-	var/list/drink_reagents = list()
-	var/list/alcohol_reagents = list()
+/obj/item/reagent_containers/borghypo/service/use_after(obj/target, mob/living/user, click_parameters)
+	if (!target.reagents)
+		return FALSE
+	if(!target.is_open_container())
+		to_chat(user, SPAN_WARNING("\The [target] is capped."))
+		return TRUE
+	if(!target.reagents.get_free_space())
+		to_chat(user, SPAN_WARNING("\The [target] is full."))
+		return TRUE
 
-	for(var/datum/reagent/reagent in stored_reagents.reagent_list)
-		// Split the reagents into alcoholic and non-alcoholic.
-		if(istype(reagent, /datum/reagent/consumable/ethanol))
-			alcohol_reagents.Add(list(list(
-				"name" = reagent.name,
-				"volume" = round(reagent.volume, 0.01) - 1,
-			))) // list in a list because Byond merges the first list...
-		else
-			drink_reagents.Add(list(list(
-				"name" = reagent.name,
-				"volume" = round(reagent.volume, 0.01) - 1,
-			)))
+	if (mode)
+		var/datum/reagent/R = reagent_ids[mode]
+		if(!reagent_volumes[R])
+			to_chat(user, SPAN_WARNING("\The [src] is out of this reagent, give it some time to refill."))
+			return TRUE
+		var/transferred = min(amount_per_transfer_from_this, reagent_volumes[R])
+		target.reagents.add_reagent(R, transferred)
+		reagent_volumes[R] -= transferred
+		to_chat(user, SPAN_NOTICE("You transfer [transferred] units of the solution to [target]."))
+	else
+		var/obj/item/reagent_containers/container = dispense.resolve()
+		if (!valid_container(user, container))
+			to_chat(user, SPAN_WARNING("Can't find the container to dispense from."))
+			return TRUE
+		var/datum/reagents/R = container.reagents
+		if (!R || !R.total_volume)
+			to_chat(user, SPAN_WARNING("\The [container] is empty."))
+		var/transferred = R.trans_to_holder(target.reagents, amount_per_transfer_from_this)
+		to_chat(user, "You transfer [transferred] units of the solution to [target].")
+	return TRUE
 
-	var/data = list()
-	data["theme"] = tgui_theme
-	data["minVolume"] = amount_per_transfer_from_this
-	data["sodas"] = drink_reagents
-	data["alcohols"] = alcohol_reagents
-	data["selectedReagent"] = selected_reagent?.name
-	return data
 
-/obj/item/reagent_containers/borghypo/borgshaker/attack(mob/M, mob/user)
-	return // No injecting with this.
+/obj/item/robot_rack/bottle
+	name = "bottle rack"
+	icon = 'icons/obj/chemical_storage.dmi'
+	icon_state = "bottle-1"
+	object_type = /obj/item/reagent_containers/glass/bottle
+	capacity = 4
+	attack_self_on_deploy = FALSE // Don't open/close bottles on deploy
 
-/obj/item/reagent_containers/borghypo/borgshaker/afterattack(obj/target, mob/user, proximity)
+// Hint that the hypo can use the bottle rack's contents
+/obj/item/robot_rack/bottle/examine(mob/user)
 	. = ..()
-	if(!proximity)
-		return
-	if(!selected_reagent)
-		balloon_alert(user, "no reagent selected!")
-		return
-	if(target.is_refillable())
-		if(!stored_reagents.has_reagent(selected_reagent.type, amount_per_transfer_from_this))
-			balloon_alert(user, "not enough [selected_reagent.name]!")
-			return
-		if(target.reagents.total_volume >= target.reagents.maximum_volume)
-			balloon_alert(user, "[target] is full!")
-			return
+	var/mob/living/silicon/robot/R = user
+	if (istype(R))
+		var/obj/item/reagent_containers/borghypo/hypo = locate() in R.module.equipment
+		if (istype(hypo))
+			to_chat(user, "Its contents are available to \the [hypo].")
 
-		// This is the in-between where we're storing the reagent we're going to pour into the container
-		// because we cannot specify a singular reagent to transfer in trans_to.
-		var/datum/reagents/shaker = new()
-		stored_reagents.remove_reagent(selected_reagent.type, amount_per_transfer_from_this)
-		shaker.add_reagent(selected_reagent.type, amount_per_transfer_from_this, no_react = TRUE)
 
-		shaker.trans_to(target, amount_per_transfer_from_this, transfered_by = user)
-		balloon_alert(user, "[amount_per_transfer_from_this] unit\s poured")
+/obj/item/robot_rack/bottle/use_before(atom/target, mob/living/user, click_parameters)
+	// Can't pick up beakers
+	if (!istype(target, object_type) && istype(target, /obj/item/reagent_containers/glass))
+		USE_FEEDBACK_FAILURE("\The [target] is the wrong shape for \the [src].")
+		return TRUE
 
-/obj/item/reagent_containers/borghypo/borgshaker/hacked
-	name = "cyborg shaker"
-	desc = "Will mix drinks that knock them dead."
-	icon_state = "threemileislandglass"
-	tgui_theme = "syndicate"
-	default_reagent_types = HACKED_SERVICE_REAGENTS
-
-/obj/item/reagent_containers/borghypo/condiment_synthesizer // Solids! Condiments! The borger uprising!
-	name = "condiment synthesizer"
-	desc = "An advanced condiment synthesizer."
-	icon = 'icons/obj/food/containers.dmi'
-	icon_state = "flour"
-	possible_transfer_amounts = list(5, 10, 20, 1)
-	// Lots of reagents all regenerating at once, so the charge cost is lower. They also regenerate faster.
-	charge_cost = 40 // Costs double the power of the borgshaker due to synthesizing solids.
-	recharge_time = 6 SECONDS // Double the recharge time too, for the same reason.
-	default_reagent_types = EXPANDED_SERVICE_REAGENTS
-
-/obj/item/reagent_containers/borghypo/condiment_synthesizer/ui_interact(mob/user, datum/tgui/ui)
-	ui = SStgui.try_update_ui(user, src, ui)
-	if(!ui)
-		ui = new(user, src, "BorgHypo", name)
-		ui.open()
-
-/obj/item/reagent_containers/borghypo/condiment_synthesizer/ui_data(mob/user)
-	var/list/condiments = list()
-	for(var/datum/reagent/reagent in stored_reagents.reagent_list)
-		if(reagent)
-			condiments.Add(list(list(
-				"name" = reagent.name,
-				"volume" = round(reagent.volume, 0.01) - 1,
-				"description" = reagent.description,
-			))) // list in a list because Byond merges the first list...
-
-	var/data = list()
-	data["theme"] = tgui_theme
-	data["minVolume"] = amount_per_transfer_from_this
-	data["maxVolume"] = max_volume_per_reagent
-	data["reagents"] = condiments
-	data["selectedReagent"] = selected_reagent?.name
-	return data
-
-/obj/item/reagent_containers/borghypo/condiment_synthesizer/attack(mob/M, mob/user)
-	return // No injecting with this.
-
-/obj/item/reagent_containers/borghypo/condiment_synthesizer/afterattack(obj/target, mob/user, proximity)
-	. = ..()
-	if(!proximity)
-		return
-	if(!selected_reagent)
-		balloon_alert(user, "no reagent selected!")
-		return
-	if(target.is_refillable())
-		if(!stored_reagents.has_reagent(selected_reagent.type, amount_per_transfer_from_this))
-			balloon_alert(user, "not enough [selected_reagent.name]!")
-			return
-		if(target.reagents.total_volume >= target.reagents.maximum_volume)
-			balloon_alert(user, "[target] is full!")
-			return
-
-		// This is the in-between where we're storing the reagent we're going to pour into the container
-		// because we cannot specify a singular reagent to transfer in trans_to.
-		var/datum/reagents/shaker = new()
-		stored_reagents.remove_reagent(selected_reagent.type, amount_per_transfer_from_this)
-		shaker.add_reagent(selected_reagent.type, amount_per_transfer_from_this, no_react = TRUE)
-
-		shaker.trans_to(target, amount_per_transfer_from_this, transfered_by = user)
-		balloon_alert(user, "[amount_per_transfer_from_this] unit\s poured")
-
-#undef BASE_MEDICAL_REAGENTS
-#undef EXPANDED_MEDICAL_REAGENTS
-#undef HACKED_MEDICAL_REAGENTS
-#undef BASE_PEACE_REAGENTS
-#undef HACKED_PEACE_REAGENTS
-#undef BASE_CLOWN_REAGENTS
-#undef HACKED_CLOWN_REAGENTS
-#undef BASE_SYNDICATE_REAGENTS
-#undef BASE_SERVICE_REAGENTS
-#undef EXPANDED_SERVICE_REAGENTS
-#undef HACKED_SERVICE_REAGENTS
-#undef BASE_STANDARD_REAGENTS
+	return ..()

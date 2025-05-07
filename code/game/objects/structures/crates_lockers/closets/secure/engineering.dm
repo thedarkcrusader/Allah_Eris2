@@ -1,101 +1,90 @@
 /obj/structure/closet/secure_closet/engineering_chief
-	name = "\proper chief engineer's locker"
-	req_access = list(ACCESS_CE)
-	icon_state = "ce"
+	name = "chief engineer's locker"
+	closet_appearance = /singleton/closet_appearance/secure_closet/engineering/ce
+	req_access = list(access_ce)
 
-/obj/structure/closet/secure_closet/engineering_chief/PopulateContents()
-	..()
-	new /obj/item/tank/jetpack/suit(src)
-	new /obj/item/radio/headset/heads/ce(src)
-	new /obj/item/storage/toolbox/mechanical(src)
-	new /obj/item/megaphone/command(src)
-	new /obj/item/clothing/neck/cloak/ce(src)
-	new /obj/item/clothing/mask/gas/atmos(src)
-	new /obj/item/areaeditor/blueprints(src)
-	new /obj/item/airlock_painter(src)
-	new /obj/item/holosign_creator/atmos(src)
-	new /obj/item/multitool/tricorder(src)
-	new /obj/item/assembly/flash/handheld(src)
-	new /obj/item/construction/rcd/loaded(src)
-	new /obj/item/door_remote/chief_engineer(src)
-	new /obj/item/pipe_dispenser(src)
-	new /obj/item/inducer(src)
-	new /obj/item/circuitboard/machine/techfab/department/engineering(src)
-	new /obj/item/extinguisher/advanced(src)
-	new /obj/item/storage/photo_album/CE(src)
-	new /obj/item/energy_harvester(src)
-	new /obj/item/clipboard/yog/paperwork/ce(src)
-	new /obj/item/poster/firstsingularity(src)
-	new /obj/item/storage/backpack/duffelbag/clothing/ce(src)
-	new /obj/item/storage/lockbox/medal/eng(src)
-	new /obj/item/barrier_taperoll/engineering(src)
-	new /obj/item/autosurgeon/magboots(src)
+/obj/structure/closet/secure_closet/engineering_chief/WillContain()
+	return list(
+		new/datum/atom_creator/weighted(list(/obj/item/clothing/accessory/storage/brown_vest = 70, /obj/item/clothing/accessory/storage/webbing = 30)),
+		new/datum/atom_creator/weighted(list(/obj/item/storage/backpack/industrial, /obj/item/storage/backpack/satchel/eng)),
+		new/datum/atom_creator/simple(/obj/item/storage/backpack/dufflebag/eng, 50),
+		/obj/item/blueprints,
+		/obj/item/clothing/under/rank/chief_engineer,
+		/obj/item/clothing/head/hardhat/firefighter/chief,
+		/obj/item/clothing/head/welding,
+		/obj/item/clothing/gloves/insulated,
+		/obj/item/clothing/shoes/brown,
+		/obj/item/device/radio/headset/heads/ce,
+		/obj/item/storage/toolbox/mechanical,
+		/obj/item/clothing/suit/storage/hazardvest,
+		/obj/item/clothing/mask/gas,
+		/obj/item/device/multitool,
+		/obj/item/device/flash,
+		/obj/item/taperoll/engineering,
+		/obj/item/material/twohanded/jack
+	)
 
 /obj/structure/closet/secure_closet/engineering_electrical
-	name = "electrical supplies locker"
-	req_access = list(ACCESS_ENGINE_EQUIP)
-	icon_state = "eng"
-	icon_door = "eng_elec"
+	name = "electrical supplies"
+	req_access = list(access_engine_equip)
+	closet_appearance = /singleton/closet_appearance/secure_closet/engineering/electrical
 
-/obj/structure/closet/secure_closet/engineering_electrical/PopulateContents()
-	..()
-	var/static/items_inside = list(
-		/obj/item/clothing/gloves/color/yellow = 2,
-		/obj/item/inducer = 2,
+/obj/structure/closet/secure_closet/engineering_electrical/WillContain()
+	return list(
+		/obj/item/clothing/gloves/nabber = 2,
+		/obj/item/clothing/gloves/insulated = 3,
 		/obj/item/storage/toolbox/electrical = 3,
-		/obj/item/electronics/apc = 3,
-		/obj/item/multitool = 3)
-	generate_items_inside(items_inside,src)
+		/obj/item/module/power_control = 3,
+		/obj/item/device/multitool = 3
+	)
 
 /obj/structure/closet/secure_closet/engineering_welding
-	name = "welding supplies locker"
-	req_access = list(ACCESS_ENGINE_EQUIP)
-	icon_state = "eng"
-	icon_door = "eng_weld"
+	name = "welding supplies"
+	req_access = list(access_construction)
+	closet_appearance = /singleton/closet_appearance/secure_closet/engineering/welding
 
-/obj/structure/closet/secure_closet/engineering_welding/PopulateContents()
-	..()
-	for(var/i in 1 to 3)
-		new /obj/item/clothing/head/welding(src)
-	for(var/i in 1 to 3)
-		new /obj/item/weldingtool(src)
+/obj/structure/closet/secure_closet/engineering_welding/WillContain()
+	return list(
+		/obj/item/clothing/head/welding = 3,
+		/obj/item/weldingtool/largetank = 3,
+		/obj/item/storage/backpack/weldpack = 3,
+		/obj/item/clothing/glasses/welding = 3,
+		/obj/item/welder_tank = 6
+	)
 
 /obj/structure/closet/secure_closet/engineering_personal
 	name = "engineer's locker"
-	req_access = list(ACCESS_ENGINE_EQUIP)
-	icon_state = "eng_secure"
+	req_access = list(access_engine_equip)
+	closet_appearance = /singleton/closet_appearance/secure_closet/engineering
 
-/obj/structure/closet/secure_closet/engineering_personal/PopulateContents()
-	..()
-	new /obj/item/radio/headset/headset_eng(src)
-	new /obj/item/storage/toolbox/mechanical(src)
-	new /obj/item/tank/internals/emergency_oxygen/engi(src)
-	new /obj/item/holosign_creator/engineering(src)
-	new /obj/item/clothing/mask/gas(src)
-	new /obj/item/clothing/glasses/meson/engine(src)
-	new /obj/item/storage/box/emptysandbags(src)
-	new /obj/item/storage/bag/construction(src)
-	new /obj/item/barrier_taperoll/engineering(src)
+/obj/structure/closet/secure_closet/engineering_personal/WillContain()
+	return list(
+		new/datum/atom_creator/weighted(list(/obj/item/clothing/accessory/storage/brown_vest = 70, /obj/item/clothing/accessory/storage/webbing = 30)),
+		new/datum/atom_creator/weighted(list(/obj/item/storage/backpack/industrial, /obj/item/storage/backpack/satchel/eng)),
+		new/datum/atom_creator/simple(/obj/item/storage/backpack/dufflebag/eng, 50),
+		/obj/item/storage/toolbox/mechanical,
+		/obj/item/device/radio/headset/headset_eng,
+		/obj/item/clothing/suit/storage/hazardvest,
+		/obj/item/clothing/mask/gas,
+		/obj/item/clothing/glasses/meson,
+		/obj/item/taperoll/engineering
+	)
 
+/obj/structure/closet/secure_closet/atmos_personal
+	name = "technician's locker"
+	req_access = list(access_atmospherics)
+	closet_appearance = /singleton/closet_appearance/secure_closet/engineering/atmos
 
-/obj/structure/closet/secure_closet/atmospherics
-	name = "\proper atmospheric technician's locker"
-	req_access = list(ACCESS_ATMOSPHERICS)
-	icon_state = "atmos"
-
-/obj/structure/closet/secure_closet/atmospherics/PopulateContents()
-	..()
-	new /obj/item/radio/headset/headset_eng(src)
-	new /obj/item/pipe_dispenser(src)
-	new /obj/item/storage/toolbox/mechanical(src)
-	new /obj/item/tank/internals/emergency_oxygen/engi(src)
-	new /obj/item/analyzer(src)
-	new /obj/item/holosign_creator/atmos(src)
-	new /obj/item/watertank/atmos(src)
-	new /obj/item/clothing/suit/fire/atmos(src)
-	new /obj/item/clothing/head/hardhat/atmos(src)
-	new /obj/item/clothing/glasses/meson/engine/tray(src)
-	new /obj/item/clothing/gloves/atmos(src)
-	new /obj/item/clothing/mask/gas/atmos(src)
-	new /obj/item/extinguisher/advanced(src)
-	new /obj/item/barrier_taperoll/engineering(src)
+/obj/structure/closet/secure_closet/atmos_personal/WillContain()
+	return list(
+		new/datum/atom_creator/weighted(list(/obj/item/clothing/accessory/storage/brown_vest = 70, /obj/item/clothing/accessory/storage/webbing = 30)),
+		new/datum/atom_creator/weighted(list(/obj/item/storage/backpack/industrial, /obj/item/storage/backpack/satchel/eng)),
+		new/datum/atom_creator/simple(/obj/item/storage/backpack/dufflebag/eng, 50),
+		/obj/item/clothing/suit/fire/firefighter,
+		/obj/item/device/flashlight,
+		/obj/item/extinguisher,
+		/obj/item/device/radio/headset/headset_eng,
+		/obj/item/clothing/suit/storage/hazardvest,
+		/obj/item/clothing/mask/gas,
+		/obj/item/taperoll/atmos
+	)

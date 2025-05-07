@@ -1,85 +1,91 @@
-
 /obj
+	layer = OBJ_LAYER
 	animate_movement = 2
-	speech_span = SPAN_ROBOT
-	uses_integrity = TRUE
 
-	var/obj_flags = CAN_BE_HIT
-	var/set_obj_flags // ONLY FOR MAPPING: Sets flags from a string list, handled in Initialize. Usage: set_obj_flags = "EMAGGED;!CAN_BE_HIT" to set EMAGGED and clear CAN_BE_HIT.
+	var/obj_flags
 
-	/// Icon to use as a 32x32 preview in crafting menus and such
-	var/icon_preview
-	var/icon_state_preview
+	var/list/matter //Used to store information about the contents of the object.
+	var/w_class // Size of the object.
+	var/unacidable = FALSE //universal "unacidabliness" var, here so you can use it in any obj.
+	var/throwforce = 0
+	///// whether this object cuts
+	var/sharp = FALSE
+	///Whether this object is more likely to dismember
+	var/edge = FALSE
+	///For items that can puncture e.g. thick plastic but aren't necessarily sharp. Called in can_puncture()
+	var/puncture = FALSE
+	var/in_use = 0 // If we have a user using us, this will be set on. We will check if the user has stopped using us, and thus stop updating and LAGGING EVERYTHING!
+	var/damtype = DAMAGE_BRUTE
+	var/armor_penetration = 0
+	var/anchor_fall = FALSE
+	var/holographic = 0 //if the obj is a holographic object spawned by the holodeck
 
-	var/damtype = BRUTE
-	var/force = 0
-
-	/// How good a given object is at causing wounds on carbons. Higher values equal better shots at creating serious wounds.
-	var/wound_bonus = 0
-	/// If this attacks a human with no wound armor on the affected body part, add this to the wound mod. Some attacks may be significantly worse at wounding if there's even a slight layer of armor to absorb some of it vs bare flesh
-	var/bare_wound_bonus = 0
-	/// Damage multiplier against structures, machines, mechs, and to a lesser extent silicons
-	var/demolition_mod = 1
-	/// How much acid is on this object
-	var/acid_level = 0 
-
-	var/persistence_replacement //have something WAY too amazing to live to the next round? Set a new path here. Overuse of this var will make me upset.
-	var/current_skin //Has the item been reskinned?
-	var/list/unique_reskin //List of options to reskin.
-
-	// Access levels, used in modules\jobs\access.dm
-	var/list/req_access
-	var/req_access_txt = "0"
-	var/list/req_one_access
-	var/req_one_access_txt = "0"
-
-	var/renamedByPlayer = FALSE //set when a player uses a pen on a renamable object
-
-/obj/vv_edit_var(vname, vval)
-	switch(vname)
-		if("anchored")
-			setAnchored(vval)
-			return TRUE
-		if("obj_flags")
-			if ((obj_flags & DANGEROUS_POSSESSION) && !(vval & DANGEROUS_POSSESSION))
-				return FALSE
-		if("control_object")
-			var/obj/O = vval
-			if(istype(O) && (O.obj_flags & DANGEROUS_POSSESSION))
-				return FALSE
+/obj/Destroy()
+	STOP_PROCESSING(SSobj, src)
 	return ..()
 
-/obj/Initialize(mapload)
-	. = ..()
-	if (set_obj_flags)
-		var/flagslist = splittext(set_obj_flags,";")
-		var/list/string_to_objflag = GLOB.bitfields["obj_flags"]
-		for (var/flag in flagslist)
-			if(flag[1] == "!")
-				flag = copytext(flag, length(flag[1]) + 1) // Get all but the initial !
-				obj_flags &= ~string_to_objflag[flag]
-			else
-				obj_flags |= string_to_objflag[flag]
-	if((obj_flags & ON_BLUEPRINTS) && isturf(loc))
-		var/turf/T = loc
-		T.add_blueprints_preround(src)
+/obj/MouseDrop_T(atom/dropped, mob/living/user)
+	// Handle tabling objects
+	if (dropped != src && HAS_FLAGS(obj_flags, OBJ_FLAG_RECEIVE_TABLE) && isobj(dropped))
+		var/obj/object = dropped
+		if (HAS_FLAGS(object.obj_flags, OBJ_FLAG_CAN_TABLE))
+			if (object.anchored)
+				USE_FEEDBACK_FAILURE("\The [object] is firmly anchored and cannot be moved.")
+				return TRUE
+			if (!isturf(loc))
+				USE_FEEDBACK_FAILURE("\The [src] must be on a turf to lift \the [dropped] onto it.")
+				return TRUE
+			if (!user.skill_check(SKILL_HAULING, SKILL_BASIC))
+				USE_FEEDBACK_FAILURE("You're not strong enough to lift \the [dropped] onto \the [src].")
+				return TRUE
+			var/has_blocker = FALSE
+			for (var/atom/thing as anything in get_turf(src))
+				if (thing == src)
+					continue
+				if (ismob(thing) || thing.density)
+					has_blocker = thing
+					break
+			if (has_blocker)
+				USE_FEEDBACK_FAILURE("You can't lift \the [dropped] onto \the [src]. \The [has_blocker] is in the way.")
+				return TRUE
+			user.visible_message(
+				SPAN_NOTICE("\The [user] starts lifting \the [dropped] onto \the [src]."),
+				SPAN_NOTICE("You start lifting \the [dropped] onto \the [src].")
+			)
+			if (!user.do_skilled(6 SECONDS, SKILL_HAULING, src, do_flags = DO_PUBLIC_UNIQUE) || !user.use_sanity_check(src, dropped))
+				return TRUE
+			if (!HAS_FLAGS(obj_flags, OBJ_FLAG_RECEIVE_TABLE))
+				USE_FEEDBACK_FAILURE("\The [src]'s state has changed.")
+				return TRUE
+			if (!HAS_FLAGS(object.obj_flags, OBJ_FLAG_CAN_TABLE))
+				USE_FEEDBACK_FAILURE("\The [dropped]'s state has changed.")
+				return TRUE
+			if (object.anchored)
+				USE_FEEDBACK_FAILURE("\The [object] is firmly anchored and cannot be moved.")
+				return TRUE
+			if (!isturf(loc))
+				USE_FEEDBACK_FAILURE("\The [src] must be on a turf to lift \the [dropped] onto it.")
+				return TRUE
+			has_blocker = FALSE
+			for (var/atom/thing as anything in get_turf(src))
+				if (thing == src)
+					continue
+				if (ismob(thing) || thing.density)
+					has_blocker = thing
+					break
+			if (has_blocker)
+				USE_FEEDBACK_FAILURE("You can't lift \the [dropped] onto \the [src]. \The [has_blocker] is in the way.")
+				return TRUE
+			object.forceMove(loc)
+			user.visible_message(
+				SPAN_NOTICE("\The [user] lifts \the [dropped] onto \the [src]."),
+				SPAN_NOTICE("You lift \the [dropped] onto \the [src].")
+			)
+			return TRUE
 
-/obj/Destroy(force=FALSE)
-	if(!ismachinery(src))
-		STOP_PROCESSING(SSobj, src) // TODO: Have a processing bitflag to reduce on unnecessary loops through the processing lists
-	SStgui.close_uis(src)
-	. = ..()
+	return ..()
 
-/obj/proc/setAnchored(anchorvalue)
-	SEND_SIGNAL(src, COMSIG_OBJ_SETANCHORED, anchorvalue)
-	anchored = anchorvalue
-
-/obj/throw_at(atom/target, range, speed, mob/thrower, spin=1, diagonals_first = 0, datum/callback/callback, force, quickstart = TRUE)
-	..()
-	if(obj_flags & FROZEN)
-		visible_message(span_danger("[src] shatters into a million pieces!"))
-		qdel(src)
-
+/obj/item/proc/is_used_on(obj/O, mob/user)
 
 /obj/assume_air(datum/gas_mixture/giver)
 	if(loc)
@@ -87,271 +93,232 @@
 	else
 		return null
 
-/obj/assume_air_moles(datum/gas_mixture/giver, moles)
-	if(loc)
-		return loc.assume_air_moles(giver, moles)
-	return null
-
-/obj/assume_air_ratio(datum/gas_mixture/giver, ratio)
-	if(loc)
-		return loc.assume_air_ratio(giver, ratio)
-	return null
-/obj/transfer_air(datum/gas_mixture/taker, moles)
-	if(loc)
-		return loc.transfer_air(taker, moles)
-	return null
-
-/obj/transfer_air_ratio(datum/gas_mixture/taker, ratio)
-	if(loc)
-		return loc.transfer_air_ratio(taker, ratio)
-	return null
-
 /obj/remove_air(amount)
 	if(loc)
 		return loc.remove_air(amount)
-	return null
-
-/obj/remove_air_ratio(ratio)
-	if(loc)
-		return loc.remove_air_ratio(ratio)
-	return null
+	else
+		return null
 
 /obj/return_air()
 	if(loc)
 		return loc.return_air()
-	return null
-
-/obj/proc/handle_internal_lifeform(mob/lifeform_inside_me, breath_request)
-	//Return: (NONSTANDARD)
-	//		null if object handles breathing logic for lifeform
-	//		datum/air_group to tell lifeform to process using that breath return
-	//DEFAULT: Take air from turf to give to have mob process
-
-	if(breath_request>0)
-		var/datum/gas_mixture/environment = return_air()
-		return remove_air_ratio(BREATH_VOLUME / environment.return_volume())
 	else
 		return null
 
 /obj/proc/updateUsrDialog()
-	if((obj_flags & IN_USE) && !(obj_flags & USES_TGUI))
-		var/is_in_use = FALSE
-		var/list/nearby = viewers(1, src)
+	if(in_use)
+		var/is_in_use = 0
+		var/list/nearby = viewers(1, src) | usr
 		for(var/mob/M in nearby)
 			if ((M.client && M.machine == src))
-				is_in_use = TRUE
-				ui_interact(M)
-		if(issilicon(usr) || IsAdminGhost(usr))
-			if (!(usr in nearby))
-				if (usr.client && usr.machine==src) // && M.machine == src is omitted because if we triggered this by using the dialog, it doesn't matter if our machine changed in between triggering it and this - the dialog is probably still supposed to refresh.
-					is_in_use = TRUE
-					ui_interact(usr)
+				if(CanUseTopic(M, DefaultTopicState()) > STATUS_CLOSE)
+					is_in_use = 1
+					interact(M)
+				else
+					M.unset_machine()
+		in_use = is_in_use
 
-		// check for TK users
-
-		if(ishuman(usr))
-			var/mob/living/carbon/human/H = usr
-			if(!(usr in nearby))
-				if(usr.client && usr.machine==src)
-					if(H.dna.check_mutation(TK))
-						is_in_use = TRUE
-						ui_interact(usr)
-		if (is_in_use)
-			obj_flags |= IN_USE
-		else
-			obj_flags &= ~IN_USE
-
-/obj/proc/updateDialog(update_viewers = TRUE,update_ais = TRUE)
+/obj/proc/updateDialog()
 	// Check that people are actually using the machine. If not, don't update anymore.
-	if(obj_flags & IN_USE)
-		var/is_in_use = FALSE
-		if(update_viewers)
-			for(var/mob/M in viewers(1, src))
-				if ((M.client && M.machine == src))
-					is_in_use = TRUE
-					src.interact(M)
-		var/ai_in_use = FALSE
-		if(update_ais)
-			ai_in_use = AutoUpdateAI(src)
+	if(in_use)
+		var/list/nearby = viewers(1, src)
+		var/is_in_use = 0
+		for(var/mob/M in nearby)
+			if ((M.client && M.machine == src))
+				if(CanUseTopic(M, DefaultTopicState()) > STATUS_CLOSE)
+					is_in_use = 1
+					interact(M)
+				else
+					M.unset_machine()
+		var/ai_in_use = AutoUpdateAI(src)
 
-		if(update_viewers && update_ais) //State change is sure only if we check both
-			if(!ai_in_use && !is_in_use)
-				obj_flags &= ~IN_USE
-
+		if(!ai_in_use && !is_in_use)
+			in_use = 0
 
 /obj/attack_ghost(mob/user)
-	. = ..()
-	if(.)
-		return
 	ui_interact(user)
+	..()
 
-/obj/proc/container_resist(mob/living/user)
+/obj/proc/interact(mob/user)
 	return
 
 /mob/proc/unset_machine()
-	SIGNAL_HANDLER
-	if(!machine)
-		return
-	UnregisterSignal(machine, COMSIG_QDELETING)
-	machine.on_unset_machine(src)
-	machine = null
-
-//called when the user unsets the machine.
-/atom/movable/proc/on_unset_machine(mob/user)
-	return
+	src.machine = null
 
 /mob/proc/set_machine(obj/O)
-	if(QDELETED(src) || QDELETED(O))
-		return
-	if(machine)
+	if(src.machine)
 		unset_machine()
-	machine = O
-	RegisterSignal(O, COMSIG_QDELETING, PROC_REF(unset_machine))
+	src.machine = O
 	if(istype(O))
-		O.obj_flags |= IN_USE
+		O.in_use = 1
 
 /obj/item/proc/updateSelfDialog()
 	var/mob/M = src.loc
 	if(istype(M) && M.client && M.machine == src)
 		src.attack_self(M)
 
-/obj/singularity_pull(S, current_size)
-	..()
-	if(!anchored || current_size >= STAGE_FIVE)
-		step_towards(src,S)
+/obj/proc/hide(hide)
+	set_invisibility(hide ? INVISIBILITY_MAXIMUM : initial(invisibility))
 
-/obj/get_dumping_location(datum/component/storage/source,mob/user)
-	return get_turf(src)
+/obj/proc/hides_under_flooring()
+	return level == ATOM_LEVEL_UNDER_TILE
 
-/obj/proc/CanAStarPass()
-	. = !density
+/obj/proc/hear_talk(mob/M as mob, text, verb, datum/language/speaking)
+	if(talking_atom)
+		talking_atom.catchMessage(text, M)
+/*
+	var/mob/mo = locate(/mob) in src
+	if(mo)
+		var/rendered = SPAN_CLASS("game say", "[SPAN_CLASS("name", "[M.name]: ")] [SPAN_CLASS("message", text))]"
+		mo.show_message(rendered, 2)
+		*/
+	return
 
-/obj/proc/check_uplink_validity()
-	return 1
+/obj/proc/see_emote(mob/M as mob, text, emote_type)
+	return
 
-/obj/vv_get_dropdown()
-	. = ..()
-	VV_DROPDOWN_SEPERATOR
-	VV_DROPDOWN_OPTION(VV_HK_MASS_DEL_TYPE, "Delete all of type")
-	VV_DROPDOWN_OPTION(VV_HK_OSAY, "Object Say")
-	VV_DROPDOWN_OPTION(VV_HK_ARMOR_MOD, "Modify armor values")
+/obj/proc/show_message(msg, type, alt, alt_type)//Message, type of message (1 or 2), alternative message, alt message type (1 or 2)
+	return
 
-/obj/vv_do_topic(list/href_list)
-	if(!(. = ..()))
-		return
-	if(href_list[VV_HK_OSAY])
-		if(check_rights(R_FUN, FALSE))
-			usr.client.object_say(src)
-	if(href_list[VV_HK_ARMOR_MOD])
-		var/list/pickerlist = list()
-		var/list/armorlist = armor.getList()
+/obj/proc/damage_flags()
+	. = 0
+	if(has_edge(src))
+		. |= DAMAGE_FLAG_EDGE
+	if(is_sharp(src))
+		. |= DAMAGE_FLAG_SHARP
+	if (damtype == DAMAGE_BURN)
+		. |= DAMAGE_FLAG_LASER
 
-		for (var/i in armorlist)
-			pickerlist += list(list("value" = armorlist[i], "name" = i))
-
-		var/list/result = presentpicker(usr, "Modify armor", "Modify armor: [src]", Button1="Save", Button2 = "Cancel", Timeout=FALSE, inputtype = "text", values = pickerlist)
-
-		if (islist(result))
-			if (result["button"] != 2) // If the user pressed the cancel button
-				// text2num conveniently returns a null on invalid values
-				armor = armor.setRating(melee = text2num(result["values"][MELEE]),\
-			                  bullet = text2num(result["values"][BULLET]),\
-			                  laser = text2num(result["values"][LASER]),\
-			                  energy = text2num(result["values"][ENERGY]),\
-			                  bomb = text2num(result["values"][BOMB]),\
-			                  bio = text2num(result["values"][BIO]),\
-			                  rad = text2num(result["values"][RAD]),\
-			                  fire = text2num(result["values"][FIRE]),\
-			                  acid = text2num(result["values"][ACID]),\
-							  electric = text2num(result["values"][ELECTRIC]))
-				log_admin("[key_name(usr)] modified the armor on [src] ([type]) to melee: [armor.melee], bullet: [armor.bullet], laser: [armor.laser], energy: [armor.energy], bomb: [armor.bomb], bio: [armor.bio], fire: [armor.fire], acid: [armor.acid], electric: [armor.electric]")
-				message_admins(span_notice("[key_name_admin(usr)] modified the armor on [src] ([type]) to melee: [armor.melee], bullet: [armor.bullet], laser: [armor.laser], energy: [armor.energy], bomb: [armor.bomb], bio: [armor.bio], fire: [armor.fire], acid: [armor.acid], electric: [armor.electric]"))
-	if(href_list[VV_HK_MASS_DEL_TYPE])
-		if(check_rights(R_DEBUG|R_SERVER))
-			var/action_type = tgui_alert(usr, "Strict type ([type]) or type and all subtypes?",,list("Strict type","Type and subtypes","Cancel"))
-			if(action_type == "Cancel" || !action_type)
-				return
-
-			if(tgui_alert(usr, "Are you really sure you want to delete all objects of type [type]?",,list("Yes","No")) != "Yes")
-				return
-
-			if(tgui_alert(usr, "Second confirmation required. Delete?",,list("Yes","No")) != "Yes")
-				return
-
-			var/O_type = type
-			switch(action_type)
-				if("Strict type")
-					var/i = 0
-					for(var/obj/Obj in world)
-						if(Obj.type == O_type)
-							i++
-							qdel(Obj)
-						CHECK_TICK
-					if(!i)
-						to_chat(usr, "No objects of this type exist")
-						return
-					log_admin("[key_name(usr)] deleted all objects of type [O_type] ([i] objects deleted) ")
-					message_admins(span_notice("[key_name(usr)] deleted all objects of type [O_type] ([i] objects deleted) "))
-				if("Type and subtypes")
-					var/i = 0
-					for(var/obj/Obj in world)
-						if(istype(Obj,O_type))
-							i++
-							qdel(Obj)
-						CHECK_TICK
-					if(!i)
-						to_chat(usr, "No objects of this type exist")
-						return
-					log_admin("[key_name(usr)] deleted all objects of type or subtype of [O_type] ([i] objects deleted) ")
-					message_admins(span_notice("[key_name(usr)] deleted all objects of type or subtype of [O_type] ([i] objects deleted) "))
-
-/obj/examine(mob/user)
-	. = ..()
-	if(obj_flags & UNIQUE_RENAME)
-		. += span_notice("Use a pen on it to rename it[obj_flags & UNIQUE_REDESC ? " or change its description" : ""].")
-	else if(obj_flags & UNIQUE_REDESC)
-		. += span_notice("Use a pen on it to change its description.")
-	if(unique_reskin && !current_skin)
-		. += span_notice("Alt-click it to reskin it.")
-
-/obj/AltClick(mob/user)
-	. = ..()
-	if(unique_reskin && !current_skin && user.canUseTopic(src, BE_CLOSE, NO_DEXTERITY))
-		reskin_obj(user)
-
-/obj/proc/reskin_obj(mob/M)
-	if(!LAZYLEN(unique_reskin))
-		return
-	to_chat(M, "<b>Reskin options for [name]:</b>")
-	for(var/V in unique_reskin)
-		var/output = icon2html(src, M, unique_reskin[V])
-		to_chat(M, "[V]: [span_reallybig("[output]")]")
-
-	var/choice = input(M,"Warning, you can only reskin [src] once!","Reskin Object") as null|anything in unique_reskin
-	if(!QDELETED(src) && choice && !current_skin && !M.incapacitated() && in_range(M,src))
-		if(!unique_reskin[choice])
-			return
-		current_skin = choice
-		icon_state = unique_reskin[choice]
-		to_chat(M, "[src] is now skinned as '[choice].'")
-
-/obj/analyzer_act(mob/living/user, obj/item/I)
-	if(atmosanalyzer_scan(user, src))
+/obj/use_tool(obj/item/tool, mob/living/user, list/click_params)
+	if (isWrench(tool) && HAS_FLAGS(obj_flags, OBJ_FLAG_ANCHORABLE))
+		wrench_floor_bolts(user, tool)
 		return TRUE
 	return ..()
 
-/obj/proc/plunger_act(obj/item/plunger/P, mob/living/user, reinforced)
-	return
-
-/obj/proc/freeze()
-	if(HAS_TRAIT(src, TRAIT_FROZEN))
+/**
+ * Whether or not the object can be anchored in its current state/position. Assumes the anchorable flag has already been checked.
+ *
+ * **Parameters**:
+ * - `tool` - Tool being used to un/anchor the object.
+ * - `user` - User performing the interaction.
+ * - `silent` (Boolean, default `FALSE`) - If set, does not send user feedback messages on failure.
+ *
+ * Returns boolean.
+ */
+/obj/proc/can_anchor(obj/item/tool, mob/user, silent = FALSE)
+	if (isinspace())
+		if (!silent)
+			USE_FEEDBACK_FAILURE("\The [src] cannot be anchored in space.")
 		return FALSE
-	if(resistance_flags & FREEZE_PROOF)
-		return FALSE
-
-	AddElement(/datum/element/frozen)
 	return TRUE
 
-/// Unfreezes this obj if its frozen
-/obj/proc/unfreeze()
-	SEND_SIGNAL(src, COMSIG_OBJ_UNFREEZE)
+
+/obj/proc/wrench_floor_bolts(mob/user, obj/item/tool, delay = 2 SECONDS)
+	if (!can_anchor(tool, user))
+		return
+	user.visible_message(
+		SPAN_NOTICE("\The [user] begins [anchored ? "un" : ""]securing \the [src] [anchored ? "from" : "to"] the floor with \a [tool]."),
+		SPAN_NOTICE("You begin [anchored ? "un" : ""]securing \the [src] [anchored ? "from" : "to"] the floor with \the [tool].")
+	)
+	playsound(src, 'sound/items/Ratchet.ogg', 50, TRUE)
+	if (!user.do_skilled((tool.toolspeed * delay), SKILL_CONSTRUCTION, src, do_flags = DO_REPAIR_CONSTRUCT) || !user.use_sanity_check(src, tool))
+		return
+	user.visible_message(
+		SPAN_NOTICE("\The [user] [anchored ? "un" : ""]secures \the [src] [anchored ? "from" : "to"] the floor with \a [tool]."),
+		SPAN_NOTICE("You [anchored ? "un" : ""]secure \the [src] [anchored ? "from" : "to"] the floor with \the [tool].")
+	)
+	playsound(src, 'sound/items/Ratchet.ogg', 50, TRUE)
+	anchored = !anchored
+	post_anchor_change()
+	return
+
+
+/**
+ * Called when the object's anchor state is changed via `wrench_floor_bolts()`.
+ */
+/obj/proc/post_anchor_change()
+	update_icon()
+	return
+
+
+/obj/attack_hand(mob/living/user)
+	. = ..()
+	if (.)
+		return
+	if (Adjacent(user))
+		add_fingerprint(user)
+
+	if (ishuman(user) && !isitem(src) && user.a_intent == I_HURT && get_max_health())
+		var/mob/living/carbon/human/assailant = user
+		var/datum/unarmed_attack/attack = assailant.get_unarmed_attack(src)
+		if (!attack)
+			return ..()
+		assailant.do_attack_animation(src)
+		assailant.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
+		var/damage = attack.damage + rand(1,5)
+		var/attack_verb = "[pick(attack.attack_verb)]"
+
+		if (MUTATION_FERAL in user.mutations)
+			attack_verb = "smashes"
+			damage = 10
+
+		if (!can_damage_health(damage, attack.get_damage_type()))
+			playsound(loc, use_weapon_hitsound? attack.attack_sound : damage_hitsound, 25, TRUE, -1)
+			user.visible_message(
+				SPAN_WARNING("\The [user] hits \the [src], but doesn't even leave a dent!"),
+				SPAN_WARNING("You hit \the [src], but cause no visible damage and hurt yourself!")
+			)
+			if (!(MUTATION_FERAL in user.mutations))
+				user.apply_damage(3, DAMAGE_BRUTE, user.hand ? BP_L_HAND : BP_R_HAND)
+				return TRUE
+
+		playsound(loc, use_weapon_hitsound? attack.attack_sound : damage_hitsound, 25, TRUE, -1)
+		assailant.visible_message(
+				SPAN_WARNING("\The [assailant] [attack_verb] \the [src]!"),
+				SPAN_WARNING("You [attack_verb] \the [src]!")
+				)
+		damage_health(damage, attack.get_damage_type(), attack.damage_flags())
+		return TRUE
+
+/obj/is_fluid_pushable(amt)
+	return ..() && w_class <= round(amt/20)
+
+/obj/proc/can_embed()
+	return is_sharp(src)
+
+/obj/AltClick(mob/user)
+	if(obj_flags & OBJ_FLAG_ROTATABLE)
+		rotate(user)
+		return TRUE
+	return ..()
+
+/obj/examine(mob/user)
+	. = ..()
+	if((obj_flags & OBJ_FLAG_ROTATABLE))
+		to_chat(user, SPAN_SUBTLE("Can be rotated with alt-click."))
+	if((obj_flags & OBJ_FLAG_ANCHORABLE))
+		to_chat(user, SPAN_SUBTLE("Can be [anchored? "unsecured from the floor" : "secured to the floor"] using a wrench."))
+
+/obj/proc/rotate(mob/user)
+	if(!CanPhysicallyInteract(user))
+		to_chat(user, SPAN_NOTICE("You can't interact with \the [src] right now!"))
+		return
+
+	if(anchored)
+		to_chat(user, SPAN_NOTICE("\The [src] is secured to the floor!"))
+		return
+
+	set_dir(turn(dir, 90))
+	update_icon()
+
+//For things to apply special effects after damaging an organ, called by organ's take_damage
+/obj/proc/after_wounding(obj/item/organ/external/organ, datum/wound)
+
+/**
+ * Test for if stepping on a tile containing this obj is safe to do, used for things like landmines and cliffs.
+ */
+/obj/proc/is_safe_to_step(mob/living/L)
+	return TRUE
+
+/obj/get_mass()
+	return min(2**(w_class-1), 100)

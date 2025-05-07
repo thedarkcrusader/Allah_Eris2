@@ -10,45 +10,57 @@
  */
 
 /obj/item/clothing/suit/fire
-	name = "emergency firesuit"
-	desc = "A suit that helps protect against fire and heat."
+	name = "firesuit"
+	desc = "A suit that protects against fire and heat."
 	icon_state = "firesuit"
-	item_state = "ro_suit"
-	w_class = WEIGHT_CLASS_BULKY
-	gas_transfer_coefficient = 0.9
-	body_parts_covered = CHEST|GROIN|LEGS|FEET|ARMS|HANDS
-	allowed = list(/obj/item/flashlight, /obj/item/tank/internals, /obj/item/extinguisher, /obj/item/crowbar)
-	slowdown = 1
-	armor = list(MELEE = 15, BULLET = 5, LASER = 20, ENERGY = 10, BOMB = 20, BIO = 10, RAD = 20, FIRE = 100, ACID = 50)
-	flags_inv = HIDEGLOVES|HIDESHOES|HIDEJUMPSUIT
-	clothing_flags = STOPSHIGHPRESSURE | THICKMATERIAL
-	heat_protection = CHEST|GROIN|LEGS|FEET|ARMS|HANDS
-	max_heat_protection_temperature = FIRE_SUIT_MAX_TEMP_PROTECT
-	cold_protection = CHEST|GROIN|LEGS|FEET|ARMS|HANDS
-	min_cold_protection_temperature = FIRE_SUIT_MIN_TEMP_PROTECT
-	strip_delay = 60
-	equip_delay_other = 60
-	resistance_flags = FIRE_PROOF
+	item_state_slots = list(
+		slot_l_hand_str = "firefighter",
+		slot_r_hand_str = "firefighter",
+	)
+	w_class = ITEM_SIZE_LARGE
+
+	body_parts_covered = UPPER_TORSO | LOWER_TORSO| ARMS
+	armor = list(laser = ARMOR_LASER_MINOR, energy = ARMOR_ENERGY_MINOR, bomb = ARMOR_BOMB_MINOR)
+	allowed = list(
+		/obj/item/device/flashlight,
+		/obj/item/tank/oxygen_emergency,
+		/obj/item/tank/oxygen_emergency_extended,
+		/obj/item/tank/nitrogen_emergency,
+		/obj/item/extinguisher,
+		/obj/item/crowbar/emergency_forcing_tool,
+		/obj/item/clothing/head
+	)
+
+	gas_transfer_coefficient = 0.90
+	permeability_coefficient = 0.50
+	heat_protection = UPPER_TORSO | LOWER_TORSO | ARMS
+	cold_protection = UPPER_TORSO | LOWER_TORSO | ARMS
+
+	max_pressure_protection = FIRESUIT_MAX_PRESSURE
+	max_heat_protection_temperature = FIRESUIT_MAX_HEAT_PROTECTION_TEMPERATURE
+
+/obj/item/clothing/suit/fire/Initialize()
+	. = ..()
+	slowdown_per_slot[slot_wear_suit] = 0.5
 
 /obj/item/clothing/suit/fire/firefighter
 	icon_state = "firesuit"
-	item_state = "firefighter"
+	item_state_slots = list(
+		slot_l_hand_str = "firefighter",
+		slot_r_hand_str = "firefighter",
+	)
 
 
 /obj/item/clothing/suit/fire/heavy
-	name = "heavy firesuit"
-	desc = "An old, bulky thermal protection suit."
-	icon_state = "thermal"
-	item_state = "ro_suit"
-	slowdown = 1.5
-
-/obj/item/clothing/suit/fire/atmos
 	name = "firesuit"
-	desc = "An expensive firesuit that protects against even the most deadly of station fires. Designed to protect even if the wearer is set aflame."
-	icon_state = "atmos_firesuit"
-	item_state = "firesuit_atmos"
-	max_heat_protection_temperature = FIRE_IMMUNITY_MAX_TEMP_PROTECT
-	clothing_flags = STOPSPRESSUREDAMAGE | THICKMATERIAL
+	desc = "A suit that protects against extreme fire and heat."
+	//icon_state = "thermal"
+	item_state_slots = list(
+		slot_l_hand_str = "ro_suit",
+		slot_r_hand_str = "ro_suit",
+	)
+	w_class = ITEM_SIZE_HUGE//bulky item
+
 
 /*
  * Bomb protection
@@ -57,97 +69,92 @@
 	name = "bomb hood"
 	desc = "Use in case of bomb."
 	icon_state = "bombsuit"
-	gas_transfer_coefficient = 0.01
-	clothing_flags = THICKMATERIAL
-	armor = list(MELEE = 20, BULLET = 0, LASER = 20,ENERGY = 10, BOMB = 100, BIO = 100, RAD = 0, FIRE = 80, ACID = 50)
-	flags_inv = HIDEFACE|HIDEMASK|HIDEEARS|HIDEEYES|HIDEHAIR|HIDEFACIALHAIR
-	dynamic_hair_suffix = ""
-	dynamic_fhair_suffix = ""
-	cold_protection = HEAD
-	min_cold_protection_temperature = HELMET_MIN_TEMP_PROTECT
-	heat_protection = HEAD
-	max_heat_protection_temperature = HELMET_MAX_TEMP_PROTECT
-	strip_delay = 70
-	equip_delay_other = 70
-	flags_cover = HEADCOVERSEYES | HEADCOVERSMOUTH
-	resistance_flags = NONE
-	hattable = FALSE
+	armor = list(
+		melee = ARMOR_MELEE_VERY_HIGH,
+		bullet = ARMOR_BALLISTIC_MINOR,
+		laser = ARMOR_LASER_SMALL,
+		energy = ARMOR_ENERGY_RESISTANT,
+		bomb = ARMOR_BOMB_SHIELDED
+		)
+	flags_inv = HIDEMASK|HIDEEARS|HIDEEYES|BLOCKHAIR
+	body_parts_covered = HEAD|FACE|EYES
+	item_flags = null
+	siemens_coefficient = 0
 
 
 /obj/item/clothing/suit/bomb_suit
 	name = "bomb suit"
 	desc = "A suit designed for safety when handling explosives."
 	icon_state = "bombsuit"
-	item_state = "bombsuit"
-	w_class = WEIGHT_CLASS_BULKY
+	w_class = ITEM_SIZE_HUGE//bulky item
 	gas_transfer_coefficient = 0.01
-	clothing_flags = THICKMATERIAL
-	body_parts_covered = CHEST|GROIN|LEGS|FEET|ARMS|HANDS
-	slowdown = 2
-	armor = list(MELEE = 20, BULLET = 0, LASER = 20,ENERGY = 10, BOMB = 100, BIO = 100, RAD = 0, FIRE = 80, ACID = 50)
-	flags_inv = HIDEJUMPSUIT
-	heat_protection = CHEST|GROIN|LEGS|FEET|ARMS|HANDS
-	max_heat_protection_temperature = ARMOR_MAX_TEMP_PROTECT
-	cold_protection = CHEST|GROIN|LEGS|FEET|ARMS|HANDS
-	min_cold_protection_temperature = ARMOR_MIN_TEMP_PROTECT
-	strip_delay = 70
-	equip_delay_other = 70
-	resistance_flags = NONE
+	permeability_coefficient = 0.01
+	armor = list(
+		melee = ARMOR_MELEE_VERY_HIGH,
+		bullet = ARMOR_BALLISTIC_MINOR,
+		laser = ARMOR_LASER_SMALL,
+		energy = ARMOR_ENERGY_RESISTANT,
+		bomb = ARMOR_BOMB_SHIELDED
+		)
+	flags_inv = HIDEJUMPSUIT|HIDETAIL
+	heat_protection = UPPER_TORSO|LOWER_TORSO
+	item_flags = null
+	max_heat_protection_temperature = ARMOR_MAX_HEAT_PROTECTION_TEMPERATURE
+	siemens_coefficient = 0
 
+/obj/item/clothing/suit/bomb_suit/Initialize()
+	. = ..()
+	slowdown_per_slot[slot_wear_suit] = 1.25
 
 /obj/item/clothing/head/bomb_hood/security
-	icon_state = "bombsuit_sec"
-	item_state = "bombsuit_sec"
-	armor = list(MELEE = 50, BULLET = 10, LASER = 30,ENERGY = 20, BOMB = 100, BIO = 0, RAD = 0, FIRE = 80, ACID = 50)	//Much better armor, lots of padding against low-power kinetic blows!
+	icon_state = "bombsuitsec"
+	body_parts_covered = HEAD
 
 /obj/item/clothing/suit/bomb_suit/security
-	desc = "A slightly more advanced bomb suit for use by NT security forces. Comes with a holster for your favorite assistant-beating tools!"
-	icon_state = "bombsuit_sec"
-	item_state = "bombsuit_sec"
-	allowed = list(/obj/item/gun/energy, /obj/item/melee/baton, /obj/item/restraints/handcuffs)
-	slowdown = 1.5	//Meant for more stressful situations than JUST disarming a bomb, whatever that might be.
-	armor = list(MELEE = 50, BULLET = 10, LASER = 30,ENERGY = 20, BOMB = 100, BIO = 0, RAD = 0, FIRE = 80, ACID = 50)
-
-/obj/item/clothing/head/bomb_hood/white
-	icon_state = "bombsuit_white"
-	item_state = "bombsuit_white"
-
-/obj/item/clothing/suit/bomb_suit/white
-	icon_state = "bombsuit_white"
-	item_state = "bombsuit_white"
+	icon_state = "bombsuitsec"
+	allowed = list(/obj/item/gun/energy,/obj/item/melee/baton,/obj/item/handcuffs)
+	body_parts_covered = UPPER_TORSO|LOWER_TORSO|LEGS|FEET|ARMS|HANDS
 
 /*
-* Radiation protection
-*/
-
+ * Radiation protection
+ */
 /obj/item/clothing/head/radiation
 	name = "radiation hood"
-	icon_state = "rad"
-	desc = "A hood with radiation protective properties. The label reads, 'Made with lead. Please do not consume insulation.'"
-	clothing_flags = THICKMATERIAL
-	flags_inv = HIDEMASK|HIDEEARS|HIDEFACE|HIDEEYES|HIDEHAIR|HIDEFACIALHAIR
-	armor = list(MELEE = 5, BULLET = 5, LASER = 0,ENERGY = 0, BOMB = 5, BIO = 60, RAD = 100, FIRE = 30, ACID = 30)
-	strip_delay = 60
-	equip_delay_other = 60
-	flags_cover = HEADCOVERSEYES | HEADCOVERSMOUTH
-	resistance_flags = NONE
-	flags_1 = RAD_PROTECT_CONTENTS_1
-	hattable = FALSE
+	icon_state = "rad_hood"
+	item_state = "rad_hood"
+	desc = "A hood with radiation protective properties. Label: Made with lead, do not eat insulation."
+	flags_inv = BLOCKHAIR
+	body_parts_covered = HEAD|FACE|EYES
+	armor = list(
+		bio = ARMOR_BIO_RESISTANT,
+		rad = ARMOR_RAD_SHIELDED
+		)
+
 
 /obj/item/clothing/suit/radiation
 	name = "radiation suit"
-	desc = "A suit that protects against radiation. The label reads, 'Made with lead. Please do not consume insulation.'"
-	icon_state = "rad"
+	desc = "A suit that protects against radiation. Label: Made with lead, do not eat insulation."
+	icon_state = "rad_suit"
 	item_state = "rad_suit"
-	w_class = WEIGHT_CLASS_BULKY
-	gas_transfer_coefficient = 0.9
-	clothing_flags = THICKMATERIAL
-	body_parts_covered = CHEST|GROIN|LEGS|FEET|ARMS|HANDS
-	allowed = list(/obj/item/flashlight, /obj/item/tank/internals/emergency_oxygen, /obj/item/tank/internals/plasmaman, /obj/item/tank/internals/ipc_coolant, /obj/item/geiger_counter)
-	slowdown = 0.5
-	armor = list(MELEE = 5, BULLET = 5, LASER = 0,ENERGY = 0, BOMB = 5, BIO = 60, RAD = 100, FIRE = 30, ACID = 30)
-	strip_delay = 60
-	equip_delay_other = 60
-	flags_inv = HIDEJUMPSUIT
-	resistance_flags = NONE
-	flags_1 = RAD_PROTECT_CONTENTS_1
+	w_class = ITEM_SIZE_HUGE //bulky item
+	gas_transfer_coefficient = 0.90
+	permeability_coefficient = 0.50
+	body_parts_covered = UPPER_TORSO|LOWER_TORSO|LEGS|ARMS|HANDS|FEET
+	allowed = list(
+		/obj/item/device/flashlight,
+		/obj/item/tank/oxygen_emergency,
+		/obj/item/tank/oxygen_emergency_extended,
+		/obj/item/tank/nitrogen_emergency,
+		/obj/item/clothing/head/radiation,
+		/obj/item/clothing/mask/gas,
+		/obj/item/device/geiger
+	)
+	armor = list(
+		bio = ARMOR_BIO_RESISTANT,
+		rad = ARMOR_RAD_SHIELDED
+		)
+	flags_inv = HIDEJUMPSUIT|HIDETAIL|HIDEGLOVES|HIDESHOES
+
+/obj/item/clothing/suit/radiation/Initialize()
+	. = ..()
+	slowdown_per_slot[slot_shoes] = 0.75

@@ -1,258 +1,72 @@
-/*ALL DNA, SPECIES, AND GENETICS-RELATED DEFINES GO HERE*/
+// Bitflags for mutations.
+#define STRUCDNASIZE 27
+#define   UNIDNASIZE 13
 
-#define CHECK_DNA_AND_SPECIES(C) if((!(C.dna)) || (!(C.dna.species))) return
+// Generic mutations:
+#define MUTATION_COLD_RESISTANCE 1
+#define MUTATION_XRAY            2
+#define MUTATION_FERAL           3 // Smash objects instead of using them, and harder to grab.
+#define MUTATION_CLUMSY          4
+#define MUTATION_FAT             5
+#define MUTATION_HUSK            6
+#define MUTATION_LASER           7 // Harm intent - click anywhere to shoot lasers from eyes.
+#define MUTATION_HEAL            8 // Healing people with hands.
+#define MUTATION_SPACERES        9 // Can't be harmed via pressure damage.
+#define MUTATION_SKELETON        10
 
-//Defines copying names of mutations in all cases, make sure to change this if you change mutation's type
-#define HULK		/datum/mutation/human/hulk
-#define XRAY		/datum/mutation/human/thermal/x_ray
-#define SPACEMUT	/datum/mutation/human/space_adaptation
-#define HEATMUT		/datum/mutation/human/heat_adaptation
-#define TK			/datum/mutation/human/telekinesis
-#define NERVOUS		/datum/mutation/human/nervousness
-#define EPILEPSY	/datum/mutation/human/epilepsy
-#define MUTATE		/datum/mutation/human/bad_dna
-#define COUGH		/datum/mutation/human/cough
-#define DWARFISM	/datum/mutation/human/dwarfism
-#define GIGANTISM	/datum/mutation/human/gigantism
-#define CLOWNMUT	/datum/mutation/human/clumsy
-#define TOURETTES	/datum/mutation/human/tourettes
-#define DEAFMUT		/datum/mutation/human/deaf
-#define BLINDMUT	/datum/mutation/human/blind
-#define RACEMUT		/datum/mutation/human/race
-#define BADSIGHT	/datum/mutation/human/nearsight
-#define LASEREYES	/datum/mutation/human/laser_eyes
-#define CHAMELEON	/datum/mutation/human/chameleon
-#define SUPER_CHAMELEON		/datum/mutation/human/chameleon/super
-#define WACKY		/datum/mutation/human/wacky
-#define MUT_MUTE	/datum/mutation/human/mute
-#define SMILE		/datum/mutation/human/smile
-#define STONER		/datum/mutation/human/stoner
-#define UNINTELLIGIBLE		/datum/mutation/human/unintelligible
-#define SWEDISH		/datum/mutation/human/swedish
-#define CHAV		/datum/mutation/human/chav
-#define ELVIS		/datum/mutation/human/elvis
-#define RADIOACTIVE	/datum/mutation/human/radioactive
-#define RAVENOUS	/datum/mutation/human/ravenous
-#define RADPROOF	/datum/mutation/human/radproof
-#define SAPBLOOD	/datum/mutation/human/sapblood
-#define GLOWY		/datum/mutation/human/glow
-#define ANTIGLOWY	/datum/mutation/human/glow/anti
-#define TELEPATHY	/datum/mutation/human/telepathy
-#define FIREBREATH	/datum/mutation/human/firebreath
-#define VOID		/datum/mutation/human/void
-#define STRONG    	/datum/mutation/human/strong
-#define FIRESWEAT	/datum/mutation/human/fire
-#define THERMAL		/datum/mutation/human/thermal
-#define ANTENNA		/datum/mutation/human/antenna
-#define PARANOIA	/datum/mutation/human/paranoia
-#define INSULATED	/datum/mutation/human/insulated
-#define SHOCKTOUCH	/datum/mutation/human/shock
-#define SHOCKTOUCHFAR		/datum/mutation/human/shock/far
-#define OLFACTION	/datum/mutation/human/olfaction
-#define ACIDFLESH	/datum/mutation/human/acidflesh
-#define BADBLINK	/datum/mutation/human/badblink
-#define SPASTIC		/datum/mutation/human/spastic
-#define EXTRASTUN	/datum/mutation/human/extrastun
-#define GELADIKINESIS		/datum/mutation/human/geladikinesis
-#define CRYOKINESIS /datum/mutation/human/cryokinesis
-#define ACIDSPIT	/datum/mutation/human/acidspit
-#define CEREBRAL	/datum/mutation/human/cerebral
-#define THICKSKIN	/datum/mutation/human/thickskin
-#define DENSEBONES	/datum/mutation/human/densebones
-#define RADIANTBURST	/datum/mutation/human/radiantburst
+// Other Mutations:
+#define mNobreath      100 // No need to breathe.
+#define mRemote        101 // Remote viewing.
+#define mRegen         102 // Health regeneration.
+#define mRun           103 // No slowdown.
+#define mRemotetalk    104 // Remote talking.
+#define mMorph         105 // Hanging appearance.
+#define mBlend         106 // Nothing. (seriously nothing)
+#define mHallucination 107 // Hallucinations.
+#define mFingerprints  108 // No fingerprints.
+#define mShock         109 // Insulated hands.
+#define mSmallsize     110 // Table climbing.
 
+// disabilities
+#define NEARSIGHTED    FLAG_01
+#define EPILEPSY       FLAG_02
+#define COUGHING       FLAG_03
+#define NERVOUS        FLAG_04
 
-#define UI_CHANGED "ui changed"
-#define UE_CHANGED "ue changed"
-#define UF_CHANGED "uf changed"
+// sdisabilities
+#define BLINDED     FLAG_01
+#define MUTED       FLAG_02
+#define DEAFENED    FLAG_03
 
-#define CHAMELEON_MUTATION_DEFAULT_TRANSPARENCY 255
-#define CHAMELEON_MUTATION_MINIMUM_TRANSPARENCY 30
+// The way blocks are handled badly needs a rewrite, this is horrible.
+// Too much of a project to handle at the moment, TODO for later.
+GLOBAL_VAR_AS(BLINDBLOCK,0)
+GLOBAL_VAR_AS(DEAFBLOCK,0)
+GLOBAL_VAR_AS(TELEBLOCK,0)
+GLOBAL_VAR_AS(FIREBLOCK,0)
+GLOBAL_VAR_AS(XRAYBLOCK,0)
+GLOBAL_VAR_AS(CLUMSYBLOCK,0)
+GLOBAL_VAR_AS(FERALBLOCK, 0)
+GLOBAL_VAR_AS(FAKEBLOCK,0)
+GLOBAL_VAR_AS(COUGHBLOCK,0)
+GLOBAL_VAR_AS(GLASSESBLOCK,0)
+GLOBAL_VAR_AS(EPILEPSYBLOCK,0)
+GLOBAL_VAR_AS(TWITCHBLOCK,0)
+GLOBAL_VAR_AS(NERVOUSBLOCK,0)
+GLOBAL_VAR_AS(MONKEYBLOCK, STRUCDNASIZE)
 
+GLOBAL_VAR_AS(BLOCKADD,0)
+GLOBAL_VAR_AS(DIFFMUT,0)
 
-// String identifiers for associative list lookup
-
-//Types of usual mutations
-#define	POSITIVE 			1
-#define	NEGATIVE			2
-#define	MINOR_NEGATIVE		4
-
-
-//Mutation classes. Normal being on them, extra being additional mutations with instability and other being stuff you dont want people to fuck with like wizard mutate
-#define MUT_NORMAL 1
-#define MUT_EXTRA 2
-#define MUT_OTHER 3
-
-//DNA - Because fuck you and your magic numbers being all over the codebase.
-#define DNA_BLOCK_SIZE				3
-
-#define DNA_BLOCK_SIZE_COLOR DEFAULT_HEX_COLOR_LEN
-
-#define DNA_UNI_IDENTITY_BLOCKS		7
-#define DNA_HAIR_COLOR_BLOCK		1
-#define DNA_FACIAL_HAIR_COLOR_BLOCK	2
-#define DNA_SKIN_TONE_BLOCK			3
-#define DNA_EYE_COLOR_BLOCK			4
-#define DNA_GENDER_BLOCK			5
-#define DNA_FACIAL_HAIR_STYLE_BLOCK	6
-#define DNA_HAIR_STYLE_BLOCK		7
-
-/// This number needs to equal the total number of DNA blocks
-#define DNA_FEATURE_BLOCKS 28
-
-#define DNA_MUTANT_COLOR_BLOCK 1
-#define DNA_ETHEREAL_COLOR_BLOCK 2
-#define DNA_LIZARD_MARKINGS_BLOCK 3
-#define DNA_LIZARD_TAIL_BLOCK 4
-#define DNA_SNOUT_BLOCK 5
-#define DNA_HORNS_BLOCK 6
-#define DNA_FRILLS_BLOCK 7
-#define DNA_SPINES_BLOCK 8
-#define DNA_HUMAN_TAIL_BLOCK 9
-#define DNA_EARS_BLOCK 10
-#define DNA_MOTH_WINGS_BLOCK 11
-#define DNA_MUSHROOM_CAPS_BLOCK 12
-#define DNA_POD_HAIR_BLOCK 13
-//Yog specific DNA Blocks
-#define DNA_POD_FLOWER_BLOCK 14
-#define DNA_POLY_TAIL_BLOCK 15
-#define DNA_POLY_TEETH_BLOCK 16
-#define DNA_POLY_DOME_BLOCK 17
-#define DNA_POLY_DORSAL_BLOCK 18
-#define DNA_ETHEREAL_MARK_BLOCK 19
-#define DNA_PRETERNIS_WEATHERING_BLOCK 20
-#define DNA_PRETERNIS_ANTENNA_BLOCK 21
-#define DNA_PRETERNIS_EYE_BLOCK 22
-#define DNA_VOX_QUILLS_BLOCK 23
-#define DNA_VOX_FACIAL_QUILLS_BLOCK 24
-#define DNA_VOX_TAIL_MARKINGS_BLOCK 25
-#define DNA_VOX_BODY_MARKINGS_BLOCK 26
-#define DNA_VOX_SKIN_TONE_BLOCK 27
-#define DNA_MUTANT_COLOR_SECONDARY 28
-
-#define DNA_SEQUENCE_LENGTH			4
-#define DNA_MUTATION_BLOCKS			8
-#define DNA_UNIQUE_ENZYMES_LEN		32
-
-//Transformation proc stuff
-#define TR_KEEPITEMS	(1<<0)
-#define TR_KEEPVIRUS	(1<<1)
-#define TR_KEEPDAMAGE	(1<<2)
-/// hashing names (e.g. monkey(e34f)) (only in monkeyize)
-#define TR_HASHNAME		(1<<3)
-#define TR_KEEPIMPLANTS	(1<<4)
-/// changelings shouldn't edit the DNA's SE when turning into a monkey
-#define TR_KEEPSE		(1<<5)
-#define TR_DEFAULTMSG	(1<<6)
-#define TR_KEEPORGANS	(1<<8)
-#define TR_KEEPSTUNS	(1<<9)
-#define TR_KEEPREAGENTS	(1<<10)
-
-
-#define CLONER_FRESH_CLONE "fresh"
-#define CLONER_MATURE_CLONE "mature"
-
-//species traits for mutantraces
-#define MUTCOLORS		1
-#define HAIR			2
-#define FACEHAIR		3
-#define EYECOLOR		4
-#define LIPS			5
-#define NOBLOOD			6
-#define NOTRANSSTING	7
-/// Used if we want the mutant colour to be only used by mutant bodyparts. Don't combine this with MUTCOLORS, or it will be useless.
-#define MUTCOLORS_PARTSONLY	8
-#define NOZOMBIE		9
-/// If we want a race to have a standard color (for now this is only polysmorphs)
-#define NOCOLORCHANGE   10
-/// Has weird leg sprites. Used by lizards and polysmorphs. Don't give it to other races unless you make sprites for this (see human_parts_greyscale.dmi)
-#define DIGITIGRADE		11
-#define NO_UNDERWEAR	12
-#define NOLIVER			13
-#define NOSTOMACH		14
-#define NO_DNA_COPY     15
-#define DRINKSBLOOD		16
-#define NOFLASH			17
-/// Use this if you want to change the race's color without the player being able to pick their own color. AKA special color shifting
-#define DYNCOLORS		18
-/// Do not draw eyes or eyeless overlay
-#define NOEYESPRITES	19
-/// Used for determining which wounds are applicable to this species.
-/// if we have flesh (can suffer slash/piercing/burn wounds, requires they don't have NOBLOOD)
-#define HAS_FLESH	20
-/// if we have bones (can suffer bone wounds)
-#define HAS_BONE	21
-/// Can't be husked.
-#define NOHUSK			22
-/// have no mouth to ingest/eat with
-#define NOMOUTH			23
-/// has a tail
-#define HAS_TAIL		24
-#define NONANITES		25
-#define HAIRCOLOR		26
-#define FACEHAIRCOLOR	27
-#define MUTCOLORS_SECONDARY		28
-/// doesn't care about their blood level through normal means, but still has it
-#define STABLEBLOOD 29
-
-//organ slots
-#define ORGAN_SLOT_BRAIN "brain"
-#define ORGAN_SLOT_APPENDIX "appendix"
-#define ORGAN_SLOT_STOMACH "stomach"
-#define ORGAN_SLOT_EARS "ears"
-#define ORGAN_SLOT_EYES "eye_sight"
-#define ORGAN_SLOT_LUNGS "lungs"
-#define ORGAN_SLOT_HEART "heart"
-#define ORGAN_SLOT_ZOMBIE "zombie_infection"
-#define ORGAN_SLOT_BRAIN_TUMOR "brain_tumor"
-#define ORGAN_SLOT_LIVER "liver"
-#define ORGAN_SLOT_TONGUE "tongue"
-#define ORGAN_SLOT_VOICE "vocal_cords"
-#define ORGAN_SLOT_ADAMANTINE_RESONATOR "adamantine_resonator"
-#define ORGAN_SLOT_TAIL "tail"
-#define ORGAN_SLOT_PARASITE_EGG "parasite_egg"
-
-//implants
-#define ORGAN_SLOT_BRAIN_IMPLANT "brain_implant"
-#define ORGAN_SLOT_HUD "eye_hud"
-#define ORGAN_SLOT_BREATHING_TUBE "breathing_tube"
-#define ORGAN_SLOT_TORSO_IMPLANT "torso_implant"
-#define ORGAN_SLOT_HEART_AID "heartdrive"
-#define ORGAN_SLOT_STOMACH_AID "stomach_aid"
-#define ORGAN_SLOT_RIGHT_ARM_AUG "r_arm_device"
-#define ORGAN_SLOT_LEFT_ARM_AUG "l_arm_device"
-#define ORGAN_SLOT_RIGHT_LEG_AUG "r_leg_device"
-#define ORGAN_SLOT_LEFT_LEG_AUG "l_leg_device"
-
-//organ defines
-#define STANDARD_ORGAN_THRESHOLD 	100
-#define STANDARD_ORGAN_HEALING 		0.001
-/// designed to fail organs when left to decay for ~15 minutes
-#define STANDARD_ORGAN_DECAY		0.00222
-
-//used for the can_chromosome var on mutations
-#define CHROMOSOME_NEVER 0
-#define CHROMOSOME_NONE 1
-#define CHROMOSOME_USED 2
-
-#define GENDERS 4
-#define G_MALE 1
-#define G_FEMALE 2
-#define G_PLURAL 3
-#define G_NEUTER 4
-
-// Defines for used in creating "perks" for the species preference pages.
-/// A key that designates UI icon displayed on the perk.
-#define SPECIES_PERK_ICON "ui_icon"
-/// A key that designates the name of the perk.
-#define SPECIES_PERK_NAME "name"
-/// A key that designates the description of the perk.
-#define SPECIES_PERK_DESC "description"
-/// A key that designates what type of perk it is (see below).
-#define SPECIES_PERK_TYPE "perk_type"
-
-// The possible types each perk can be.
-// Positive perks are shown in green, negative in red, and neutral in grey.
-#define SPECIES_POSITIVE_PERK "positive"
-#define SPECIES_NEGATIVE_PERK "negative"
-#define SPECIES_NEUTRAL_PERK "neutral"
+GLOBAL_VAR_AS(HEADACHEBLOCK,0)
+GLOBAL_VAR_AS(NOBREATHBLOCK,0)
+GLOBAL_VAR_AS(REMOTEVIEWBLOCK,0)
+GLOBAL_VAR_AS(REGENERATEBLOCK,0)
+GLOBAL_VAR_AS(INCREASERUNBLOCK,0)
+GLOBAL_VAR_AS(REMOTETALKBLOCK,0)
+GLOBAL_VAR_AS(MORPHBLOCK,0)
+GLOBAL_VAR_AS(BLENDBLOCK,0)
+GLOBAL_VAR_AS(HALLUCINATIONBLOCK,0)
+GLOBAL_VAR_AS(NOPRINTSBLOCK,0)
+GLOBAL_VAR_AS(SHOCKIMMUNITYBLOCK,0)
+GLOBAL_VAR_AS(SMALLSIZEBLOCK,0)

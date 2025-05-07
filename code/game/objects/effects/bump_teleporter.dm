@@ -1,37 +1,34 @@
-/obj/effect/bump_teleporter
+var/global/list/obj/bump_teleporter/BUMP_TELEPORTERS = list()
+
+/obj/bump_teleporter
 	name = "bump-teleporter"
-	icon = 'icons/mob/screen_gen.dmi'
+	icon = 'icons/mob/screen1.dmi'
 	icon_state = "x2"
 	var/id = null			//id of this bump_teleporter.
 	var/id_target = null	//id of bump_teleporter which this moves you to.
-	invisibility = INVISIBILITY_ABSTRACT 		//nope, can't see this
+	invisibility = INVISIBILITY_ABSTRACT //nope, can't see this
 	anchored = TRUE
 	density = TRUE
-	opacity = FALSE
+	opacity = 0
 
-	var/static/list/AllTeleporters
+/obj/bump_teleporter/New()
+	..()
+	BUMP_TELEPORTERS += src
 
-/obj/effect/bump_teleporter/Initialize(mapload)
-	. = ..()
-	LAZYADD(AllTeleporters, src)
-
-/obj/effect/bump_teleporter/Destroy()
-	LAZYREMOVE(AllTeleporters, src)
+/obj/bump_teleporter/Destroy()
+	BUMP_TELEPORTERS -= src
 	return ..()
 
-
-/obj/effect/bump_teleporter/singularity_act()
-	return
-
-/obj/effect/bump_teleporter/singularity_pull()
-	return
-
-/obj/effect/bump_teleporter/Bumped(atom/movable/AM)
-	if(!ismob(AM))
+/obj/bump_teleporter/Bumped(atom/user)
+	if(!ismob(user))
+		//user.loc = src.loc	//Stop at teleporter location
 		return
+
 	if(!id_target)
+		//user.loc = src.loc	//Stop at teleporter location, there is nowhere to teleport to.
 		return
 
-	for(var/obj/effect/bump_teleporter/BT in AllTeleporters)
+	for(var/obj/bump_teleporter/BT in BUMP_TELEPORTERS)
 		if(BT.id == src.id_target)
-			AM.forceMove(BT.loc) //Teleport to location with correct id.
+			usr.forceMove(BT.loc)	//Teleport to location with correct id.
+			return

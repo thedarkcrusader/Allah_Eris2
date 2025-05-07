@@ -1,377 +1,206 @@
+// Variables not to expand the lists of. Vars is pointless to expand, and overlays/underlays cannot be expanded.
+var/global/list/view_variables_dont_expand = list("overlays", "underlays", "vars")
+// Variables that runtime if you try to test associativity of the lists they contain by indexing
+var/global/list/view_variables_no_assoc = list("verbs", "contents","screen","images")
+
+// Acceptable 'in world', as VV would be incredibly hampered otherwise
 /client/proc/debug_variables(datum/D in world)
-	set category = "Misc.Server Debug"
+	set category = "Debug"
 	set name = "View Variables"
-	//set src in world
+
+	if(!istype(D, /datum))
+		to_chat(usr, SPAN_WARNING("Not a viewable datum."))
+		return
+
+	if(!check_rights())
+		return
+
 	var/static/cookieoffset = rand(1, 9999) //to force cookies to reset after the round.
 
-	if(!usr.client || !usr.client.holder) //The usr vs src abuse in this proc is intentional and must not be changed
-		to_chat(usr, span_danger("You need to be an administrator to access this."), confidential = TRUE)
-		return
-
-	if(!D)
-		return
-
-	var/islist = islist(D)
-	var/isappearance = isappearance(D)
-	if (!islist && !istype(D) && !isappearance)
-		return
-
-	var/title = ""
-	var/refid = REF(D)
 	var/icon/sprite
-	var/hash
+	var/atom/A
+	if(isloc(D))
+		A = D
+		if(A.icon && A.icon_state)
+			sprite = icon(A.icon, A.icon_state)
+			send_rsc(usr, sprite, "view_vars_sprite.png")
 
-	var/type = /list
-	if (isappearance)
-		type = /image
-	else if (!islist)
-		type = D.type
-
-
-
-	if(istype(D, /atom) || isappearance)
-		var/atom/AT = D
-		if(AT.icon && AT.icon_state)
-			sprite = new /icon(AT.icon, AT.icon_state)
-			hash = md5(AT.icon)
-			hash = md5(hash + AT.icon_state)
-			src << browse_rsc(sprite, "vv[hash].png")
-
-	title = "[D] ([REF(D)]) = [type]"
-	var/formatted_type = replacetext("[type]", "/", "<wbr>/")
-
-	var/sprite_text
-	if(sprite)
-		sprite_text = "<img src='vv[hash].png'></td><td>"
-	var/list/header = isappearance? list("<b>/image</b>") : (islist(D)? list("<b>/list</b>") : D.vv_get_header())
-
-	var/marked_line
-	if(holder && holder.marked_datum && holder.marked_datum == D)
-		marked_line = VV_MSG_MARKED
-	var/varedited_line
-	if(!isappearance && !islist && (D.datum_flags & DF_VAR_EDITED))
-		varedited_line = VV_MSG_EDITED
-	var/deleted_line
-	if(!isappearance && !islist && D.gc_destroyed)
-		deleted_line = VV_MSG_DELETED
-
-	var/list/dropdownoptions = list()
-	if (islist)
-		dropdownoptions = list(
-			"---",
-			"Add Item" = VV_HREF_TARGETREF_INTERNAL(refid, VV_HK_LIST_ADD),
-			"Remove Nulls" = VV_HREF_TARGETREF_INTERNAL(refid, VV_HK_LIST_ERASE_NULLS),
-			"Remove Dupes" = VV_HREF_TARGETREF_INTERNAL(refid, VV_HK_LIST_ERASE_DUPES),
-			"Set len" = VV_HREF_TARGETREF_INTERNAL(refid, VV_HK_LIST_SET_LENGTH),
-			"Shuffle" = VV_HREF_TARGETREF_INTERNAL(refid, VV_HK_LIST_SHUFFLE),
-			"Show VV To Player" = VV_HREF_TARGETREF_INTERNAL(refid, VV_HK_EXPOSE),
-			"---"
-			)
-		for(var/i in 1 to length(dropdownoptions))
-			var/name = dropdownoptions[i]
-			var/link = dropdownoptions[name]
-			dropdownoptions[i] = "<option value[link? "='[link]'":""]>[name]</option>"
-	else if (!isappearance)
-		dropdownoptions = D.vv_get_dropdown()
-
-	var/list/names = list()
-	if (!islist && !isappearance)
-		for (var/V in D.vars)
-			names += V
-	sleep(0.1 SECONDS)//For some reason, without this sleep, VVing will cause client to disconnect on certain objects.
-
-	log_admin("[key_name(usr)] viewed the variables of [D].")
-
-	var/list/variable_html = list()
-	if (islist)
-		var/list/L = D
-		for (var/i in 1 to L.len)
-			var/key = L[i]
-			var/value
-			if (IS_NORMAL_LIST(L) && !isnum(key))
-				value = L[key]
-			variable_html += debug_variable(i, value, 0, D)
-	else if(isappearance(D))
-		variable_html += debug_variable("type", D:type, 0, D)
-		variable_html += debug_variable("name", D:name, 0, D)
-		variable_html += debug_variable("desc", D:desc, 0, D)
-		variable_html += debug_variable("suffix", D:suffix, 0, D)
-		variable_html += debug_variable("text", D:text, 0, D)
-		variable_html += debug_variable("icon", D:icon, 0, D)
-		variable_html += debug_variable("icon_state", D:icon_state, 0, D)
-		variable_html += debug_variable("visibility", D:visibility, 0, D)
-		variable_html += debug_variable("luminosity", D:luminosity, 0, D)
-		variable_html += debug_variable("opacity", D:opacity, 0, D)
-		variable_html += debug_variable("density", D:density, 0, D)
-		variable_html += debug_variable("verbs", D:verbs, 0, D)
-		variable_html += debug_variable("dir", D:dir, 0, D)
-		variable_html += debug_variable("gender", D:gender, 0, D)
-		variable_html += debug_variable("tag", D:tag, 0, D)
-		variable_html += debug_variable("overlays", D:overlays, 0, D)
-		variable_html += debug_variable("underlays", D:underlays, 0, D)
-		variable_html += debug_variable("layer", D:layer, 0, D)
-		variable_html += debug_variable("parent_type", D:parent_type, 0, D)
-		variable_html += debug_variable("mouse_over_pointer", D:mouse_over_pointer, 0, D)
-		variable_html += debug_variable("mouse_drag_pointer", D:mouse_drag_pointer, 0, D)
-		variable_html += debug_variable("mouse_drop_pointer", D:mouse_drop_pointer, 0, D)
-		variable_html += debug_variable("mouse_drop_zone", D:mouse_drop_zone, 0, D)
-		variable_html += debug_variable("animate_movement", D:animate_movement, 0, D)
-		variable_html += debug_variable("screen_loc", D:screen_loc, 0, D)
-		variable_html += debug_variable("infra_luminosity", D:infra_luminosity, 0, D)
-		variable_html += debug_variable("invisibility", D:invisibility, 0, D)
-		variable_html += debug_variable("mouse_opacity", D:mouse_opacity, 0, D)
-		variable_html += debug_variable("pixel_x", D:pixel_x, 0, D)
-		variable_html += debug_variable("pixel_y", D:pixel_y, 0, D)
-		variable_html += debug_variable("pixel_step_size", D:pixel_step_size, 0, D)
-		variable_html += debug_variable("pixel_z", D:pixel_z, 0, D)
-		variable_html += debug_variable("override", D:override, 0, D)
-		variable_html += debug_variable("glide_size", D:glide_size, 0, D)
-		variable_html += debug_variable("maptext", D:maptext, 0, D)
-		variable_html += debug_variable("maptext_width", D:maptext_width, 0, D)
-		variable_html += debug_variable("maptext_height", D:maptext_height, 0, D)
-		variable_html += debug_variable("transform", D:transform, 0, D)
-		variable_html += debug_variable("alpha", D:alpha, 0, D)
-		variable_html += debug_variable("color", D:color, 0, D)
-		variable_html += debug_variable("blend_mode", D:blend_mode, 0, D)
-		variable_html += debug_variable("appearance", D:appearance, 0, D)
-		variable_html += debug_variable("maptext_x", D:maptext_x, 0, D)
-		variable_html += debug_variable("maptext_y", D:maptext_y, 0, D)
-		variable_html += debug_variable("plane", D:plane, 0, D)
-		variable_html += debug_variable("appearance_flags", D:appearance_flags, 0, D)
-		variable_html += debug_variable("pixel_w", D:pixel_w, 0, D)
-		variable_html += debug_variable("render_source", D:render_source, 0, D)
-		variable_html += debug_variable("render_target", D:render_target, 0, D)
-	else
-		names = sortList(names)
-		for (var/V in names)
-			if(D.can_vv_get(V))
-				variable_html += D.vv_get_var(V)
+	send_rsc(usr,'code/js/view_variables.js', "view_variables.js")
 
 	var/html = {"
-<html>
-	<head>
-		<meta charset='UTF-8'>
-		<title>[title]</title>
-		<link rel="stylesheet" type="text/css" href="view_variables.css">
-	</head>
-	<body onload='selectTextField()' onkeydown='return handle_keydown()' onkeyup='handle_keyup()'>
-		<script type="text/javascript">
-			// onload
-			function selectTextField() {
-				var filter_text = document.getElementById('filter');
-				filter_text.focus();
-				filter_text.select();
-				var lastsearch = getCookie("[refid][cookieoffset]search");
-				if (lastsearch) {
-					filter_text.value = lastsearch;
-					updateSearch();
-				}
-			}
-			function getCookie(cname) {
-				var name = cname + "=";
-				var ca = document.cookie.split(';');
-				for(var i=0; i<ca.length; i++) {
-					var c = ca\[i];
-					while (c.charAt(0)==' ') c = c.substring(1,c.length);
-					if (c.indexOf(name)==0) return c.substring(name.length,c.length);
-				}
-				return "";
-			}
-
-			// main search functionality
-			var last_filter = "";
-			function updateSearch() {
-				var filter = document.getElementById('filter').value.toLowerCase();
-				var vars_ol = document.getElementById("vars");
-
-				if (filter === last_filter) {
-					// An event triggered an update but nothing has changed.
-					return;
-				} else if (filter.indexOf(last_filter) === 0) {
-					// The new filter starts with the old filter, fast path by removing only.
-					var children = vars_ol.childNodes;
-					for (var i = children.length - 1; i >= 0; --i) {
-						try {
-							var li = children\[i];
-							if (li.innerText.toLowerCase().indexOf(filter) == -1) {
-								vars_ol.removeChild(li);
-							}
-						} catch(err) {}
-					}
-				} else {
-					// Remove everything and put back what matches.
-					while (vars_ol.hasChildNodes()) {
-						vars_ol.removeChild(vars_ol.lastChild);
-					}
-
-					for (var i = 0; i < complete_list.length; ++i) {
-						try {
-							var li = complete_list\[i];
-							if (!filter || li.innerText.toLowerCase().indexOf(filter) != -1) {
-								vars_ol.appendChild(li);
-							}
-						} catch(err) {}
-					}
-				}
-
-				last_filter = filter;
-				document.cookie="[refid][cookieoffset]search="+encodeURIComponent(filter);
-
-				var lis_new = vars_ol.getElementsByTagName("li");
-				for (var j = 0; j < lis_new.length; ++j) {
-					lis_new\[j].style.backgroundColor = (j == 0) ? "#ffee88" : "white";
-				}
-			}
-
-			// onkeydown
-			function handle_keydown() {
-				if(event.keyCode == 116) {  //F5 (to refresh properly)
-					document.getElementById("refresh_link").click();
-					event.preventDefault ? event.preventDefault() : (event.returnValue = false);
-					return false;
-				}
-				return true;
-			}
-
-			// onkeyup
-			function handle_keyup() {
-				if (event.keyCode == 13) {  //Enter / return
-					var vars_ol = document.getElementById('vars');
-					var lis = vars_ol.getElementsByTagName("li");
-					for (var i = 0; i < lis.length; ++i) {
-						try {
-							var li = lis\[i];
-							if (li.style.backgroundColor == "#ffee88") {
-								alist = lis\[i].getElementsByTagName("a");
-								if(alist.length > 0) {
-									location.href=alist\[0].href;
-								}
-							}
-						} catch(err) {}
-					}
-				} else if(event.keyCode == 38){  //Up arrow
-					var vars_ol = document.getElementById('vars');
-					var lis = vars_ol.getElementsByTagName("li");
-					for (var i = 0; i < lis.length; ++i) {
-						try {
-							var li = lis\[i];
-							if (li.style.backgroundColor == "#ffee88") {
-								if (i > 0) {
-									var li_new = lis\[i-1];
-									li.style.backgroundColor = "white";
-									li_new.style.backgroundColor = "#ffee88";
-									return
-								}
-							}
-						} catch(err) {}
-					}
-				} else if(event.keyCode == 40) {  //Down arrow
-					var vars_ol = document.getElementById('vars');
-					var lis = vars_ol.getElementsByTagName("li");
-					for (var i = 0; i < lis.length; ++i) {
-						try {
-							var li = lis\[i];
-							if (li.style.backgroundColor == "#ffee88") {
-								if ((i+1) < lis.length) {
-									var li_new = lis\[i+1];
-									li.style.backgroundColor = "white";
-									li_new.style.backgroundColor = "#ffee88";
-									return
-								}
-							}
-						} catch(err) {}
-					}
-				} else {
-					updateSearch();
-				}
-			}
-
-			// onchange
-			function handle_dropdown(list) {
-				var value = list.options\[list.selectedIndex].value;
-				if (value !== "") {
-					location.href = value;
-				}
-				list.selectedIndex = 0;
-				document.getElementById('filter').focus();
-			}
-
-			// byjax
-			function replace_span(what) {
-				var idx = what.indexOf(':');
-				document.getElementById(what.substr(0, idx)).innerHTML = what.substr(idx + 1);
-			}
-		</script>
-		<div align='center'>
-			<table width='100%'>
-				<tr>
+		<html>
+		<head>
+			<script src='view_variables.js'></script>
+			<title>[D] (\ref[D] - [D.type])</title>
+			<style>
+				body { font-family: Verdana, sans-serif; font-size: 9pt; }
+				.value { font-family: "Courier New", monospace; font-size: 8pt; }
+			</style>
+		</head>
+		<body onload='selectTextField(\ref[D]); updateSearch(\ref[D])'; onkeyup='updateSearch(\ref[D])'>
+			<div align='center'>
+				<table width='100%'><tr>
 					<td width='50%'>
-						<table align='center' width='100%'>
-							<tr>
-								<td>
-									[sprite_text]
-									<div align='center'>
-										[header.Join()]
-									</div>
-								</td>
-							</tr>
-						</table>
+						<table align='center' width='100%'><tr>
+							[sprite ? "<td><img src='view_vars_sprite.png'></td>" : ""]
+							<td><div align='center'>[D.get_view_variables_header()]</div></td>
+						</tr></table>
 						<div align='center'>
-							<b><font size='1'>[formatted_type]</font></b>
-							<span id='marked'>[marked_line]</span>
-							<span id='varedited'>[varedited_line]</span>
-							<span id='deleted'>[deleted_line]</span>
+							<b><span style='font-size: 10px'>[replacetext("[D.type]", "/", "/<wbr>")]</span></b>
+							[holder.marked_datum() == D ? "<br/><span style='font-size: 10px; color: red'><b>Marked Object</b></span>" : ""]
 						</div>
 					</td>
 					<td width='50%'>
 						<div align='center'>
-							<a id='refresh_link' href='byond://?_src_=vars;[HrefToken()];datumrefresh=[refid]'>Refresh</a>
+							<a href='byond://?_src_=vars;datumrefresh=\ref[D]'>Refresh</a>
+							[A ? "<A HREF='byond://?_src_=holder;adminplayerobservecoodjump=1;X=[A.x];Y=[A.y];Z=[A.z]'>Jump To</a>":""]
 							<form>
-								<select name="file" size="1"
-									onchange="handle_dropdown(this)"
-									onmouseclick="this.focus()"
-									style="background-color:#ffffff">
-									<option value selected>Select option</option>
-									[dropdownoptions.Join()]
+								<select name='file'
+								        size='1'
+								        onchange='loadPage(this.form.elements\[0\])'
+								        target='_parent._top'
+								        onmouseclick='this.focus()'
+								        style='background-color:#ffffff'>
+									<option>Select option</option>
+									<option />
+									<option value='byond://?_src_=vars;mark_object=\ref[D]'>Mark Object</option>
+									<option value='byond://?_src_=vars;call_proc=\ref[D]'>Call Proc</option>
+									[D.get_view_variables_options()]
 								</select>
 							</form>
 						</div>
 					</td>
-				</tr>
-			</table>
-		</div>
-		<hr>
-		<font size='1'>
-			<b>E</b> - Edit, tries to determine the variable type by itself.<br>
-			<b>C</b> - Change, asks you for the var type first.<br>
-			<b>M</b> - Mass modify: changes this variable for all objects of this type.<br>
-		</font>
-		<hr>
-		<table width='100%'>
-			<tr>
+				</tr></table>
+			</div>
+			<hr/>
+			<span style='font-size: 10px'>
+				<b>E</b> - Edit, tries to determine the variable type by itself.<br/>
+				<b>C</b> - Change, asks you for the var type first.<br/>
+				<b>M</b> - Mass modify: changes this variable for all objects of this type.<br/>
+			</span>
+			<hr/>
+			<table width='100%'><tr>
 				<td width='20%'>
 					<div align='center'>
 						<b>Search:</b>
 					</div>
 				</td>
 				<td width='80%'>
-					<input type='text' id='filter' name='filter_text' value='' style='width:100%;'>
+					<input type='text'
+					       id='filter'
+					       name='filter_text'
+					       value=''
+					       style='width:100%;' />
 				</td>
-			</tr>
-		</table>
-		<hr>
-		<ol id='vars'>
-			[variable_html.Join()]
-		</ol>
-		<script type='text/javascript'>
-			var complete_list = \[\];
-			var lis = document.getElementById("vars").children;
-			for(var i = lis.length; i--;) complete_list\[i\] = lis\[i\];
-		</script>
-	</body>
-</html>
-"}
-	src << browse(html, "window=variables[refid];size=475x650")
+			</tr></table>
+			<hr/>
+			<ol id='vars'>
+				[make_view_variables_var_list(D)]
+			</ol>
+			<script type='text/javascript'>
+				var complete_list = \[\];
+				var lis = document.getElementById("vars").children;
+				for(var i = lis.length; i--;) complete_list\[i\] = lis\[i\];
+			</script>
+		</body>
+		</html>
+		"}
 
-/client/proc/vv_update_display(datum/D, span, content)
-	src << output("[span]:[content]", "variables[REF(D)].browser:replace_span")
+	show_browser(usr, html, "window=variables\ref[D];size=475x650")
+
+/client
+	var/list/watched_variables = list()
+	var/datum/browser/watched_variables/watched_variables_window
+
+/client/proc/watched_variables()
+	set category = "Debug"
+	set name = "View Watched Variables"
+
+	watched_variables_window = new(usr, "watchedvariables", "Watched Variables", 640, 640, src)
+
+	watched_variables_window.set_content()
+	watched_variables_window.open()
+
+/datum/browser/watched_variables/set_content()
+	var/list/dat = list()
+
+	if(!user || !user.client)
+		return
+
+	dat += "<style>div.var { padding: 5px; } div.var:nth-child(even) { background-color: #555; }</style>"
+	for(var/datum/D in user.client.watched_variables)
+		dat += "<h1>[make_view_variables_value(D)]</h1>"
+		for(var/v in user.client.watched_variables[D])
+			dat += "<div class='var'>"
+			dat += "(<a href='byond://?_src_=vars;datumunwatch=\ref[D];varnameunwatch=[v]'>X</a>) "
+			dat += "[D.make_view_variables_variable_entry(v, D.get_variable_value(v), 1)] [v] = [make_view_variables_value(D.get_variable_value(v), v)]"
+			dat += "</div>"
+
+	..(jointext(dat, null))
+
+/datum/browser/watched_variables/update()
+	set_content()
+	..()
+
+/datum/browser/watched_variables/Process()
+	update()
+
+/datum/browser/watched_variables/Destroy()
+	STOP_PROCESSING(SSprocessing, src)
+
+	. = ..()
+
+/proc/make_view_variables_var_list(datum/D)
+	. = list()
+	var/list/variables = D.get_variables()
+	variables = sortList(variables)
+	for(var/x in variables)
+		. += make_view_variables_var_entry(D, x, D.get_variable_value(x))
+	return jointext(., null)
+
+/proc/make_view_variables_value(value, varname = "*")
+	var/vtext = ""
+	var/extra = list()
+	if(isnull(value))
+		vtext = "null"
+	else if(istext(value))
+		vtext = "\"[value]\""
+	else if(isicon(value))
+		vtext = "[value]"
+	else if(isfile(value))
+		vtext = "'[value]'"
+	else if(istype(value, /datum))
+		var/datum/DA = value
+		if("[DA]" == "[DA.type]" || !"[DA]")
+			vtext = "<a href='byond://?_src_=vars;Vars=\ref[DA]'>\ref[DA]</a> - [DA.type]"
+		else
+			vtext = "<a href='byond://?_src_=vars;Vars=\ref[DA]'>\ref[DA]</a> - [DA] ([DA.type])"
+	else if(istype(value, /client))
+		var/client/C = value
+		vtext = "<a href='byond://?_src_=vars;Vars=\ref[C]'>\ref[C]</a> - [C] ([C.type])"
+	else if(islist(value))
+		var/list/L = value
+		vtext = "/list ([length(L)])"
+		if(!(varname in view_variables_dont_expand) && length(L) > 0 && length(L) < 100)
+			extra += "<ul>"
+			for (var/index = 1 to length(L))
+				var/entry = L[index]
+				if(!isnum(entry) && !isnull(entry) && !(varname in view_variables_no_assoc))
+					extra += "<li>[index]: [make_view_variables_value(entry)] -> [make_view_variables_value(L[entry])]</li>"
+				else
+					extra += "<li>[index]: [make_view_variables_value(entry)]</li>"
+			extra += "</ul>"
+	else
+		vtext = "[value]"
+
+	return "[SPAN_CLASS("value", "[vtext]")][jointext(extra, null)]"
+
+/proc/make_view_variables_var_entry(datum/D, varname, value, level=0)
+	var/ecm = null
+
+	if(D)
+		ecm = D.make_view_variables_variable_entry(varname, value)
+
+	var/valuestr = make_view_variables_value(value, varname)
+
+	return "<li>[ecm][varname] = [valuestr]</li>"

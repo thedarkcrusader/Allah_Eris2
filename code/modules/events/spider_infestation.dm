@@ -1,46 +1,45 @@
-/datum/round_event_control/spider_infestation
-	name = "Spider Infestation"
-	typepath = /datum/round_event/spider_infestation
-	weight = 5
-	max_occurrences = 1
-	min_players = 25
-	description = "Spawns spider eggs, ready to hatch."
-	min_wizard_trigger_potency = 5
-	max_wizard_trigger_potency = 7
-	track = EVENT_TRACK_MAJOR
-	tags = list(TAG_COMBAT, TAG_DESTRUCTIVE, TAG_EXTERNAL, TAG_ALIEN)
-	checks_antag_cap = TRUE
+var/global/sent_spiders_to_station = 0
 
-/datum/round_event/spider_infestation
-	announce_when	= 400
-
+/datum/event/spider_infestation
+	announceWhen	= 90
 	var/spawncount = 1
+	var/guaranteed_to_grow = 0
 
 
-/datum/round_event/spider_infestation/setup()
-	announce_when = rand(announce_when, announce_when + 50)
-	spawncount = rand(5, 8)
-	setup = TRUE //storytellers
+/datum/event/spider_infestation/setup()
+	var/list/active_with_role = number_active_with_role()
+	announceWhen = rand(announceWhen, announceWhen + 60)
+	if (severity <= EVENT_LEVEL_MODERATE)
+		spawncount = 3 * severity
+	else
+		spawncount = 5 * severity
+	spawncount = min(spawncount, round(active_with_role["Any"] / 2))
+	guaranteed_to_grow = max(round(rand(spawncount / 3, spawncount / 2)), severity <= EVENT_LEVEL_MODERATE ? 3 : 5)
+	sent_spiders_to_station = TRUE
 
-/datum/round_event/spider_infestation/announce(fake)
-	priority_announce("Unidentified lifesigns detected coming aboard [station_name()]. Secure any exterior access, including ducting and ventilation.", "Lifesign Alert", ANNOUNCER_ALIENS)
+/datum/event/spider_infestation/announce()
+	GLOB.using_map.unidentified_lifesigns_announcement()
+	var/obj/overmap/visitable/O = map_sectors["[pick(affecting_z)]"]
+	if (!O)
+		return
 
+	O.add_scan_data("spider_infestation", SPAN_COLOR(COLOR_RED, "Unidentified hostile lifeforms detected."))
 
-/datum/round_event/spider_infestation/start()
+	addtimer(new Callback(O, TYPE_PROC_REF(/obj/overmap, remove_scan_data), "spider_infestation"), 10 MINUTES)
+
+/datum/event/spider_infestation/start()
 	var/list/vents = list()
-	for(var/obj/machinery/atmospherics/components/unary/vent_pump/temp_vent in GLOB.machines)
-		if(QDELETED(temp_vent))
-			continue
-		if(is_station_level(temp_vent.loc.z) && !temp_vent.welded)
-			var/datum/pipeline/temp_vent_parent = temp_vent.parents[1]
-			if(temp_vent_parent.other_atmos_machines.len > 20)
+	for(var/obj/machinery/atmospherics/unary/vent_pump/temp_vent in world)
+		if(!temp_vent.welded && temp_vent.network && (temp_vent.loc.z in affecting_z))
+			if(length(temp_vent.network.normal_members) > 50)
 				vents += temp_vent
 
-	while((spawncount >= 1) && vents.len)
+	while((spawncount >= 1) && length(vents))
 		var/obj/vent = pick(vents)
-		var/spawn_type = /obj/structure/spider/spiderling
-		if(prob(66))
-			spawn_type = /obj/structure/spider/spiderling/nurse
-		announce_to_ghosts(spawn_atom_to_turf(spawn_type, vent, 1, FALSE))
+		if (guaranteed_to_grow > 0)
+			new /obj/spider/spiderling/growing(vent.loc)
+			guaranteed_to_grow--
+		else
+			new /obj/spider/spiderling(vent.loc)
 		vents -= vent
 		spawncount--

@@ -1,165 +1,162 @@
 /obj/machinery/igniter
 	name = "igniter"
-	desc = "It's useful for igniting plasma."
-	icon = 'icons/obj/stationobjs.dmi'
-	icon_state = "igniter0"
-	plane = FLOOR_PLANE
-	use_power = IDLE_POWER_USE
-	idle_power_usage = 2
-	active_power_usage = 4
-	circuit = /obj/item/circuitboard/machine/igniter
-	max_integrity = 300
-	armor = list(MELEE = 50, BULLET = 30, LASER = 70, ENERGY = 50, BOMB = 20, BIO = 0, RAD = 0, FIRE = 100, ACID = 70)
-	resistance_flags = FIRE_PROOF
-	var/id = null
-	var/on = FALSE
-	var/safety = FALSE // If is true igniter wont turn on
-
-/obj/machinery/igniter/incinerator_toxmix
-	id = INCINERATOR_TOXMIX_IGNITER
-
-/obj/machinery/igniter/incinerator_atmos
-	id = INCINERATOR_ATMOS_IGNITER
-
-/obj/machinery/igniter/incinerator_syndicatelava
-	id = INCINERATOR_SYNDICATELAVA_IGNITER
-
-/obj/machinery/igniter/on
-	on = TRUE
+	desc = "It's useful for igniting flammable items."
+	icon = 'icons/obj/structures/igniter.dmi'
 	icon_state = "igniter1"
+	var/on = 0
+	anchored = TRUE
+	idle_power_usage = 20
+	active_power_usage = 1000
 
-/obj/machinery/igniter/attack_hand(mob/user)
+	uncreated_component_parts = list(
+		/obj/item/stock_parts/radio/receiver,
+		/obj/item/stock_parts/power/apc
+	)
+	public_variables = list(
+		/singleton/public_access/public_variable/igniter_on
+	)
+	public_methods = list(
+		/singleton/public_access/public_method/igniter_toggle
+	)
+	stock_part_presets = list(/singleton/stock_part_preset/radio/receiver/igniter = 1)
+
+/obj/machinery/igniter/Initialize()
 	. = ..()
-	if(.)
-		return
-	add_fingerprint(user)
+	update_icon()
 
-	use_power(50)
-	if(!safety)
-		on = !(on)
-	else
-		on = FALSE
-	update_appearance(UPDATE_ICON)
-
-/obj/machinery/igniter/attackby(obj/item/O, mob/user, params)
-	if(default_deconstruction_screwdriver(user, icon_state, icon_state, O))
-		to_chat(user, span_notice("You [panel_open ? "open" : "close"] the maintenance hatch of [src]."))
-		return TRUE
-	if(default_deconstruction_crowbar(O))
-		return TRUE
-
-/obj/machinery/igniter/examine(mob/user)
-	. = ..()
-	if(panel_open)
-		. += "<span class='[span_notice("The maintenance panel is [panel_open ? "opened" : "closed"].")]"
-
-/obj/machinery/igniter/process()	//ugh why is this even in process()?
-	if(safety || panel_open)
-		on = FALSE
-		update_appearance(UPDATE_ICON)
-		return
-	if (src.on && !(stat & NOPOWER))
-		var/turf/location = src.loc
-		if (isturf(location))
-			location.hotspot_expose(1000,500,1)
-	return TRUE
-
-/obj/machinery/igniter/Initialize(mapload)
-	. = ..()
-	wires = new /datum/wires/igniter(src)
+/obj/machinery/igniter/on_update_icon()
+	..()
 	icon_state = "igniter[on]"
 
-/obj/machinery/igniter/update_icon_state()
-	. = ..()
-	if(stat & NOPOWER)
-		icon_state = "igniter0"
-	else
-		icon_state = "igniter[on]"
+/obj/machinery/igniter/interface_interact(mob/user)
+	if(!CanInteract(user, DefaultTopicState()))
+		return FALSE
+	ignite()
+	visible_message(SPAN_NOTICE("\The [user] toggles \the [src]."))
+	return TRUE
 
-/obj/machinery/igniter/connect_to_shuttle(mapload, obj/docking_port/mobile/port, obj/docking_port/stationary/dock)
-	id = "[port.shuttle_id]_[id]"
+/obj/machinery/igniter/Process()
+	if(is_powered())
+		var/turf/location = src.loc
+		if (isturf(location))
+			location.hotspot_expose(1000)
+	return 1
+
+/obj/machinery/igniter/proc/ignite()
+	use_power_oneoff(2000)
+	on = !on
+	if(on)
+		START_PROCESSING_MACHINE(src, MACHINERY_PROCESS_SELF)
+	else
+		STOP_PROCESSING_MACHINE(src, MACHINERY_PROCESS_SELF)
+	update_icon()
+
+/singleton/public_access/public_variable/igniter_on
+	expected_type = /obj/machinery/igniter
+	name = "igniter active"
+	desc = "Whether or not the igniter is igniting."
+	can_write = FALSE
+	has_updates = FALSE
+
+/singleton/public_access/public_variable/holosign_on/access_var(obj/machinery/igniter/igniter)
+	return igniter.on
+
+/singleton/public_access/public_method/igniter_toggle
+	name = "igniter toggle"
+	desc = "Toggle the igniter on or off."
+	call_proc = TYPE_PROC_REF(/obj/machinery/igniter, ignite)
+
+/singleton/stock_part_preset/radio/receiver/igniter
+	frequency = BUTTON_FREQ
+	receive_and_call = list("button_active" = /singleton/public_access/public_method/igniter_toggle)
 
 // Wall mounted remote-control igniter.
 
 /obj/machinery/sparker
 	name = "mounted igniter"
 	desc = "A wall-mounted ignition device."
-	icon = 'icons/obj/stationobjs.dmi'
+	icon = 'icons/obj/structures/mounted_igniter.dmi'
 	icon_state = "migniter"
-	resistance_flags = FIRE_PROOF
-	var/id = null
 	var/disable = 0
 	var/last_spark = 0
-	var/datum/effect_system/spark_spread/spark_system
+	var/base_state = "migniter"
+	anchored = TRUE
+	idle_power_usage = 20
+	active_power_usage = 1000
 
-/obj/machinery/sparker/toxmix
-	id = INCINERATOR_TOXMIX_IGNITER
+	uncreated_component_parts = list(
+		/obj/item/stock_parts/radio/receiver,
+		/obj/item/stock_parts/power/apc
+	)
+	public_methods = list(
+		/singleton/public_access/public_method/sparker_spark
+	)
+	stock_part_presets = list(/singleton/stock_part_preset/radio/receiver/sparker = 1)
 
-/obj/machinery/sparker/Initialize(mapload)
-	. = ..()
-	spark_system = new /datum/effect_system/spark_spread
-	spark_system.set_up(2, 1, src)
-	spark_system.attach(src)
-
-/obj/machinery/sparker/connect_to_shuttle(mapload, obj/docking_port/mobile/port, obj/docking_port/stationary/dock)
-	id = "[port.shuttle_id]_[id]"
-
-/obj/machinery/sparker/Destroy()
-	QDEL_NULL(spark_system)
-	return ..()
-
-/obj/machinery/sparker/update_icon_state()
-	. = ..()
+/obj/machinery/sparker/on_update_icon()
+	..()
 	if(disable)
-		icon_state = "[initial(icon_state)]-d"
+		icon_state = "migniter-d"
 	else if(powered())
-		icon_state = "[initial(icon_state)]"
+		icon_state = "migniter"
+//		src.sd_SetLuminosity(2)
 	else
-		icon_state = "[initial(icon_state)]-p"
+		icon_state = "migniter-p"
+//		src.sd_SetLuminosity(0)
 
-/obj/machinery/sparker/powered()
-	if(disable)
-		return FALSE
+/obj/machinery/sparker/use_tool(obj/item/W, mob/living/user, list/click_params)
+	if(isScrewdriver(W))
+		disable = !disable
+		if(disable)
+			user.visible_message(SPAN_WARNING("[user] has disabled the [src]!"), SPAN_WARNING("You disable the connection to the [src]."))
+		else if(!disable)
+			user.visible_message(SPAN_WARNING("[user] has reconnected the [src]!"), SPAN_WARNING("You fix the connection to the [src]."))
+		update_icon()
+		return TRUE
+
 	return ..()
-
-/obj/machinery/sparker/attackby(obj/item/W, mob/user, params)
-	if (W.tool_behaviour == TOOL_SCREWDRIVER)
-		add_fingerprint(user)
-		src.disable = !src.disable
-		if (src.disable)
-			user.visible_message(span_notice("[user] has disabled \the [src]!"), span_notice("You disable the connection to \the [src]."))
-		if (!src.disable)
-			user.visible_message(span_notice("[user] has reconnected \the [src]!"), span_notice("You fix the connection to \the [src]."))
-		update_appearance(UPDATE_ICON)
-	else
-		return ..()
 
 /obj/machinery/sparker/attack_ai()
 	if (anchored)
-		return src.ignite()
+		return ignite()
 	else
 		return
 
 /obj/machinery/sparker/proc/ignite()
-	if (!(powered()))
+	if (!powered())
 		return
 
-	if ((src.disable) || (src.last_spark && world.time < src.last_spark + 50))
+	if (disable || (last_spark && world.time < last_spark + 50))
 		return
 
 
-	flick("[initial(icon_state)]-spark", src)
-	spark_system.start()
-	last_spark = world.time
-	use_power(1000)
+	flick("migniter-spark", src)
+	var/datum/effect/spark_spread/s = new /datum/effect/spark_spread
+	s.set_up(2, 1, src)
+	s.start()
+	src.last_spark = world.time
+	use_power_oneoff(2000)
 	var/turf/location = src.loc
 	if (isturf(location))
-		location.hotspot_expose(1000,2500,1)
-	return TRUE
+		location.hotspot_expose(1000)
+	return 1
 
 /obj/machinery/sparker/emp_act(severity)
-	. = ..()
-	if (. & EMP_PROTECT_SELF)
+	if(inoperable())
+		..(severity)
 		return
-	if(!(stat & (BROKEN|NOPOWER)))
-		ignite()
+	ignite()
+	..(severity)
+
+/singleton/public_access/public_method/sparker_spark
+	name = "spark"
+	desc = "Creates sparks to ignite nearby gases."
+	call_proc = TYPE_PROC_REF(/obj/machinery/sparker, ignite)
+
+/singleton/stock_part_preset/radio/receiver/sparker
+	frequency = BUTTON_FREQ
+	receive_and_call = list("button_active" = /singleton/public_access/public_method/sparker_spark)
+
+/obj/machinery/button/ignition
+	name = "ignition switch"
+	desc = "A remote control switch for a mounted igniter."

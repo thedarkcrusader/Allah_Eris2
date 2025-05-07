@@ -1,37 +1,30 @@
 //Baseline portable generator. Has all the default handling. Not intended to be used on it's own (since it generates unlimited power).
 /obj/machinery/power/port_gen
-	name = "portable generator"
+	name = "Placeholder Generator"	//seriously, don't use this. It can't be anchored without VV magic.
 	desc = "A portable generator for emergency backup power."
-	icon = 'icons/obj/power.dmi'
-	icon_state = "portgen0_0"
+	icon = 'icons/obj/structures/portgen.dmi'
+	icon_state = "portgen0"
 	density = TRUE
 	anchored = FALSE
-	use_power = NO_POWER_USE
+	interact_offline = TRUE
 
-	var/active = FALSE
+	machine_name = "portable generator"
+	machine_desc = "A portable generator often used for backup power."
+
+	var/active = 0
 	var/power_gen = 5000
+	var/recent_fault = 0
 	var/power_output = 1
-	var/consumption = 0
-	var/base_icon = "portgen0"
-	var/datum/looping_sound/generator/soundloop
+	atom_flags = ATOM_FLAG_CLIMBABLE
+	var/datum/sound_token/sound_token
+	var/sound_id
+	var/working_sound
 
-	interaction_flags_atom = INTERACT_ATOM_ATTACK_HAND | INTERACT_ATOM_UI_INTERACT | INTERACT_ATOM_REQUIRES_ANCHORED
-
-/obj/machinery/power/port_gen/Initialize(mapload)
-	. = ..()
-	soundloop = new(list(src), active)
-
-/obj/machinery/power/port_gen/Destroy()
-	QDEL_NULL(soundloop)
-	return ..()
-
-/obj/machinery/power/port_gen/connect_to_network()
-	if(!anchored)
-		return FALSE
-	. = ..()
+/obj/machinery/power/port_gen/proc/IsBroken()
+	return (MACHINE_IS_BROKEN(src) || GET_FLAGS(stat, MACHINE_STAT_EMPED))
 
 /obj/machinery/power/port_gen/proc/HasFuel() //Placeholder for fuel check.
-	return TRUE
+	return 1
 
 /obj/machinery/power/port_gen/proc/UseFuel() //Placeholder for fuel use.
 	return
@@ -42,260 +35,531 @@
 /obj/machinery/power/port_gen/proc/handleInactive()
 	return
 
-/obj/machinery/power/port_gen/proc/TogglePower()
-	if(active)
-		active = FALSE
-		update_appearance(UPDATE_ICON)
-		soundloop.stop()
-	else if(HasFuel())
-		active = TRUE
-		START_PROCESSING(SSmachines, src)
-		update_appearance(UPDATE_ICON)
-		soundloop.start()
+/obj/machinery/power/port_gen/proc/update_sound()
+	if(!working_sound)
+		return
+	if(!sound_id)
+		sound_id = "[type]_[sequential_id(/obj/machinery/power/port_gen)]"
+	if(active && HasFuel() && !IsBroken())
+		var/volume = 10 + 15*power_output
+		if(!sound_token)
+			sound_token = GLOB.sound_player.PlayLoopingSound(src, sound_id, working_sound, volume = volume)
+		sound_token.SetVolume(volume)
+	else if(sound_token)
+		QDEL_NULL(sound_token)
 
-/obj/machinery/power/port_gen/update_icon_state()
-	. = ..()
-	icon_state = "[base_icon]_[active]"
 
-/obj/machinery/power/port_gen/process()
-	if(active)
-		if(!HasFuel() || !anchored)
-			TogglePower()
-			return
-		if(powernet)
-			add_avail(power_gen * power_output)
+/obj/machinery/power/port_gen/Process()
+	..()
+	if(active && HasFuel() && !IsBroken() && anchored && powernet)
+		add_avail(power_gen * power_output)
 		UseFuel()
+		src.updateDialog()
 	else
+		active = 0
 		handleInactive()
+	update_icon()
+	update_sound()
 
-/obj/machinery/power/port_gen/examine(mob/user)
+/obj/machinery/power/port_gen/on_update_icon()
+	if(!active)
+		icon_state = initial(icon_state)
+		return 1
+	else
+		icon_state = "[initial(icon_state)]on"
+
+/obj/machinery/power/port_gen/CanUseTopic(mob/user)
+	if(!anchored)
+		to_chat(user, SPAN_WARNING("The generator needs to be secured first."))
+		return STATUS_CLOSE
+	return ..()
+
+/obj/machinery/power/port_gen/examine(mob/user, distance)
 	. = ..()
-	. += "It is[!active?"n't":""] running."
+	if(distance > 1)
+		return
+	if(active)
+		to_chat(usr, SPAN_NOTICE("The generator is on."))
+	else
+		to_chat(usr, SPAN_NOTICE("The generator is off."))
+/obj/machinery/power/port_gen/emp_act(severity)
+	SHOULD_CALL_PARENT(FALSE)
+	if(!active)
+		return
+	var/duration
+	switch(severity)
+		if(EMP_ACT_HEAVY)
+			set_broken(TRUE)
+			if(prob(75)) explode()
+			else duration = 10 MINUTES
+		if(EMP_ACT_LIGHT)
+			if(prob(25)) set_broken(TRUE)
+			if(prob(10)) explode()
+			else duration = 30 SECONDS
+	GLOB.empd_event.raise_event(src, severity)
 
-/////////////////
-// P.A.C.M.A.N //
-/////////////////
+	if(duration)
+		set_stat(MACHINE_STAT_EMPED, TRUE)
+		addtimer(new Callback(src, PROC_REF(resolve_emp_timer)), duration)
+
+/obj/machinery/power/port_gen/proc/resolve_emp_timer()
+	set_stat(MACHINE_STAT_EMPED, FALSE)
+
+/obj/machinery/power/port_gen/proc/explode()
+	explosion(src.loc, 8, EX_ACT_HEAVY)
+	qdel(src)
+
+#define TEMPERATURE_DIVISOR 40
+#define TEMPERATURE_CHANGE_MAX 20
+
+//A power generator that runs on solid plasma sheets.
 /obj/machinery/power/port_gen/pacman
-	name = "\improper P.A.C.M.A.N.-type portable generator"
-	circuit = /obj/item/circuitboard/machine/pacman
-	var/sheets = 0
-	var/max_sheets = 100
-	var/sheet_name = ""
-	var/sheet_path = /obj/item/stack/sheet/mineral/plasma
-	var/sheet_left = 0 // How much is left of the sheet
-	var/time_per_sheet = 260
-	var/current_heat = 0
+	name = "\improper P.A.C.M.A.N.-type Portable Generator"
+	desc = "A power generator that runs on solid phoron sheets. Rated for 80 kW max safe output."
 
-/obj/machinery/power/port_gen/pacman/Initialize(mapload)
+	machine_name = "\improper PACMAN-type generator"
+	machine_desc = "A portable generator often used for backup power or running small spacecraft. Runs on solid phoron sheets; rated for 80 kW max safe output."
+
+	var/sheet_name = "Phoron Sheets"
+	var/sheet_path = /obj/item/stack/material/phoron
+
+	/*
+		These values were chosen so that the generator can run safely up to 80 kW
+		A full 50 phoron sheet stack should last 20 minutes at power_output = 4
+		temperature_gain and max_temperature are set so that the max safe power level is 4.
+		Setting to 5 or higher can only be done temporarily before the generator overheats.
+	*/
+	power_gen = 20000			//Watts output per power_output level
+	working_sound = 'sound/machines/engine.ogg'
+	construct_state = /singleton/machine_construction/default/panel_closed
+	uncreated_component_parts = null
+	stat_immune = 0
+	obj_flags = OBJ_FLAG_ANCHORABLE
+	var/max_power_output = 5	//The maximum power setting without emagging.
+	var/max_safe_output = 4		// For UI use, maximal output that won't cause overheat.
+	var/time_per_sheet = 96		//fuel efficiency - how long 1 sheet lasts at power level 1
+	var/max_sheets = 100 		//max capacity of the hopper
+	var/max_temperature = 300	//max temperature before overheating increases
+	var/temperature_gain = 50	//how much the temperature increases per power output level, in degrees per level
+
+	var/sheets = 0			//How many sheets of material are loaded in the generator
+	var/sheet_left = 0		//How much is left of the current sheet
+	var/operating_temperature = 0		//The current temperature
+	var/overheating = 0		//if this gets high enough the generator explodes
+	var/max_overheat = 150
+
+/obj/machinery/power/port_gen/pacman/Initialize()
 	. = ..()
 	if(anchored)
 		connect_to_network()
-
-/obj/machinery/power/port_gen/pacman/Initialize(mapload)
-	. = ..()
-
-	var/obj/S = sheet_path
-	sheet_name = initial(S.name)
 
 /obj/machinery/power/port_gen/pacman/Destroy()
 	DropFuel()
 	return ..()
 
 /obj/machinery/power/port_gen/pacman/RefreshParts()
-	var/temp_rating = 0
-	var/consumption_coeff = 0
-	for(var/obj/item/stock_parts/SP in component_parts)
-		if(istype(SP, /obj/item/stock_parts/matter_bin))
-			max_sheets = SP.rating * SP.rating * 50
-		else if(istype(SP, /obj/item/stock_parts/capacitor))
-			temp_rating += SP.rating
-		else
-			consumption_coeff += SP.rating
-	power_gen = round(initial(power_gen) * temp_rating * 2)
-	consumption = consumption_coeff
+	var/temp_rating = total_component_rating_of_type(/obj/item/stock_parts/micro_laser)
+	temp_rating += total_component_rating_of_type(/obj/item/stock_parts/capacitor)
+
+	max_sheets = 50 * clamp(total_component_rating_of_type(/obj/item/stock_parts/matter_bin), 0, 5) ** 2
+
+	power_gen = round(initial(power_gen) * clamp(temp_rating, 0, 20) / 2)
+	..()
 
 /obj/machinery/power/port_gen/pacman/examine(mob/user)
-	. = ..()
-	. += span_notice("The generator has [sheets] units of [sheet_name] fuel left, producing [DisplayPower(power_gen)] per cycle.")
-	if(anchored)
-		. += span_notice("It is anchored to the ground.")
-	if(in_range(user, src) || isobserver(user))
-		. += "<span class='notice'>The status display reads: Fuel efficiency increased by <b>[(consumption*100)-100]%</b>.<span>"
+	. = ..(user)
+	to_chat(user, "\The [src] appears to be producing [power_gen*power_output] W.")
+	to_chat(user, "There [sheets == 1 ? "is" : "are"] [sheets] sheet\s left in the hopper.")
+	if(IsBroken()) to_chat(user, SPAN_WARNING("\The [src] seems to have broken down."))
+	if(overheating) to_chat(user, SPAN_DANGER("\The [src] is overheating!"))
+
+/obj/machinery/power/port_gen/pacman/proc/process_exhaust()
+	var/datum/gas_mixture/environment = loc?.return_air()
+	if(environment)
+		environment.adjust_gas(GAS_CO, 0.05*power_output)
 
 /obj/machinery/power/port_gen/pacman/HasFuel()
-	if(sheets >= 1 / (time_per_sheet / power_output) - sheet_left)
-		return TRUE
-	return FALSE
+	var/needed_sheets = power_output / time_per_sheet
+	if(sheets >= needed_sheets - sheet_left)
+		return 1
+	return 0
 
+//Removes one stack's worth of material from the generator.
 /obj/machinery/power/port_gen/pacman/DropFuel()
 	if(sheets)
-		new sheet_path(drop_location(), sheets)
-		sheets = 0
+		var/obj/item/stack/material/S = new sheet_path(loc)
+		var/amount = min(sheets, S.max_amount)
+		S.amount = amount
+		sheets -= amount
 
 /obj/machinery/power/port_gen/pacman/UseFuel()
-	var/needed_sheets = 1 / (time_per_sheet * consumption / power_output)
-	var/temp = min(needed_sheets, sheet_left)
-	needed_sheets -= temp
-	sheet_left -= temp
-	sheets -= round(needed_sheets)
-	needed_sheets -= round(needed_sheets)
-	if (sheet_left <= 0 && sheets > 0)
-		sheet_left = 1 - needed_sheets
+
+	//how much material are we using this iteration?
+	var/needed_sheets = power_output / time_per_sheet
+
+	//HasFuel() should guarantee us that there is enough fuel left, so no need to check that
+	//the only thing we need to worry about is if we are going to rollover to the next sheet
+	if (needed_sheets > sheet_left)
 		sheets--
-
-	var/lower_limit = 56 + power_output * 10
-	var/upper_limit = 76 + power_output * 10
-	var/bias = 0
-	if (power_output > 4)
-		upper_limit = 400
-		bias = power_output - consumption * (4 - consumption)
-	if (current_heat < lower_limit)
-		current_heat += 4 - consumption
+		sheet_left = (1 + sheet_left) - needed_sheets
 	else
-		current_heat += rand(-7 + bias, 7 + bias)
-		if (current_heat < lower_limit)
-			current_heat = lower_limit
-		if (current_heat > upper_limit)
-			current_heat = upper_limit
+		sheet_left -= needed_sheets
 
-	if (current_heat > 300)
+	//calculate the "target" temperature range
+	//This should probably depend on the external temperature somehow, but whatever.
+	var/lower_limit = 56 + power_output * temperature_gain
+	var/upper_limit = 76 + power_output * temperature_gain
+	/*
+		Hot or cold environments can affect the equilibrium temperature
+		The lower the pressure the less effect it has. I guess it cools using a radiator or something when in vacuum.
+		Gives traitors more opportunities to sabotage the generator or allows enterprising engineers to build additional
+		cooling in order to get more power out.
+	*/
+	var/datum/gas_mixture/environment = loc.return_air()
+	if (environment)
+		var/outer_temp = 0.1 * operating_temperature + T0C
+		if(outer_temp > environment.temperature) //sharing the heat
+			var/heat_transfer = environment.get_thermal_energy_change(outer_temp)
+			if(heat_transfer > 1)
+				var/heating_power = 0.1 * power_gen * power_output
+				heat_transfer = min(heat_transfer, heating_power)
+				environment.add_thermal_energy(heat_transfer)
+
+		var/ratio = min(environment.return_pressure()/ONE_ATMOSPHERE, 1)
+		var/ambient = environment.temperature - T20C
+		lower_limit += ambient*ratio
+		upper_limit += ambient*ratio
+
+	var/average = (upper_limit + lower_limit)/2
+
+	//calculate the temperature increase
+	var/bias = clamp(round((average - operating_temperature)/TEMPERATURE_DIVISOR, 1),  -TEMPERATURE_CHANGE_MAX, TEMPERATURE_CHANGE_MAX)
+	operating_temperature += bias + rand(-7, 7)
+
+	if (operating_temperature > max_temperature)
 		overheat()
-		qdel(src)
+	else if (overheating > 0)
+		overheating--
+	process_exhaust()
 
 /obj/machinery/power/port_gen/pacman/handleInactive()
-	current_heat = max(current_heat - 2, 0)
-	if(current_heat == 0)
-		STOP_PROCESSING(SSmachines, src)
+	var/cooling_temperature = 20
+	var/datum/gas_mixture/environment = loc.return_air()
+	if (environment)
+		var/ratio = min(environment.return_pressure()/ONE_ATMOSPHERE, 1)
+		var/ambient = environment.temperature - T20C
+		cooling_temperature += ambient*ratio
+
+	if (operating_temperature > cooling_temperature)
+		var/temp_loss = (operating_temperature - cooling_temperature)/TEMPERATURE_DIVISOR
+		temp_loss = clamp(round(temp_loss, 1), 2, TEMPERATURE_CHANGE_MAX)
+		operating_temperature = max(operating_temperature - temp_loss, cooling_temperature)
+		src.updateDialog()
+
+	if(overheating)
+		overheating--
 
 /obj/machinery/power/port_gen/pacman/proc/overheat()
-	explosion(src.loc, 2, 5, 2, -1)
+	overheating++
+	if (overheating > max_overheat)
+		explode()
 
-/obj/machinery/power/port_gen/pacman/MouseDrop_T(atom/dropping, mob/user)
-	if(istype(dropping, sheet_path) && Adjacent(user))
-		attackby(dropping, user)
-	else
-		..()
+/obj/machinery/power/port_gen/pacman/explode()
+	//Vapourize all the phoron
+	//When ground up in a grinder, 1 sheet produces 20 u of phoron -- Chemistry-Machinery.dm
+	//1 mol = 10 u? I dunno. 1 mol of carbon is definitely bigger than a pill
+	var/phoron = (sheets+sheet_left)*20
+	var/datum/gas_mixture/environment = loc.return_air()
+	if (environment)
+		environment.adjust_gas_temp(GAS_PHORON, phoron/10, operating_temperature + T0C)
 
-/obj/machinery/power/port_gen/pacman/attackby(obj/item/O, mob/user, params)
+	sheets = 0
+	sheet_left = 0
+	..()
+
+/obj/machinery/power/port_gen/pacman/emag_act(remaining_charges, mob/user)
+	if (active && prob(25))
+		explode() //if they're foolish enough to emag while it's running
+
+	if (!emagged)
+		emagged = TRUE
+		return 1
+
+/obj/machinery/power/port_gen/pacman/components_are_accessible(path)
+	return !active && ..()
+
+/obj/machinery/power/port_gen/pacman/cannot_transition_to(state_path, mob/user)
+	if(active)
+		return SPAN_WARNING("You cannot do this while \the [src] is running!")
+	return ..()
+
+/obj/machinery/power/port_gen/pacman/use_tool(obj/item/O, mob/living/user, list/click_params)
 	if(istype(O, sheet_path))
 		var/obj/item/stack/addstack = O
 		var/amount = min((max_sheets - sheets), addstack.amount)
 		if(amount < 1)
-			to_chat(user, span_notice("The [src.name] is full!"))
-			return
-		to_chat(user, span_notice("You add [amount] sheets to the [src.name]."))
+			to_chat(user, SPAN_NOTICE("The [src.name] is full!"))
+			return TRUE
+		to_chat(user, SPAN_NOTICE("You add [amount] sheet\s to the [src.name]."))
 		sheets += amount
 		addstack.use(amount)
-		return
-	else if(!active)
-		if(O.tool_behaviour == TOOL_WRENCH)
-			if(!anchored && !isinspace())
-				anchored = TRUE
-				connect_to_network()
-				to_chat(user, span_notice("You secure the generator to the floor."))
-			else if(anchored)
-				anchored = FALSE
-				disconnect_from_network()
-				to_chat(user, span_notice("You unsecure the generator from the floor."))
+		updateUsrDialog()
+		return TRUE
 
-			playsound(src, 'sound/items/deconstruct.ogg', 50, 1)
-			return
-		else if(O.tool_behaviour == TOOL_SCREWDRIVER)
-			panel_open = !panel_open
-			O.play_tool_sound(src)
-			if(panel_open)
-				to_chat(user, span_notice("You open the access panel."))
-			else
-				to_chat(user, span_notice("You close the access panel."))
-			return
-		else if(default_deconstruction_crowbar(O))
-			return
+	if(isWrench(O) && active)
+		to_chat(SPAN_WARNING("Turn off \the [src] before wrenching its bolts."))
+		return TRUE
+
 	return ..()
 
-/obj/machinery/power/port_gen/pacman/emag_act(mob/user, obj/item/card/emag/emag_card)
-	if(obj_flags & EMAGGED)
-		return FALSE
-	obj_flags |= EMAGGED
-	emp_act(EMP_HEAVY)
+/obj/machinery/power/port_gen/pacman/dismantle()
+	while (sheets > 0)
+		DropFuel()
+	. = ..()
 
-/obj/machinery/power/port_gen/pacman/attack_ai(mob/user)
-	interact(user)
+/obj/machinery/power/port_gen/pacman/interface_interact(mob/user)
+	ui_interact(user)
+	return TRUE
 
-/obj/machinery/power/port_gen/pacman/attack_paw(mob/user)
-	interact(user)
-
-/obj/machinery/power/port_gen/pacman/AltClick(mob/user)
-	if(!user.canUseTopic(src, !issilicon(user)))
+/obj/machinery/power/port_gen/pacman/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1)
+	if(IsBroken())
 		return
-	if(anchored)
-		TogglePower()
 
-/obj/machinery/power/port_gen/pacman/ui_interact(mob/user, datum/tgui/ui)
-	ui = SStgui.try_update_ui(user, src, ui)
-	if(!ui)
-		ui = new(user, src, "PortableGenerator", name)
-		ui.open()
-
-/obj/machinery/power/port_gen/pacman/ui_data()
-	var/data = list()
-
+	var/data[0]
 	data["active"] = active
-	data["sheet_name"] = capitalize(sheet_name)
-	data["sheets"] = sheets
-	data["stack_percent"] = round(sheet_left * 100, 0.1)
+	if(istype(user, /mob/living/silicon/ai))
+		data["is_ai"] = 1
+	else if(istype(user, /mob/living/silicon/robot) && !Adjacent(user))
+		data["is_ai"] = 1
+	else
+		data["is_ai"] = 0
+	data["output_set"] = power_output
+	data["output_max"] = max_power_output
+	data["output_safe"] = max_safe_output
+	data["output_watts"] = power_output * power_gen
+	data["temperature_current"] = src.operating_temperature
+	data["temperature_max"] = src.max_temperature
+	if(overheating)
+		data["temperature_overheat"] = ((overheating / max_overheat) * 100)		// Overheat percentage. Generator explodes at 100%
+	else
+		data["temperature_overheat"] = 0
+	// 1 sheet = 1000cm3?
+	data["fuel_stored"] = round((sheets * 1000) + (sheet_left * 1000))
+	data["fuel_capacity"] = round(max_sheets * 1000, 0.1)
+	data["fuel_usage"] = active ? round((power_output / time_per_sheet) * 1000) : 0
+	data["fuel_type"] = sheet_name
+	data["uses_coolant"] = !!reagents
+	data["coolant_stored"] = reagents?.total_volume
+	data["coolant_capacity"] = reagents?.maximum_volume
 
-	data["anchored"] = anchored
-	data["connected"] = (powernet == null ? 0 : 1)
-	data["ready_to_boot"] = anchored && HasFuel()
-	data["power_generated"] = DisplayPower(power_gen)
-	data["power_output"] = DisplayPower(power_gen * power_output)
-	data["power_available"] = (powernet == null ? 0 : DisplayPower(avail()))
-	data["current_heat"] = current_heat
-	. =  data
 
-/obj/machinery/power/port_gen/pacman/ui_act(action, params)
+
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
+	if (!ui)
+		ui = new(user, src, ui_key, "pacman.tmpl", src.name, 500, 560)
+		ui.set_initial_data(data)
+		ui.open()
+		ui.set_auto_update(1)
+
+
+/*
+/obj/machinery/power/port_gen/pacman/interact(mob/user)
+	if (get_dist(src, user) > 1 )
+		if (!istype(user, /mob/living/silicon/ai))
+			user.unset_machine()
+			close_browser(user, "window=port_gen")
+			return
+
+	user.set_machine(src)
+
+	var/dat = text("<b>[name]</b><br>")
+	if (active)
+		dat += text("Generator: <A href='byond://?src=\ref[src];action=disable'>On</A><br>")
+	else
+		dat += text("Generator: <A href='byond://?src=\ref[src];action=enable'>Off</A><br>")
+	dat += text("[capitalize(sheet_name)]: [sheets] - <A href='byond://?src=\ref[src];action=eject'>Eject</A><br>")
+	var/stack_percent = round(sheet_left * 100, 1)
+	dat += text("Current stack: [stack_percent]% <br>")
+	dat += text("Power output: <A href='byond://?src=\ref[src];action=lower_power'>-</A> [power_gen * power_output] Watts<A href='byond://?src=\ref[src];action=higher_power'>+</A><br>")
+	dat += text("Power current: [(isnull(powernet) ? "Unconnected" : "[avail()]")]<br>")
+
+	var/tempstr = "Temperature: [temperature]&deg;C<br>"
+	dat += (overheating)? SPAN_DANGER("[tempstr]") : tempstr
+	dat += "<br><A href='byond://?src=\ref[src];action=close'>Close</A>"
+	show_browser(user, "[dat]", "window=port_gen")
+	onclose(user, "port_gen")
+*/
+
+/obj/machinery/power/port_gen/pacman/Topic(href, href_list)
 	if(..())
 		return
-	switch(action)
-		if("toggle_power")
-			TogglePower()
-			. = TRUE
 
-		if("eject")
+	src.add_fingerprint(usr)
+	if(href_list["action"])
+		if(href_list["action"] == "enable")
+			if(!active && HasFuel() && !IsBroken())
+				active = 1
+				update_icon()
+		if(href_list["action"] == "disable")
+			if (active)
+				active = 0
+				update_icon()
+		if(href_list["action"] == "eject")
 			if(!active)
 				DropFuel()
-				. = TRUE
-
-		if("lower_power")
+		if(href_list["action"] == "lower_power")
 			if (power_output > 1)
 				power_output--
-				. = TRUE
-
-		if("higher_power")
-			if (power_output < 4 || (obj_flags & EMAGGED))
+		if (href_list["action"] == "higher_power")
+			if (power_output < max_power_output || (emagged && power_output < round(max_power_output*2.5)))
 				power_output++
-				. = TRUE
 
 /obj/machinery/power/port_gen/pacman/super
-	name = "\improper S.U.P.E.R.P.A.C.M.A.N.-type portable generator"
-	icon_state = "portgen1_0"
-	base_icon = "portgen1"
-	circuit = /obj/item/circuitboard/machine/pacman/super
-	sheet_path = /obj/item/stack/sheet/mineral/uranium
-	power_gen = 15000
-	time_per_sheet = 85
+	name = "\improper S.U.P.E.R.P.A.C.M.A.N.-type Portable Generator"
+	desc = "A power generator that utilizes uranium sheets as fuel. Can run for much longer than the standard PACMAN type generators. Rated for 80 kW max safe output."
+	icon_state = "portgen1"
+	sheet_path = /obj/item/stack/material/uranium
+	sheet_name = "Uranium Sheets"
+	time_per_sheet = 576 //same power output, but a 50 sheet stack will last 2 hours at max safe power
+	machine_name = "\improper SUPERPACMAN-type generator"
+	machine_desc = "A portable generator used for providing backup power for extended periods. Efficiently runs on uranium sheets; rated for 80 kW max safe output."
+	var/rad_power = 4
 
-/obj/machinery/power/port_gen/pacman/super/overheat()
-	explosion(src.loc, 3, 3, 3, -1)
+//nuclear energy is green energy!
+/obj/machinery/power/port_gen/pacman/super/process_exhaust()
+	return
+
+/obj/machinery/power/port_gen/pacman/super/UseFuel()
+	//produces a tiny amount of radiation when in use
+	if (prob(rad_power*power_output))
+		SSradiation.radiate(src, 2*rad_power)
+	..()
+
+/obj/machinery/power/port_gen/pacman/super/on_update_icon()
+	if(..())
+		set_light(0)
+		return 1
+	ClearOverlays()
+	if(power_output >= max_safe_output)
+		var/image/I = image(icon,"[initial(icon_state)]rad")
+		I.blend_mode = BLEND_ADD
+		I.alpha = round(255*power_output/max_power_output)
+		AddOverlays(I)
+		set_light(rad_power + power_output - max_safe_output, 0.7, "#3b97ca")
+	else
+		set_light(0)
+
+
+/obj/machinery/power/port_gen/pacman/super/explode()
+	//a nice burst of radiation
+	var/rads = rad_power*25 + (sheets + sheet_left)*1.5
+	SSradiation.radiate(src, (max(40, rads)))
+
+	explosion(src.loc, rad_power * 4)
+	qdel(src)
+
+/obj/machinery/power/port_gen/pacman/super/potato
+	name = "nuclear reactor"
+	desc = "PTTO-3, an industrial all-in-one nuclear power plant by Neo-Chernobyl GmbH. It uses uranium and vodka as a fuel source. Rated for 150 kW max safe output."
+	power_gen = 30000		//Watts output per power_output level
+	icon_state = "potato"
+	max_safe_output = 4
+	max_power_output = 8	//The maximum power setting without emagging.
+	temperature_gain = 80	//how much the temperature increases per power output level, in degrees per level
+	max_temperature = 450
+	time_per_sheet = 400
+	rad_power = 12
+	atom_flags = ATOM_FLAG_OPEN_CONTAINER
+	anchored = TRUE
+	machine_name = "\improper PTTO-3 nuclear generator"
+	machine_desc = "This nuclear generator uses a combination of uranium and, strangely, vodka. Rated for 150 kW max safe output."
+	var/coolant_volume = 120
+	var/coolant_use = 1
+	var/datum/reagent/coolant_reagent = /datum/reagent/ethanol/vodka
+
+/obj/machinery/power/port_gen/pacman/super/potato/New()
+	create_reagents(coolant_volume)
+	..()
+
+/obj/machinery/power/port_gen/pacman/super/potato/examine(mob/user)
+	. = ..()
+	to_chat(user, "Auxilary tank shows [reagents.total_volume]u of liquid in it.")
+
+/obj/machinery/power/port_gen/pacman/super/potato/UseFuel()
+	if(reagents.has_reagent(coolant_reagent))
+		rad_power = 4
+		temperature_gain = 60
+		reagents.remove_any(coolant_use)
+		if(prob(2))
+			audible_message(SPAN_NOTICE("[src] churns happily"))
+	else
+		rad_power = initial(rad_power)
+		temperature_gain = initial(temperature_gain)
+	..()
+
+/obj/machinery/power/port_gen/pacman/super/potato/on_update_icon()
+	if(..())
+		return 1
+	if(power_output > max_safe_output)
+		icon_state = "potatodanger"
+
+/obj/machinery/power/port_gen/pacman/super/potato/use_tool(obj/item/item, mob/living/user, list/click_params)
+	if (!istype(item, /obj/item/reagent_containers))
+		return ..()
+	var/datum/reagents/item_reagents = item.reagents
+	if (!HAS_FLAGS(item.atom_flags, ATOM_FLAG_OPEN_CONTAINER))
+		to_chat(user, SPAN_WARNING("\The [item] is closed."))
+	else if (!item_reagents.has_reagent(coolant_reagent))
+		to_chat(user, SPAN_WARNING("\The [src] needs [initial(coolant_reagent.name)] to run."))
+	else if (length(item_reagents.reagent_list) > 1)
+		to_chat(user, SPAN_WARNING("The contents of \the [item] is impure."))
+	else
+		var/obj/item/reagent_containers/container = item
+		var/transferred = item_reagents.trans_to_holder(reagents, container.amount_per_transfer_from_this)
+		if (transferred)
+			user.visible_message(
+				SPAN_ITALIC("\The [user] pours something from \the [item] into \the [src]."),
+				SPAN_ITALIC("You pour [transferred]u from \the [item] into \the [src]."),
+				SPAN_ITALIC("You hear a liquid gurgling.")
+			)
+		else
+			to_chat(user, SPAN_WARNING("The [src] is full."))
+	return TRUE
+
+/obj/machinery/power/port_gen/pacman/super/potato/reactor
+	name = "nuclear reactor"
+	desc = "ICRER-2, an industrial-yet-compact nuclear fusion reactor powered by sheets of uranium and liquid coolant. Rated for 180 KW maximum safe output on a full coolant tank for one hour. Exceeding this is likely to result in nuclear detonation and is not recommended."
+	icon_state = "potato"
+	max_safe_output = 5
+	max_power_output = 8
+	temperature_gain = 70
+	max_temperature = 500
+	rad_power = 8
+	coolant_use = 0.2
+	coolant_volume = 360
+	coolant_reagent = /datum/reagent/coolant
+	machine_name = "\improper ICRER-2 nuclear generator"
+	machine_desc = "A standard nuclear generator that produces a respectable amount of power by processing uranium and industrial coolant. Rated for 180 kW max safe output."
 
 /obj/machinery/power/port_gen/pacman/mrs
-	name = "\improper M.R.S.P.A.C.M.A.N.-type portable generator"
-	base_icon = "portgen2"
-	icon_state = "portgen2_0"
-	circuit = /obj/item/circuitboard/machine/pacman/mrs
-	sheet_path = /obj/item/stack/sheet/mineral/diamond
-	power_gen = 40000
-	time_per_sheet = 80
+	name = "\improper M.R.S.P.A.C.M.A.N.-type Portable Generator"
+	desc = "An advanced power generator that runs on tritium. Rated for 200 kW maximum safe output!"
+	icon_state = "portgen2"
+	sheet_path = /obj/item/stack/material/tritium
+	sheet_name = "Tritium Fuel Sheets"
 
-/obj/machinery/power/port_gen/pacman/mrs/overheat()
-	explosion(src.loc, 4, 4, 4, -1)
+	//I don't think tritium has any other use, so we might as well make this rewarding for players
+	//max safe power output (power level = 8) is 200 kW and lasts for 1 hour - 3 or 4 of these could power the station
+	power_gen = 25000 //watts
+	max_power_output = 10
+	max_safe_output = 8
+	time_per_sheet = 576
+	max_temperature = 800
+	temperature_gain = 90
+	machine_name = "\improper MRSPACMAN-type generator"
+	machine_desc = "A powerful and reliable backup generator that provides a hefty amount of electricity from tritium sheets. Rated for 200 kW max safe output."
+
+/obj/machinery/power/port_gen/pacman/mrs/explode()
+	//no special effects, but the explosion is pretty big (same as a supermatter shard).
+	explosion(src.loc, 21)
+	qdel(src)

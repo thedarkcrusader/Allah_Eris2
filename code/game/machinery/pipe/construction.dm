@@ -3,232 +3,239 @@ Buildable pipes
 Buildable meters
 */
 
-//construction defines are in __defines/pipe_construction.dm
-//update those defines ANY TIME an atmos path is changed...
-//...otherwise construction will stop working
-
 /obj/item/pipe
 	name = "pipe"
 	desc = "A pipe."
-	var/pipe_type
 	var/pipename
+	var/connect_types = CONNECT_TYPE_REGULAR
 	force = 7
-	throwforce = 7
-	icon = 'icons/obj/atmospherics/pipes/pipe_item.dmi'
+	icon = 'icons/obj/atmospherics/pipe-item.dmi'
 	icon_state = "simple"
+	randpixel = 5
 	item_state = "buildpipe"
-	w_class = WEIGHT_CLASS_NORMAL
-	///Piping layer that we are going to be on
-	var/piping_layer = PIPING_LAYER_DEFAULT
-	///Type of pipe-object made, selected from the RPD
-	var/RPD_type
-	var/disposable = TRUE // yogs
+	w_class = ITEM_SIZE_NORMAL
+	obj_flags = OBJ_FLAG_ROTATABLE
+	dir = SOUTH
+	var/constructed_path = /obj/machinery/atmospherics/pipe/simple/hidden
+	var/pipe_class = PIPE_CLASS_BINARY
+	var/rotate_class = PIPE_ROTATE_STANDARD
 
-/obj/item/pipe/directional
-	RPD_type = PIPE_UNARY
-/obj/item/pipe/binary
-	RPD_type = PIPE_STRAIGHT
-/obj/item/pipe/binary/bendable
-	RPD_type = PIPE_BENDABLE
-/obj/item/pipe/trinary
-	RPD_type = PIPE_TRINARY
-/obj/item/pipe/trinary/flippable
-	RPD_type = PIPE_TRIN_M
-	var/flipped = FALSE
-/obj/item/pipe/quaternary
-	RPD_type = PIPE_ONEDIR
-
-/obj/item/pipe/Initialize(mapload, _pipe_type, _dir, obj/machinery/atmospherics/make_from)
-	if(make_from)
-		make_from_existing(make_from)
-	else if(_pipe_type) // yogs - only change if _pipe_type is set
-		pipe_type = _pipe_type
-		setDir(_dir)
-
-	update()
-	pixel_x += rand(-5, 5)
-	pixel_y += rand(-5, 5)
-	//Flipping handled manually due to custom handling for trinary pipes
-	AddComponent(/datum/component/simple_rotation, ROTATION_ALTCLICK | ROTATION_CLOCKWISE)
-	return ..()
-
-/obj/item/pipe/proc/make_from_existing(obj/machinery/atmospherics/make_from)
-	setDir(make_from.dir)
-	pipename = make_from.name
-	add_atom_colour(make_from.color, FIXED_COLOUR_PRIORITY)
-	pipe_type = make_from.type
-
-/obj/item/pipe/trinary/flippable/make_from_existing(obj/machinery/atmospherics/components/trinary/make_from)
-	..()
-	if(make_from.flipped)
-		do_a_flip()
-
-/obj/item/pipe/dropped()
-	if(loc)
-		set_piping_layer(piping_layer)
-	return ..()
-
-/obj/item/pipe/proc/set_piping_layer(new_layer = PIPING_LAYER_DEFAULT)
-	var/obj/machinery/atmospherics/fakeA = pipe_type
-
-	if(initial(fakeA.pipe_flags) & PIPING_ALL_LAYER)
-		new_layer = PIPING_LAYER_DEFAULT
-	piping_layer = new_layer
-
-	PIPING_LAYER_SHIFT(src, piping_layer)
-	layer = initial(layer) + ((piping_layer - PIPING_LAYER_DEFAULT) * PIPING_LAYER_LCHANGE)
-
-/obj/item/pipe/proc/update()
-	var/obj/machinery/atmospherics/fakeA = pipe_type
-	name = "[initial(fakeA.name)] fitting"
-	icon_state = initial(fakeA.pipe_state)
-	if(ispath(pipe_type,/obj/machinery/atmospherics/pipe/heat_exchanging))
-		resistance_flags |= FIRE_PROOF | LAVA_PROOF
-
-/obj/item/pipe/verb/flip()
-	set category = "Object"
-	set name = "Flip Pipe"
-	set src in view(1)
-
-	if ( usr.incapacitated() )
+/obj/item/pipe/Initialize(mapload, obj/machinery/atmospherics/P)
+	. = ..()
+	if(!P)
 		return
+	if(!P.dir)
+		set_dir(SOUTH)
+	else
+		set_dir(P.dir)
+	SetName(P.name)
+	desc = P.desc
 
-	do_a_flip()
+	connect_types = P.connect_types
+	color = P.pipe_color
+	icon = P.build_icon
+	icon_state = P.build_icon_state
+	pipe_class = P.pipe_class
+	rotate_class = P.rotate_class
+	constructed_path = P.type
 
-/obj/item/pipe/proc/do_a_flip()
-	setDir(turn(dir, -180))
+//called when a turf is attacked with a pipe item
+/obj/item/pipe/use_after(atom/target, mob/living/user, click_parameters)
+	if (istype(target, /turf/simulated/floor))
+		user.unEquip(src, target)
+		return TRUE
 
-/obj/item/pipe/trinary/flippable/do_a_flip()
-	setDir(turn(dir, flipped ? 45 : -45))
-	flipped = !flipped
+/obj/item/pipe/rotate(mob/user)
+	. = ..()
+	sanitize_dir()
 
 /obj/item/pipe/Move()
 	var/old_dir = dir
-	..()
-	setDir(old_dir) //pipes changing direction when moved is just annoying and buggy
+	. = ..()
+	set_dir(old_dir)
 
-// Convert dir of fitting into dir of built component
-/obj/item/pipe/proc/fixed_dir()
-	return dir
+/obj/item/pipe/proc/sanitize_dir()
+	switch(rotate_class)
+		if(PIPE_ROTATE_TWODIR)
+			if(dir==2)
+				set_dir(1)
+			else if(dir==8)
+				set_dir(4)
+		if(PIPE_ROTATE_ONEDIR)
+			set_dir(2)
 
-/obj/item/pipe/binary/fixed_dir()
-	. = dir
-	if(dir == SOUTH)
-		. = NORTH
-	else if(dir == WEST)
-		. = EAST
+/obj/item/pipe/attack_self(mob/user as mob)
+	return rotate(user)
 
-/obj/item/pipe/trinary/flippable/fixed_dir()
-	. = dir
-	if(dir in GLOB.diagonals)
-		. = turn(dir, 45)
+/obj/item/pipe/proc/build_unary(obj/machinery/atmospherics/unary/P, pipefailtext)
+	P.atmos_init()
+	if (QDELETED(P))
+		to_chat(usr, pipefailtext)
+		return 1
+	P.build_network()
+	if(P.node)
+		P.node.atmos_init()
+		P.node.build_network()
+	return 0
 
-/obj/item/pipe/attack_self(mob/user)
-	setDir(turn(dir,-90))
+/obj/item/pipe/proc/build_binary(obj/machinery/atmospherics/pipe/simple/P, pipefailtext)
+	P.atmos_init()
+	if (QDELETED(P))
+		to_chat(usr, pipefailtext)
+		return 1
+	P.build_network()
+	if(P.node1)
+		P.node1.atmos_init()
+		P.node1.build_network()
+	if(P.node2)
+		P.node2.atmos_init()
+		P.node2.build_network()
+	return 0
 
-/obj/item/pipe/wrench_act(mob/living/user, obj/item/wrench/W)
-	if(!isturf(loc))
-		return TRUE
+/obj/item/pipe/proc/build_trinary(obj/machinery/atmospherics/pipe/manifold/P, pipefailtext)
+	P.atmos_init()
+	if (QDELETED(P))
+		to_chat(usr, pipefailtext)
+		return 1
+	P.build_network()
+	if(P.node1)
+		P.node1.atmos_init()
+		P.node1.build_network()
+	if(P.node2)
+		P.node2.atmos_init()
+		P.node2.build_network()
+	if(P.node3)
+		P.node3.atmos_init()
+		P.node3.build_network()
+	return 0
 
-	add_fingerprint(user)
+/obj/item/pipe/proc/build_quaternary(obj/machinery/atmospherics/pipe/manifold4w/P, pipefailtext)
+	P.atmos_init()
+	if (QDELETED(P))
+		to_chat(usr, pipefailtext)
+		return 1
+	P.build_network()
+	if(P.node1)
+		P.node1.atmos_init()
+		P.node1.build_network()
+	if(P.node2)
+		P.node2.atmos_init()
+		P.node2.build_network()
+	if(P.node3)
+		P.node3.atmos_init()
+		P.node3.build_network()
+	if(P.node4)
+		P.node4.atmos_init()
+		P.node4.build_network()
+	return 0
 
-	var/obj/machinery/atmospherics/fakeA = pipe_type
-	var/flags = initial(fakeA.pipe_flags)
+/obj/item/pipe/use_tool(obj/item/W, mob/living/user, list/click_params)
+	if(!isWrench(W) || !isturf(loc))
+		return ..()
+
+	sanitize_dir()
+	var/obj/machinery/atmospherics/fake_machine = constructed_path
+	var/pipe_dir = base_pipe_initialize_directions(dir, initial(fake_machine.connect_dir_type))
+
 	for(var/obj/machinery/atmospherics/M in loc)
-		if((M.pipe_flags & flags & PIPING_ONE_PER_TURF))	//Only one dense/requires density object per tile, eg connectors/cryo/heater/coolers.
-			to_chat(user, span_warning("Something is hogging the tile!"))
-			return TRUE
-		if((M.piping_layer != piping_layer) && !((M.pipe_flags | flags) & PIPING_ALL_LAYER)) //don't continue if either pipe goes across all layers
-			continue
-		if(M.get_init_directions() & SSair.get_init_dirs(pipe_type, fixed_dir()))	// matches at least one direction on either type of pipe
-			to_chat(user, span_warning("There is already a pipe at that location!"))
+		if((M.initialize_directions & pipe_dir) && M.check_connect_types_construction(M,src))	// matches at least one direction on either type of pipe & same connection type
+			to_chat(user, SPAN_WARNING("There is already a pipe of the same type at this location."))
 			return TRUE
 	// no conflicts found
 
-	var/obj/machinery/atmospherics/A = new pipe_type(loc)
-	build_pipe(A)
-	A.on_construction(color, piping_layer)
-	transfer_fingerprints_to(A)
+	var/pipefailtext = SPAN_WARNING("There's nothing to connect this pipe section to!") //(with how the pipe code works, at least one end needs to be connected to something, otherwise the game deletes the segment)"
 
-	W.play_tool_sound(src)
+	//TODO: Move all of this stuff into the various pipe constructors.
+	var/obj/machinery/atmospherics/P = new constructed_path(get_turf(src))
+
+	P.pipe_color = color
+	if (P.colorable)
+		P.color = color
+	P.set_dir(dir)
+	P.set_initial_level()
+
+	if(P.pipe_class == PIPE_CLASS_UNARY)
+		if(build_unary(P, pipefailtext))
+			return TRUE
+
+	if(P.pipe_class == PIPE_CLASS_BINARY)
+		if(build_binary(P, pipefailtext))
+			return TRUE
+
+	if(P.pipe_class == PIPE_CLASS_TRINARY)
+		if(build_trinary(P, pipefailtext))
+			return TRUE
+
+	if(P.pipe_class == PIPE_CLASS_QUATERNARY)
+		if(build_quaternary(P, pipefailtext))
+			return TRUE
+
+	if(P.pipe_class == PIPE_CLASS_OMNI)
+		P.atmos_init()
+		P.build_network()
+
+	playsound(src.loc, 'sound/items/Ratchet.ogg', 50, 1)
 	user.visible_message( \
-		"[user] fastens \the [src].", \
-		span_notice("You fasten \the [src]."), \
-		span_italics("You hear ratcheting."))
+		"[user] fastens the [src].", \
+		SPAN_NOTICE("You have fastened the [src]."), \
+		"You hear ratchet.")
+	qdel(src)	// remove the pipe item
+	return TRUE
 
-	qdel(src)
+/obj/item/pipe/injector
+	name = "injector"
+	desc = "Passively injects air into its surroundings. Has a valve attached to it that can control flow rate."
+	connect_types =  CONNECT_TYPE_REGULAR|CONNECT_TYPE_FUEL
+	icon = 	'icons/atmos/injector.dmi'
+	icon_state = "map_injector"
+	constructed_path = /obj/machinery/atmospherics/unary/outlet_injector
+	pipe_class = PIPE_CLASS_UNARY
 
-/obj/item/pipe/proc/build_pipe(obj/machinery/atmospherics/A)
-	A.setDir(fixed_dir())
-	A.set_init_directions()
+	var/frequency
+	var/id
 
-	if(pipename)
-		A.name = pipename
-	if(A.on)
-		// Certain pre-mapped subtypes are on by default, we want to preserve
-		// every other aspect of these subtypes (name, pre-set filters, etc.)
-		// but they shouldn't turn on automatically when wrenched.
-		A.on = FALSE
+/obj/item/pipe/injector/New(loc, obj/machinery/atmospherics/P)
+	..(loc, null)
+	var/obj/machinery/atmospherics/unary/outlet_injector/I = P
+	if(!I)
+		return
+	frequency = I.frequency
+	id = I.id
+	set_dir(I.dir)
+	name = I.name
+	desc = I.desc
+	connect_types = I.connect_types
 
-/obj/item/pipe/trinary/flippable/build_pipe(obj/machinery/atmospherics/components/trinary/T)
-	..()
-	T.flipped = flipped
+/obj/item/machine_chassis
+	var/build_type
 
-/obj/item/pipe/directional/suicide_act(mob/user)
-	user.visible_message(span_suicide("[user] shoves [src] in [user.p_their()] mouth and turns it on! It looks like [user.p_theyre()] trying to commit suicide!"))
-	if(iscarbon(user))
-		var/mob/living/carbon/C = user
-		for(var/i=1 to 20)
-			C.vomit(0, TRUE, FALSE, 4, FALSE)
-			if(prob(20))
-				C.spew_organ()
-			sleep(0.5 SECONDS)
-		C.blood_volume = 0
-	return(OXYLOSS|BRUTELOSS)
+/obj/item/machine_chassis/use_tool(obj/item/W, mob/living/user, list/click_params)
+	if(isWrench(W))
+		var/obj/machinery/machine = new build_type(get_turf(src), dir, FALSE)
+		machine.apply_component_presets()
+		machine.RefreshParts()
+		if(machine.construct_state)
+			machine.construct_state.post_construct(machine)
+		playsound(loc, 'sound/items/Ratchet.ogg', 50, 1)
+		to_chat(user, SPAN_NOTICE("You have fastened the [src]."))
+		qdel(src)
+		return TRUE
 
-/obj/item/pipe_meter
+	return ..()
+
+/obj/item/machine_chassis/air_sensor
+	name = "gas sensor"
+	desc = "A sensor. It detects gasses."
+	icon = 'icons/obj/structures/airfilter.dmi'
+	icon_state = "gsensor1"
+	w_class = ITEM_SIZE_LARGE
+	build_type = /obj/machinery/air_sensor
+
+/obj/item/machine_chassis/pipe_meter
 	name = "meter"
-	desc = "A meter that can be laid on pipes."
-	icon = 'icons/obj/atmospherics/pipes/pipe_item.dmi'
+	desc = "A meter that can measure gas inside pipes or in the general area."
+	icon = 'icons/obj/atmospherics/pipe-item.dmi'
 	icon_state = "meter"
 	item_state = "buildpipe"
-	w_class = WEIGHT_CLASS_BULKY
-	var/piping_layer = PIPING_LAYER_DEFAULT
-
-/obj/item/pipe_meter/wrench_act(mob/living/user, obj/item/wrench/W)
-
-	var/obj/machinery/atmospherics/pipe/pipe
-	for(var/obj/machinery/atmospherics/pipe/P in loc)
-		if(P.piping_layer == piping_layer)
-			pipe = P
-			break
-	if(!pipe)
-		to_chat(user, span_warning("You need to fasten it to a pipe!"))
-		return TRUE
-	new /obj/machinery/meter(loc, piping_layer)
-	W.play_tool_sound(src)
-	to_chat(user, span_notice("You fasten the meter to the pipe."))
-	qdel(src)
-
-/obj/item/pipe_meter/screwdriver_act(mob/living/user, obj/item/S)
-	. = ..()
-	if(.)
-		return TRUE
-
-	if(!isturf(loc))
-		to_chat(user, span_warning("You need to fasten it to the floor!"))
-		return TRUE
-
-	new /obj/machinery/meter/turf(loc, piping_layer)
-	S.play_tool_sound(src)
-	to_chat(user, span_notice("You fasten the meter to the [loc.name]."))
-	qdel(src)
-
-/obj/item/pipe_meter/dropped()
-	. = ..()
-	if(loc)
-		setAttachLayer(piping_layer)
-
-/obj/item/pipe_meter/proc/setAttachLayer(new_layer = PIPING_LAYER_DEFAULT)
-	piping_layer = new_layer
-	PIPING_LAYER_DOUBLE_SHIFT(src, piping_layer)
+	w_class = ITEM_SIZE_LARGE
+	build_type = /obj/machinery/meter
