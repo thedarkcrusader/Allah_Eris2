@@ -9,7 +9,8 @@
 
 #include "example\example_define.dm" // Always included because tests. May be fixable later.
 
-#include "using.dm"
+//#include "using.dm"
+#include "torch\map.dm"
 
 GLOBAL_TYPED_AS(using_map, /datum/map, new using_map_DATUM)
 
