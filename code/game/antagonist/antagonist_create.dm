@@ -1,87 +1,125 @@
-/datum/antagonist/proc/create_antagonist(datum/mind/target, move, gag_announcement, preserve_appearance)
+/datum/antagonist/proc/create_antagonist(datum/mind/target, datum/faction/new_faction, doequip = TRUE, announce = TRUE, update = TRUE, check = TRUE)
+	if(!istype(target) || !target.current)
+		log_debug("ANTAGONIST Wrong target passed to create_antagonist of [id]! Target: [target == null?"NULL":target] \ref[target]")
+		return FALSE
 
-	if(!target)
+	if(check && !can_become_antag(target))
+		log_debug("ANTAGONIST [target.name] cannot become this antag, but passed roleset candidate.")
+		return FALSE
+
+	owner = target
+	target.antagonist.Add(src)
+	if(outer)
+		if(!ispath(mob_path))
+			owner = null
+			log_debug("ANTAGONIST [src.id]'s mob_path is not a path! ([mob_path])")
+			target.antagonist.Remove(src)
+			return FALSE
+
+		if(update || !istype(target.current,mob_path))
+			update_antag_mob()
+
+		place_antagonist()
+
+		if (appearance_editor)
+			spawn(3)
+				var/mob/living/carbon/human/H = owner.current
+				if(istype(H))
+					H.change_appearance(APPEARANCE_ALL, H.loc, H, TRUE, list(SPECIES_HUMAN), state = GLOB.z_state)
+
+	GLOB.current_antags.Add(src)
+	special_init()
+
+	if(new_faction)
+		new_faction.add_member(src)
+
+	create_faction()
+
+	if(doequip)
+		equip()
+
+	if(announce)
+		greet()
+
+	log_admin("[key_name(target)] became the [role_text].")
+
+	return TRUE
+
+/datum/antagonist/proc/special_init()
+
+
+/datum/antagonist/proc/create_from_ghost(mob/observer/ghost, datum/faction/new_faction, doequip = TRUE, announce = TRUE, update = TRUE)
+	if(!istype(ghost))
+		log_debug("ANTAGONIST Wrong target passed to create_from_ghost of [id]! Ghost: [ghost == null?"NULL":ghost] \ref[ghost]")
+		return FALSE
+
+	if(!can_become_antag_ghost(ghost))
+		log_debug("ANTAGONIST This ghost ([ghost]) can't become [id].")
+		return FALSE
+
+	if(!ispath(mob_path))
+		log_debug("ANTAGONIST mob_path in [id] is not path! ([mob_path])")
+		return FALSE
+
+
+	var/mob/M = new mob_path(null)
+	M.client = ghost.client
+
+	//Load your character setup onto the new mob, only if human
+	if (load_character && ishuman(M))
+
+		var/datum/preferences/P = M.client.prefs
+		P.copy_to(M, FALSE)
+
+
+
+	if(!M.mind)
+		log_debug("ANTAGONIST mob, which created from mob_path has no mind. ([M] - \ref[M] : [mob_path])")
+		M.client = ghost.client
+		qdel(M)
+		return FALSE
+
+	return create_antagonist(M.mind, new_faction, doequip, announce, update = FALSE)
+
+/datum/antagonist/proc/create_faction()
+	if(!faction && faction_id)
+		faction = create_or_get_faction(faction_id)
+		faction.add_member(src)
+		faction.create_objectives()
+
+/datum/antagonist/proc/set_antag_name()
+	if(!owner || !owner.current)
 		return
-
-	update_antag_mob(target, preserve_appearance)
-	if(!target.current)
-		remove_antagonist(target)
-		return 0
-	if(flags & ANTAG_CHOOSE_NAME)
-		spawn(1)
-			set_antag_name(target.current)
-	if(move)
-		place_mob(target.current)
-	update_leader()
-	create_objectives(target)
-	update_icons_added(target)
-	greet(target)
-	if(!gag_announcement)
-		announce_antagonist_spawn()
-
-/datum/antagonist/proc/create_default(mob/source)
-	var/mob/living/M
-	if(mob_path)
-		M = new mob_path(get_turf(source))
-	else
-		M = new /mob/living/carbon/human(get_turf(source))
-	M.ckey = source.ckey
-
-	if(!M.ckey && source.mind)
-		M.ckey = source.mind.key
-
-	add_antagonist(M.mind, 1, 0, 1) // Equip them and move them to spawn.
-	return M
-
-/datum/antagonist/proc/create_id(assignment, mob/living/carbon/human/player, equip = 1)
-
-	var/obj/item/card/id/W = new id_type(player)
-	if(!W) return
-	W.access |= default_access
-	W.assignment = "[assignment]"
-	player.set_id_info(W)
-	if(equip) player.equip_to_slot_or_del(W, slot_wear_id)
-	return W
-
-/datum/antagonist/proc/create_radio(freq, mob/living/carbon/human/player)
-	var/obj/item/device/radio/R
-
-	switch(freq)
-		if(SYND_FREQ)
-			R = new/obj/item/device/radio/headset/syndicate(player)
-		if(RAID_FREQ)
-			R = new/obj/item/device/radio/headset/raider(player)
-		if(V_RAID_FREQ)
-			R = new/obj/item/device/radio/headset/vox_raider(player)
-		else
-			R = new/obj/item/device/radio/headset(player)
-			R.set_frequency(freq)
-
-	player.equip_to_slot_or_del(R, slot_l_ear)
-	return R
-
-/datum/antagonist/proc/greet(datum/mind/player)
-
-	// Basic intro text.
-	to_chat(player.current, SPAN_DANGER(FONT_LARGE("You are a [role_text]!")))
-	if(leader_welcome_text && player == leader)
-		to_chat(player.current, SPAN_CLASS("antagdesc", "[get_leader_welcome_text(player.current)]"))
-	else
-		to_chat(player.current, SPAN_CLASS("antagdesc", "[get_welcome_text(player.current)]"))
-	if (config.objectives_disabled == CONFIG_OBJECTIVE_NONE || !length(player.objectives))
-		to_chat(player.current, get_antag_text(player.current))
-
-	src.show_objectives_at_creation(player)
-	return 1
-
-/datum/antagonist/proc/set_antag_name(mob/living/player)
+	var/mob/living/player = owner.current
 	// Choose a name, if any.
 	var/newname = sanitize(input(player, "You are a [role_text]. Would you like to change your name to something else?", "Name change") as null|text, MAX_NAME_LEN)
-	if (newname)
+	if(newname)
 		player.real_name = newname
-		player.SetName(player.real_name)
-		if(player.dna)
-			player.dna.real_name = newname
+		player.name = player.real_name
+		player.dna_trace = sha1(player.real_name)
+		player.fingers_trace = md5(player.real_name)
 	if(player.mind) player.mind.name = player.name
 	// Update any ID cards.
 	update_access(player)
+
+
+/datum/antagonist/proc/remove_antagonist()
+	if(faction)
+		faction.remove_member(src)
+		faction = null
+
+	GLOB.current_antags.Remove(src)
+	if (!owner)
+		return //This can happen with some spamclicking
+	if(owner.current)
+		BITSET(owner.current.hud_updateflag, SPECIALROLE_HUD)
+
+	owner.antagonist.Remove(src)
+	owner = null
+	return TRUE
+
+/datum/antagonist/proc/place_antagonist()
+	if(!owner.current)
+		return
+	var/turf/T = pick_mobless_turf_if_exists(GLOB.antag_starting_locations[id])
+	owner.current.forceMove(T)

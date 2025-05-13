@@ -8,8 +8,17 @@
 //			/old_density: The density before the change.
 //			/new_density: The density after the change.
 
-GLOBAL_TYPED_NEW(density_set_event, /singleton/observ/density_set)
+GLOBAL_DATUM_INIT(density_set_event, /decl/observ/density_set, new)
 
-/singleton/observ/density_set
+/decl/observ/density_set
 	name = "Density Set"
 	expected_type = /atom
+
+/*******************
+* Density Handling *
+*******************/
+/atom/set_density(new_density)
+	var/old_density = density
+	. = ..()
+	if(density != old_density)
+		GLOB.density_set_event.raise_event(src, old_density, density)

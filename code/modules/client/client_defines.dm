@@ -1,52 +1,128 @@
+/**
+ * Client datum
+ *
+ * A datum that is created whenever a user joins a BYOND world, one will exist for every active connected
+ * player
+ *
+ * when they first connect, this client object is created and [/client/New] is called
+ *
+ * When they disconnect, this client object is deleted and [/client/Del] is called
+ *
+ * All client topic calls go through [/client/Topic] first, so a lot of our specialised
+ * topic handling starts here
+ */
 /client
-	// Allow client instances to be treated like regular datums
+	/**
+	 * This line makes clients parent type be a datum
+	 *
+	 * By default in byond if you define a proc on datums, that proc will exist on nearly every single type
+	 * from icons to images to atoms to mobs to objs to turfs to areas, it won't however, appear on client
+	 *
+	 * instead by default they act like their own independent type so while you can do isdatum(icon)
+	 * and have it return true, you can't do isdatum(client), it will always return false.
+	 *
+	 * This makes writing oo code hard, when you have to consider this extra special case
+	 *
+	 * This line prevents that, and has never appeared to cause any ill effects, while saving us an extra
+	 * pain to think about
+	 *
+	 * This line is widely considered black fucking magic, and the fact it works is a puzzle to everyone
+	 * involved, including the current engine developer, lummox
+	 *
+	 * If you are a future developer and the engine source is now available and you can explain why this
+	 * is the way it is, please do update this comment
+	 */
 	parent_type = /datum
+		////////////////
+		//ADMIN THINGS//
+		////////////////
+	///Contains admin info. Null if client is not an admin.
+	var/datum/admins/holder = null
+	var/datum/admins/deadmin_holder = null
+	var/buildmode		= 0
 
-	/** At compile time, should be TRUE if serving the rsc from DD or FALSE if using other
-		http server(s) to spread load. Defaults FALSE as /client/New() handles setting either
-		a url from config.resource_urls, or TRUE if none exist
-		Refer to http://www.byond.com/forum/post/1906517?page=2#comment23727144
-	*/
-	preload_rsc = FALSE
+	///Contains the last message sent by this client - used to protect against copy-paste spamming.
+	var/last_message = ""
+	///contins a number of how many times a message identical to last_message was sent.
+	var/last_message_count = 0
+	///How many messages sent in the last 10 seconds
+	var/total_message_count = 0
+	///Next tick to reset the total message counter
+	var/total_count_reset = 0
+	///Internal counter for clients sending external (IRC/Discord) relay messages via ahelp to prevent spamming. Set to a number every time an admin reply is sent, decremented for every client send.
+	var/externalreplyamount = 0
 
-	/// When some kind of staff member, the client's permissions and behaviors
-	var/datum/admins/holder
+		/////////
+		//OTHER//
+		/////////
+	var/datum/preferences/prefs = null
+	var/moving			= null
+	var/adminobs		= null
+	var/area			= null
 
-	/// When not currently wanting to see buttons, holder lives here instead
-	var/datum/admins/deadmin_holder
+	var/adminhelped = 0
 
-	/// The client's preferences object, populated from save data and runtime changes
-	var/datum/preferences/prefs
+	/// List of Stat Panel tabs
+	var/list/verb_tabs = list()
 
-	/// Controls the display of tooltips to this client
+	/// Disables default BYOND verb panel in favor of Stat Panel™
+	show_verb_panel = FALSE
+
+		///////////////
+		//SOUND STUFF//
+		///////////////
+	var/ambience_playing= null
+	var/played			= 0
+
+		////////////
+		//SECURITY//
+		////////////
+	var/received_irc_pm = -99999
+	var/irc_admin			//IRC admin that spoke with them last.
+	var/mute_irc = 0
+	var/warned_about_multikeying = 0	// Prevents people from being spammed about multikeying every time their mob changes.
+	var/ip_reputation = 0 //Do we think they're using a proxy/vpn? Only if IP Reputation checking is enabled in config.
+	var/account_age_in_days // Byond account age
+
+
+		////////////////////////////////////
+		//things that require the database//
+		////////////////////////////////////
+	var/id = -1
+	var/registration_date = ""
+	var/first_seen = ""
+	var/country = ""
+	var/country_code = ""
+	var/first_seen_days_ago
+	/* security shit from asset cache (what the fuck) */
+	var/VPN_whitelist //avoid vpn cheking
+	var/list/related_ip = list()
+	var/list/related_cid = list()
+
+	preload_rsc = PRELOAD_RSC
+
+		////////////////
+		//Mouse things//
+		////////////////
+	var/datum/click_handler/CH
+
+	///datum that controls the displaying and hiding of tooltips
 	var/datum/tooltip/tooltips
 
-	/// When starting an ahelp conversation, whether the client gets a reply button
-	var/adminhelped
+	var/datum/interface/UI	//interface for current mob
 
-	/// A message to show to online staff when joining, if any
-	var/staffwarn
+	var/lastping = 0
+	var/avgping = 0
+	var/connection_time //world.time they connected
+	var/connection_realtime //world.realtime they connected
+	var/connection_timeofday //world.timeofday they connected
 
-	/// Whether or not the client is currently playing the "ship hum" ambience sound
-	var/playing_vent_ambience = FALSE
+	var/datum/chatOutput/chatOutput
 
-	/// The next threshold time for the client to be able to play basic ambience sounds
-	var/next_ambience_time = 0
-
-	/// The last time this client was messaged from IRC. Prevents responses after 10 minutes
-	var/received_irc_pm = -99999
-
-	/// Prevents people from being spammed about multikeying every time their mob changes
-	var/warned_about_multikeying = TRUE
-
-	/// If the database is available, how old the account is in days
-	var/player_age = "Requires database"
-
-	/// If the database is available, what other accounts previously logged in from this IP
-	var/related_accounts_ip = "Requires database"
-
-	/// If the database is available, what other accounts previously logged in from this CID
-	var/related_accounts_cid = "Requires database"
-
-	/// The current fullscreen state for /client/toggle_fullscreen()
-	var/fullscreen = FALSE
+	// List of all asset filenames sent to this client by the asset cache, along with their assoicated md5s
+	var/list/sent_assets = list()
+	/// List of all completed blocking send jobs awaiting acknowledgement by send_asset
+	var/list/completed_asset_jobs = list()
+	/// Last asset send job id.
+	var/last_asset_job = 0
+	var/last_completed_asset_job = 0

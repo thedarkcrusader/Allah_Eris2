@@ -24,6 +24,12 @@
 	categories.Cut()
 	return ..()
 
+/datum/category_collection/proc/operator[](idx)
+	return categories_by_name[idx]
+
+/datum/category_collection/proc/operator[]=(idx, B)
+	categories_by_name[idx] = B
+
 /******************
 * Category Groups *
 ******************/
@@ -34,7 +40,7 @@
 	var/list/datum/category_item/items_by_name  // Associative list of initialized items, by name
 	var/datum/category_collection/collection    // The collection this group belongs to
 
-/datum/category_group/New(datum/category_collection/cc)
+/datum/category_group/New(var/datum/category_collection/cc)
 	..()
 	collection = cc
 	items = new()
@@ -58,8 +64,14 @@
 	collection = null
 	return ..()
 
-/datum/category_group/dd_SortValue()
+datum/category_group/dd_SortValue()
 	return name
+
+/datum/category_group/proc/operator[](idx)
+	return items_by_name[idx]
+
+/datum/category_group/proc/operator[]=(idx, B)
+	items_by_name[idx] = B
 
 
 /*****************
@@ -69,7 +81,7 @@
 	var/name = ""
 	var/datum/category_group/category		// The group this item belongs to
 
-/datum/category_item/New(datum/category_group/cg)
+/datum/category_item/New(var/datum/category_group/cg)
 	..()
 	category = cg
 
@@ -77,5 +89,5 @@
 	category = null
 	return ..()
 
-/datum/category_item/dd_SortValue()
+datum/category_item/dd_SortValue()
 	return name

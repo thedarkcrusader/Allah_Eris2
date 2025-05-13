@@ -1,164 +1,216 @@
 /*
- * Trays - initially by Agouri
+ * Trays - Agouri
  */
-
 /obj/item/tray
 	name = "tray"
-	icon = 'icons/obj/food/food.dmi'
+	icon = 'icons/obj/food.dmi'
 	icon_state = "tray"
 	desc = "A metal tray to lay food on."
-	force = 5
+	force = WEAPON_FORCE_NORMAL
+	throwforce = WEAPON_FORCE_NORMAL
 	throw_speed = 1
 	throw_range = 5
 	w_class = ITEM_SIZE_NORMAL
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
-	matter = list(MATERIAL_ALUMINIUM = 3000)
-	hitsound = "tray_hit"
-	var/bash_cooldown = 0 // You can bash a rolling pin against a tray to make a shield bash sound! Based on world.time
+	flags = CONDUCT
+	matter = list(MATERIAL_STEEL = 3)
 	var/list/carrying = list() // List of things on the tray. - Doohl
-	var/max_carry = 2 * BASE_STORAGE_COST(ITEM_SIZE_NORMAL)
+	var/max_carry = 10
 
-
-// Use the tray in-hand to dump out all its items.
-/obj/item/tray/attack_self(mob/living/user)
-	if (LAZYLEN(carrying))
-		var/turf/T = get_turf(user)
-		ClearOverlays()
-		for (var/obj/item/carried in carrying)
-			carried.dropInto(T)
-			LAZYREMOVE(carrying, carried)
-		user.visible_message(SPAN_NOTICE("[user] dumps out \the [src]."), SPAN_NOTICE("You empty out \the [src]."))
-		return TRUE
-	. = ..()
-
-// When hitting people with the tray, drop all its items everywhere. You jerk.
-/obj/item/tray/use_before(mob/living/M, mob/living/user)
-	. = FALSE
-	if (user.a_intent != I_HURT)
-		return FALSE
+/obj/item/tray/attack(mob/living/carbon/M, mob/living/carbon/user)
 
 	// Drop all the things. All of them.
-	ClearOverlays()
+	overlays.Cut()
 	for(var/obj/item/I in carrying)
-		I.dropInto(get_turf(M))
+		I.loc = M.loc
 		carrying.Remove(I)
-		step(I, pick(NORTH, SOUTH, EAST, WEST, NORTHWEST, NORTHEAST, SOUTHWEST, SOUTHEAST))
-	return TRUE
+		if(isturf(I.loc))
+			spawn()
+				for(var/i = 1, i <= rand(1,2), i++)
+					if(I)
+						step(I, pick(NORTH,SOUTH,EAST,WEST))
+						sleep(rand(2,4))
 
 
-// Bash a rolling pin against a tray like a true knight!
-/obj/item/tray/use_tool(obj/item/W, mob/living/user, list/click_params)
-	if(istype(W, /obj/item/material/rollingpin))
-		if(bash_cooldown < world.time)
+/*	if((CLUMSY in user.mutations) && prob(50))              //What if he's a clown?
+		to_chat(M, SPAN_WARNING("You accidentally slam yourself with the [src]!"))
+		M.Weaken(1)
+		user.take_organ_damage(2)
+		if(prob(50))
+			playsound(M, 'sound/items/trayhit1.ogg', 50, 1)
+			return
+		else
+			playsound(M, 'sound/items/trayhit2.ogg', 50, 1) //sound playin'
+			return //it always returns, but I feel like adding an extra return just for safety's sakes. EDIT; Oh well I won't :3
+*/
+	var/mob/living/carbon/human/H = M      ///////////////////////////////////// /Let's have this ready for later.
+
+
+	if(!(user.targeted_organ in list(BP_EYES, BP_HEAD))) //////////////hitting anything else other than the eyes
+		if(prob(33))
+			src.add_blood(H)
+			var/turf/location = H.loc
+			if (istype(location, /turf))
+				location.add_blood(H)     ///Plik plik, the sound of blood
+
+		M.attack_log += text("\[[time_stamp()]\] <font color='orange'>Has been attacked with [src.name] by [user.name] ([user.ckey])</font>")
+		user.attack_log += text("\[[time_stamp()]\] <font color='red'>Used the [src.name] to attack [M.name] ([M.ckey])</font>")
+		msg_admin_attack("[user.name] ([user.ckey]) used the [src.name] to attack [M.name] ([M.ckey]) (<A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[user.x];Y=[user.y];Z=[user.z]'>JMP</a>)")
+
+		if(prob(15))
+			M.Weaken(3)
+			M.take_organ_damage(3)
+		else
+			M.take_organ_damage(5)
+		if(prob(50))
+			playsound(M, 'sound/items/trayhit1.ogg', 50, 1)
+			for(var/mob/O in viewers(M, null))
+				O.show_message(SPAN_DANGER("[user] slams [M] with the tray!"), 1)
+			return
+		else
+			playsound(M, 'sound/items/trayhit2.ogg', 50, 1)  //we applied the damage, we played the sound, we showed the appropriate messages. Time to return and stop the proc
+			for(var/mob/O in viewers(M, null))
+				O.show_message(SPAN_DANGER("[user] slams [M] with the tray!"), 1)
+			return
+
+
+	var/protected = 0
+	for(var/slot in list(slot_head, slot_wear_mask, slot_glasses))
+		var/obj/item/protection = M.get_equipped_item(slot)
+		if(istype(protection) && (protection.body_parts_covered & FACE))
+			protected = 1
+			break
+
+	if(protected)
+		to_chat(M, SPAN_WARNING("You get slammed in the face with the tray, against your mask!"))
+		if(prob(33))
+			src.add_blood(H)
+			if (H.wear_mask)
+				H.wear_mask.add_blood(H)
+			if (H.head)
+				H.head.add_blood(H)
+			if (H.glasses && prob(33))
+				H.glasses.add_blood(H)
+			var/turf/location = H.loc
+			if (istype(location, /turf))     //Addin' blood! At least on the floor and item :v
+				location.add_blood(H)
+
+		if(prob(50))
+			playsound(M, 'sound/items/trayhit1.ogg', 50, 1)
+			for(var/mob/O in viewers(M, null))
+				O.show_message(SPAN_DANGER("[user] slams [M] with the tray!"), 1)
+		else
+			playsound(M, 'sound/items/trayhit2.ogg', 50, 1)  //sound playin'
+			for(var/mob/O in viewers(M, null))
+				O.show_message(SPAN_DANGER("[user] slams [M] with the tray!"), 1)
+		if(prob(10))
+			M.Stun(rand(1,3))
+			M.take_organ_damage(3)
+			return
+		else
+			M.take_organ_damage(5)
+			return
+
+	else //No eye or head protection, tough luck!
+		to_chat(M, SPAN_WARNING("You get slammed in the face with the tray!"))
+		if(prob(33))
+			src.add_blood(M)
+			var/turf/location = H.loc
+			if (istype(location, /turf))
+				location.add_blood(H)
+
+		if(prob(50))
+			playsound(M, 'sound/items/trayhit1.ogg', 50, 1)
+			for(var/mob/O in viewers(M, null))
+				O.show_message(SPAN_DANGER("[user] slams [M] in the face with the tray!"), 1)
+		else
+			playsound(M, 'sound/items/trayhit2.ogg', 50, 1)  //sound playin' again
+			for(var/mob/O in viewers(M, null))
+				O.show_message(SPAN_DANGER("[user] slams [M] in the face with the tray!"), 1)
+		if(prob(30))
+			M.Stun(rand(2,4))
+			M.take_organ_damage(4)
+			return
+		else
+			M.take_organ_damage(8)
+			if(prob(30))
+				M.Weaken(2)
+				return
+			return
+
+/obj/item/tray/var/cooldown = 0	//shield bash cooldown. based on world.time
+
+/obj/item/tray/attackby(obj/item/W, mob/user)
+	if(istype(W, /obj/item/material/kitchen/rollingpin))
+		if(cooldown < world.time - 25)
 			user.visible_message(SPAN_WARNING("[user] bashes [src] with [W]!"))
 			playsound(user.loc, 'sound/effects/shieldbash.ogg', 50, 1)
-			bash_cooldown = world.time + 25
-		return TRUE
-	if (!istype(W, /obj/item/projectile) && !istype(W, /obj/item/clothing))
-		if (calc_carry() + storage_cost_for_item(W) > max_carry)
-			to_chat(user, SPAN_WARNING("\The [src] can't fit \the [W]!"))
-		else if (!can_add_item(W))
-			to_chat(user, SPAN_WARNING("\The [src] can't hold \the [W]!"))
+			cooldown = world.time
+	else
+		..()
+
+/*
+===============~~~~~================================~~~~~====================
+=																			=
+=  Code for trays carrying things. By Doohl for Doohl erryday Doohl Doohl~  =
+=																			=
+===============~~~~~================================~~~~~====================
+*/
+/obj/item/tray/proc/calc_carry()
+	// calculate the weight of the items on the tray
+	var/val = 0 // value to return
+
+	for(var/obj/item/I in carrying)
+		if(I.w_class == ITEM_SIZE_TINY)
+			val ++
+		else if(I.w_class == ITEM_SIZE_SMALL)
+			val += 3
 		else
-			to_chat(user, SPAN_NOTICE("You add \the [W] to \the [src]."))
-			user.drop_item()
-			pickup_item(W)
-		return TRUE
+			val += 5
+
+	return val
+
+/obj/item/tray/pre_pickup(mob/user)
+	if(!isturf(loc))
+		return ..()
+
+	for(var/obj/item/I in loc)
+		if( I != src && !I.anchored && !istype(I, /obj/item/clothing/under) && !istype(I, /obj/item/clothing/suit) && !istype(I, /obj/item/projectile) )
+			var/add = 0
+			if(I.w_class == ITEM_SIZE_TINY)
+				add = 1
+			else if(I.w_class == ITEM_SIZE_SMALL)
+				add = 3
+			else
+				add = 5
+			if(calc_carry() + add >= max_carry)
+				break
+
+			I.loc = src
+			carrying.Add(I)
+			overlays += image("icon" = I.icon, "icon_state" = I.icon_state, "layer" = 30 + I.layer, "pixel_x" = I.pixel_x, "pixel_y" = I.pixel_y)
 
 	return ..()
 
+/obj/item/tray/dropped(mob/user)
 
-// Returns the space an object takes up on the tray. Non-food takes up double!
-/obj/item/tray/proc/storage_cost_for_item(obj/item/I)
-	var/effective_cost = I.get_storage_cost()
-	return istype(I, /obj/item/reagent_containers/food) ? effective_cost : effective_cost * 2
+	spawn(1) //why sleep 1? Because forceMove first drops us on the ground.
+		if(!isturf(loc)) //to handle hand switching
+			return
 
+		var/foundtable = 0
+		for(var/obj/structure/table/T in loc)
+			foundtable = 1
+			break
 
-// Returns TRUE if the tray can hold an item, and FALSE otherwise.
-/obj/item/tray/proc/can_add_item(obj/item/I)
-	var/cost = storage_cost_for_item(I)
-	return !I.anchored && I.canremove && \
-		!istype(I, /obj/item/projectile) && !istype(I, /obj/item/clothing/under) && !istype(I, /obj/item/clothing/suit) && !istype(I, /obj/item/storage) && \
-		calc_carry() + cost <= max_carry
+		overlays.Cut()
 
-
-// Calculates the total storage cost being used by the tray.
-/obj/item/tray/proc/calc_carry()
-	. = 0
-	for(var/obj/item/I in carrying)
-		. += storage_cost_for_item(I)
-
-
-// Puts an item onto the tray and displays it visually.
-/obj/item/tray/proc/pickup_item(obj/item/I)
-	I.forceMove(src)
-	LAZYADD(carrying, I)
-	add_item_overlay(I)
-
-
-/obj/item/tray/use_before(atom/target, mob/living/user, click_parameters)
-	var/intent_check = ishuman(user) ? I_GRAB : I_HELP
-	if (user.a_intent != intent_check || istype(target, /obj/item/storage) || istype(target, /obj/screen/storage))
-		return ..()
-
-	var/turf/turf = get_turf(target)
-	if (LAZYLEN(carrying))
-		// Table - Dump contents
-		if (istype(target, /obj/structure/table))
-			ClearOverlays()
-			for (var/obj/item/carried in carrying)
-				carried.dropInto(turf)
-			LAZYCLEARLIST(carrying)
-			user.visible_message(
-				SPAN_NOTICE("\The [user] dumps \a [src]'s contents onto \the [target]."),
-				SPAN_NOTICE("You dump \the [src]'s contents onto \the [target].")
-			)
-			return TRUE
-
-		// Fridge - Load fridge
-		if (istype(target, /obj/machinery/smartfridge))
-			var/obj/machinery/smartfridge/fridge = target
-			var/fed_in = 0
-			ClearOverlays()
-			for (var/obj/item/carried in carrying)
-				if (!fridge.accept_check(carried))
-					add_item_overlay(carried)
-					continue
-				carried.dropInto(fridge)
-				fridge.stock_item(carried)
-				LAZYREMOVE(carrying, carried)
-				fed_in++
-			if (!fed_in)
-				USE_FEEDBACK_FAILURE("Nothing in \the [src] is valid for \the [target].")
-				return TRUE
-			var/some_of = LAZYLEN(carrying) ? "some of " : ""
-			user.visible_message(
-				SPAN_NOTICE("\The [user] fills \the [target] with [some_of]\a [src]'s contents."),
-				SPAN_NOTICE("You fill \the [target] with [some_of]\the [src]'s contents.")
-			)
-			return TRUE
-
-	// Attempt to load items
-	var/added_items = 0
-	for (var/obj/item/item in turf)
-		if (can_add_item(item))
-			pickup_item(item)
-			added_items++
-	if (!added_items)
-		USE_FEEDBACK_FAILURE("\The [target] doesn't have anything to pick up with \the [src].")
-		return TRUE
-	user.visible_message(
-		SPAN_NOTICE("\The [user] scoops some things up from \the [target] with \a [src]."),
-		SPAN_NOTICE("You scoop some things up from \the [target] with \the [src].")
-	)
-	return TRUE
-
-
-// Adds a visible overlay on the tray with the item's icon, state, and overlays, to display them on the tray itself
-/obj/item/tray/proc/add_item_overlay(obj/item/I)
-	if (isnull(I) || !istype(I))
-		return
-	var/image/item_image = image("icon" = I.icon, "icon_state" = I.icon_state, "layer" = 30 + I.layer, "pixel_x" = rand(-3, 3), "pixel_y" = rand(-3, 3)) // this line terrifies me
-	item_image.color = I.color
-	item_image.CopyOverlays(I)
-	AddOverlays(item_image)
+		for(var/obj/item/I in carrying)
+			I.loc = loc
+			carrying.Remove(I)
+			if(!foundtable && isturf(loc))
+			// if no table, presume that the person just shittily dropped the tray on the ground and made a mess everywhere!
+				spawn()
+					for(var/i = 1, i <= rand(1,2), i++)
+						if(I)
+							step(I, pick(NORTH,SOUTH,EAST,WEST))
+							sleep(rand(2,4))

@@ -1,6 +1,24 @@
+/client/var/global/list/forbidden_varedit_object_types = list(
+										/datum/admins,						//Admins editing their own admin-power object? Yup, sounds like a good idea.,
+										/obj/machinery/blackbox_recorder,	//Prevents people messing with feedback gathering
+									)
+
+var/list/VVlocked = list("vars", "holder", "client", "virus", "viruses", "cuffed", "last_eaten", "unlock_content", "bound_x", "bound_y", "step_x", "step_y", "force_ending")
+var/list/VVicon_edit_lock = list("icon", "icon_state", "overlays", "underlays")
+var/list/VVckey_edit = list("key", "ckey")
+
+/*
+/client/proc/cmd_modify_object_variables(obj/O as obj|mob|turf|area in world)   // Acceptable 'in world', as VV would be incredibly hampered otherwise
+	set category = "Debug"
+	set name = "Edit Variables"
+	set desc="(target) Edit a target item's variables"
+	src.modify_variables(O)
+
+*/
+
 /client/proc/mod_list_add_ass()
 	var/class = "text"
-	var/list/class_input = list("text","num","type","reference","mob reference", "icon","file","color","list","view variables","restore to default")
+	var/list/class_input = list("text","num","type","reference","mob reference", "icon","file","list","edit referenced object","restore to default")
 	if(src.holder)
 		var/datum/marked_datum = holder.marked_datum()
 		if(marked_datum)
@@ -25,7 +43,7 @@
 			var_value = input("Enter new number:","Num") as null|num
 
 		if("type")
-			var_value = select_subpath(/obj/item/latexballon, /datum)
+			var_value = input("Enter type:","Type") as null|anything in typesof(/obj,/mob,/area,/turf)
 
 		if("reference")
 			var_value = input("Select reference:","Reference") as null|mob|obj|turf|area in world
@@ -42,18 +60,15 @@
 		if("marked datum")
 			var_value = holder.marked_datum()
 
-		if("color")
-			var_value = input("Select new color:","Color") as null|color
-
 	if(!var_value) return
 
 	return var_value
 
 
-/client/proc/mod_list_add(list/L, atom/O, original_name, objectvar)
+/client/proc/mod_list_add(var/list/L, atom/O, original_name, objectvar)
 
 	var/class = "text"
-	var/list/class_input = list("text","num","type","reference","mob reference", "icon","file","list","color","view variables","restore to default")
+	var/list/class_input = list("text","num","type","reference","mob reference", "icon","file","list","edit referenced object","restore to default")
 	if(src.holder)
 		var/datum/marked_datum = holder.marked_datum()
 		if(marked_datum)
@@ -78,7 +93,7 @@
 			var_value = input("Enter new number:","Num") as num
 
 		if("type")
-			var_value = select_subpath(/obj/item/latexballon, /datum)
+			var_value = input("Enter type:","Type") in typesof(/obj,/mob,/area,/turf)
 
 		if("reference")
 			var_value = input("Select reference:","Reference") as mob|obj|turf|area in world
@@ -103,26 +118,26 @@
 			L[var_value] = mod_list_add_ass() //haha
 		if("No")
 			L += var_value
-	to_world_log("### ListVarEdit by [src]: [O.type] [objectvar]: ADDED=[var_value]")
+	log_world("### ListVarEdit by [src]: [O.type] [objectvar]: ADDED=[var_value]")
 	log_admin("[key_name(src)] modified [original_name]'s [objectvar]: ADDED=[var_value]")
 	message_admins("[key_name_admin(src)] modified [original_name]'s [objectvar]: ADDED=[var_value]")
 
-/client/proc/mod_list(list/L, atom/O, original_name, objectvar)
-	if(!check_rights(R_VAREDIT))	return
-	if(!islist(L)) to_chat(src, "Not a List.")
-	if(length(L) > 1000)
+/client/proc/mod_list(var/list/L, atom/O, original_name, objectvar)
+	if(!check_rights(R_ADMIN))
+		return
+	if(!istype(L,/list)) src << "Not a List."
+
+	if(L.len > 1000)
 		var/confirm = alert(src, "The list you're trying to edit is very long, continuing may crash the server.", "Warning", "Continue", "Abort")
 		if(confirm != "Continue")
 			return
 
 	var/assoc = 0
-	if(length(L) > 0)
+	if(L.len > 0)
 		var/a = L[1]
-		try
-			if(!isnum(a) && L[a] != null)
-				assoc = 1 //This is pretty weak test but I can't think of anything else
-				to_chat(usr, "List appears to be associative.")
-		catch {} // Builtin non-assoc lists (contents, etc.) will runtime if you try to get an assoc value of them
+		if(istext(a) && L[a] != null)
+			assoc = 1 //This is pretty weak test but i can't think of anything else
+			to_chat(usr, "List appears to be associative.")
 
 	var/list/names = null
 	if(!assoc)
@@ -150,11 +165,19 @@
 
 	var/dir
 
-	if(O.may_not_edit_var(usr, objectvar))
-		return
+	if(variable in VVlocked)
+		if(!check_rights(R_DEBUG))
+			return
+	if(variable in VVckey_edit)
+		if(!check_rights(R_FUN|R_DEBUG))
+			return
+	if(variable in VVicon_edit_lock)
+		if(!check_rights(R_FUN|R_DEBUG))
+			return
 
 	if(isnull(variable))
 		to_chat(usr, "Unable to determine variable type.")
+
 	else if(isnum(variable))
 		to_chat(usr, "Variable appears to be <b>NUM</b>.")
 		default = "num"
@@ -173,11 +196,11 @@
 		variable = "\icon[variable]"
 		default = "icon"
 
-	else if(isloc(variable) || istype(variable,/datum))
+	else if(istype(variable,/atom) || istype(variable,/datum))
 		to_chat(usr, "Variable appears to be <b>TYPE</b>.")
 		default = "type"
 
-	else if(islist(variable))
+	else if(istype(variable,/list))
 		to_chat(usr, "Variable appears to be <b>LIST</b>.")
 		default = "list"
 
@@ -213,8 +236,9 @@
 
 		if(dir)
 			to_chat(usr, "If a direction, direction is: [dir]")
+
 	var/class = "text"
-	var/list/class_input = list("text","num","type","reference","mob reference", "icon","file","list","view variables","restore to default")
+	var/list/class_input = list("text","num","type","reference","mob reference", "icon","file","list","edit referenced object","restore to default")
 
 	if(src.holder)
 		var/datum/marked_datum = holder.marked_datum()
@@ -250,12 +274,11 @@
 			else
 				L[L.Find(variable)] = new_var
 
-		if("view variables")
-			debug_variables(variable)
-			return
+		if("edit referenced object")
+			modify_variables(variable)
 
 		if("DELETE FROM LIST")
-			to_world_log("### ListVarEdit by [src]: [O.type] [objectvar]: REMOVED=[html_encode("[variable]")]")
+			log_world("### ListVarEdit by [src]: [O.type] [objectvar]: REMOVED=[html_encode("[variable]")]")
 			log_admin("[key_name(src)] modified [original_name]'s [objectvar]: REMOVED=[variable]")
 			message_admins("[key_name_admin(src)] modified [original_name]'s [objectvar]: REMOVED=[variable]")
 			L -= variable
@@ -276,8 +299,7 @@
 				L[L.Find(variable)] = new_var
 
 		if("type")
-			new_var = select_subpath(/obj/item/latexballon, /datum)
-
+			new_var = input("Enter type:","Type") in typesof(/obj,/mob,/area,/turf)
 			if(assoc)
 				L[assoc_key] = new_var
 			else
@@ -320,14 +342,15 @@
 			else
 				L[L.Find(variable)] = new_var
 
-	to_world_log("### ListVarEdit by [src]: [O.type] [objectvar]: [original_var]=[new_var]")
+	log_world("### ListVarEdit by [src]: [O.type] [objectvar]: [original_var]=[new_var]")
 	log_admin("[key_name(src)] modified [original_name]'s [objectvar]: [original_var]=[new_var]")
 	message_admins("[key_name_admin(src)] modified [original_name]'s varlist [objectvar]: [original_var]=[new_var]")
 
-/client/proc/modify_variables(atom/O, param_var_name = null, autodetect_class = 0)
-	if(!check_rights(R_VAREDIT))	return
+/client/proc/modify_variables(var/atom/O, var/param_var_name = null, var/autodetect_class = 0)
+	if(!check_rights(R_ADMIN))
+		return
 
-	for(var/p in forbidden_varedit_object_types())
+	for(var/p in forbidden_varedit_object_types)
 		if( istype(O,p) )
 			to_chat(usr, SPAN_DANGER("It is forbidden to edit this object's variables."))
 			return
@@ -337,16 +360,23 @@
 	var/var_value
 
 	if(param_var_name)
-		if(!(param_var_name in O.get_variables()))
+		if(!(param_var_name in O.vars))
 			to_chat(src, "A variable with this name ([param_var_name]) doesn't exist in this atom ([O])")
 			return
 
-		if(O.may_not_edit_var(usr, param_var_name))
-			return
+		if(param_var_name in VVlocked)
+			if(!check_rights(R_DEBUG))
+				return
+		if(param_var_name in VVckey_edit)
+			if(!check_rights(R_FUN|R_DEBUG))
+				return
+		if(param_var_name in VVicon_edit_lock)
+			if(!check_rights(R_FUN|R_DEBUG))
+				return
 
 		variable = param_var_name
 
-		var_value = O.get_variable_value(variable)
+		var_value = O.vars[variable]
 
 		if(autodetect_class)
 			if(isnull(var_value))
@@ -371,11 +401,11 @@
 				var_value = "\icon[var_value]"
 				class = "icon"
 
-			else if(isloc(var_value) || istype(var_value,/datum))
+			else if(istype(var_value,/atom) || istype(var_value,/datum))
 				to_chat(usr, "Variable appears to be <b>TYPE</b>.")
 				class = "type"
 
-			else if(islist(var_value))
+			else if(istype(var_value,/list))
 				to_chat(usr, "Variable appears to be <b>LIST</b>.")
 				class = "list"
 
@@ -397,10 +427,14 @@
 
 		variable = input("Which var?","Var") as null|anything in names
 		if(!variable)	return
-		var_value = O.get_variable_value(variable)
+		var_value = O.vars[variable]
 
-		if(O.may_not_edit_var(usr, variable))
-			return
+		if(variable in VVlocked)
+			if(!check_rights(R_DEBUG)) return
+		if(variable in VVckey_edit)
+			if(!check_rights(R_FUN|R_DEBUG)) return
+		if(variable in VVicon_edit_lock)
+			if(!check_rights(R_FUN|R_DEBUG)) return
 
 	if(!autodetect_class)
 
@@ -408,6 +442,7 @@
 		var/default
 		if(isnull(var_value))
 			to_chat(usr, "Unable to determine variable type.")
+
 		else if(isnum(var_value))
 			to_chat(usr, "Variable appears to be <b>NUM</b>.")
 			default = "num"
@@ -426,11 +461,11 @@
 			var_value = "\icon[var_value]"
 			default = "icon"
 
-		else if(isloc(var_value) || istype(var_value,/datum))
+		else if(istype(var_value,/atom) || istype(var_value,/datum))
 			to_chat(usr, "Variable appears to be <b>TYPE</b>.")
 			default = "type"
 
-		else if(islist(var_value))
+		else if(istype(var_value,/list))
 			to_chat(usr, "Variable appears to be <b>LIST</b>.")
 			default = "list"
 
@@ -465,7 +500,8 @@
 					dir = null
 			if(dir)
 				to_chat(usr, "If a direction, direction is: [dir]")
-		var/list/class_input = list("text","num","type","reference","mob reference", "icon","file","list","json","color","view variables","restore to default")
+
+		var/list/class_input = list("text","num","type","reference","mob reference", "icon","file","list","edit referenced object","restore to default")
 		if(src.holder)
 			var/datum/marked_datum = holder.marked_datum()
 			if(marked_datum)
@@ -477,7 +513,7 @@
 
 	var/original_name
 
-	if (!isloc(O))
+	if (!istype(O, /atom))
 		original_name = "\ref[O] ([O])"
 	else
 		original_name = O:name
@@ -489,96 +525,68 @@
 	switch(class)
 
 		if("list")
-			mod_list(O.get_variable_value(variable), O, original_name, variable)
+			mod_list(O.vars[variable], O, original_name, variable)
 			return
 
 		if("restore to default")
-			var_value = O.get_initial_variable_value(variable)
+			O.vars[variable] = initial(O.vars[variable])
 
-		if("view variables")
-			debug_variables(O)
-			return
+		if("edit referenced object")
+			return .(O.vars[variable])
 
 		if("text")
-			var/var_new = input("Enter new text:","Text",O.get_variable_value(variable)) as null|text
-			if(isnull(var_new)) return
-			var_value = var_new
+			var/var_new = input("Enter new text:","Text",O.vars[variable]) as null|text
+			if(var_new==null) return
+			O.vars[variable] = var_new
 
 		if("num")
-			if(variable=="stat")
-				var/var_new = input("Enter new number:","Num",O.get_variable_value(variable)) as null|num
-				if(isnull(var_new)) return
-				if((O.get_variable_value(variable) == 2) && (var_new < 2))//Bringing the dead back to life
-					var/mob/M = O
-					M.switch_from_dead_to_living_mob_list()
-				if((O.get_variable_value(variable) < 2) && (var_new == 2))//Kill he
-					var/mob/M = O
-					M.switch_from_living_to_dead_mob_list()
-				var_value = var_new
+			if(variable=="light_range")
+				var/var_new = input("Enter new number:","Num",O.vars[variable]) as null|num
+				if(var_new == null) return
+				O.set_light(var_new)
+			else if(variable=="stat")
+				var/var_new = input("Enter new number:","Num",O.vars[variable]) as null|num
+				if(var_new == null) return
+				if((O.vars[variable] == 2) && (var_new < 2))//Bringing the dead back to life
+					GLOB.dead_mob_list -= O
+					GLOB.living_mob_list += O
+				if((O.vars[variable] < 2) && (var_new == 2))//Kill he
+					GLOB.living_mob_list -= O
+					GLOB.dead_mob_list += O
+				O.vars[variable] = var_new
 			else
-				var/var_new =  input("Enter new number:","Num",O.get_variable_value(variable)) as null|num
-				if(isnull(var_new)) return
-				var_value = var_new
+				var/var_new =  input("Enter new number:","Num",O.vars[variable]) as null|num
+				if(var_new==null) return
+				O.vars[variable] = var_new
 
 		if("type")
-			var/var_new = select_subpath(/obj/item/latexballon, /datum)
-			if (!var_new)
-				return
-			var_value = var_new
+			var/var_new = input("Enter type:","Type",O.vars[variable]) as null|anything in typesof(/obj,/mob,/area,/turf)
+			if(var_new==null) return
+			O.vars[variable] = var_new
 
 		if("reference")
-			var/var_new = input("Select reference:","Reference",O.get_variable_value(variable)) as null|mob|obj|turf|area in world
-			if(isnull(var_new)) return
-			var_value = var_new
+			var/var_new = input("Select reference:","Reference",O.vars[variable]) as null|mob|obj|turf|area in world
+			if(var_new==null) return
+			O.vars[variable] = var_new
 
 		if("mob reference")
-			var/var_new = input("Select reference:","Reference",O.get_variable_value(variable)) as null|mob in world
-			if(isnull(var_new)) return
-			var_value = var_new
+			var/var_new = input("Select reference:","Reference",O.vars[variable]) as null|mob in world
+			if(var_new==null) return
+			O.vars[variable] = var_new
 
 		if("file")
-			var/var_new = input("Pick file:","File",O.get_variable_value(variable)) as null|file
-			if(isnull(var_new)) return
-			var_value = var_new
+			var/var_new = input("Pick file:","File",O.vars[variable]) as null|file
+			if(var_new==null) return
+			O.vars[variable] = var_new
 
 		if("icon")
-			var/var_new = input("Pick icon:","Icon",O.get_variable_value(variable)) as null|icon
-			if(isnull(var_new)) return
-			var_value = var_new
-
-		if("color")
-			var_value = input("Select new color:","Color") as null|color
-
-		if("json")
-			var/json_str = input("JSON string", "JSON", json_encode(O.get_variable_value(variable))) as null | message
-			try
-				var_value = json_decode(json_str)
-			catch
-				return
+			var/var_new = input("Pick icon:","Icon",O.vars[variable]) as null|icon
+			if(var_new==null) return
+			O.vars[variable] = var_new
 
 		if("marked datum")
-			var_value = holder.marked_datum()
+			O.vars[variable] = holder.marked_datum()
 
-	var/old_value = O.get_variable_value(variable)
-	if(!special_set_vv_var(O, variable, var_value, src))
-		O.set_variable_value(variable, var_value)
-
-	var/new_value = O.get_variable_value(variable)
-	if(old_value == new_value)
-		return
-
-	to_world_log("### VarEdit by [src]: [O.type] [variable]=[html_encode("[new_value]")]")
-	log_and_message_admins("modified [original_name]'s [variable] from '[old_value]' to '[new_value]'")
-
-/client
-	var/static/vv_set_handlers
-
-/client/proc/special_set_vv_var(datum/O, variable, var_value, client)
-	if(!vv_set_handlers)
-		vv_set_handlers = init_subtypes(/singleton/vv_set_handler)
-	for(var/vv_handler in vv_set_handlers)
-		var/singleton/vv_set_handler/sh = vv_handler
-		if(sh.can_handle_set_var(O, variable, var_value, client))
-			sh.handle_set_var(O, variable, var_value, client)
-			return TRUE
-	return FALSE
+	log_world("### VarEdit by [src]: [O.type] [variable]=[html_encode("[O.vars[variable]]")]")
+	log_admin("[key_name(src)] modified [original_name]'s [variable] to [O.vars[variable]]")
+	message_admins("[key_name_admin(src)] modified [original_name]'s [variable] to [O.vars[variable]]")

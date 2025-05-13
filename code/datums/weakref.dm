@@ -1,20 +1,16 @@
-/// One-way reference to a `/weakref` instance that refers to this datum, if one exists.
-/datum/var/weakref/weakref
+/// Creates a weakref to the given input.
+/// See /datum/weakref's documentation for more information.
+/proc/WEAKREF(datum/input)
+	if(istype(input) && !QDELETED(input))
+		if(istype(input, /datum/weakref))
+			return input
 
-/**
- * Creates a weakref to the given input. See `/weakref`'s documentation for more information.
- */
-/proc/weakref(datum/D)
-	RETURN_TYPE(/weakref)
-	if(!istype(D))
-		return
-	if(QDELETED(D))
-		return
-	if(istype(D, /weakref))
-		return D
-	if(!D.weakref)
-		D.weakref = new/weakref(D)
-	return D.weakref
+		if(!input.weak_reference)
+			input.weak_reference = new /datum/weakref(input)
+		return input.weak_reference
+
+/datum/proc/create_weakref() //Forced creation for admin proccalls
+	return WEAKREF(src)
 
 /**
  * A weakref holds a non-owning reference to a datum.
@@ -41,7 +37,7 @@
  *
  * A common use case for weak references is holding onto what created itself.
  * For example, if a machine wanted to know what its last user was, it might
- * create a `var/mob/living/last_user`. However, this is a strong reference to
+ * create a `var/mob/living/last_user`. However, this is a storng reference to
  * the mob, and thus will force a hard deletion when that mob is deleted.
  * It is often better in this case to instead create a weakref to the user,
  * meaning this type definition becomes `var/datum/weakref/last_user`.
@@ -56,38 +52,26 @@
  * chew toy example. A circular reference that doesn't clean itself up properly
  * will always hard delete.
  */
-/weakref
-	/// String. `\ref[]` reference of the associated `/datum`.
-	var/ref
+/datum/weakref
+	var/reference
 
-	// Handy info for debugging
-	/// String. `name` of the associated `/datum`.
-	var/ref_name
-	/// Type path (Type of `/datum`). `type` of the associated `/datum`.
-	var/ref_type
+/datum/weakref/New(datum/thing)
+	reference = REF(thing)
 
-/weakref/New(datum/D)
-	ref = "\ref[D]"
-	ref_name = "[D]"
-	ref_type = D.type
+/datum/weakref/Destroy(force)
+	var/datum/target = resolve()
+	qdel(target)
 
-/weakref/Destroy()
-	// A weakref datum should not be manually destroyed as it is a shared resource,
-	//  rather it should be automatically collected by the BYOND GC when all references are gone.
-	SHOULD_CALL_PARENT(FALSE)
-	return QDEL_HINT_IWILLGC
+	if(!force)
+		return QDEL_HINT_LETMELIVE //Let BYOND autoGC thiswhen nothing is using it anymore.
+	target?.weak_reference = null
+	return ..()
 
 /**
  * Retrieves the datum that this weakref is referencing.
  *
  * This will return `null` if the datum was deleted. This MUST be respected.
  */
-
-/weakref/proc/resolve()
-	var/datum/D = locate(ref)
-	if(D && D.weakref == src)
-		return D
-	return null
-
-/weakref/get_log_info_line()
-	return "[ref_name] ([ref_type]) ([ref]) (WEAKREF)"
+/datum/weakref/proc/resolve()
+	var/datum/D = locate(reference)
+	return (!QDELETED(D) && D.weak_reference == src) ? D : null

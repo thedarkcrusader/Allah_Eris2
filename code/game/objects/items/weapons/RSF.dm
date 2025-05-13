@@ -1,95 +1,103 @@
+/*
+CONTAINS:
+RSF
+
+*/
+
 /obj/item/rsf
-	name = "rapid service fabricator"
+	name = "\improper Rapid-Service-Fabricator"
 	desc = "A device used to rapidly deploy service items."
-	icon = 'icons/obj/tools/rcd.dmi'
+	icon = 'icons/obj/tools.dmi'
 	icon_state = "rcd"
-
-	/// The things an RSF can create as a map of {"name" = [radial icon, energy cost, path]}.
-	var/static/list/modes = list(
-		"Cigarette" = list("cigarette", 10, /obj/item/clothing/mask/smokable/cigarette),
-		"Drinking Glass" = list("glass", 50, /obj/item/reagent_containers/food/drinks/glass2),
-		"Paper" = list("paper", 10, /obj/item/paper),
-		"Pen" = list("pen", 50, /obj/item/pen),
-		"Dice Pack" = list("dicebag", 200, /obj/item/storage/pill_bottle/dice)
-	)
-
-	/// The current mode of the RSF. One of the keys in the modes list.
-	var/mode
-
-	/// The maximum amount of matter the RSF can hold when not a robot RSF.
+	opacity = 0
+	density = FALSE
+	anchored = FALSE
 	var/max_stored_matter = 30
+	var/stored_matter = 30
+	var/mode = 1
+	w_class = ITEM_SIZE_NORMAL
 
-	/// The current amount of matter the RSF holds.
-	var/stored_matter
+/obj/item/rsf/examine(mob/user, extra_description = "")
+	if(get_dist(user, src) < 2)
+		extra_description += "It holds [stored_matter] out of [max_stored_matter] charges."
+	..(user, extra_description)
 
-
-/obj/item/rsf/examine(mob/user, distance)
-	. = ..()
-	if (distance <= 0)
-		to_chat(user, "It currently holds [stored_matter]/[max_stored_matter] fabrication units.")
-
-
-/obj/item/rsf/attack_self(mob/living/user)
-	var/radial = list()
-	for (var/key in modes)
-		radial[key] = mutable_appearance('icons/screen/radial.dmi', modes[key][1])
-	var/choice = show_radial_menu(user, user, radial, require_near = TRUE, radius = 42, tooltips = TRUE, check_locs = list(src))
-	if (!choice || !user.use_sanity_check(src))
+/obj/item/rsf/attackby(obj/item/W as obj, mob/user as mob)
+	var/obj/item/stack/material/M = W
+	if(istype(M) && M.material.name == MATERIAL_COMPRESSED)
+		var/amount = min(M.get_amount(), round(max_stored_matter - stored_matter))
+		if(M.use(amount) && stored_matter < max_stored_matter)
+			stored_matter += amount
+			playsound(src.loc, 'sound/machines/click.ogg', 10, 1)
+			to_chat(user, "<span class='notice'>You load [amount] Compressed Matter into \the [src]</span>.")
+	else
+		..()
+/obj/item/rsf/attack_self(mob/user as mob)
+	playsound(src.loc, 'sound/effects/pop.ogg', 50, 0)
+	if (mode == 1)
+		mode = 2
+		to_chat(user, "Changed dispensing mode to 'Drinking Glass'")
 		return
-	mode = choice
-	to_chat(user, SPAN_NOTICE("Changed dispensing mode to \"[choice]\"."))
-	playsound(src, 'sound/effects/pop.ogg', 50, FALSE)
+	if (mode == 2)
+		mode = 3
+		to_chat(user, "Changed dispensing mode to 'Paper'")
+		return
+	if (mode == 3)
+		mode = 4
+		to_chat(user, "Changed dispensing mode to 'Pen'")
+		return
+	if (mode == 4)
+		mode = 5
+		to_chat(user, "Changed dispensing mode to 'Dice Pack'")
+		return
+	if (mode == 5)
+		mode = 1
+		to_chat(user, "Changed dispensing mode to 'Cigarette'")
+		return
 
+/obj/item/rsf/afterattack(atom/A, mob/user as mob, proximity)
 
-/obj/item/rsf/use_before(atom/target, mob/living/user, list/click_parameters)
-	if (!istype(target, /obj/structure/table) && !istype(target, /turf/simulated/floor))
-		return FALSE
-	var/turf/into = get_turf(target)
-	if (!into)
-		return FALSE
-	if (!(mode in modes))
-		to_chat(user, SPAN_WARNING("\The [src] is not set to dispense anything."))
-		return TRUE
-	var/details = modes[mode]
-	if (isrobot(user))
-		var/mob/living/silicon/robot/robot = user
-		if (robot.stat || !robot.cell)
-			to_chat(user, SPAN_WARNING("You're in no condition to do that."))
-			return TRUE
-		var/cost = details[2]
-		if (!robot.cell.checked_use(cost))
-			to_chat(user, SPAN_WARNING("You don't have enough energy to do that."))
-			return TRUE
-	else if (stored_matter < 1)
-		to_chat(user, SPAN_WARNING("\The [src] is empty."))
-		return TRUE
+	if(!proximity) return
+
+	if(isrobot(user))
+		var/mob/living/silicon/robot/R = user
+		if(R.stat || !R.cell || R.cell.is_empty())
+			return
+	else
+		if(stored_matter <= 0)
+			return
+
+	if(!istype(A, /obj/structure/table) && !istype(A, /turf/floor))
+		return
+
+	playsound(src.loc, 'sound/machines/click.ogg', 10, 1)
+	var/used_energy = 0
+	var/obj/product
+
+	switch(mode)
+		if(1)
+			product = new /obj/item/clothing/mask/smokable/cigarette()
+			used_energy = 10
+		if(2)
+			product = new /obj/item/reagent_containers/food/drinks/drinkingglass()
+			used_energy = 50
+		if(3)
+			product = new /obj/item/paper()
+			used_energy = 10
+		if(4)
+			product = new /obj/item/pen()
+			used_energy = 50
+		if(5)
+			product = new /obj/item/storage/box/dice()
+			used_energy = 200
+
+	to_chat(user, "Dispensing [product ? product : "product"]...")
+	product.loc = get_turf(A)
+
+	if(isrobot(user))
+		var/mob/living/silicon/robot/R = user
+		if(R.cell)
+			R.cell.use(used_energy)
 	else
 		stored_matter--
-	playsound(loc, 'sound/machines/click.ogg', 10, TRUE)
-	var/obj/product = details[3]
-	product = new product
-	to_chat(user, "Dispensing \a [product]...")
-	product.dropInto(into)
-	return TRUE
-
-
-/obj/item/rsf/use_tool(obj/item/item, mob/living/user, list/click_params)
-	if (istype(item, /obj/item/rcd_ammo))
-		var/obj/item/rcd_ammo/ammo = item
-		if (stored_matter >= max_stored_matter)
-			to_chat(user, "The RSF can't hold any more matter.")
-			return TRUE
-		var/use_amount = min(ammo.remaining, max_stored_matter - stored_matter)
-		stored_matter += use_amount
-		ammo.remaining -= use_amount
-		if (ammo.remaining <= 0)
-			qdel(ammo)
-		playsound(loc, 'sound/machines/click.ogg', 10, TRUE)
-		to_chat(user, "The RSF now holds [stored_matter]/[max_stored_matter] fabrication units.")
-		return TRUE
-	return ..()
-
-
-/obj/item/rsf/loaded/Initialize()
-	. = ..()
-	stored_matter = max_stored_matter
+		to_chat(user, "The RSF now holds [stored_matter]/30 fabrication-units.")

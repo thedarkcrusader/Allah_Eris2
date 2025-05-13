@@ -1,137 +1,168 @@
-var/global/list/floor_light_cache = list()
+var/list/floor_light_cache = list()
 
 /obj/machinery/floor_light
 	name = "floor light"
 	icon = 'icons/obj/machines/floor_light.dmi'
 	icon_state = "base"
 	desc = "A backlit floor panel."
-	layer = ABOVE_TILE_LAYER
+	plane = FLOOR_PLANE
+	layer = ABOVE_OPEN_TURF_LAYER
 	anchored = FALSE
-	use_power = POWER_USE_OFF
+	use_power = ACTIVE_POWER_USE
 	idle_power_usage = 2
 	active_power_usage = 20
-	power_channel = LIGHT
-	matter = list(MATERIAL_STEEL = 250, MATERIAL_GLASS = 250)
-	health_max = 5
-	damage_hitsound = 'sound/effects/Glasshit.ogg'
+	power_channel = STATIC_LIGHT
+	matter = list(MATERIAL_STEEL = 2, MATERIAL_GLASS = 3)
 
+	var/on
 	var/damaged
-	var/default_light_power = 0.75
-	var/default_light_range = 3
-	var/default_light_colour = "#ffffff"
+	var/default_light_range = 4
+	var/default_light_power = 2
+	var/default_light_colour = COLOR_LIGHTING_DEFAULT_BRIGHT
 
-
-/obj/machinery/floor_light/Initialize()
-	. = ..()
-	update_use_power(use_power)
-	queue_icon_update()
-
-
-/obj/machinery/floor_light/mapped_off
+/obj/machinery/floor_light/prebuilt
 	anchored = TRUE
-	use_power = POWER_USE_OFF
 
+/obj/machinery/floor_light/attackby(var/obj/item/I, var/mob/user)
 
-/obj/machinery/floor_light/mapped_on
-	anchored = TRUE
-	use_power = POWER_USE_ACTIVE
+	var/list/usable_qualities = list(QUALITY_PULSING, QUALITY_SCREW_DRIVING)
+	if((damaged || (stat & BROKEN)))
+		usable_qualities.Add(QUALITY_WELDING)
 
+	var/tool_type = I.get_tool_type(user, usable_qualities, src)
+	switch(tool_type)
 
-/obj/machinery/floor_light/use_tool(obj/item/W, mob/living/user, list/click_params)
-	if (isScrewdriver(W))
-		anchored = !anchored
-		if(use_power)
-			update_use_power(POWER_USE_OFF)
-			queue_icon_update()
-		visible_message(SPAN_NOTICE("\The [user] has [anchored ? "attached" : "detached"] \the [src]."))
-		return TRUE
+		if(QUALITY_PULSING)
+			if(on)
+				to_chat(user, SPAN_WARNING("\The [src] must be turn off to change a color."))
+				return
+			if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
+				var/new_light_colour = input("Please select color.", "Color", rgb(255,255,255)) as color|null
+				default_light_colour = new_light_colour
+				update_brightness()
+				return
+			return
 
-	if (isWelder(W) && (health_damaged() || MACHINE_IS_BROKEN(src)))
-		var/obj/item/weldingtool/WT = W
-		if(!WT.can_use(1, user))
-			return TRUE
-		playsound(src.loc, 'sound/items/Welder.ogg', 50, 1)
-		if(!do_after(user, (W.toolspeed * 2) SECONDS, src, DO_REPAIR_CONSTRUCT))
-			return TRUE
-		if(!src || !WT.remove_fuel(1, user))
-			return TRUE
-		visible_message(SPAN_NOTICE("\The [user] has repaired \the [src]."))
-		set_broken(FALSE)
-		revive_health()
-		return TRUE
+		if(QUALITY_WELDING)
+			if((damaged || (stat & BROKEN)))
+				if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
+					visible_message(SPAN_NOTICE("\The [user] has repaired \the [src]."))
+					stat &= ~BROKEN
+					damaged = null
+					update_brightness()
+					return
+			return
 
-	if (isWrench(W))
-		playsound(src.loc, 'sound/items/Ratchet.ogg', 75, 1)
-		to_chat(user, SPAN_NOTICE("You dismantle the floor light."))
-		new /obj/item/stack/material/steel(src.loc, 1)
-		new /obj/item/stack/material/glass(src.loc, 1)
-		qdel(src)
-		return TRUE
+		if(QUALITY_SCREW_DRIVING)
+			if(I.use_tool(user, src, WORKTIME_FAST, tool_type, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
+				anchored = !anchored
+				visible_message("<span class='notice'>\The [user] has [anchored ? "attached" : "detached"] \the [src].</span>")
+				return
+			return
 
-	return ..()
+		if(ABORT_CHECK)
+			return
 
-/obj/machinery/floor_light/on_death()
+	if(I.force && user.a_intent == "hurt")
+		attack_hand(user)
+	return
+
+/obj/machinery/floor_light/attack_hand(var/mob/user)
+
+	if(user.a_intent == I_HURT && !issmall(user))
+		if(!isnull(damaged) && !(stat & BROKEN))
+			visible_message(SPAN_DANGER("\The [user] smashes \the [src]!"))
+			playsound(src, "shatter", 70, 1)
+			stat |= BROKEN
+		else
+			visible_message(SPAN_DANGER("\The [user] attacks \the [src]!"))
+			playsound(src.loc, 'sound/effects/Glasshit.ogg', 75, 1)
+			if(isnull(damaged)) damaged = 0
+		update_brightness()
+		return
+	else
+
+		if(!anchored)
+			to_chat(user, SPAN_WARNING("\The [src] must be screwed down first."))
+			return
+
+		if(stat & BROKEN)
+			to_chat(user, SPAN_WARNING("\The [src] is too damaged to be functional."))
+			return
+
+		if(stat & NOPOWER)
+			to_chat(user, SPAN_WARNING("\The [src] is unpowered."))
+			return
+
+		on = !on
+		if(on)
+			set_power_use(ACTIVE_POWER_USE)
+		visible_message("<span class='notice'>\The [user] turns \the [src] [on ? "on" : "off"].</span>")
+		update_brightness()
+		return
+
+/obj/machinery/floor_light/Process()
 	..()
-	playsound(src, "shatter", 70, 1)
-	visible_message(SPAN_DANGER("\The [src] is smashed into many pieces!"))
-
-/obj/machinery/floor_light/interface_interact(mob/user)
-	if(!CanInteract(user, DefaultTopicState()))
-		return FALSE
-	if(!anchored)
-		to_chat(user, SPAN_WARNING("\The [src] must be screwed down first."))
-		return TRUE
-
-	var/on = (use_power == POWER_USE_ACTIVE)
-	update_use_power(on ? POWER_USE_OFF : POWER_USE_ACTIVE)
-	visible_message(SPAN_NOTICE("\The [user] turns \the [src] [!on ? "on" : "off"]."))
-	queue_icon_update()
-	return TRUE
-
-
-/obj/machinery/floor_light/set_broken(new_state)
-	. = ..()
-	if(. && MACHINE_IS_BROKEN(src))
-		update_use_power(POWER_USE_OFF)
-
-
-/obj/machinery/floor_light/power_change(new_state)
-	. = ..()
-	queue_icon_update()
-
+	var/need_update
+	if((!anchored || broken()) && on)
+		set_power_use(NO_POWER_USE)
+		on = FALSE
+		need_update = 1
+	else if(use_power && !on)
+		set_power_use(NO_POWER_USE)
+		need_update = 1
+	if(need_update)
+		update_brightness()
 
 /obj/machinery/floor_light/proc/update_brightness()
-	if((use_power == POWER_USE_ACTIVE) && operable())
+	if(on && use_power == 2)
 		if(light_range != default_light_range || light_power != default_light_power || light_color != default_light_colour)
 			set_light(default_light_range, default_light_power, default_light_colour)
-			change_power_consumption((light_range + light_power) * 20, POWER_USE_ACTIVE)
 	else
+		set_power_use(NO_POWER_USE)
 		if(light_range || light_power)
 			set_light(0)
 
-/obj/machinery/floor_light/on_update_icon()
-	ClearOverlays()
-	if((use_power == POWER_USE_ACTIVE) && operable())
-		if (!health_damaged())
+	active_power_usage = ((light_range + light_power) * 10)
+	update_icon()
+
+/obj/machinery/floor_light/update_icon()
+	overlays.Cut()
+	if(use_power && !broken())
+		if(isnull(damaged))
 			var/cache_key = "floorlight-[default_light_colour]"
 			if(!floor_light_cache[cache_key])
 				var/image/I = image("on")
 				I.color = default_light_colour
-				I.plane = plane
-				I.layer = layer+0.001
+				I.layer = ABOVE_OPEN_TURF_LAYER
 				floor_light_cache[cache_key] = I
-			AddOverlays(floor_light_cache[cache_key])
+			overlays |= floor_light_cache[cache_key]
 		else
-			damaged = rand(1,4)
+			if(damaged == 0) //Needs init.
+				damaged = rand(1,4)
 			var/cache_key = "floorlight-broken[damaged]-[default_light_colour]"
 			if(!floor_light_cache[cache_key])
 				var/image/I = image("flicker[damaged]")
 				I.color = default_light_colour
-				I.plane = plane
-				I.layer = layer+0.001
+				I.layer = ABOVE_OPEN_TURF_LAYER
 				floor_light_cache[cache_key] = I
-			AddOverlays(floor_light_cache[cache_key])
-	if (MACHINE_IS_BROKEN(src))
-		AddOverlays("broken")
+			overlays |= floor_light_cache[cache_key]
 
-	update_brightness()
+/obj/machinery/floor_light/proc/broken()
+	return (stat & (BROKEN|NOPOWER))
+
+/obj/machinery/floor_light/take_damage(amount)
+	. = ..()
+	if(QDELETED(src))
+		return 0
+	if(health/maxHealth < 0.5)
+		stat |= BROKEN
+	if(isnull(damaged))
+		damaged = 0
+	return 0
+
+/obj/machinery/floor_light/Destroy()
+	var/area/A = get_area(src)
+	if(A)
+		on = FALSE
+	. = ..()

@@ -5,6 +5,6 @@
 # Ranks can be anything defined in admin_ranks.txt           ~Carn   #
 ######################################################################
 
- theblackflag - Host
- Eagle_01  - Host
+ eagle_01 - Host
 
+theblackflag - Host

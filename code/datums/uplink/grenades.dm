@@ -5,80 +5,61 @@
 	category = /datum/uplink_category/grenades
 
 /datum/uplink_item/item/grenades/anti_photon
-	name = "1x Photon Disruption Grenade"
-	desc = "An experimental device for temporarily removing light in a limited area for a small amount of time."
-	item_cost = 4
-	path = /obj/item/grenade/anti_photon
-
-/datum/uplink_item/item/grenades/anti_photons
-	name = "5x Photon Disruption Grenades"
-	item_cost = 16
+	name = "5xPhoton Disruption Grenades"
+	item_cost = 2
 	path = /obj/item/storage/box/anti_photons
 
-/datum/uplink_item/item/grenades/smoke
-	name = "1x Smoke Grenade"
-	desc = "A grenade that will erupt into a vision obscuring cloud of smoke. Makes for great getaways!"
+/datum/uplink_item/item/grenades/teargas
+	name = "6xTear gas Grenades"
 	item_cost = 4
-	path = /obj/item/grenade/smokebomb
+	path = /obj/item/storage/box/teargas
 
-/datum/uplink_item/item/grenades/smokes
-	name = "5x Smoke Grenades"
-	item_cost = 16
+/datum/uplink_item/item/grenades/smoke
+	name = "5xSmoke Grenades"
+	item_cost = 3
 	path = /obj/item/storage/box/smokes
 
 /datum/uplink_item/item/grenades/emp
-	name = "1x EMP Grenade"
-	desc = "A grenade that will send electronics into a frenzy, or possibly fry them altogether. The timer is adjustable with a screwdriver."
-	item_cost = 8
-	path = /obj/item/grenade/empgrenade
-
-/datum/uplink_item/item/grenades/emps
-	name = "5x EMP Grenades"
-	item_cost = 24
+	name = "5xEMP Grenades"
+	item_cost = 6
 	path = /obj/item/storage/box/emps
 
-/datum/uplink_item/item/grenades/frag_high_yield
-	name = "Fragmentation Bomb"
-	item_cost = 24
-	antag_roles = list(MODE_MERCENARY) // yeah maybe regular traitors shouldn't be able to get these
-	path = /obj/item/grenade/frag/high_yield
-
-/datum/uplink_item/item/grenades/fragshell
-	name = "1x Fragmentation Shell"
-	desc = "Weaker than standard fragmentation grenades, these devices can be fired from a grenade launcher."
-	item_cost = 10
-	antag_roles = list(MODE_MERCENARY)
-	path = /obj/item/grenade/frag/shell
-
-/datum/uplink_item/item/grenades/fragshells
-	name = "5x Fragmentation Shells"
-	desc = "Weaker than standard fragmentation grenades, these devices can be fired from a grenade launcher."
-	item_cost = 40
-	antag_roles = list(MODE_MERCENARY)
-	path = /obj/item/storage/box/fragshells
-
 /datum/uplink_item/item/grenades/frag
-	name = "1x Fragmentation Grenade"
+	name = "4xFrag Grenades"
+	item_cost = 8
+	path = /obj/item/storage/box/frag
+
+/datum/uplink_item/item/grenades/explosive
+	name = "4xHigh Explosive Grenades"
 	item_cost = 10
-	antag_roles = list(MODE_MERCENARY)
-	path = /obj/item/grenade/frag
+	path = /obj/item/storage/box/explosive
 
-/datum/uplink_item/item/grenades/frags
-	name = "5x Fragmentation Grenades"
-	item_cost = 40
-	antag_roles = list(MODE_MERCENARY)
-	path = /obj/item/storage/box/frags
+/datum/uplink_item/item/grenades/viscerator
+	name = "viscerator grenade"
+	item_cost = 5
+	path = /obj/item/grenade/spawnergrenade/manhacks
+	
+/datum/uplink_item/item/grenades/flash
+	name = "5xFlashbang Grenades"
+	item_cost = 5
+	path = /obj/item/storage/box/flashbangs/uplink_item
 
-/datum/uplink_item/item/grenades/supermatter
-	name = "1x Supermatter Grenade"
-	desc = "This grenade contains a small supermatter shard which will delaminate upon activation and pull in nearby objects, irradiate lifeforms, and eventually explode."
-	item_cost = 15
-	antag_roles = list(MODE_MERCENARY)
-	path = /obj/item/grenade/supermatter
+/datum/uplink_item/item/grenades/baton_rounds
+	name = "6xRubber rounds"
+	item_cost = 6
+	path = /obj/item/storage/box/sting_rounds
 
-/datum/uplink_item/item/grenades/supermatters
-	name = "5x Supermatter Grenades"
-	desc = "These grenades contains a small supermatter shard which will delaminate upon activation and pull in nearby objects, irradiate lifeforms, and eventually explode."
-	item_cost = 60
-	antag_roles = list(MODE_MERCENARY)
-	path = /obj/item/storage/box/supermatters
+/datum/uplink_item/item/grenades/blast_rounds
+	name = "6xBlast rounds"
+	item_cost = 18
+	path = /obj/item/storage/box/blast_rounds
+
+/datum/uplink_item/item/grenades/frag_rounds
+	name = "6xFrag rounds"
+	item_cost = 12
+	path = /obj/item/storage/box/frag_rounds
+
+/datum/uplink_item/item/grenades/emp_rounds
+	name = "6xEMP rounds"
+	item_cost = 12
+	path = /obj/item/storage/box/emp_rounds

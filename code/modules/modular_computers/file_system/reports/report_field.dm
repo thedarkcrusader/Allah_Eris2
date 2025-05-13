@@ -51,64 +51,21 @@
 	value = given_value
 
 //Exports the contents of the field into html for viewing.
-/datum/report_field/proc/get_value(in_line = 0)
+/datum/report_field/proc/get_value()
 	return value
 
 //In case the name needs to be displayed dynamically.
 /datum/report_field/proc/display_name()
 	return name
 
-/datum/report_field/proc/generate_row_pencode(access, with_fields)
-	if(!ignore_value)
-		. += "\[row\]\[cell\]\[b\][display_name()]:\[/b\]"
-		var/field = ((with_fields && can_edit) ? "\[field\]" : "" )
-		if(!access || verify_access(access))
-			. += (needs_big_box ? "\[/grid\][get_value()][field]\[grid\]" : "\[cell\][get_value()][field]")
-		else
-			. += "\[cell\]\[REDACTED\][field]"
-	else
-		. += "\[/grid\][display_name()]\[grid\]"
-	. = jointext(., null)
-
-/datum/report_field/proc/generate_nano_data(list/given_access)
-	var/dat = list()
-	if(given_access)
-		dat["access"] = verify_access(given_access)
-		dat["access_edit"] = verify_access_edit(given_access)
-	dat["name"] = display_name()
-	dat["value"] = get_value()
-	dat["can_edit"] = can_edit
-	dat["needs_big_box"] = needs_big_box
-	dat["ignore_value"] = ignore_value
-	dat["ID"] = ID
-	return dat
-
 /*
 Basic field subtypes.
 */
 
-//For plain text without forms.
-/datum/report_field/text_label
+//For information between fields.
+/datum/report_field/instruction
 	can_edit = 0
 	ignore_value = 1
-
-//For information between fields.
-/datum/report_field/text_label/instruction/generate_row_pencode(access, with_fields)
-	return "\[small\]\[i\][display_name()]\[/i\]\[/small\]"
-
-/datum/report_field/text_label/instruction/generate_nano_data(list/given_access)
-	var/dat = ..()
-	dat["name"] = "<div class='notice'><small><i>[display_name()]</i></small></div>"
-	return dat
-
-//For headers between fields.
-/datum/report_field/text_label/header/generate_row_pencode(access, with_fields)
-	return "\[h3][display_name()]\[/h3]"
-
-/datum/report_field/text_label/header/generate_nano_data(list/given_access)
-	var/dat = ..()
-	dat["name"] = "<h3>[display_name()]</h3>"
-	return dat
 
 //Basic text field, for short strings.
 /datum/report_field/simple_text
@@ -116,10 +73,10 @@ Basic field subtypes.
 
 /datum/report_field/simple_text/set_value(given_value)
 	if(istext(given_value))
-		value = sanitize(given_value) || ""
+		value = sanitizeSafe(given_value) || ""
 
 /datum/report_field/simple_text/ask_value(mob/user)
-	var/input = input(user, "[display_name()]:", "Form Input", html_decode(get_value())) as null|text
+	var/input = input(user, "[display_name()]:", "Form Input", get_value()) as null|text
 	set_value(input)
 
 //Inteded for sizable text blocks.
@@ -128,11 +85,11 @@ Basic field subtypes.
 	needs_big_box = 1
 
 /datum/report_field/pencode_text/get_value()
-	return digitalPencode2html(value)
+	return pencode2html(value)
 
 /datum/report_field/pencode_text/set_value(given_value)
 	if(istext(given_value))
-		value = sanitize(replacetext(given_value, "\n", "\[br\]"), MAX_PAPER_MESSAGE_LEN) || ""
+		value = sanitizeSafe(replacetext(given_value, "\n", "\[br\]"), MAX_PAPER_MESSAGE_LEN) || ""
 
 /datum/report_field/pencode_text/ask_value(mob/user)
 	set_value(input(user, "[display_name()] (You may use HTML paper formatting tags):", "Form Input", replacetext(html_decode(value), "\[br\]", "\n")) as null|message)
@@ -164,6 +121,32 @@ Basic field subtypes.
 
 /datum/report_field/number/set_value(given_value)
 	if(isnum(given_value))
+		value = abs(given_value)
+
+/datum/report_field/number/module/ask_value(mob/user)
+	var/input_value = input(user, "[display_name()]:", "Form Input", get_value()) as null|num
+
+	if(input_value < 0)
+		to_chat(user,SPAN_WARNING("Value has to be positive."))
+		return
+	var/obj/item/card/id/held_card = user.GetIdCard()
+	if(!held_card)
+		to_chat(user, SPAN_WARNING("Your ID is missing."))
+		return
+	var/datum/money_account/used_account = get_account(held_card.associated_account_number)
+	var/datum/transaction/T_post = new(-input_value, used_account.owner_name, "Bounty Edited", "Bounty board system")
+	if(T_post.apply_to(used_account)) //Charges the new money
+		to_chat(user, SPAN_WARNING("Bounty modified. Your previous funds have been refunded."))
+		var/datum/transaction/T_pre = new(value, used_account.owner_name, "Bounty Refund", "Bounty board system")
+		T_pre.apply_to(used_account) //Refunds the old money
+	else
+		to_chat(user, SPAN_WARNING("You don't have enough funds to do that!"))
+		return
+
+	set_value(input_value)
+
+/datum/report_field/number/module/set_value(given_value)
+	if(isnum(given_value))
 		value = given_value
 
 /datum/report_field/number/ask_value(mob/user)
@@ -188,7 +171,44 @@ Basic field subtypes.
 
 //Signature field; ask_value will obtain the user's signature.
 /datum/report_field/signature/get_value()
-	return "<span style='font-family: Times New Roman'><i>[value]</i></span>"
+	return "<font face=\"Times New Roman\"><i>[value]</i></font>"
 
 /datum/report_field/signature/ask_value(mob/user)
 	set_value((user && user.real_name) ? user.real_name : "Anonymous")
+
+/datum/report_field/signature/anon/ask_value(mob/user)
+	if(user)
+		if("No" == input(user, "Would you like be anonymous ?", "", get_value()) as null|anything in list("No", "Yes"))
+			set_value(user.real_name ? user.real_name : "Anonymous")
+		else
+			set_value("Anonymous")
+
+/datum/report_field/array
+	var/list/value_list = list()
+
+/datum/report_field/array/proc/get_raw(var/position)
+	if(position)
+		return value_list[position]
+	else
+		return value_list
+
+/datum/report_field/array/get_value()
+	var/dat = ""
+	for(var/i = 1, i<=value_list.len, i++)
+		if(i > 1)
+			dat += "<br>"
+		dat += "[value_list[i]]"
+		return dat
+
+/datum/report_field/array/set_value()
+	error("Use add_value()")
+	return
+
+/datum/report_field/array/proc/add_value(var/given_value)
+	value_list.Add(given_value)
+
+/datum/report_field/array/proc/remove_value(var/given_value)
+	value_list.Remove(given_value)
+
+/datum/report_field/array/ask_value(mob/user)
+	add_value(input(user, "Add value", "") as null|text)

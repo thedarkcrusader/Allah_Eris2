@@ -3,31 +3,27 @@
 	desc = "Used for scanning and alerting when someone enters a certain proximity."
 	icon_state = "prox"
 	origin_tech = list(TECH_MAGNET = 1)
-	matter = list(MATERIAL_STEEL = 800, MATERIAL_GLASS = 200, MATERIAL_WASTE = 50)
-	movable_flags = MOVABLE_FLAG_PROXMOVE
+	matter = list(MATERIAL_PLASTIC = 1)
+	flags = PROXMOVE
 	wires = WIRE_PULSE
 
-	secured = 0
+	secured = FALSE
 
-	var/scanning = 0
-	var/timing = 0
-	var/time = 10
-
+	var/scanning = FALSE
 	var/range = 2
-
-/obj/item/device/assembly/prox_sensor/proc/toggle_scan()
-/obj/item/device/assembly/prox_sensor/proc/sense()
+	var/timing = FALSE
+	var/time = 10
 
 
 /obj/item/device/assembly/prox_sensor/activate()
-	if(!..())	return 0//Cooldown check
+	if(!..()) //Cooldown check
+		return
 	timing = !timing
 	update_icon()
-	return 0
 
 
-/obj/item/device/assembly/prox_sensor/set_secure(make_secure)
-	..()
+/obj/item/device/assembly/prox_sensor/toggle_secure()
+	secured = !secured
 	if(secured)
 		START_PROCESSING(SSobj, src)
 	else
@@ -38,27 +34,27 @@
 	return secured
 
 
-/obj/item/device/assembly/prox_sensor/HasProximity(atom/movable/movable)
-	if (ismob(movable) && !isliving(movable))
+/obj/item/device/assembly/prox_sensor/HasProximity(atom/movable/AM as mob|obj)
+	if(!istype(AM))
+		log_debug("DEBUG: HasProximity called with [AM] on [src] ([usr]).")
 		return
-	if (istype(movable, /obj/beam))
+	if(istype(AM, /obj/effect/beam))
 		return
-	if (movable.move_speed < 12)
+	if(AM.move_speed < 12)
 		sense()
 
 
-/obj/item/device/assembly/prox_sensor/sense()
+/obj/item/device/assembly/prox_sensor/proc/sense()
 	var/turf/mainloc = get_turf(src)
-//		if(scanning && cooldown <= 0)
-//			mainloc.visible_message("\icon[src] *boop* *boop*", "*boop* *boop*")
-	if((!holder && !secured)||(!scanning)||(cooldown > 0))	return 0
+
+	if((!holder && !secured) || !scanning || cooldown > 0)
+		return
 	pulse(0)
 	if(!holder)
 		mainloc.visible_message("\icon[src] *beep* *beep*", "*beep* *beep*")
 	cooldown = 2
 	spawn(10)
 		process_cooldown()
-	return
 
 
 /obj/item/device/assembly/prox_sensor/Process()
@@ -74,90 +70,96 @@
 		timing = 0
 		toggle_scan()
 		time = 10
-	return
 
 
 /obj/item/device/assembly/prox_sensor/dropped()
 	spawn(0)
 		sense()
-		return
-	return
 
 
-/obj/item/device/assembly/prox_sensor/toggle_scan()
-	if(!secured)	return 0
-	scanning = !scanning
-	update_icon()
-	return
-
-
-/obj/item/device/assembly/prox_sensor/on_update_icon()
-	ClearOverlays()
+/obj/item/device/assembly/prox_sensor/update_icon()
+	overlays.Cut()
 	attached_overlays = list()
 	if(timing)
-		AddOverlays("prox_timing")
+		overlays += "prox_timing"
 		attached_overlays += "prox_timing"
 	if(scanning)
-		AddOverlays("prox_scanning")
+		overlays += "prox_scanning"
 		attached_overlays += "prox_scanning"
 	if(holder)
 		holder.update_icon()
 	if(holder && istype(holder.loc,/obj/item/grenade/chem_grenade))
 		var/obj/item/grenade/chem_grenade/grenade = holder.loc
 		grenade.primed(scanning)
-	return
 
 
-/obj/item/device/assembly/prox_sensor/Move()
-	..()
+/obj/item/device/assembly/prox_sensor/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
+	. = ..()
 	sense()
-	return
 
 
-/obj/item/device/assembly/prox_sensor/interact(mob/user as mob)//TODO: Change this to the wires thingy
+/obj/item/device/assembly/prox_sensor/ui_status(mob/user)
+	if(is_secured(user))
+		return ..()
+
+	return UI_CLOSE
+
+
+/obj/item/device/assembly/prox_sensor/ui_interact(mob/user, datum/tgui/ui)
+	ui = SStgui.try_update_ui(user, src, ui)
+	if(!ui)
+		ui = new(user, src, "ProximitySensor", name)
+		ui.open()
+
+
+/obj/item/device/assembly/prox_sensor/ui_data(mob/user)
+	var/list/data = list(
+		"isScanning" = scanning,
+		"isTiming" = timing,
+		"range" = range
+	)
+
+	data["minutes"] = round((time - data["seconds"]) / 60)
+	data["seconds"] = round(time % 60)
+
+	return data
+
+
+/obj/item/device/assembly/prox_sensor/ui_act(action, list/params, datum/tgui/ui, datum/ui_state/state)
+	. = ..()
+	if(.)
+		return
+
+	switch(action)
+		if("sense")
+			toggle_scan()
+			. = TRUE
+		if("time")
+			toggle_time()
+			. = TRUE
+		if("adjust")
+			if(params["range"])
+				var/value = text2num(params["range"])
+				range = clamp(range + value, 1, 5)
+				. = TRUE
+			else if(params["time"])
+				var/value = text2num(params["time"])
+				time = clamp(time + value, 0, 600)
+				. = TRUE
+
+
+/obj/item/device/assembly/prox_sensor/proc/toggle_scan()
 	if(!secured)
-		user.show_message(SPAN_WARNING("The [name] is unsecured!"))
-		return 0
-	var/second = time % 60
-	var/minute = (time - second) / 60
-	var/dat = text("<TT><B>Proximity Sensor</B>\n[] []:[]\n<A href='byond://?src=\ref[];tp=-30'>-</A> <A href='byond://?src=\ref[];tp=-1'>-</A> <A href='byond://?src=\ref[];tp=1'>+</A> <A href='byond://?src=\ref[];tp=30'>+</A>\n</TT>", (timing ? text("<A href='byond://?src=\ref[];time=0'>Arming</A>", src) : text("<A href='byond://?src=\ref[];time=1'>Not Arming</A>", src)), minute, second, src, src, src, src)
-	dat += text("<BR>Range: <A href='byond://?src=\ref[];range=-1'>-</A> [] <A href='byond://?src=\ref[];range=1'>+</A>", src, range, src)
-	dat += "<BR><A href='byond://?src=\ref[src];scanning=1'>[scanning?"Armed":"Unarmed"]</A> (Movement sensor active when armed!)"
-	dat += "<BR><BR><A href='byond://?src=\ref[src];refresh=1'>Refresh</A>"
-	dat += "<BR><BR><A href='byond://?src=\ref[src];close=1'>Close</A>"
-	show_browser(user, dat, "window=prox")
-	onclose(user, "prox")
-	return
+		return FALSE
+
+	scanning = !scanning
+	update_icon()
+	sense()
 
 
-/obj/item/device/assembly/prox_sensor/Topic(href, href_list, state = GLOB.physical_state)
-	if((. = ..()))
-		close_browser(usr, "window=prox")
-		onclose(usr, "prox")
-		return
+/obj/item/device/assembly/prox_sensor/proc/toggle_time()
+	if(!secured)
+		return FALSE
 
-	if(href_list["scanning"])
-		toggle_scan()
-
-	if(href_list["time"])
-		timing = text2num(href_list["time"])
-		update_icon()
-
-	if(href_list["tp"])
-		var/tp = text2num(href_list["tp"])
-		time += tp
-		time = min(max(round(time), 0), 600)
-
-	if(href_list["range"])
-		var/r = text2num(href_list["range"])
-		range += r
-		range = min(max(range, 1), 5)
-
-	if(href_list["close"])
-		close_browser(usr, "window=prox")
-		return
-
-	if(usr)
-		attack_self(usr)
-
-	return
+	timing = !timing
+	update_icon()

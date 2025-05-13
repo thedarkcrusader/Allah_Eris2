@@ -1,36 +1,267 @@
-
 /* SmartFridge.  Much todo
 */
 /obj/machinery/smartfridge
 	name = "\improper SmartFridge"
-	icon = 'icons/obj/machines/vending.dmi'
-	icon_state = "fridge_sci"
+	icon = 'icons/obj/vending.dmi'
+	icon_state = "smartfridge"
 	layer = BELOW_OBJ_LAYER
 	density = TRUE
 	anchored = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 5
-	active_power_usage = 100
-	atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_NO_REACT
-	obj_flags = OBJ_FLAG_ANCHORABLE | OBJ_FLAG_ROTATABLE
-	var/static/max_n_of_items = 999 // Sorry but the BYOND infinite loop detector doesn't look things over 1000.
-	var/icon_base = "fridge_sci"
-	var/icon_contents = "chem"
-	var/list/item_records = list()
-	var/datum/stored_items/currently_vending = null	//What we're putting out of the machine.
-	var/seconds_electrified = 0
+	active_power_usage = 250
+	reagent_flags = NO_REACT
+	var/global/max_n_of_items = 999 // Sorry but the BYOND infinite loop detector doesn't look things over 1000.
+	var/icon_on = "smartfridge"
+	var/icon_off = "smartfridge-off"
+	var/icon_panel = "smartfridge-panel"
+	var/icon_fill10 = "smartfridge-fill10"
+	var/icon_fill20 = "smartfridge-fill20"
+	var/icon_fill30 = "smartfridge-fill30"
+	var/list/item_quants = list()
+	var/seconds_electrified = 0;
 	var/shoot_inventory = 0
 	var/locked = 0
 	var/scan_id = 1
 	var/is_secure = 0
-	/// List of type paths this fridge accepts.
-	var/list/accepted_types = list(
-		/obj/item/reagent_containers/food/snacks/grown,
-		/obj/item/seeds,
-		/obj/item/shellfish
-	)
+	var/datum/wires/smartfridge/wires = null
+
+
 
 /obj/machinery/smartfridge/secure
+	name = "\improper Secure SmartFridge"
 	is_secure = 1
+
+
+
+
+/*******************
+*   Disk Storage
+********************/
+/obj/machinery/smartfridge/disks
+	name = "\improper Disks Storage"
+	desc = "When you need disks fast!"
+	icon_state = "smartfridge"
+	icon_fill10 = "diskfridge-fill10"
+	icon_fill20 = "diskfridge-fill20"
+	icon_fill30 = "diskfridge-fill30"
+
+/obj/machinery/smartfridge/disks/accept_check(var/obj/item/O as obj)
+	if(istype(O,/obj/item/computer_hardware/hard_drive/portable))
+		return 1
+	return 0
+
+
+
+/*******************
+*   Seed Storage
+********************/
+/obj/machinery/smartfridge/seeds
+	name = "\improper Refrigerated Seeds Storage"
+	desc = "When you need seeds fast!"
+
+/obj/machinery/smartfridge/seeds/accept_check(var/obj/item/O as obj)
+	if(istype(O,/obj/item/seeds/))
+		return 1
+	return 0
+
+/obj/machinery/smartfridge/kitchen
+	name = "\improper Agro-Club Fridge"
+	desc = "The panel says it won't allow anyone without access to the kitchen or hydroponics. Holds your seeds, produce, and basic ingredients."
+	req_one_access = list(access_hydroponics,access_kitchen)
+//Going to be a mess till I make different type paths between produce, ingredients, and finished meals. Or rebuild how smartfridges create an accept list like vendors. -Mycah
+/obj/machinery/smartfridge/kitchen/accept_check(var/obj/item/O as obj)
+	if(istype(O,/obj/item/seeds/))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/grown/))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/cheesewedge))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/sliceable/cheesewheel))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/meatball))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/rawmeatball))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/bacon))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/rawbacon))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/cutlet))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/rawcutlet))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/dough))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/doughslice))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/sliceable/flatdough))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/flatdoughslice))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/bun))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/tortilla))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/spaghetti))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/rawsticks))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/patty))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/patty_raw))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/food/snacks/meat/))
+		return 1
+	return 0
+
+/*******************
+*   Xenobio Slime Fridge
+********************/
+/obj/machinery/smartfridge/secure/extract
+	name = "\improper Slime Extract Storage"
+	desc = "A refrigerated storage unit for slime extracts"
+	req_access = list(access_moebius)
+
+/obj/machinery/smartfridge/secure/extract/accept_check(var/obj/item/O as obj)
+	if(istype(O,/obj/item/slime_extract))
+		return 1
+	return 0
+
+
+
+/*******************
+*   Chemistry Medicine Storage
+********************/
+/obj/machinery/smartfridge/secure/medbay
+	name = "\improper Refrigerated Medicine Storage"
+	desc = "A refrigerated storage unit for storing medicine and chemicals."
+	req_one_access = list(access_moebius,access_chemistry)
+
+/obj/machinery/smartfridge/secure/medbay/accept_check(var/obj/item/O as obj)
+	if(istype(O,/obj/item/reagent_containers/glass/))
+		return 1
+	if(istype(O,/obj/item/storage/pill_bottle/))
+		return 1
+	if(istype(O,/obj/item/reagent_containers/pill/))
+		return 1
+	return 0
+
+/obj/machinery/smartfridge/chemistry
+	name = "\improper Smart Chemical Storage"
+	desc = "A refrigerated storage unit for medicine and chemical storage."
+
+/obj/machinery/smartfridge/chemistry/accept_check(var/obj/item/O as obj)
+	if(istype(O,/obj/item/storage/pill_bottle) || istype(O,/obj/item/reagent_containers))
+		return 1
+	return 0
+
+
+/*************************
+*   Bar Drinks Showcase
+**************************/
+/obj/machinery/smartfridge/drinks
+	name = "\improper Drink Showcase"
+	desc = "A refrigerated storage unit for tasty tasty alcohol."
+	icon_state = "showcase"
+	icon_on = "showcase"
+	icon_off = "showcase-off"
+	icon_panel = "showcase-panel"
+	var/icon_fill = "showcase-fill"
+
+/obj/machinery/smartfridge/drinks/accept_check(var/obj/item/O as obj)
+	if(istype(O,/obj/item/reagent_containers/glass) || istype(O,/obj/item/reagent_containers/food/drinks) || istype(O,/obj/item/reagent_containers/food/condiment))
+		return 1
+
+/obj/machinery/smartfridge/drinks/update_icon()
+	cut_overlays()
+	if(stat & (BROKEN|NOPOWER))
+		icon_state = icon_off
+	else
+		icon_state = icon_on
+
+	if(panel_open && icon_panel)
+		overlays += image(icon, icon_panel)
+
+	if(contents.len && !(stat & NOPOWER))
+		overlays += image(icon, icon_fill)
+
+
+/***************************
+*   Hydroponics Drying Rack
+****************************/
+/obj/machinery/smartfridge/drying_rack
+	name = "\improper Drying Rack"
+	desc = "A machine for drying plants."
+	icon_state = "drying_rack"
+	icon_on = "drying_rack_on"
+	icon_off = "drying_rack"
+	var/drying_power = 0.1 //should take a bit but. why make people wait a lifetime to DRY PLANTS
+	var/currently_drying = FALSE
+
+/obj/machinery/smartfridge/drying_rack/accept_check(var/obj/item/O as obj)
+	if(istype(O, /obj/item/reagent_containers/food/snacks/))
+		var/obj/item/reagent_containers/food/snacks/S = O
+		if (S.dried_type)
+			return 1
+	return 0
+
+/obj/machinery/smartfridge/drying_rack/Process()
+	..()
+	if(inoperable())
+		return
+	if(contents.len)
+		dry()
+
+/obj/machinery/smartfridge/drying_rack/update_icon()
+	cut_overlays()
+	if(inoperable())
+		icon_state = icon_off
+	else
+		icon_state = icon_on
+	if(contents.len)
+		overlays += "drying_rack_filled"
+		if(!inoperable() && currently_drying)
+			overlays += "drying_rack_drying"
+
+/obj/machinery/smartfridge/drying_rack/proc/dry()
+	var/drying_something = FALSE //While we're here, check if anything is undried and still processing
+	for(var/obj/item/reagent_containers/food/snacks/S in contents)
+		if(S.dry)
+			continue
+		S.dryness += drying_power
+		if (S.dryness >= 1)
+			if(S.dried_type == S.type || !S.dried_type)
+				S.dry = TRUE
+				S.name = "dried [S.name]"
+				S.color = "#AAAAAA"
+			else
+				var/D = S.dried_type
+				D = new D(src)
+				if (istype(D, /obj/item/reagent_containers/food/snacks))
+					var/obj/item/reagent_containers/food/snacks/SD = D
+					SD.dry = TRUE //So we dont get stuck in an endless loop of drying, transforming and drying again
+				qdel(S)
+			update_contents()
+		else
+			drying_something = TRUE
+
+	if (drying_something != currently_drying)
+		currently_drying = drying_something
+		update_icon() //Only update the icon if we have to
+	currently_drying = drying_something
+	return
+
+
+
+
+
+
+
+
+
+
+
 
 /obj/machinery/smartfridge/New()
 	..()
@@ -38,296 +269,134 @@
 		wires = new/datum/wires/smartfridge/secure(src)
 	else
 		wires = new/datum/wires/smartfridge(src)
-	update_icon()
 
 /obj/machinery/smartfridge/Destroy()
-	for(var/datum/stored_items/S in item_records)
-		qdel(S)
-	item_records = null
+	qdel(wires)
+	wires = null
 	return ..()
 
-/obj/machinery/smartfridge/get_req_access()
-	if(!scan_id)
-		return list()
-	return ..()
-
-/obj/machinery/smartfridge/proc/accept_check(obj/item/O)
-	if (is_type_in_list(O, accepted_types))
-		return TRUE
-	return FALSE
-
-/obj/machinery/smartfridge/seeds
-	name = "\improper MegaSeed Servitor"
-	desc = "When you need seeds fast!"
-	accepted_types = list(
-		/obj/item/seeds
-	)
-
-/obj/machinery/smartfridge/secure/extract
-	name = "\improper Slime Extract Storage"
-	desc = "A refrigerated storage unit for slime extracts."
-	icon_contents = "slime"
-	req_access = list(access_research)
-	accepted_types = list(
-		/obj/item/slime_extract
-	)
-
-/obj/machinery/smartfridge/secure/medbay
-	name = "\improper Refrigerated Medicine Storage"
-	desc = "A refrigerated storage unit for storing medicine and chemicals."
-	icon_contents = "chem"
-	req_access = list(list(access_medical,access_chemistry))
-	accepted_types = list(
-		/obj/item/reagent_containers/glass,
-		/obj/item/storage/pill_bottle,
-		/obj/item/reagent_containers/pill,
-		/obj/item/reagent_containers/ivbag
-	)
-
-/obj/machinery/smartfridge/secure/virology
-	name = "\improper Refrigerated Virus Storage"
-	desc = "A refrigerated storage unit for storing viral material."
-	req_access = list(access_virology)
-	icon_contents = "chem"
-	accepted_types = list(
-		/obj/item/reagent_containers/glass/beaker/vial
-	)
-
-/obj/machinery/smartfridge/chemistry
-	name = "\improper Smart Chemical Storage"
-	desc = "A refrigerated storage unit for medicine and chemical storage."
-	icon_contents = "chem"
-	accepted_types = list(
-		/obj/item/storage/pill_bottle,
-		/obj/item/reagent_containers
-	)
-
-/obj/machinery/smartfridge/chemistry/virology
-	name = "\improper Smart Virus Storage"
-	desc = "A refrigerated storage unit for volatile sample storage."
-
-
-/obj/machinery/smartfridge/drinks
-	name = "\improper Drink Showcase"
-	desc = "A refrigerated storage unit for tasty tasty alcohol."
-	icon_state = "fridge_dark"
-	icon_base = "fridge_dark"
-	icon_contents = "drink"
-	accepted_types = list(
-		/obj/item/reagent_containers/glass,
-		/obj/item/reagent_containers/food/drinks,
-		/obj/item/reagent_containers/food/condiment
-	)
-
-/obj/machinery/smartfridge/foods
-	name = "\improper Hot Foods Display"
-	desc = "A heated storage unit for piping hot meals."
-	icon_state = "fridge_food"
-	icon_state = "fridge_food"
-	icon_contents = "food"
-	accepted_types = list(
-		/obj/item/reagent_containers/food/snacks,
-		/obj/item/material/utensil
-	)
-
-/obj/machinery/smartfridge/drying_rack
-	name = "drying rack"
-	desc = "A machine for drying plants."
-	icon_state = "drying_rack"
-	accepted_types = null
-
-/obj/machinery/smartfridge/drying_rack/accept_check(obj/item/O)
-	if(istype(O, /obj/item/reagent_containers/food/snacks))
-		var/obj/item/reagent_containers/food/snacks/S = O
-		return S.dried_type ? TRUE : FALSE
-	else if(istype(O, /obj/item/stack/material))
-		var/obj/item/stack/material/mat = O
-		var/material/skin/skin_mat = mat.material
-		return istype(skin_mat)
-	return FALSE
-
-/obj/machinery/smartfridge/drying_rack/Process()
-	..()
-	if(inoperable())
-		return
-	if(length(contents))
-		dry()
-		update_icon()
-
-/obj/machinery/smartfridge/drying_rack/on_update_icon()
-	ClearOverlays()
-	if(inoperable())
-		if(length(contents))
-			icon_state = "drying_rack-plant-off"
-		else
-			icon_state = "drying_rack-off"
-	else
-		icon_state = "drying_rack"
-	if(length(contents))
-		icon_state = "drying_rack-plant"
-		if(operable())
-			icon_state = "drying_rack-close"
-
-/obj/machinery/smartfridge/drying_rack/proc/dry()
-	for(var/datum/stored_items/I in item_records)
-		for(var/thing in I.instances)
-			var/remove_thing = FALSE
-			if(istype(thing, /obj/item/reagent_containers/food/snacks))
-				var/obj/item/reagent_containers/food/snacks/S = thing
-				if(S.dry || !I.get_specific_product(get_turf(src), S))
-					continue
-				if(S.dried_type == S.type)
-					S.dry = 1
-					S.SetName("dried [S.name]")
-					S.color = "#a38463"
-					stock_item(S)
-					I.instances -= thing
-					I.amount--
-				else
-					var/D = S.dried_type
-					new D(get_turf(src))
-					remove_thing = TRUE
-
-			else if(istype(thing, /obj/item/stack/material))
-				var/obj/item/stack/material/skin = thing
-				if(!istype(skin.material, /material/skin))
-					continue
-				var/material/skin/skin_mat = skin.material
-				if(!skin_mat.tans_to)
-					continue
-				var/material/leather_mat = SSmaterials.get_material_by_name(skin_mat.tans_to)
-				stock_item(new leather_mat.stack_type(get_turf(src), skin.amount, skin_mat.tans_to))
-				remove_thing = TRUE
-
-			if(remove_thing)
-				I.instances -= thing
-				I.amount--
-				qdel(thing)
-				return
+/obj/machinery/smartfridge/proc/accept_check(var/obj/item/O as obj)
+	if(istype(O,/obj/item/reagent_containers/food/snacks/grown/) || istype(O,/obj/item/seeds/) || istype(O,/obj/item/reagent_containers/food/snacks/meat/) || istype(O,/obj/item/reagent_containers/food/snacks/egg/))
+		return 1
+	return 0
 
 
 /obj/machinery/smartfridge/Process()
-	if(inoperable())
+	if(stat & (BROKEN|NOPOWER))
 		return
 	if(src.seconds_electrified > 0)
 		src.seconds_electrified--
 	if(src.shoot_inventory && prob(2))
 		src.throw_item()
 
-/obj/machinery/smartfridge/on_update_icon()
-	ClearOverlays()
-	if(inoperable())
-		icon_state = "[icon_base]-off"
+/obj/machinery/smartfridge/power_change()
+	var/old_stat = stat
+	..()
+	if(powered())
+		set_power_use(ACTIVE_POWER_USE)
 	else
-		icon_state = icon_base
+		set_power_use(IDLE_POWER_USE)
+	if(old_stat != stat)
+		update_icon()
 
-	if(is_secure)
-		AddOverlays(image(icon, "[icon_base]-sidepanel"))
+/obj/machinery/smartfridge/update_icon()
+	cut_overlays()
+	if(stat & (BROKEN|NOPOWER))
+		icon_state = icon_off
+	else
+		icon_state = icon_on
 
-	if(panel_open)
-		AddOverlays(image(icon, "[icon_base]-panel"))
+	if(panel_open && icon_panel)
+		overlays += image(icon, icon_panel)
 
-	var/image/I
-	var/is_off = ""
-	if(inoperable())
-		is_off = "-off"
-
-	// Fridge contents
-	switch(length(contents))
-		if(0)
-			I = image(icon, "empty[is_off]")
-		if(1 to 2)
-			I = image(icon, "[icon_contents]-1[is_off]")
-		if(3 to 5)
-			I = image(icon, "[icon_contents]-2[is_off]")
-		if(6 to 8)
-			I = image(icon, "[icon_contents]-3[is_off]")
+	if(contents.len)
+		if(contents.len <= 10)
+			overlays += image(icon, icon_fill10)
+		else if(contents.len <= 20)
+			overlays += image(icon, icon_fill20)
 		else
-			I = image(icon, "[icon_contents]-4[is_off]")
-	AddOverlays(I)
-
-	// Fridge top
-	I = image(icon, "[icon_base]-top")
-	I.pixel_z = 32
-	I.layer = ABOVE_WINDOW_LAYER
-	AddOverlays(I)
+			overlays += image(icon, icon_fill30)
 
 /*******************
 *   Item Adding
 ********************/
 
-/obj/machinery/smartfridge/use_tool(obj/item/O, mob/living/user, list/click_params)
-	if(isScrewdriver(O))
+/obj/machinery/smartfridge/attackby(var/obj/item/O as obj, var/mob/user as mob)
+	if(istype(O, /obj/item/tool/screwdriver))
 		panel_open = !panel_open
 		user.visible_message("[user] [panel_open ? "opens" : "closes"] the maintenance panel of \the [src].", "You [panel_open ? "open" : "close"] the maintenance panel of \the [src].")
 		update_icon()
 		SSnano.update_uis(src)
-		return TRUE
+		return
 
-	if(isMultitool(O) || isWirecutter(O))
+	if(istype(O, /obj/item/tool/multitool)||istype(O, /obj/item/tool/wirecutters))
 		if(panel_open)
 			attack_hand(user)
-		return TRUE
+		return
 
-	if(!is_powered())
+	if(stat & NOPOWER)
 		to_chat(user, SPAN_NOTICE("\The [src] is unpowered and useless."))
-		return TRUE
+		return
 
 	if(accept_check(O))
-		if(!user.unEquip(O))
-			return TRUE
-		stock_item(O)
-		user.visible_message(SPAN_NOTICE("\The [user] has added \the [O] to \the [src]."), SPAN_NOTICE("You add \the [O] to \the [src]."))
-		update_icon()
-		return TRUE
+		if(contents.len >= max_n_of_items)
+			to_chat(user, SPAN_NOTICE("\The [src] is full."))
+			return 1
+		else
+			user.remove_from_mob(O)
+			O.forceMove(src)
+			update_contents()
+			user.visible_message(SPAN_NOTICE("[user] has added \the [O] to \the [src]."), SPAN_NOTICE("You add \the [O] to \the [src]."))
+			update_icon()
+			SSnano.update_uis(src)
 
-	else if(istype(O, /obj/item/storage))
+	else if(istype(O, /obj/item/storage/bag))
 		var/obj/item/storage/bag/P = O
 		var/plants_loaded = 0
 		for(var/obj/G in P.contents)
-			if(accept_check(G) && P.remove_from_storage(G, src, 1))
-				plants_loaded++
-				stock_item(G)
-		P.finish_bulk_removal()
-
+			if(accept_check(G))
+				if(contents.len >= max_n_of_items)
+					to_chat(user, SPAN_NOTICE("\The [src] is full."))
+					return 1
+				else
+					P.remove_from_storage(G,src)
+					plants_loaded++
 		if(plants_loaded)
-			user.visible_message(SPAN_NOTICE("\The [user] loads \the [src] with the contents of \the [P]."), SPAN_NOTICE("You load \the [src] with the contents of \the [P]."))
-			if(length(P.contents) > 0)
-				to_chat(user, SPAN_NOTICE("Some items were refused."))
-		return TRUE
-	return ..()
+			update_contents()
+			update_icon()
+			user.visible_message(SPAN_NOTICE("[user] loads \the [src] with \the [P]."), SPAN_NOTICE("You load \the [src] with \the [P]."))
+			if(P.contents.len > 0)
+				to_chat(user, SPAN_NOTICE("Some items are refused."))
 
-/obj/machinery/smartfridge/secure/emag_act(remaining_charges, mob/user)
+		SSnano.update_uis(src)
+
+	else
+		to_chat(user, SPAN_NOTICE("\The [src] smartly refuses [O]."))
+		return 1
+
+/obj/machinery/smartfridge/secure/emag_act(var/remaining_charges, var/mob/user)
 	if(!emagged)
-		emagged = TRUE
+		emagged = 1
 		locked = -1
-		req_access.Cut()
 		to_chat(user, "You short out the product lock on [src].")
 		return 1
 
-/obj/machinery/smartfridge/proc/stock_item(obj/item/O)
-	for(var/datum/stored_items/I in item_records)
-		if(istype(O, I.item_path) && O.name == I.item_name)
-			stock(I, O)
-			return
+/obj/machinery/smartfridge/attack_hand(mob/user as mob)
+	if(stat & (NOPOWER|BROKEN))
+		return
+	wires.Interact(user)
+	nano_ui_interact(user)
 
-	var/datum/stored_items/I = new/datum/stored_items(src, O.type, O.name)
-	dd_insertObjectList(item_records, I)
-	stock(I, O)
 
-/obj/machinery/smartfridge/proc/stock(datum/stored_items/I, obj/item/O)
-	I.add_product(O)
-	SSnano.update_uis(src)
-
-/obj/machinery/smartfridge/interface_interact(mob/user)
-	ui_interact(user)
-	return TRUE
-
+/obj/machinery/smartfridge/proc/update_contents()
+	item_quants.Cut()
+	for (var/obj/item/i in contents)
+		item_quants[i.name] = (item_quants[i.name] ? item_quants[i.name]+1 : 1)
 /*******************
 *   SmartFridge Menu
 ********************/
 
-/obj/machinery/smartfridge/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1)
+/obj/machinery/smartfridge/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	user.set_machine(src)
 
 	var/data[0]
@@ -338,13 +407,13 @@
 	data["secure"] = is_secure
 
 	var/list/items[0]
-	for (var/i=1 to length(item_records))
-		var/datum/stored_items/I = item_records[i]
-		var/count = I.get_amount()
+	for (var/i=1 to length(item_quants))
+		var/K = item_quants[i]
+		var/count = item_quants[K]
 		if(count > 0)
-			items.Add(list(list("display_name" = html_encode(capitalize(I.item_name)), "vend" = i, "quantity" = count)))
+			items.Add(list(list("display_name" = html_encode(capitalize(K)), "vend" = i, "quantity" = count)))
 
-	if(length(items) > 0)
+	if(items.len > 0)
 		data["contents"] = items
 
 	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
@@ -359,6 +428,8 @@
 	var/mob/user = usr
 	var/datum/nanoui/ui = SSnano.get_open_ui(user, src, "main")
 
+	src.add_fingerprint(user)
+
 	if(href_list["close"])
 		user.unset_machine()
 		ui.close()
@@ -367,46 +438,61 @@
 	if(href_list["vend"])
 		var/index = text2num(href_list["vend"])
 		var/amount = text2num(href_list["amount"])
-		var/datum/stored_items/I = item_records[index]
-		var/count = I.get_amount()
+		var/K = item_quants[index]
+		var/count = item_quants[K]
 
 		// Sanity check, there are probably ways to press the button when it shouldn't be possible.
 		if(count > 0)
-			if((count - amount) < 0)
-				amount = count
-			for(var/i = 1 to amount)
-				I.get_product(get_turf(src))
-				update_icon()
+			item_quants[K] = max(count - amount, 0)
 
+			var/i = amount
+			for(var/obj/O in contents)
+				if(O.name == K)
+					O.loc = loc
+					i--
+					if(i <= 0)
+						update_contents()
+						update_icon()
+						return 1
+
+		update_contents()
+		update_icon()
 		return 1
 	return 0
 
-/obj/machinery/smartfridge/proc/throw_item()
+/obj/machinery/smartfridge/throw_item()
 	var/obj/throw_item = null
 	var/mob/living/target = locate() in view(7,src)
 	if(!target)
 		return 0
 
-	for(var/datum/stored_items/I in src.item_records)
-		throw_item = I.get_product(loc)
-		if (!throw_item)
+	for (var/O in item_quants)
+		if(item_quants[O] <= 0) //Try to use a record that actually has something to dump.
 			continue
-		break
 
+		item_quants[O]--
+		for(var/obj/T in contents)
+			if(T.name == O)
+				T.loc = src.loc
+				throw_item = T
+				break
+		break
+	update_contents()
 	if(!throw_item)
 		return 0
 	spawn(0)
-		throw_item.throw_at(target,16,3)
+		throw_item.throw_at(target,16,3,src)
 	src.visible_message(SPAN_WARNING("[src] launches [throw_item.name] at [target.name]!"))
-	update_icon()
 	return 1
 
 /************************
 *   Secure SmartFridges
 *************************/
 
-/obj/machinery/smartfridge/secure/CanUseTopic(mob/user, datum/topic_state/state, href_list)
-	if(!allowed(user) && !emagged && locked != -1 && href_list && href_list["vend"] && scan_id)
-		to_chat(user, SPAN_WARNING("Access denied."))
-		return STATUS_CLOSE
+/obj/machinery/smartfridge/secure/Topic(href, href_list)
+	if(stat & (NOPOWER|BROKEN)) return 0
+	if(usr.contents.Find(src) || (in_range(src, usr) && istype(loc, /turf)))
+		if(!allowed(usr) && !emagged && locked != -1 && href_list["vend"])
+			to_chat(usr, SPAN_WARNING("Access denied."))
+			return 0
 	return ..()

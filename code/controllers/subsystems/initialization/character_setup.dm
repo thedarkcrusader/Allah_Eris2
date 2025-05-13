@@ -1,43 +1,29 @@
 SUBSYSTEM_DEF(character_setup)
 	name = "Character Setup"
-	init_order = SS_INIT_CHAR_SETUP
-	priority = SS_PRIORITY_CHAR_SETUP
-	flags = SS_BACKGROUND
-	wait = 1 SECOND
-	runlevels = RUNLEVELS_PREGAME | RUNLEVELS_GAME
+	init_order = INIT_ORDER_CHAR_SETUP
+	flags = SS_NO_FIRE
 
 	var/list/prefs_awaiting_setup = list()
 	var/list/preferences_datums = list()
-	var/list/newplayers_requiring_init = list()
 
-	var/list/save_queue = list()
+	var/datum/category_collection/setup_option_collection/setup_options
 
+/datum/controller/subsystem/character_setup/Initialize()
+	setup_options = new
 
-/datum/controller/subsystem/character_setup/UpdateStat(time)
-	return
-
-
-/datum/controller/subsystem/character_setup/Initialize(start_uptime)
-	while(length(prefs_awaiting_setup))
-		var/datum/preferences/prefs = prefs_awaiting_setup[length(prefs_awaiting_setup)]
-		LIST_DEC(prefs_awaiting_setup)
+	while(prefs_awaiting_setup.len)
+		var/datum/preferences/prefs = prefs_awaiting_setup[prefs_awaiting_setup.len]
+		prefs_awaiting_setup.len--
 		prefs.setup()
-	while(length(newplayers_requiring_init))
-		var/mob/new_player/new_player = newplayers_requiring_init[length(newplayers_requiring_init)]
-		LIST_DEC(newplayers_requiring_init)
-		new_player.deferred_login()
 
+	for(var/d in preferences_datums)
+		var/datum/preferences/prefs = d
+		if(istype(prefs) && !prefs.path)
+			error("Prefs failed to setup (SS): [prefs.client_ckey]")
+			prefs.setup()
 
-/datum/controller/subsystem/character_setup/fire(resumed = FALSE)
-	while(length(save_queue))
-		var/datum/preferences/prefs = save_queue[length(save_queue)]
-		LIST_DEC(save_queue)
+	// Start playing music for clients
+	for(var/client/C in clients)
+		GLOB.lobbyScreen.play_music(C)
 
-		if(!QDELETED(prefs))
-			prefs.save_preferences()
-
-		if(MC_TICK_CHECK)
-			return
-
-/datum/controller/subsystem/character_setup/proc/queue_preferences_save(datum/preferences/prefs)
-	save_queue |= prefs
+	. = ..()

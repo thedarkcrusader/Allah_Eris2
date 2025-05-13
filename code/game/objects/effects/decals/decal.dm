@@ -1,12 +1,8 @@
-/obj/decal
-	layer = DECAL_LAYER
+/obj/effect
+	spawn_frequency = 10
+	bad_type = /obj/effect
+	spawn_tags = null
 
-
-/obj/decal/fall_damage()
-	return 0
-
-/obj/decal/is_burnable()
-	return TRUE
-
-/obj/decal/lava_act()
-	. = !throwing ? ..() : FALSE
+/obj/effect/decal
+	plane = FLOOR_PLANE
+	bad_type = /obj/effect/decal

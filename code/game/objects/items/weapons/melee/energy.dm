@@ -1,333 +1,236 @@
 /obj/item/melee/energy
-	var/active = FALSE
-	var/damaged = FALSE
-	var/disabled
+	icon = 'icons/obj/weapons.dmi'
+	sharp = FALSE
+	edge = FALSE
+	armor_divisor = ARMOR_PEN_MASSIVE
+	flags = NOBLOODY
+	structure_damage_factor = STRUCTURE_DAMAGE_BREACHING
+	heat = 3800
+	embed_mult = 0 //No physical matter to catch onto things
+	bad_type = /obj/item/melee/energy
+	var/active = 0
 	var/active_force
 	var/active_throwforce
-	var/active_icon
-	var/lighting_color
-	var/active_attack_verb
-	var/inactive_attack_verb = list()
-	armor_penetration = 50
-	atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_NO_BLOOD
+	var/active_w_class
 
-
-/obj/item/melee/energy/can_embed()
-	return FALSE
-
-
-/obj/item/melee/energy/Initialize()
-	. = ..()
-	if(active)
-		active = FALSE
-		activate()
-	else
-		active = TRUE
-		deactivate()
-
-
-/obj/item/melee/energy/on_update_icon()
-	if(active)
-		icon_state = active_icon
-	else
-		icon_state = initial(icon_state)
-
+/obj/item/melee/energy/is_hot()
+	if (active)
+		return heat
 
 /obj/item/melee/energy/proc/activate(mob/living/user)
-	if (active)
+	anchored = TRUE
+	if(active)
 		return
-	if (damaged)
-		if (world.time < disabled)
-			if (user)
-				user.show_message(SPAN_WARNING("\The [src] sputters. It's not going to work right now!"))
-			return
-		user.visible_message(SPAN_NOTICE("\The [src] resonates perfectly, once again."))
-		damaged = FALSE
-
-	active = TRUE
+	active = 1
 	force = active_force
 	throwforce = active_throwforce
+	damtype = BURN
 	sharp = TRUE
 	edge = TRUE
-	slot_flags |= SLOT_DENYPOCKET
-	attack_verb = active_attack_verb
-
-	if (user)
-		playsound(user, 'sound/weapons/saberon.ogg', 50, 1)
-		to_chat(user, SPAN_NOTICE("\The [src] is now energised."))
-	set_light(2, 0.8, lighting_color)
-
-	if (istype(user,/mob/living/carbon/human))
-		var/mob/living/carbon/human/H = user
-		H.update_inv_l_hand()
-		H.update_inv_r_hand()
-
-	update_icon()
-
+	w_class = active_w_class
+	playsound(user, 'sound/weapons/saberon.ogg', 50, 1)
+	update_wear_icon()
 
 /obj/item/melee/energy/proc/deactivate(mob/living/user)
-	if (!active)
+	anchored = FALSE
+	if(!active)
 		return
-	active = FALSE
+	playsound(user, 'sound/weapons/saberoff.ogg', 50, 1)
+	active = 0
 	force = initial(force)
 	throwforce = initial(throwforce)
+	damtype = initial(damtype)
 	sharp = initial(sharp)
 	edge = initial(edge)
-	slot_flags = initial(slot_flags)
-	attack_verb = inactive_attack_verb
-
-	if (user)
-		playsound(user, 'sound/weapons/saberoff.ogg', 50, 1)
-		to_chat(user, SPAN_NOTICE("\The [src] deactivates!"))
-	set_light(0)
-
-	if (istype(user,/mob/living/carbon/human))
-		var/mob/living/carbon/human/H = user
-		H.update_inv_l_hand()
-		H.update_inv_r_hand()
-
-	update_icon()
-
+	w_class = initial(w_class)
+	update_wear_icon()
 
 /obj/item/melee/energy/attack_self(mob/living/user as mob)
 	if (active)
-		if ((MUTATION_CLUMSY in user.mutations) && prob(50))
-			var/datum/pronouns/pronouns = user.choose_from_pronouns()
-			user.visible_message(SPAN_DANGER("\The [user] accidentally cuts [pronouns.self] with \the [src]."),\
+/*		if ((CLUMSY in user.mutations) && prob(50))
+			user.visible_message(SPAN_DANGER("\The [user] accidentally cuts \himself with \the [src]."),\
 			SPAN_DANGER("You accidentally cut yourself with \the [src]."))
-			user.take_organ_damage(5,5)
+			user.take_organ_damage(5,5)	*/
 		deactivate(user)
 	else
 		activate(user)
-
 	add_fingerprint(user)
-	return
-
-
-/obj/item/melee/energy/emp_act(severity)
-	SHOULD_CALL_PARENT(FALSE)
-	if (!active)
-		return
-	if (damaged)
-		return
-	var/disabletime = 30 SECONDS
-	if (severity == EMP_ACT_HEAVY)
-		disabletime = 1.5 MINUTES
-
-	visible_message(SPAN_DANGER("\The [src] violently shudders!"))
-	new /obj/overlay/emp_pulse (get_turf(src))
-
-	disabled = world.time + disabletime
-	var/mob/living/carbon/M = loc
-	if (M)
-		deactivate(M)
-	else
-		deactivate()
-	update_icon()
-	damaged = TRUE
-	GLOB.empd_event.raise_event(src, severity)
-
-
-/obj/item/melee/energy/get_storage_cost()
-	if (active)
-		return ITEM_SIZE_NO_CONTAINER
-	return ..()
-
-
-/obj/item/melee/energy/IsHeatSource()
-	return active ? 3500 : 0
-
 
 /*
  * Energy Axe
  */
 /obj/item/melee/energy/axe
-	icon = 'icons/obj/weapons/melee_energy.dmi'
 	name = "energy axe"
-	desc = "An energised battle axe."
+	desc = "A battle axe with some kind of red energy crystal. Pretty sharp."
 	icon_state = "axe0"
-	active_icon = "axe1"
-	lighting_color = COLOR_SABER_AXE
-	active_force = 60
-	active_throwforce = 35
+	active_force = WEAPON_FORCE_GODLIKE
+	active_throwforce = 50
+	active_w_class = ITEM_SIZE_HUGE
 	force = 20
 	throwforce = 10
 	throw_speed = 1
 	throw_range = 5
 	w_class = ITEM_SIZE_NORMAL
-	atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_NO_BLOOD
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
+	flags = CONDUCT | NOBLOODY
 	origin_tech = list(TECH_MAGNET = 3, TECH_COMBAT = 4)
-	active_attack_verb = list("attacked", "chopped", "cleaved", "torn", "cut")
-	inactive_attack_verb = list("attacked", "chopped", "cleaved", "torn", "cut")
+	attack_verb = list("attacked", "chopped", "cleaved", "torn", "cut")
 	sharp = TRUE
 	edge = TRUE
-	melee_accuracy_bonus = 15
 
+/obj/item/melee/energy/axe/activate(mob/living/user)
+	icon_state = "axe1"
+	..()
+	to_chat(user, SPAN_NOTICE("\The [src] is now energized."))
 
 /obj/item/melee/energy/axe/deactivate(mob/living/user)
-	. = ..()
-	to_chat(user, SPAN_NOTICE("\The [src] is de-energised. It's just a regular axe now."))
-
+	icon_state = initial(icon_state)
+	..()
+	to_chat(user, SPAN_NOTICE("\The [src] is de-energized. It's just a regular axe now."))
 
 /*
  * Energy Sword
  */
 /obj/item/melee/energy/sword
-	icon = 'icons/obj/weapons/melee_energy.dmi'
+	color
 	name = "energy sword"
-	desc = "May the force be within you."
+	desc = "A tight and compact hilt featuring a side switch for deploying a highly precise, deadly, and concentrated beam of light. Used by assassins, honor guards, and rich men, this sword of light strikes fear into even the coldest of mercenaries."
 	icon_state = "sword0"
-	active_force = 30
-	active_throwforce = 20
-	force = 3
-	throwforce = 5
+	active_force = WEAPON_FORCE_LETHAL // Go forth and slay, padawan
+	active_throwforce = WEAPON_FORCE_LETHAL
+	no_double_tact = TRUE
+	active_w_class = ITEM_SIZE_BULKY
+	force = WEAPON_FORCE_HARMLESS
+	throwforce = WEAPON_FORCE_HARMLESS
+	armor_divisor = ARMOR_PEN_HALF
 	throw_speed = 1
 	throw_range = 5
 	w_class = ITEM_SIZE_SMALL
-	atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_NO_BLOOD
-	origin_tech = list(TECH_MAGNET = 3, TECH_ESOTERIC = 4)
+	flags = NOBLOODY
+	origin_tech = list(TECH_MAGNET = 3, TECH_COVERT = 4)
 	sharp = TRUE
 	edge = TRUE
-	base_parry_chance = 50
-	active_attack_verb = list("attacked", "slashed", "stabbed", "sliced", "torn", "ripped", "diced", "cut")
-	hitsound = 'sound/weapons/blade1.ogg'
 	var/blade_color
 
+/obj/item/melee/energy/sword/dropped(var/mob/user)
+	..()
+	deactivate(user)
 
-/obj/item/melee/energy/sword/Initialize()
+/obj/item/melee/energy/sword/Initialize(mapload)
+	. = ..()
 	if(!blade_color)
 		blade_color = pick("red","blue","green","purple")
-
-	active_icon = "sword[blade_color]"
-	var/color_hex = list("red" = COLOR_SABER_RED,  "blue" = COLOR_SABER_BLUE, "green" = COLOR_SABER_GREEN, "purple" = COLOR_SABER_PURPLE)
-	lighting_color = color_hex[blade_color]
-
-	. = ..()
-
 
 /obj/item/melee/energy/sword/green
 	blade_color = "green"
 
-
 /obj/item/melee/energy/sword/red
 	blade_color = "red"
-
-
-/obj/item/melee/energy/sword/red/activated
-	active = TRUE
-
 
 /obj/item/melee/energy/sword/blue
 	blade_color = "blue"
 
-
 /obj/item/melee/energy/sword/purple
 	blade_color = "purple"
 
+/obj/item/melee/energy/sword/pirate
+	blade_color = "cutlass"
 
-/obj/item/melee/energy/sword/dropped(mob/user)
+/obj/item/melee/energy/sword/sabre
+	blade_color = "green"
+
+/obj/item/melee/energy/sword/activate(mob/living/user)
+	if(!active)
+		to_chat(user, SPAN_NOTICE("\The [src] is now energized."))
+	icon_state = "sword[blade_color]"
 	..()
-	if(!ismob(loc))
-		deactivate(user)
+	attack_verb = list("attacked", "slashed", "stabbed", "sliced", "torn", "ripped", "diced", "cut")
+	hitsound = 'sound/weapons/blade1.ogg'
 
+	tool_qualities = list(QUALITY_CUTTING = 30,  QUALITY_WIRE_CUTTING = 20, QUALITY_LASER_CUTTING = 20, QUALITY_WELDING = 10, QUALITY_CAUTERIZING = 10)
 
-/obj/item/melee/energy/sword/handle_shield(mob/user, damage, atom/damage_source = null, mob/attacker = null, def_zone = null, attack_text = "the attack")
-	. = ..()
-	if(.)
-		var/datum/effect/spark_spread/spark_system = new /datum/effect/spark_spread()
+/obj/item/melee/energy/sword/deactivate(mob/living/user)
+	if(active)
+		to_chat(user, SPAN_NOTICE("\The [src] deactivates!"))
+	icon_state = initial(icon_state)
+	..()
+	attack_verb = list()
+	tool_qualities = initial(tool_qualities)
+
+/obj/item/melee/energy/sword/handle_shield(mob/user, var/damage, atom/damage_source = null, mob/attacker = null, var/def_zone = null, var/attack_text = "the attack")
+	if(active && default_parry_check(user, attacker, damage_source) && prob(50))
+		user.visible_message(SPAN_DANGER("\The [user] parries [attack_text] with \the [src]!"))
+
+		var/datum/effect/effect/system/spark_spread/spark_system = new /datum/effect/effect/system/spark_spread()
 		spark_system.set_up(5, 0, user.loc)
 		spark_system.start()
 		playsound(user.loc, 'sound/weapons/blade1.ogg', 50, 1)
-
-
-/obj/item/melee/energy/sword/get_parry_chance(mob/user, mob/attacker)
-	return active ? ..() : 0
-
+		return 1
+	return 0
 
 /obj/item/melee/energy/sword/pirate
-	icon = 'icons/obj/weapons/melee_energy.dmi'
 	name = "energy cutlass"
 	desc = "Arrrr matey."
 	icon_state = "cutlass0"
-	active_icon = "cutlass1"
-	lighting_color = COLOR_SABER_CUTLASS
 
 
-/obj/item/melee/energy/sword/pirate/activated
-	active = TRUE
-
+/obj/item/melee/energy/sword/sabre
+	name = "laser sabre"
+	desc = "You feel the radiant glow below your skin."
+	origin_tech = list(TECH_MAGNET = 5, TECH_POWER = 6, TECH_COMBAT = 3)
+	active_force = WEAPON_FORCE_ROBUST
+	active_throwforce = WEAPON_FORCE_ROBUST
 
 /*
  *Energy Blade
  */
+
+//Can't be activated or deactivated, so no reason to be a subtype of energy
 /obj/item/melee/energy/blade
-	icon = 'icons/obj/weapons/melee_energy.dmi'
 	name = "energy blade"
 	desc = "A concentrated beam of energy in the shape of a blade. Very stylish... and lethal."
+	icon = 'icons/obj/weapons.dmi'
 	icon_state = "blade"
-	active_icon = "blade"	//It's all energy, so it should always be visible.
-	lighting_color = COLOR_SABER_GREEN
-	active_force = 40 //Normal attacks deal very high damage - about the same as wielded fire axe
-	active = 1
-	armor_penetration = 100
+	force = WEAPON_FORCE_BRUTAL //Normal attacks deal very high damage - about the same as The Sword of Truth
+	armor_divisor = ARMOR_PEN_MASSIVE
+	damtype = BURN
 	sharp = TRUE
 	edge = TRUE
 	anchored = TRUE    // Never spawned outside of inventory, should be fine.
-	canremove = FALSE // You can use it while prone. Still deleted if the arm is destroyed.
-	active_throwforce = 1  //Throwing or dropping the item deletes it.
+	throwforce = 1  //Throwing or dropping the item deletes it.
 	throw_speed = 1
 	throw_range = 1
-	w_class = ITEM_SIZE_TINY //technically it's just energy or something, I dunno
-	atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_NO_BLOOD
-	active_attack_verb = list("attacked", "slashed", "stabbed", "sliced", "torn", "ripped", "diced", "cut")
+	w_class = ITEM_SIZE_BULKY
+	flags = NOBLOODY
 	hitsound = 'sound/weapons/blade1.ogg'
-	var/mob/living/carbon/human/creator
-	var/datum/effect/spark_spread/spark_system
+	attack_verb = list("attacked", "slashed", "stabbed", "sliced", "torn", "ripped", "diced", "cut")
+	var/mob/living/creator
+	var/datum/effect/effect/system/spark_spread/spark_system
+	var/cleanup = TRUE	// Should the blade despawn moments after being discarded by the summoner?
+	var/init_procees = TRUE
+	var/stunmode = FALSE
+	var/stunforce = 0
+	var/agonyforce = 40
 
-
-/obj/item/melee/energy/blade/New()
-	..()
-	spark_system = new /datum/effect/spark_spread()
-	spark_system.set_up(5, 0, src)
-	spark_system.attach(src)
-
-
-/obj/item/melee/energy/blade/Initialize()
+/obj/item/melee/energy/blade/Initialize(mapload)
 	. = ..()
-	if(ishuman(loc))
-		creator = loc
-	START_PROCESSING(SSobj, src)
-	playsound(creator, 'sound/weapons/saberon.ogg', 50, 1)
-
+	if(init_procees)
+		spark_system = new /datum/effect/effect/system/spark_spread()
+		spark_system.set_up(5, 0, src)
+		spark_system.attach(src)
+		START_PROCESSING(SSobj, src)
 
 /obj/item/melee/energy/blade/Destroy()
 	STOP_PROCESSING(SSobj, src)
-	playsound(creator, 'sound/weapons/saberoff.ogg', 50, 1)
-	creator = null
 	. = ..()
 
-
-/obj/item/melee/energy/blade/get_storage_cost()
-	return ITEM_SIZE_NO_CONTAINER
-
-
-/obj/item/melee/energy/blade/attack_self(mob/user as mob)
-	user.drop_from_inventory(src)
-
-
 /obj/item/melee/energy/blade/dropped()
-	..()
-	QDEL_IN(src, 0)
-
+	if(cleanup)
+		spawn(1) if(src) qdel(src)
 
 /obj/item/melee/energy/blade/Process()
-	if (creator.handcuffed || (creator.stat != CONSCIOUS))
-		QDEL_IN(src, 0)
-
-	if (!creator || loc != creator || !creator.IsHolding(src))
+	if(!creator || loc != creator || (creator.l_hand != src && creator.r_hand != src))
 		// Tidy up a bit.
-		if(istype(loc,/mob/living))
+		if(isliving(loc))
 			var/mob/living/carbon/human/host = loc
 			if(istype(host))
 				for(var/obj/item/organ/external/organ in host.organs)
@@ -337,35 +240,61 @@
 			host.pinned -= src
 			host.embedded -= src
 			host.drop_from_inventory(src)
-		QDEL_IN(src, 0)
+		if(cleanup)
+			spawn(1) if(src) qdel(src)
+
+/obj/item/melee/energy/blade/organ_module //just to make sure that blade doesnt delet itself
+	no_double_tact = TRUE //Retains BULKY defensive capabilities like parrying while blocking while being fast as other armblades
+	cleanup = FALSE
+	init_procees = FALSE
+
+/obj/item/melee/energy/blade/organ_module/attack_self(mob/user)
+
+/obj/item/melee/energy/blade/attack_self(mob/user as mob)
+	if(stunmode)
+		desc = "A concentrated beam of energy in the shape of a blade. Very stylish... and lethal."
+		icon_state = "blade"
+		force = WEAPON_FORCE_ROBUST
+		sharp = FALSE
+		edge = TRUE
+		attack_verb = list("attacked", "slashed", "stabbed", "sliced", "torn", "ripped", "diced", "cut")
+		stunmode = FALSE
+	else
+		desc = "A concentrated beam of energy in the shape of a blade. Very stylish... for a stun baton."
+		icon_state = "blade_stun"
+		force = WEAPON_FORCE_PAINFUL
+		sharp = FALSE
+		edge = FALSE
+		attack_verb = list("beaten", "battered", "struck")
+		stunmode = TRUE
+	update_wear_icon()
 
 
-/obj/item/melee/energy/blade/e_armblade
-	name = "hardsuit armblade"
-	desc = "An extra large, extra sharp laser armblade. Rip and tear."
-	icon_state = "e_armblade"
-	active_icon = "e_armblade"
-	lighting_color = COLOR_SABER_RED
-	active_force = 30 // Regular energy sword damage.
-	armor_penetration = 40 // Absolutely not 100AP for this one. Thank you.
+/obj/item/melee/energy/blade/apply_hit_effect(mob/living/target, mob/living/user, hit_zone)
+	if(!istype(target))
+		return ..()
+	if(isrobot(target))
+		return ..()
+	if(stunmode)
+		var/agony = agonyforce
+		var/stun = stunforce
+		var/obj/item/organ/external/affecting = null
+		if(ishuman(target))
+			var/mob/living/carbon/human/H = target
+			affecting = H.get_organ(user.targeted_organ)
 
+		if(affecting)
+			target.visible_message(SPAN_DANGER("[target] has been punched in the [affecting.name] with [src] by [user]!"))
+		else
+			target.visible_message(SPAN_DANGER("[target] has been punched with [src] by [user]!"))
+		playsound(loc, 'sound/weapons/Egloves.ogg', 50, 1, -1)
+		target.stun_effect_act(stun, agony, user.targeted_organ, src)
+		msg_admin_attack("[key_name(user)] stunned [key_name(target)] with the [src].")
+		user.attack_log += "\[[time_stamp()]\] <font color='red'>Stunned [key_name(target)] with [src]</font>"
+		target.attack_log += "\[[time_stamp()]\] <font color='orange'>Was stunned by [key_name(target)] with [src]</font>"
 
-/obj/item/melee/energy/machete
-	icon = 'icons/obj/weapons/melee_energy.dmi'
-	name = "energy machete"
-	desc = "A machete handle that extends out into a long, purple machete blade. It appears to be Skrellian in origin."
-	icon_state = "machete_skrell_x"
-	active_icon = "machete_skrell"
-	active_force = 25
-	active_throwforce = 17.25
-	lighting_color = COLOR_SABER_SKRELL
-	force = 3
-	throwforce = 1
-	w_class = ITEM_SIZE_SMALL
-	origin_tech = list(TECH_MAGNET = 3)
-	active_attack_verb = list("attacked", "chopped", "cleaved", "torn", "cut")
-	hitsound = 'sound/weapons/blade1.ogg'
-
-
-/obj/item/melee/energy/machete/IsHatchet()
-	return TRUE
+		if(ishuman(target))
+			var/mob/living/carbon/human/H = target
+			H.forcesay(hit_appends)
+	else
+		..()

@@ -1,31 +1,36 @@
-/// Multiplies by deciseconds in a second
-#define SECOND *10
+//time of day but automatically adjusts to the server going into the next day within the same round.
+//for when you need a reliable time number that doesn't depend on byond time.
+#define MIDNIGHT_ROLLOVER		864000	//number of deciseconds in a day
+#define REALTIMEOFDAY (world.timeofday + (MIDNIGHT_ROLLOVER * MIDNIGHT_ROLLOVER_CHECK))
+#define MIDNIGHT_ROLLOVER_CHECK ( rollovercheck_last_timeofday != world.timeofday ? update_midnight_rollover() : midnight_rollovers )
 
-/// Multiplies by deciseconds in a second
 #define SECONDS *10
 
-/// Multiplies by deciseconds in a minute
-#define MINUTE *600
+#define MINUTES SECONDS*60
 
-/// Multiplies by deciseconds in a minute
-#define MINUTES *600
+#define HOURS MINUTES*60
 
-/// Multiplies by deciseconds in an hour
-#define HOUR *36000
+#define TICKS *world.tick_lag
 
-/// Multiplies by deciseconds in an hour
-#define HOURS *36000
+#define MILLISECONDS * 0.01
 
-/// Multiplies by deciseconds in a day
-#define DAY *864000
+#define DS2TICKS(DS) ((DS)/world.tick_lag)
 
-/// Multiplies by deciseconds in a day
+#define TICKS2DS(T) ((T) TICKS)
+
+#define MS2DS(T) ((T) MILLISECONDS)
+
+#define DS2MS(T) ((T) * 100)
+
+
+#define SECOND SECONDS
+
+#define MINUTE MINUTES
+
+#define HOUR HOURS
+
+#define DAY DAYS
 #define DAYS *864000
 
-#define worldtime2stationtime(time) time2text(GLOB.roundstart_hour HOURS + time, "hh:mm")
-
-#define station_time_in_ticks (GLOB.roundstart_hour HOURS + round_duration_in_ticks)
-
-#define duration2stationtime(time) time2text(station_time_in_ticks + time, "hh:mm")
-
-#define round_duration_in_ticks (GLOB.round_start_time ? uptime() - GLOB.round_start_time : 0)
+#define TimeOfGame (get_game_time())
+#define TimeOfTick (world.tick_usage*0.01*world.tick_lag)

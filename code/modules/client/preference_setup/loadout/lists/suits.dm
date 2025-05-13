@@ -1,185 +1,146 @@
+// Suit slot
 /datum/gear/suit
+	display_name = "apron, yellow"
+	path = /obj/item/clothing/suit/apron
 	slot = slot_wear_suit
 	sort_category = "Suits and Overwear"
-	category = /datum/gear/suit
 
-/datum/gear/suit/poncho
-	display_name = "poncho selection"
-	path = /obj/item/clothing/suit/poncho
-	cost = 1
-	flags = GEAR_HAS_TYPE_SELECTION
+/datum/gear/suit/jacket
+	display_name = "jacket"
+	path = /obj/item/clothing/suit/storage/toggle/bomber
+	cost = 1 //higher price because it has some armor value or style (old)
+	//I'm dropping the price because the style is the same either way
+	//and a few extra points in armor roundstart is useless 5 minutes into the round anyways
 
-/datum/gear/suit/security_poncho
-	display_name = "poncho, security"
-	path = /obj/item/clothing/suit/poncho/security
-
-/datum/gear/suit/medical_poncho
-	display_name = "poncho, medical"
-	path = /obj/item/clothing/suit/poncho/medical
-
-/datum/gear/suit/engineering_poncho
-	display_name = "poncho, engineering"
-	path = /obj/item/clothing/suit/poncho/engineering
-
-/datum/gear/suit/science_poncho
-	display_name = "poncho, science"
-	path = /obj/item/clothing/suit/poncho/science
-
-/datum/gear/suit/nanotrasen_poncho
-	display_name = "poncho, NanoTrasen"
-	path = /obj/item/clothing/suit/poncho/nanotrasen
-
-/datum/gear/suit/cargo_poncho
-	display_name = "poncho, supply"
-	path = /obj/item/clothing/suit/poncho/cargo
-
-/datum/gear/suit/suit_jacket
-	display_name = "standard suit jackets"
-	path = /obj/item/clothing/suit/storage/toggle/suit
-
-/datum/gear/suit/suit_jacket/New()
+/datum/gear/suit/jacket/New()
 	..()
-	var/suitjackets = list()
-	suitjackets += /obj/item/clothing/suit/storage/toggle/suit/black
-	suitjackets += /obj/item/clothing/suit/storage/toggle/suit/blue
-	suitjackets += /obj/item/clothing/suit/storage/toggle/suit/purple
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(suitjackets)
+	var/jacket = list(
+		"Bomber" 			= 	/obj/item/clothing/suit/storage/toggle/bomber,
+		"Bomber, furred" 	= 	/obj/item/clothing/suit/storage/toggle/bomber/furred,
+		"Service" 			= 	/obj/item/clothing/suit/storage/toggle/service,
+		"Tactful" 			= 	/obj/item/clothing/suit/storage/khaki,
+		"Leather" 			= 	/obj/item/clothing/suit/storage/leather_jacket,
+		"White" 			= 	/obj/item/clothing/suit/storage/drive_jacket,
+		"Violet" 			= 	/obj/item/clothing/suit/storage/violet_jacket,
+		"Windbreaker" 		=	/obj/item/clothing/suit/storage/toggle/windbreaker,
+		"Boxer" 			= 	/obj/item/clothing/suit/storage/boxer_jacket
+	)
+	gear_tweaks += new /datum/gear_tweak/path(jacket)
 
-/datum/gear/suit/custom_suit_jacket
-	display_name = "suit jacket, colour select"
-	path = /obj/item/clothing/suit/storage/toggle/suit
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/suit/custom_suit_jacket_double
-	display_name = "suit jacket (double-breasted), colour select"
-	path = /obj/item/clothing/suit/storage/toggle/suit_double
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/suit/hazard
-	display_name = "hazard vests"
+/datum/gear/suit/hazard_vest
+	display_name = "hazard vest"
 	path = /obj/item/clothing/suit/storage/hazardvest
-	flags = GEAR_HAS_TYPE_SELECTION
 
-/datum/gear/suit/chest_rig
-	display_name = "chest rig"
-	path = /obj/item/clothing/suit/storage
-
-/datum/gear/suit/chest_rig/New()
+/datum/gear/suit/hazard_vest/New()
 	..()
-	var/chest_rigs = list()
-	chest_rigs += /obj/item/clothing/suit/storage/engineering_chest_rig
-	chest_rigs += /obj/item/clothing/suit/storage/security_chest_rig
-	chest_rigs += /obj/item/clothing/suit/storage/medical_chest_rig
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(chest_rigs)
-
-/datum/gear/suit/highvis
-	display_name = "high-visibility jacket"
-	path = /obj/item/clothing/suit/storage/toggle/highvis
+	var/hazard_vest = list(
+		"Orange"		=	/obj/item/clothing/suit/storage/hazardvest,
+		"Dark Orange"	=	/obj/item/clothing/suit/storage/hazardvest/orange,
+		"Grey" 			=	/obj/item/clothing/suit/storage/hazardvest/black
+	)
+	gear_tweaks += new /datum/gear_tweak/path(hazard_vest)
 
 /datum/gear/suit/hoodie
-	display_name = "hoodie, colour select"
-	path = /obj/item/clothing/suit/storage/hooded/hoodie
-	flags = GEAR_HAS_COLOR_SELECTION
+	display_name = "hoodie"
+	path = /obj/item/clothing/suit/storage/toggle/hoodie/black
 
-/datum/gear/suit/hoodie_sel
-	display_name = "standard hoodies"
-	path = /obj/item/clothing/suit/storage/toggle/hoodie
-
-/datum/gear/suit/hoodie_sel/New()
+/datum/gear/suit/hoodie/New()
 	..()
-	var/hoodies = list()
-	hoodies += /obj/item/clothing/suit/storage/toggle/hoodie/cti
-	hoodies += /obj/item/clothing/suit/storage/toggle/hoodie/mu
-	hoodies += /obj/item/clothing/suit/storage/toggle/hoodie/nt
-	hoodies += /obj/item/clothing/suit/storage/toggle/hoodie/smw
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(hoodies)
+	var/jacket = list(
+		"Black"		=	/obj/item/clothing/suit/storage/toggle/hoodie/black,
+		"Grey"		=	/obj/item/clothing/suit/storage/toggle/hoodie
+	)
+	gear_tweaks += new /datum/gear_tweak/path(jacket)
 
 /datum/gear/suit/labcoat
-	display_name = "labcoat, colour select"
+	display_name = "labcoat"
 	path = /obj/item/clothing/suit/storage/toggle/labcoat
-	flags = GEAR_HAS_COLOR_SELECTION
 
-/datum/gear/suit/labcoat_blue
-	display_name = "blue trimmed labcoat"
-	path = /obj/item/clothing/suit/storage/toggle/labcoat/blue
+/datum/gear/suit/poncho
+	display_name = "poncho, color selection"
+	path = /obj/item/clothing/suit/poncho
 
-/datum/gear/suit/labcoat_corp
-	display_name = "labcoat, corporate colors"
-	path = /obj/item/clothing/suit/storage/toggle/labcoat/science
-	flags = GEAR_HAS_TYPE_SELECTION
+/datum/gear/suit/poncho/New()
+	..()
+	var/poncho = list(
+		"Tan"		=	/obj/item/clothing/suit/poncho,
+		"Blue"		=	/obj/item/clothing/suit/poncho/tactical
+	)
+	gear_tweaks += new /datum/gear_tweak/path(poncho)
 
 /datum/gear/suit/coat
-	display_name = "coat, colour select"
-	path = /obj/item/clothing/suit/storage/toggle/labcoat/coat
-	flags = GEAR_HAS_COLOR_SELECTION
+	display_name = "Modern overcoat"
+	path = /obj/item/clothing/suit/storage/cyberpunksleek
 
-/datum/gear/suit/leather
-	display_name = "jacket selection"
-	path = /obj/item/clothing/suit
-
-/datum/gear/suit/leather/New()
+/datum/gear/suit/coat/New()
 	..()
-	var/jackets = list()
-	jackets += /obj/item/clothing/suit/storage/toggle/bomber
-	jackets += /obj/item/clothing/suit/storage/leather_jacket/nanotrasen
-	jackets += /obj/item/clothing/suit/storage/toggle/brown_jacket/nanotrasen
-	jackets += /obj/item/clothing/suit/storage/leather_jacket
-	jackets += /obj/item/clothing/suit/storage/toggle/brown_jacket
-	jackets += /obj/item/clothing/suit/storage/mbill
-	jackets += /obj/item/clothing/suit/storage/toggle/leather_hoodie
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(jackets)
+	var/coat = list(
+		"Green"			=	/obj/item/clothing/suit/storage/cyberpunksleek/green,
+		"Black"			=	/obj/item/clothing/suit/storage/cyberpunksleek/black,
+		"White"			=	/obj/item/clothing/suit/storage/cyberpunksleek/white,
+		"Brown"			=	/obj/item/clothing/suit/storage/cyberpunksleek
+	)
+	gear_tweaks += new /datum/gear_tweak/path(coat)
 
-/datum/gear/suit/wintercoat
-	display_name = "winter coat"
-	path = /obj/item/clothing/suit/storage/hooded/wintercoat
+/datum/gear/suit/longcoat
+	display_name = "Modern long overcoat"
+	path = /obj/item/clothing/suit/storage/cyberpunksleek_long
 
-/datum/gear/suit/wintercoat_dais
-	display_name = "winter coat, DAIS"
-	path = /obj/item/clothing/suit/storage/hooded/wintercoat/dais
+/datum/gear/suit/longcoat/New()
+	..()
+	var/longcoat = list(
+		"Green"			=	/obj/item/clothing/suit/storage/cyberpunksleek_long/green,
+		"Black"			=	/obj/item/clothing/suit/storage/cyberpunksleek_long/black,
+		"White"			=	/obj/item/clothing/suit/storage/cyberpunksleek_long/white,
+		"Brown"			=	/obj/item/clothing/suit/storage/cyberpunksleek_long
+	)
+	gear_tweaks += new /datum/gear_tweak/path(longcoat)
 
-/datum/gear/suit/track
-	display_name = "track jacket selection"
-	path = /obj/item/clothing/suit/storage/toggle/track
-	flags = GEAR_HAS_TYPE_SELECTION
+/datum/gear/suit/bladerunner
+	display_name = "old leather coat"
+	path = /obj/item/clothing/suit/storage/bladerunner
 
-/datum/gear/suit/blueapron
-	display_name = "apron, blue"
-	path = /obj/item/clothing/suit/apron
+/datum/gear/suit/punkvest
+	display_name = "punk vest"
+	path = /obj/item/clothing/suit/punkvest
 	cost = 1
 
-/datum/gear/suit/overalls
-	display_name = "apron, overalls"
-	path = /obj/item/clothing/suit/apron/overalls
+/datum/gear/suit/punkvest/New()
+	..()
+	var/punkvest = list(
+		"Punk" 			=	/obj/item/clothing/suit/punkvest,
+		"Cyberpunk" 	=	/obj/item/clothing/suit/punkvest/cyber,
+		"Sleek" 		= 	/obj/item/clothing/suit/storage/leather_jacket/tunnelsnake,
+		"Tunnelsnake" 	= 	/obj/item/clothing/suit/storage/leather_jacket/tunnelsnake_snake,
+		"Jaeger" 		= 	/obj/item/clothing/suit/storage/leather_jacket/tunnelsnake_jager
+	)
+	gear_tweaks += new /datum/gear_tweak/path(punkvest)
+
+/datum/gear/suit/puffy
+	display_name = "puffy coat"
+	path = /obj/item/clothing/suit/storage/puffyred
 	cost = 1
 
-/datum/gear/suit/medcoat
-	display_name = "medical suit selection"
-	path = /obj/item/clothing/suit
-	flags = GEAR_HAS_NO_CUSTOMIZATION
-
-/datum/gear/suit/medcoat/New()
+/datum/gear/suit/puffy/New()
 	..()
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_args(/obj/item/clothing/suit/storage/toggle/fr_jacket, /obj/item/clothing/suit/storage/toggle/fr_jacket/ems, /obj/item/clothing/suit/surgicalapron, /obj/item/clothing/suit/storage/toggle/fr_jacket/emrs)
+	var/puffy = list(
+		"Red Puffy" 		=	 /obj/item/clothing/suit/storage/puffyred,
+		"Blue Puffy" 		=	 /obj/item/clothing/suit/storage/puffyblue,
+		"Purple Puffy"	 	=	 /obj/item/clothing/suit/storage/puffypurple
+	)
+	gear_tweaks += new /datum/gear_tweak/path(puffy)
 
-/datum/gear/suit/trenchcoat
-	display_name = "trenchcoat selection"
-	path = /obj/item/clothing/suit
-	cost = 3
+/datum/gear/suit/bomj
+	display_name = "bomj coat"
+	path = /obj/item/clothing/suit/storage/bomj
 
-/datum/gear/suit/trenchcoat/New()
-	..()
-	var/trenchcoats = list()
-	trenchcoats += /obj/item/clothing/suit/storage/det_trench
-	trenchcoats += /obj/item/clothing/suit/storage/det_trench/grey
-	trenchcoats += /obj/item/clothing/suit/leathercoat
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(trenchcoats)
+/datum/gear/suit/guild/black
+	display_name = "black guild coat"
+	path = /obj/item/clothing/suit/storage/cargo_jacket/black
+	allowed_roles = list(JOBS_CARGO)
 
+/datum/gear/suit/guild/black/old
+	display_name = "old black guild coat"
+	path = /obj/item/clothing/suit/storage/cargo_jacket/black/old
+	allowed_roles = list(JOBS_CARGO)
 
-/datum/gear/suit/pullover
-	display_name = "sweater, pullover"
-	path = /obj/item/clothing/suit/storage/pullover
-
-
-/datum/gear/suit/zipper
-	display_name = "sweater, zip up"
-	path = /obj/item/clothing/suit/storage/toggle/zipper

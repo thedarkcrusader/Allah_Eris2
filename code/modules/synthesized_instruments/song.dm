@@ -11,7 +11,7 @@
 
 	var/linear_decay = 1
 	var/sustain_timer = 1
-	var/soft_coeff = 2.0
+	var/soft_coeff = 2
 	var/transposition = 0
 
 	var/octave_range_min
@@ -27,12 +27,15 @@
 	src.instrument_data = instrument
 	src.octave_range_min = GLOB.musical_config.lowest_octave
 	src.octave_range_max = GLOB.musical_config.highest_octave
+
 	instrument.create_full_sample_deviation_map()
+
+
+
 	available_channels = GLOB.musical_config.channels_per_instrument
 
 /datum/synthesized_song/Destroy()
 	player.event_manager.deactivate()
-	return ..()
 
 /datum/synthesized_song/proc/sanitize_tempo(new_tempo) // Identical to datum/song
 	new_tempo = abs(new_tempo)
@@ -79,9 +82,12 @@
 	else
 		use_env = 1
 
-	var/current_volume = clamp(sound_copy.volume, 0, 100)
+	var/current_volume = CLAMP(sound_copy.volume, 0, 100)
 	sound_copy.volume = current_volume //Sanitize volume
 	var/datum/sound_token/token = new /datum/sound_token/instrument(src.player.actual_instrument, src.sound_id, sound_copy, src.player.range, FALSE, use_env, player)
+	#if DM_VERSION < 511
+	sound_copy.frequency = 1
+	#endif
 	var/delta_volume = player.volume / src.sustain_timer
 
 	var/tick = duration
@@ -118,7 +124,7 @@
 	return
 
 /datum/synthesized_song/proc/play_lines(mob/user, list/allowed_suff, list/note_off_delta, list/lines)
-	if (!length(lines))
+	if (!lines.len)
 		STOP_PLAY_LINES
 	var/list/cur_accidentals = list("n", "n", "n", "n", "n", "n", "n")
 	var/list/cur_octaves = list(3, 3, 3, 3, 3, 3, 3)
@@ -133,8 +139,8 @@
 		for (var/notes in splittext(lowertext(line), ","))
 			var/list/components = splittext(notes, "/")
 			var/duration = sanitize_tempo(src.tempo)
-			if (length(components))
-				var/delta = length(components)==2 && text2num(components[2]) ? text2num(components[2]) : 1
+			if (components.len)
+				var/delta = components.len==2 && text2num(components[2]) ? text2num(components[2]) : 1
 				var/note_str = splittext(components[1], "-")
 
 				duration = sanitize_tempo(src.tempo / delta)
@@ -147,7 +153,6 @@
 						note_off = text2ascii(note_sym) - note_off_delta[note_sym]
 					else
 						continue // Shitty note, move along and avoid runtimes
-
 					var/octave = cur_octaves[note_off]
 					var/accidental = cur_accidentals[note_off]
 
@@ -173,7 +178,7 @@
 						STOP_PLAY_LINES
 			cur_note++
 			src.player.event_manager.suspended = 0
-			if (!src.playing || src.player.shouldStopPlaying(user))
+			if (!src.playing || src.player.should_stop_playing(user))
 				STOP_PLAY_LINES
 			sleep(duration)
 		src.current_line++
@@ -188,7 +193,7 @@
 	var/list/allowed_suff = list("b", "n", "#", "s")
 	var/list/note_off_delta = list("a"=91, "b"=91, "c"=98, "d"=98, "e"=98, "f"=98, "g"=98)
 	var/list/lines_copy = src.lines.Copy()
-	addtimer(new Callback(src, PROC_REF(play_lines), user, allowed_suff, note_off_delta, lines_copy), 0)
+	addtimer(CALLBACK(src, PROC_REF(play_lines), user, allowed_suff, note_off_delta, lines_copy), 0)
 
 #undef CP
 #undef IS_DIGIT

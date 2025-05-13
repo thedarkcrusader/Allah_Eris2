@@ -3,32 +3,30 @@
 	desc = "Now we're getting somewhere."
 	icon_state = "wheelchair"
 	anchored = FALSE
-	bed_flags = BED_FLAG_CANNOT_BE_DISMANTLED | BED_FLAG_CANNOT_BE_PADDED
+	buckle_movable = 1
+
 	var/driving = 0
 	var/mob/living/pulling = null
 	var/bloodiness
 
+	movement_handlers = list(/datum/movement_handler/delay = list(2), /datum/movement_handler/move_relay_self)
 
-/obj/structure/bed/chair/wheelchair/Initialize()
-	. = ..()
-	movement_handlers = list(
-		/datum/movement_handler/deny_multiz,
-		/datum/movement_handler/delay = list(config.walk_delay),
-		/datum/movement_handler/move_relay_self
-	)
-
-
-/obj/structure/bed/chair/wheelchair/on_update_icon()
+/obj/structure/bed/chair/wheelchair/update_icon()
 	return
 
 /obj/structure/bed/chair/wheelchair/set_dir()
 	..()
-	ClearOverlays()
-	var/image/O = image(icon = 'icons/obj/structures/furniture.dmi', icon_state = "w_overlay", dir = src.dir)
-	O.layer = ABOVE_HUMAN_LAYER
-	AddOverlays(O)
+	overlays.Cut()
+	var/image/O = image(icon = 'icons/obj/furniture.dmi', icon_state = "w_overlay", dir = src.dir)
+	O.layer = ABOVE_MOB_LAYER
+	overlays += O
 	if(buckled_mob)
 		buckled_mob.set_dir(dir)
+
+/obj/structure/bed/chair/wheelchair/attackby(obj/item/I, mob/living/user)
+	if((QUALITY_BOLT_TURNING in I.tool_qualities) || (QUALITY_WIRE_CUTTING in I.tool_qualities) || istype(I, /obj/item/stack))
+		return
+	..()
 
 /obj/structure/bed/chair/wheelchair/relaymove(mob/user, direction)
 	// Redundant check?
@@ -77,8 +75,6 @@
 	step(src, direction)
 	if(buckled_mob) // Make sure it stays beneath the occupant
 		Move(buckled_mob.loc)
-		var/datum/movement_handler/delay/delay = GetMovementHandler(/datum/movement_handler/delay)
-		delay.SetDelay(buckled_mob.movement_delay(/singleton/move_intent/walk))
 	set_dir(direction)
 	if(pulling) // Driver
 		if(pulling.loc == src.loc) // We moved onto the wheelchair? Revert!
@@ -102,12 +98,12 @@
 				if (propelled)
 					for (var/mob/O in src.loc)
 						if (O != occupant)
-							Bump(O, TRUE)
+							Bump(O)
 				else
 					unbuckle_mob()
 			if (pulling && (get_dist(src, pulling) > 1))
 				pulling.pulledby = null
-				to_chat(pulling, SPAN_WARNING("You lost your grip!"))
+				to_chat(pulling,  SPAN_WARNING("You lost your grip!"))
 				pulling = null
 		else
 			if (occupant && (src.loc != occupant.loc))
@@ -120,13 +116,12 @@
 		user_unbuckle_mob(user)
 	return
 
-/obj/structure/bed/chair/wheelchair/CtrlClick(mob/user)
+/obj/structure/bed/chair/wheelchair/CtrlClick(var/mob/user)
 	if(in_range(src, user))
-		if(!ishuman(user))
-			return FALSE
+		if(!ishuman(user))	return
 		if(user == buckled_mob)
-			to_chat(user, SPAN_WARNING("You realize you are unable to push the wheelchair you sit in."))
-			return TRUE
+			to_chat(user, SPAN_WARNING("You realize you are unable to push the wheelchair you're sitting in."))
+			return
 		if(!pulling)
 			pulling = user
 			user.pulledby = src
@@ -138,10 +133,9 @@
 			to_chat(usr, "You let go of \the [name]'s handles.")
 			pulling.pulledby = null
 			pulling = null
-		return TRUE
-	return FALSE
+		return
 
-/obj/structure/bed/chair/wheelchair/Bump(atom/A, called)
+/obj/structure/bed/chair/wheelchair/Bump(atom/A)
 	..()
 	if(!buckled_mob)	return
 
@@ -151,24 +145,28 @@
 		if (pulling && (pulling.a_intent == I_HURT))
 			occupant.throw_at(A, 3, 3, pulling)
 		else if (propelled)
-			occupant.throw_at(A, 3, 3)
+			occupant.throw_at(A, 3, 3, propelled)
 
 		var/def_zone = ran_zone()
-		var/blocked = 100 * occupant.get_blocked_ratio(def_zone, DAMAGE_BRUTE, damage = 10)
-		occupant.throw_at(A, 3, 3)
-		occupant.apply_effect(6, EFFECT_STUN, blocked)
-		occupant.apply_effect(6, EFFECT_WEAKEN, blocked)
-		occupant.apply_effect(6, EFFECT_STUTTER, blocked)
-		occupant.apply_damage(10, DAMAGE_BRUTE, def_zone)
+
+		occupant.throw_at(A, 3, propelled)
+		occupant.apply_effect(6, STUN, occupant.getarmor(def_zone, ARMOR_MELEE))
+		occupant.apply_effect(6, WEAKEN, occupant.getarmor(def_zone, ARMOR_MELEE))
+		occupant.apply_effect(6, STUTTER, occupant.getarmor(def_zone, ARMOR_MELEE))
+		occupant.damage_through_armor(6, BRUTE, def_zone, ARMOR_MELEE)
+
 		playsound(src.loc, 'sound/weapons/punch1.ogg', 50, 1, -1)
-		if(istype(A, /mob/living))
+
+		if(isliving(A))
+
 			var/mob/living/victim = A
 			def_zone = ran_zone()
-			blocked = 100 * victim.get_blocked_ratio(def_zone, DAMAGE_BRUTE, damage = 10)
-			victim.apply_effect(6, EFFECT_STUN, blocked)
-			victim.apply_effect(6, EFFECT_WEAKEN, blocked)
-			victim.apply_effect(6, EFFECT_STUTTER, blocked)
-			victim.apply_damage(10, DAMAGE_BRUTE, def_zone)
+
+			victim.apply_effect(6, STUN, victim.getarmor(def_zone, ARMOR_MELEE))
+			victim.apply_effect(6, WEAKEN, victim.getarmor(def_zone, ARMOR_MELEE))
+			victim.apply_effect(6, STUTTER, victim.getarmor(def_zone, ARMOR_MELEE))
+			victim.damage_through_armor(6, BRUTE, def_zone, ARMOR_MELEE)
+
 		if(pulling)
 			occupant.visible_message(SPAN_DANGER("[pulling] has thrusted \the [name] into \the [A], throwing \the [occupant] out of it!"))
 			admin_attack_log(pulling, occupant, "Crashed their victim into \an [A].", "Was crashed into \an [A].", "smashed into \the [A] using")
@@ -176,7 +174,7 @@
 			occupant.visible_message(SPAN_DANGER("[occupant] crashed into \the [A]!"))
 
 /obj/structure/bed/chair/wheelchair/proc/create_track()
-	var/obj/decal/cleanable/blood/tracks/B = new(loc)
+	var/obj/effect/decal/cleanable/blood/tracks/B = new(loc)
 	var/newdir = get_dir(get_step(loc, dir), loc)
 	if(newdir == dir)
 		B.set_dir(newdir)
@@ -196,6 +194,37 @@
 	..()
 
 /proc/equip_wheelchair(mob/living/carbon/human/H) //Proc for spawning in a wheelchair if a new character has no legs. Used in new_player.dm
-	var/obj/structure/bed/chair/wheelchair/W = new(get_turf(H))
-	if(isturf(H.loc))
-		W.buckle_mob(H)
+	var/obj/structure/bed/chair/wheelchair/W = new(H.loc)
+	W.buckle_mob(H)
+
+/obj/item/wheelchair
+	name = "wheelchair"
+	desc = "A folded wheelchair that can be carried around."
+	icon = 'icons/obj/furniture.dmi'
+	icon_state = "wheelchair_folded"
+	w_class = ITEM_SIZE_HUGE
+	var/obj/structure/bed/chair/wheelchair/unfolded
+
+/obj/item/wheelchair/attack_self(mob/user)
+	if(unfolded)
+		unfolded.forceMove(get_turf(src))
+	else
+		new/obj/structure/bed/chair/wheelchair(get_turf(src))
+	qdel(src)
+
+/obj/structure/bed/chair/wheelchair/MouseDrop(over_object, src_location, over_location)
+	..()
+	if(over_object == usr && Adjacent(usr))
+		if(!ishuman(usr) || usr.incapacitated())
+			return
+		if(buckled_mob)
+			return 0
+		if(pulling)
+			return 0 // You can't fold a wheelchair when somebody holding the handles.
+		visible_message("[usr] collapses \the [src.name].")
+		var/obj/item/wheelchair/R = new/obj/item/wheelchair(get_turf(src))
+		R.name = src.name
+		R.color = src.color
+		R.unfolded = src
+		src.forceMove(R)
+		return

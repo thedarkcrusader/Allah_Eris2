@@ -1,17 +1,17 @@
 //This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:33
 
 /obj/machinery/containment_field
-	name = "containment field"
-	desc = "An energy field."
-	icon = 'icons/obj/machines/power/singularity.dmi'
+	name = "Containment Field"
+	desc = "A crackling, humming field of electromagnetic energy. Its kinetic force is more than enough to halt the course of a gravitational singularity, so it's probably not safe for you to touch."
+	icon = 'icons/obj/singularity.dmi'
 	icon_state = "Contain_F"
 	anchored = TRUE
 	density = FALSE
-	unacidable = TRUE
-	use_power = POWER_USE_OFF
-	uncreated_component_parts = null
+	unacidable = 1
+	use_power = NO_POWER_USE
 	light_range = 4
-	movable_flags = MOVABLE_FLAG_PROXMOVE
+	layer = ABOVE_OBJ_LAYER
+	flags = PROXMOVE
 	var/obj/machinery/field_generator/FG1 = null
 	var/obj/machinery/field_generator/FG2 = null
 	var/hasShocked = 0 //Used to add a delay between shocks. In some cases this used to crash servers by spawning hundreds of sparks every second.
@@ -23,17 +23,22 @@
 		FG2.cleanup()
 	. = ..()
 
-/obj/machinery/containment_field/physical_attack_hand(mob/user)
-	return shock(user)
+/obj/machinery/containment_field/attack_hand(mob/user as mob)
+	if(get_dist(src, user) > 1)
+		return 0
+	else
+		shock(user)
+		return 1
 
-/obj/machinery/containment_field/ex_act(severity)
-	return 0
+
+/obj/machinery/containment_field/explosion_act(target_power, explosion_handler/handler)
+	return target_power
 
 /obj/machinery/containment_field/HasProximity(atom/movable/AM as mob|obj)
-	if(istype(AM,/mob/living/silicon) && prob(40))
+	if(issilicon(AM) && prob(40))
 		shock(AM)
 		return 1
-	if(istype(AM,/mob/living/carbon) && prob(50))
+	if(iscarbon(AM) && prob(50))
 		shock(AM)
 		return 1
 	return 0
@@ -57,9 +62,9 @@
 		sleep(20)
 
 		hasShocked = 0
-		return TRUE
+	return
 
-/obj/machinery/containment_field/proc/set_master(master1,master2)
+/obj/machinery/containment_field/proc/set_master(var/master1,var/master2)
 	if(!master1 || !master2)
 		return 0
 	FG1 = master1

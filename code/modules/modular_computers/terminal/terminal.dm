@@ -1,12 +1,12 @@
-/// System for a shitty terminal emulator.
+// System for a shitty terminal emulator.
 /datum/terminal
 	var/name = "Terminal"
 	var/datum/browser/panel
 	var/list/history = list()
-	var/list/history_max_length = 50
-	var/datum/extension/interactive/ntos/computer
+	var/list/history_max_length = 20
+	var/obj/item/modular_computer/computer
 
-/datum/terminal/New(mob/user, datum/extension/interactive/ntos/computer)
+/datum/terminal/New(mob/user, obj/item/modular_computer/computer)
 	..()
 	src.computer = computer
 	if(user && can_use(user))
@@ -26,9 +26,9 @@
 /datum/terminal/proc/can_use(mob/user)
 	if(!user)
 		return FALSE
-	if(!computer || !computer.on)
-		return FALSE
 	if(!CanInteractWith(user, computer, GLOB.default_state))
+		return FALSE
+	if(!computer || !computer.enabled)
 		return FALSE
 	return TRUE
 
@@ -47,39 +47,36 @@
 		return panel.user
 
 /datum/terminal/proc/show_terminal(mob/user)
-	panel = new(user, "terminal-\ref[computer]", name, 800, 600, src)
+	panel = new(user, "terminal-\ref[computer]", name, 500, 460, src)
 	update_content()
 	panel.open()
 
 /datum/terminal/proc/update_content()
 	var/list/content = history.Copy()
-	content += "<form action='byond://'><input type='hidden' name='src' value='\ref[src]'> <input type='text' size='40' name='input' autofocus><input type='submit' value='Enter'></form>"
-	content += "<i>type `man` for a list of available commands.</i>"
+	content += "<form action='byond://'><input type='hidden' name='src' value='\ref[src]'>> <input type='text' size='40' name='input'><input type='submit' value='Enter'></form>"
 	panel.set_content(jointext(content, "<br>"))
+	panel.update()
 
 /datum/terminal/Topic(href, href_list)
 	if(..())
-		return TOPIC_HANDLED
+		return 1
 	if(!can_use(usr) || href_list["close"])
 		qdel(src)
-		return TOPIC_HANDLED
+		return 1
 	if(href_list["input"])
 		var/input = sanitize(href_list["input"])
 		history += "> [input]"
 		var/output = parse(input, usr)
-		log_computer_command("[key_name(usr)]: [input]")
-		computer_log_repository.store_computer_log(usr, get_turf(computer.holder), input)
 		if(QDELETED(src)) // Check for exit.
-			return TOPIC_HANDLED
+			return TRUE
 		history += output
 		if(length(history) > history_max_length)
 			history.Cut(1, length(history) - history_max_length + 1)
 		update_content()
-		panel.update()
-		return TOPIC_HANDLED
+		return TRUE
 
 /datum/terminal/proc/parse(text, mob/user)
-	if(user.skill_check(SKILL_COMPUTER, SKILL_BASIC))
+	if(user.stat_check(STAT_COG, STAT_LEVEL_BASIC))
 		for(var/datum/terminal_command/command in GLOB.terminal_commands)
 			. = command.parse(text, user, src)
 			if(!isnull(.))
@@ -96,5 +93,4 @@
 		if(scf.can_run(user, src))
 			candidates[scf] = scf.weight
 	var/datum/terminal_skill_fail/chosen = pickweight(candidates)
-	if(istype(chosen))
-		return chosen.execute(src)
+	return chosen.execute()

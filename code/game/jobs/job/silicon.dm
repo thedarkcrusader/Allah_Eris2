@@ -1,75 +1,52 @@
 /datum/job/ai
 	title = "AI"
-	department_flag = MSC
-
-	total_positions = 0 // Not used for AI, see is_position_available below and modules/mob/living/silicon/ai/latejoin.dm
-	spawn_positions = 1
-	selection_color = "#3f823f"
+	flag = AI
+	department_flag = COMMAND
+	department = DEPARTMENT_COMMAND
+	faction = "CEV Eris"
+	total_positions = 1 // Not used for AI, see is_position_available below and modules/mob/living/silicon/ai/latejoin.dm
+	spawn_positions = 1 // |-> above message is partly true, it is used by /AssignRole so we still need to set it to 1
+	selection_color = "#b5b7cb"
 	supervisors = "your laws"
 	req_admin_notify = 1
-	minimal_player_age = 14
 	account_allowed = 0
-	economic_power = 0
-	outfit_type = /singleton/hierarchy/outfit/job/silicon/ai
-	loadout_allowed = FALSE
-	hud_icon = "hudblank"
-	skill_points = 0
-	min_skill = list(
-		SKILL_BUREAUCRACY   = SKILL_EXPERIENCED,
-		SKILL_FINANCE       = SKILL_EXPERIENCED,
-		SKILL_EVA           = SKILL_EXPERIENCED,
-		SKILL_MECH          = SKILL_EXPERIENCED,
-		SKILL_PILOT         = SKILL_EXPERIENCED,
-		SKILL_HAULING       = SKILL_UNSKILLED,
-		SKILL_COMPUTER      = SKILL_MASTER,
-		SKILL_BOTANY        = SKILL_EXPERIENCED,
-		SKILL_COOKING       = SKILL_EXPERIENCED,
-		SKILL_COMBAT        = SKILL_EXPERIENCED,
-		SKILL_WEAPONS       = SKILL_EXPERIENCED,
-		SKILL_FORENSICS     = SKILL_EXPERIENCED,
-		SKILL_CONSTRUCTION  = SKILL_EXPERIENCED,
-		SKILL_ELECTRICAL    = SKILL_EXPERIENCED,
-		SKILL_ATMOS         = SKILL_EXPERIENCED,
-		SKILL_ENGINES       = SKILL_EXPERIENCED,
-		SKILL_DEVICES       = SKILL_EXPERIENCED,
-		SKILL_SCIENCE       = SKILL_EXPERIENCED,
-		SKILL_MEDICAL       = SKILL_EXPERIENCED,
-		SKILL_ANATOMY       = SKILL_EXPERIENCED,
-		SKILL_CHEMISTRY     = SKILL_EXPERIENCED
-	)
+	wage = WAGE_NONE
+	outfit_type = /decl/hierarchy/outfit/job/silicon/ai
 
-/datum/job/ai/equip(mob/living/carbon/human/H)
-	if(!H)	return 0
-	return 1
+/datum/job/ai/equip(var/mob/living/carbon/human/H, var/alt_title)
+	return FALSE
 
 /datum/job/ai/is_position_available()
-	return (length(empty_playable_ai_cores) != 0)
+	return (empty_playable_ai_cores.len != 0)
 
-/datum/job/ai/handle_variant_join(mob/living/carbon/human/H, alt_title)
-	return H
+/obj/landmark/join/start/AI
+	icon_state = "player-grey"
+	name = "AI"
+	join_tag = /datum/job/ai
+	delete_me = FALSE//do we really need this huh??
+
+/obj/landmark/join/start/triai
+	icon_state = "ai-green"
+	name = "triai"
+	join_tag = "triai"
 
 /datum/job/cyborg
 	title = "Robot"
-	department_flag = MSC
+	flag = CYBORG
+	department_flag = MISC
+	faction = "CEV Eris"
 	total_positions = 2
 	spawn_positions = 2
+	alt_titles = list("Drone", "Cyborg")
 	supervisors = "your laws and the AI"
-	selection_color = "#254c25"
-	minimal_player_age = 7
+	selection_color = "#cdcfe0"
 	account_allowed = 0
-	economic_power = 0
-	loadout_allowed = FALSE
-	outfit_type = /singleton/hierarchy/outfit/job/silicon/cyborg
-	hud_icon = "hudblank"
-	skill_points = 0
+	wage = WAGE_NONE
 
-/datum/job/cyborg/handle_variant_join(mob/living/carbon/human/H, alt_title)
-	return H && H.Robotize(SSrobots.get_mob_type_by_title(alt_title || title))
+	outfit_type = /decl/hierarchy/outfit/job/silicon/cyborg
 
-/datum/job/cyborg/equip(mob/living/carbon/human/H)
-	return !!H
+/datum/job/cyborg/equip(var/mob/living/carbon/human/H, var/alt_title)
+	return FALSE
 
-/datum/job/cyborg/New()
-	..()
-	alt_titles = SSrobots.robot_alt_titles.Copy()
-	alt_titles -= title // So the unit test doesn't flip out if a mob or mmi type is declared for our main title.
+/obj/landmark/join/start/cyborg
+	join_tag = /datum/job/cyborg

@@ -1,190 +1,269 @@
-/obj/machinery/computer/modular/preset
-	var/list/default_software
-	var/datum/computer_file/program/autorun_program
-	base_type = /obj/machinery/computer/modular
+/obj/item/modular_computer/console/preset
+	bad_type = /obj/item/modular_computer/console/preset
 
-/obj/machinery/computer/modular/preset/full
-	uncreated_component_parts = list(
-		/obj/item/stock_parts/power/apc,
-		/obj/item/stock_parts/computer/card_slot,
-		/obj/item/stock_parts/computer/ai_slot
-		)
+/obj/item/modular_computer/console/preset/install_default_hardware()
+	..()
+	processor_unit = new/obj/item/computer_hardware/processor_unit(src)
+	tesla_link = new/obj/item/computer_hardware/tesla_link(src)
+	hard_drive = new/obj/item/computer_hardware/hard_drive/advanced(src)
+	network_card = new/obj/item/computer_hardware/network_card/wired(src)
+	scanner = new /obj/item/computer_hardware/scanner/paper(src)
 
-/obj/machinery/computer/modular/preset/aislot
-	uncreated_component_parts = list(
-		/obj/item/stock_parts/power/apc,
-		/obj/item/stock_parts/computer/ai_slot
-		)
+// Engineering
+/obj/item/modular_computer/console/preset/engineering/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/wordprocessor())
+	hard_drive.store_file(new/datum/computer_file/program/newsbrowser())
+	hard_drive.store_file(new/datum/computer_file/program/power_monitor())
+	hard_drive.store_file(new/datum/computer_file/program/alarm_monitor())
+	hard_drive.store_file(new/datum/computer_file/program/atmos_control())
+	hard_drive.store_file(new/datum/computer_file/program/rcon_console())
+	hard_drive.store_file(new/datum/computer_file/program/camera_monitor())
 
-/obj/machinery/computer/modular/preset/cardslot
-	uncreated_component_parts = list(
-		/obj/item/stock_parts/power/apc,
-		/obj/item/stock_parts/computer/card_slot
-		)
+// Engineering alarm monitor
+/obj/item/modular_computer/console/preset/engineering/alarms/install_default_programs()
+	..()
+	set_autorun("alarmmonitor")
 
-/obj/machinery/computer/modular/preset/Initialize()
-	. = ..()
-	var/datum/extension/interactive/ntos/os = get_extension(src, /datum/extension/interactive/ntos)
-	if(os)
-		for(var/program_type in default_software)
-			os.create_file(new program_type())
-		if(autorun_program)
-			os.set_autorun(initial(autorun_program.filename))
+// Engineering supermatter monitor
+/obj/item/modular_computer/console/preset/engineering/supermatter/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/supermatter_monitor())
+	set_autorun("supmon")
 
-/obj/machinery/computer/modular/preset/engineering
-	default_software = list(
-		/datum/computer_file/program/power_monitor,
-		/datum/computer_file/program/supermatter_monitor,
-		/datum/computer_file/program/alarm_monitor,
-		/datum/computer_file/program/atmos_control,
-		/datum/computer_file/program/rcon_console,
-		/datum/computer_file/program/camera_monitor,
-		/datum/computer_file/program/shields_monitor
-	)
+// Engineering RCON control
+/obj/item/modular_computer/console/preset/engineering/rcon/install_default_programs()
+	..()
+	set_autorun("rconconsole")
 
-/obj/machinery/computer/modular/preset/medical
-	default_software = list(
-		/datum/computer_file/program/suit_sensors,
-		/datum/computer_file/program/camera_monitor,
-		/datum/computer_file/program/records,
-		/datum/computer_file/program/wordprocessor
-	)
+// Engineering shield control
+/obj/item/modular_computer/console/preset/engineering/shield/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/shield_control())
+	set_autorun("shieldcontrol")
 
-/obj/machinery/computer/modular/preset/aislot/research
-	default_software = list(
-		/datum/computer_file/program/ntnetmonitor,
-		/datum/computer_file/program/nttransfer,
-		/datum/computer_file/program/camera_monitor,
-		/datum/computer_file/program/aidiag,
-		/datum/computer_file/program/email_client,
-		/datum/computer_file/program/wordprocessor
-	)
+// Engineering power monitor
+/obj/item/modular_computer/console/preset/engineering/power/install_default_programs()
+	..()
+	set_autorun("powermonitor")
 
-/obj/machinery/computer/modular/preset/aislot/sysadmin
-	default_software = list(
-		/datum/computer_file/program/ntnetmonitor,
-		/datum/computer_file/program/nttransfer,
-		/datum/computer_file/program/camera_monitor,
-		/datum/computer_file/program/aidiag,
-		/datum/computer_file/program/email_client,
-		/datum/computer_file/program/email_administration,
-		/datum/computer_file/program/records,
-		/datum/computer_file/program/wordprocessor
-	)
+// Engineering atmos control
+/obj/item/modular_computer/console/preset/engineering/atmos/install_default_programs()
+	..()
+	set_autorun("atmoscontrol")
 
-/obj/machinery/computer/modular/preset/cardslot/command
-	default_software = list(
-		/datum/computer_file/program/comm,
-		/datum/computer_file/program/camera_monitor,
-		/datum/computer_file/program/email_client,
-		/datum/computer_file/program/records,
-		/datum/computer_file/program/docking,
-		/datum/computer_file/program/wordprocessor
-	)
+// Medical
+/obj/item/modular_computer/console/preset/medical/install_default_hardware()
+	..()
+	printer = new/obj/item/computer_hardware/printer(src)
 
-/obj/machinery/computer/modular/preset/cardslot/command_sec
-	default_software = list(
-		/datum/computer_file/program/comm,
-		/datum/computer_file/program/camera_monitor,
-		/datum/computer_file/program/email_client,
-		/datum/computer_file/program/records,
-		/datum/computer_file/program/docking,
-		/datum/computer_file/program/wordprocessor,
-		/datum/computer_file/program/digitalwarrant,
-		/datum/computer_file/program/forceauthorization
-	)
+/obj/item/modular_computer/console/preset/medical/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/wordprocessor())
+	hard_drive.store_file(new/datum/computer_file/program/newsbrowser())
+	hard_drive.store_file(new/datum/computer_file/program/camera_monitor())
+	hard_drive.store_file(new/datum/computer_file/program/records())
+	hard_drive.store_file(new/datum/computer_file/program/suit_sensors())
 
-/obj/machinery/computer/modular/preset/cardslot/command_eng
-	default_software = list(
-		/datum/computer_file/program/comm,
-		/datum/computer_file/program/camera_monitor,
-		/datum/computer_file/program/email_client,
-		/datum/computer_file/program/records,
-		/datum/computer_file/program/docking,
-		/datum/computer_file/program/wordprocessor,
-		/datum/computer_file/program/power_monitor,
-		/datum/computer_file/program/supermatter_monitor,
-		/datum/computer_file/program/alarm_monitor,
-		/datum/computer_file/program/atmos_control,
-		/datum/computer_file/program/rcon_console,
-		/datum/computer_file/program/shields_monitor
-	)
+// Medical records
+/obj/item/modular_computer/console/preset/medical/records/install_default_programs()
+	..()
+	set_autorun("crewrecords")
 
-/obj/machinery/computer/modular/preset/security
-	default_software = list(
-		/datum/computer_file/program/digitalwarrant,
-		/datum/computer_file/program/camera_monitor,
-		/datum/computer_file/program/records,
-		/datum/computer_file/program/forceauthorization,
-		/datum/computer_file/program/wordprocessor
-	)
+// Medical crew monitor
+/obj/item/modular_computer/console/preset/medical/monitor/install_default_programs()
+	..()
+	set_autorun("sensormonitor")
 
-/obj/machinery/computer/modular/preset/civilian
-	default_software = list(
-		/datum/computer_file/program/camera_monitor,
-		/datum/computer_file/program/records,
-		/datum/computer_file/program/email_client,
-		/datum/computer_file/program/supply,
-		/datum/computer_file/program/wordprocessor
-	)
+// Research
+/obj/item/modular_computer/console/preset/research/install_default_hardware()
+	..()
+	printer = new/obj/item/computer_hardware/printer(src)
 
-/obj/machinery/computer/modular/preset/dock
-	default_software = list(
-		/datum/computer_file/program/reports,
-		/datum/computer_file/program/camera_monitor,
-		/datum/computer_file/program/records,
-		/datum/computer_file/program/email_client,
-		/datum/computer_file/program/supply,
-		/datum/computer_file/program/docking,
-		/datum/computer_file/program/deck_management
-	)
+/obj/item/modular_computer/console/preset/research/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/wordprocessor())
+	hard_drive.store_file(new/datum/computer_file/program/newsbrowser())
+	hard_drive.store_file(new/datum/computer_file/program/nttransfer())
+	hard_drive.store_file(new/datum/computer_file/program/camera_monitor())
 
-/obj/machinery/computer/modular/preset/supply_public
-	default_software = list(
-		/datum/computer_file/program/supply
-	)
-	autorun_program = /datum/computer_file/program/supply
+// Genetics
+/obj/item/modular_computer/console/preset/genetics/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/dna())
 
-/obj/machinery/computer/modular/preset/full/ert
-	default_software = list(
-		/datum/computer_file/program/nttransfer,
-		/datum/computer_file/program/camera_monitor/ert,
-		/datum/computer_file/program/email_client,
-		/datum/computer_file/program/alarm_monitor,
-		/datum/computer_file/program/comm,
-		/datum/computer_file/program/aidiag,
-		/datum/computer_file/program/records,
-		/datum/computer_file/program/wordprocessor
-	)
+// TODO: enable after baymed AI
+// Research robotics (placeholder for future)
+/*
+/obj/item/modular_computer/console/preset/research/silicon/install_default_hardware()
+	..()
+	ai_slot = new/obj/item/computer_hardware/ai_slot(src)
 
-/obj/machinery/computer/modular/preset/full/merc
-	default_software = list(
-		/datum/computer_file/program/camera_monitor/hacked,
-		/datum/computer_file/program/alarm_monitor,
-		/datum/computer_file/program/aidiag
-	)
+/obj/item/modular_computer/console/preset/research/silicon/install_default_programs()
+	..()
+	//hard_drive.store_file(new/datum/computer_file/program/aidiag())
+*/
+// Research administrator
+/obj/item/modular_computer/console/preset/research/sysadmin/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/records())
+	hard_drive.store_file(new/datum/computer_file/program/ntnetmonitor())
+	hard_drive.store_file(new/datum/computer_file/program/email_administration())
 
-/obj/machinery/computer/modular/preset/full/merc/Initialize()
-	. = ..()
-	emag_act(INFINITY)
+// Command
+/obj/item/modular_computer/console/preset/command/install_default_hardware()
+	..()
+	printer = new/obj/item/computer_hardware/printer(src)
+	card_slot = new/obj/item/computer_hardware/card_slot(src)
 
-/obj/machinery/computer/modular/preset/library
-	default_software = list(
-		/datum/computer_file/program/nttransfer,
-		/datum/computer_file/program/email_client,
-		/datum/computer_file/program/library,
-		/datum/computer_file/program/wordprocessor
-	)
+/obj/item/modular_computer/console/preset/command/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/email_client())
+	hard_drive.store_file(new/datum/computer_file/program/wordprocessor())
+	hard_drive.store_file(new/datum/computer_file/program/newsbrowser())
+	hard_drive.store_file(new/datum/computer_file/program/nttransfer())
+	hard_drive.store_file(new/datum/computer_file/program/camera_monitor())
+	hard_drive.store_file(new/datum/computer_file/program/records())
+	hard_drive.store_file(new/datum/computer_file/program/reports())
+	hard_drive.store_file(new/datum/computer_file/program/comm())
+	hard_drive.store_file(new/datum/computer_file/program/card_mod())
 
-/obj/machinery/computer/modular/preset/merchant
-	default_software = list(
-		/datum/computer_file/program/merchant,
-		/datum/computer_file/program/email_client,
-		/datum/computer_file/program/wordprocessor
-	)
+//First Officer
+/obj/item/modular_computer/console/preset/command/access/install_default_programs()
+	..()
+	set_autorun("cardmod")
 
-/obj/machinery/computer/modular/preset/filemanager
-	default_software = list(
-		/datum/computer_file/program/wordprocessor
-	)
-	autorun_program = /datum/computer_file/program/filemanager
+// Security
+/obj/item/modular_computer/console/preset/security/install_default_hardware()
+	..()
+	printer = new/obj/item/computer_hardware/printer(src)
+
+/obj/item/modular_computer/console/preset/security/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/wordprocessor())
+	hard_drive.store_file(new/datum/computer_file/program/newsbrowser())
+	hard_drive.store_file(new/datum/computer_file/program/camera_monitor())
+	hard_drive.store_file(new/datum/computer_file/program/records())
+	hard_drive.store_file(new/datum/computer_file/program/digitalwarrant())
+	hard_drive.store_file(new/datum/computer_file/program/audio())
+
+
+// Security cameras
+/obj/item/modular_computer/console/preset/security/camera/install_default_programs()
+	..()
+	set_autorun("cammon")
+
+// Security records
+/obj/item/modular_computer/console/preset/security/records/install_default_programs()
+	..()
+	set_autorun("crewrecords")
+
+// Civilian
+/obj/item/modular_computer/console/preset/civilian/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/email_client())
+	hard_drive.store_file(new/datum/computer_file/program/chatclient())
+	hard_drive.store_file(new/datum/computer_file/program/wordprocessor())
+	hard_drive.store_file(new/datum/computer_file/program/newsbrowser())
+	hard_drive.store_file(new/datum/computer_file/program/nttransfer())
+	hard_drive.store_file(new/datum/computer_file/program/crew_manifest())
+	hard_drive.store_file(new/datum/computer_file/program/camera_monitor())
+
+
+// Civilian Offices
+/obj/item/modular_computer/console/preset/civilian/professional/install_default_hardware()
+	..()
+	printer = new/obj/item/computer_hardware/printer(src)
+
+/obj/item/modular_computer/console/preset/civilian/professional/install_default_programs()
+	..()
+	var/datum/computer_file/program/crew_manifest/CM = locate(/datum/computer_file/program/crew_manifest) in hard_drive.stored_files
+	hard_drive.remove_file(CM)
+	hard_drive.store_file(new/datum/computer_file/program/records())
+
+// Civilian Library
+/obj/item/modular_computer/console/preset/civilian/professional/library/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/library())
+
+// Trade Console
+/obj/item/modular_computer/console/preset/trade/install_default_hardware()
+	..()
+	card_slot = new/obj/item/computer_hardware/card_slot(src)
+	printer = new/obj/item/computer_hardware/printer(src)
+
+/obj/item/modular_computer/console/preset/trade/install_default_programs()
+	..()
+	hard_drive.store_file(new /datum/computer_file/program/trade())
+	set_autorun("trade")
+
+// Trade Ordering Console
+/obj/item/modular_computer/console/preset/trade_orders/install_default_programs()
+	..()
+	hard_drive.store_file(new /datum/computer_file/program/trade/order())
+	set_autorun("trade_orders")
+
+//Dock control
+/*
+/obj/item/modular_computer/console/preset/dock/install_default_hardware()
+	..()
+	printer = new/obj/item/computer_hardware/printer(src)
+
+/obj/item/modular_computer/console/preset/dock/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/nttransfer())
+	hard_drive.store_file(new/datum/computer_file/program/email_client())
+	//hard_drive.store_file(new/datum/computer_file/program/supply())
+	hard_drive.store_file(new/datum/computer_file/program/wordprocessor())
+	//hard_drive.store_file(new/datum/computer_file/program/docking())
+
+// Crew-facing supply ordering computer
+/obj/item/modular_computer/console/preset/supply/install_default_hardware()
+	..()
+	printer = new/obj/item/computer_hardware/printer(src)
+
+/obj/item/modular_computer/console/preset/supply/install_default_programs()
+	..()
+	//hard_drive.store_file(new/datum/computer_file/program/supply())
+	set_autorun("supply")
+
+// ERT
+/obj/item/modular_computer/console/preset/ert/install_default_hardware()
+	..()
+	ai_slot = new/obj/item/computer_hardware/ai_slot(src)
+	printer = new/obj/item/computer_hardware/printer(src)
+	card_slot = new/obj/item/computer_hardware/card_slot(src)
+
+/obj/item/modular_computer/console/preset/ert/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/nttransfer())
+	hard_drive.store_file(new/datum/computer_file/program/camera_monitor/ert())
+	hard_drive.store_file(new/datum/computer_file/program/alarm_monitor())
+	hard_drive.store_file(new/datum/computer_file/program/comm())
+	//hard_drive.store_file(new/datum/computer_file/program/aidiag())
+	hard_drive.store_file(new/datum/computer_file/program/records())
+	hard_drive.store_file(new/datum/computer_file/program/wordprocessor())
+
+// Mercenary
+/obj/item/modular_computer/console/preset/mercenary/
+	computer_emagged = TRUE
+
+/obj/item/modular_computer/console/preset/mercenary/install_default_hardware()
+	..()
+	ai_slot = new/obj/item/computer_hardware/ai_slot(src)
+	printer = new/obj/item/computer_hardware/printer(src)
+	card_slot = new/obj/item/computer_hardware/card_slot(src)
+
+/obj/item/modular_computer/console/preset/mercenary/install_default_programs()
+	..()
+	hard_drive.store_file(new/datum/computer_file/program/camera_monitor/hacked())
+	hard_drive.store_file(new/datum/computer_file/program/alarm_monitor())
+	//hard_drive.store_file(new/datum/computer_file/program/aidiag())
+
+// Merchant
+/obj/item/modular_computer/console/preset/merchant/install_default_programs()
+	..()
+	//hard_drive.store_file(new/datum/computer_file/program/merchant())
+	hard_drive.store_file(new/datum/computer_file/program/wordprocessor())
+*/
+

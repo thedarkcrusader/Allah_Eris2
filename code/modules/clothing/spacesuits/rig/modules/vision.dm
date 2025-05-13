@@ -13,29 +13,30 @@
 	var/mode
 	var/obj/item/clothing/glasses/glasses
 
-/datum/rig_vision/New()
-	if(ispath(glasses))
-		glasses = new glasses
-
 /datum/rig_vision/nvg
 	mode = "night vision"
-	glasses = /obj/item/clothing/glasses/night
+/datum/rig_vision/nvg/New()
+	glasses = new /obj/item/clothing/glasses/powered/night
 
 /datum/rig_vision/thermal
 	mode = "thermal scanner"
-	glasses = /obj/item/clothing/glasses/thermal
+/datum/rig_vision/thermal/New()
+	glasses = new /obj/item/clothing/glasses/powered/thermal
 
 /datum/rig_vision/meson
 	mode = "meson scanner"
-	glasses = /obj/item/clothing/glasses/meson
+/datum/rig_vision/meson/New()
+	glasses = new /obj/item/clothing/glasses/powered/meson
 
 /datum/rig_vision/sechud
 	mode = "security HUD"
-	glasses = /obj/item/clothing/glasses/hud/security
+/datum/rig_vision/sechud/New()
+	glasses = new /obj/item/clothing/glasses/hud/security
 
 /datum/rig_vision/medhud
 	mode = "medical HUD"
-	glasses = /obj/item/clothing/glasses/hud/health
+/datum/rig_vision/medhud/New()
+	glasses = new /obj/item/clothing/glasses/hud/health
 
 /obj/item/rig_module/vision
 
@@ -43,23 +44,19 @@
 	desc = "A layered, translucent visor system for a hardsuit."
 	icon_state = "optics"
 
-	interface_name = "optical scanners"
+	active_power_cost = 0.05
+
+	interface_name = "Optical scanners"
 	interface_desc = "An integrated multi-mode vision system."
 
 	usable = 1
 	toggleable = 1
 	disruptive = 0
-	module_cooldown = 0
-	active_power_cost = 100
 
 	engage_string = "Cycle Visor Mode"
 	activate_string = "Enable Visor"
 	deactivate_string = "Disable Visor"
-
-	banned_modules = list(
-		/obj/item/rig_module/vision
-	)
-
+	bad_type = /obj/item/rig_module/vision
 	var/datum/rig_vision/vision
 	var/list/vision_modes = list(
 		/datum/rig_vision/nvg,
@@ -76,7 +73,7 @@
 	icon_state = "fulloptics"
 
 
-	interface_name = "multi optical visor"
+	interface_name = "Multi optical visor"
 	interface_desc = "An integrated multi-mode vision system."
 
 	vision_modes = list(/datum/rig_vision/meson,
@@ -84,71 +81,72 @@
 						/datum/rig_vision/thermal,
 						/datum/rig_vision/sechud,
 						/datum/rig_vision/medhud)
+	rarity_value = 100
 
 /obj/item/rig_module/vision/meson
-
 	name = "hardsuit meson scanner"
 	desc = "A layered, translucent visor system for a hardsuit."
 	icon_state = "meson"
-	origin_tech = list(TECH_MAGNET = 2, TECH_ENGINEERING = 5)
+
 	usable = 0
 
-	interface_name = "meson scanner"
+	interface_name = "Meson scanner"
 	interface_desc = "An integrated meson scanner."
 
 	vision_modes = list(/datum/rig_vision/meson)
+	spawn_tags = SPAWN_TAG_RIG_MODULE_COMMON
 
 /obj/item/rig_module/vision/thermal
-
 	name = "hardsuit thermal scanner"
 	desc = "A layered, translucent visor system for a hardsuit."
 	icon_state = "thermal"
 
 	usable = 0
 
-	interface_name = "thermal scanner"
+	interface_name = "Thermal scanner"
 	interface_desc = "An integrated thermal scanner."
 
 	vision_modes = list(/datum/rig_vision/thermal)
+	rarity_value = 50
 
 /obj/item/rig_module/vision/nvg
-
 	name = "hardsuit night vision interface"
 	desc = "A multi input night vision system for a hardsuit."
 	icon_state = "night"
-	origin_tech = list(TECH_MAGNET = 6, TECH_ENGINEERING = 6)
+
 	usable = 0
 
-	interface_name = "night vision interface"
+	interface_name = "Night vision interface"
 	interface_desc = "An integrated night vision system."
-
 	vision_modes = list(/datum/rig_vision/nvg)
+	rarity_value = 30
 
 /obj/item/rig_module/vision/sechud
 
 	name = "hardsuit security hud"
 	desc = "A simple tactical information system for a hardsuit."
 	icon_state = "securityhud"
-	origin_tech = list(TECH_MAGNET = 3, TECH_BIO = 2, TECH_ENGINEERING = 5)
+
 	usable = 0
 
-	interface_name = "security HUD"
+	interface_name = "Security HUD"
 	interface_desc = "An integrated security heads up display."
 
 	vision_modes = list(/datum/rig_vision/sechud)
+	spawn_tags = SPAWN_TAG_RIG_MODULE_COMMON
 
 /obj/item/rig_module/vision/medhud
-
 	name = "hardsuit medical hud"
 	desc = "A simple medical status indicator for a hardsuit."
 	icon_state = "healthhud"
-	origin_tech = list(TECH_MAGNET = 3, TECH_BIO = 2, TECH_ENGINEERING = 5)
+
 	usable = 0
 
-	interface_name = "medical HUD"
+	interface_name = "Medical HUD"
 	interface_desc = "An integrated medical heads up display."
 
 	vision_modes = list(/datum/rig_vision/medhud)
+	spawn_tags = SPAWN_TAG_RIG_MODULE_COMMON
 
 
 // There should only ever be one vision module installed in a suit.
@@ -156,7 +154,7 @@
 	..()
 	holder.visor = src
 
-/obj/item/rig_module/vision/engage(atom/target)
+/obj/item/rig_module/vision/engage()
 
 	var/starting_up = !active
 
@@ -165,22 +163,22 @@
 
 	// Don't cycle if this engage() is being called by activate().
 	if(starting_up)
-		to_chat(holder.wearer, SPAN_INFO("You activate your visual sensors."))
+		to_chat(holder.wearer, "<font color='blue'>You activate your visual sensors.</font>")
 		return 1
 
-	if(length(vision_modes) > 1)
+	if(vision_modes.len > 1)
 		vision_index++
-		if(vision_index > length(vision_modes))
+		if(vision_index > vision_modes.len)
 			vision_index = 1
 		vision = vision_modes[vision_index]
 
-		to_chat(holder.wearer, SPAN_INFO("You cycle your sensors to <b>[vision.mode]</b> mode."))
+		to_chat(holder.wearer, "<font color='blue'>You cycle your sensors to <b>[vision.mode]</b> mode.</font>")
 	else
-		to_chat(holder.wearer, SPAN_INFO("Your sensors only have one mode."))
+		to_chat(holder.wearer, "<font color='blue'>Your sensors only have one mode.</font>")
 	return 1
 
-/obj/item/rig_module/vision/Initialize()
-	. = ..()
+/obj/item/rig_module/vision/New()
+	..()
 
 	if(!vision_modes)
 		return

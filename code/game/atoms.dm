@@ -1,336 +1,261 @@
 /atom
-	/// Integer. The atom's layering level. Primarily used for determining whether the atom is visible or not on certain tile/flooring types/layers (I.e. plating and non-plating).
-	var/level = ATOM_LEVEL_OVER_TILE
-	/// Bitflag (Any of `ATOM_FLAG_*`). General atom level flags. See `code\__defines\flags.dm`.
-	var/atom_flags = ATOM_FLAG_NO_TEMP_CHANGE
-	/// LAZYLIST of all DNA strings present on the atom from blood. Do not modify directly. See `add_blood()` and `clean_blood()`.
-	var/list/blood_DNA
-	/// Boolean. Whether or not the atom was bloodied at any point. This remains TRUE even when `is_bloodied` is set to FALSE, except in very specific circumstances. Used for luminol handling to detect cleaned blood.
-	var/was_bloodied = FALSE
-	/// Color. The color of the blood overlay effect, if present.
-	var/blood_color
-	/// The amount of times blood will transfer to other atoms.
-	var/blood_transfer_amount = 0
-	/// Integer. The `world.time` the atom was last bumped into. Only used by some subtypes to prevent bump spamming.
+	layer = TURF_LAYER
+	plane = GAME_PLANE
+	appearance_flags = TILE_BOUND|PIXEL_SCALE|LONG_GLIDE
+	var/original_plane = null
+	var/level = ABOVE_PLATING_LEVEL
+	var/flags = NONE
+	var/reagent_flags = NONE
 	var/last_bumped = 0
-	/// Bitflag (Any of `PASS_FLAG_*`). Flags indicating the types of dense objects this atom is able to pass through/over.
-	var/pass_flags = FLAGS_OFF
-	/// Boolean. Whether or not thrown objects can pass through/over the atom.
-	var/throwpass = FALSE
-	/// Integer. The atom's current germ level. The higher the germ level, the more germ on the atom.
-	var/germ_level = GERM_LEVEL_AMBIENT
-	/// Boolean. Whether or not the atom is considered simulated. If `FALSE`, blocks a majority of interactions, processes, etc.
-	var/simulated = TRUE
-	/// Integer (One of `ATOM_FLOURESCENCE_*`). Whether or not the atom is visible under a UV light. If set to `2`, the atom is actively highlighted by a light. See `code\__defines\misc.dm`.
-	var/fluorescent = ATOM_FLOURESCENCE_NONE
-	/// The reagents contained within the atom. Handles all reagent interactions and processing.
+	var/pass_flags = 0
+	var/throwpass = 0
+	var/simulated = TRUE //filter for actions - used by lighting overlays
+	var/fluorescent // Shows up under a UV light.
+	var/allow_spin = TRUE // prevents thrown atoms from spinning when disabled on thrown or target
+	var/used_now = FALSE //For tools system, check for it should forbid to work on atom for more than one user at time
+	var/auto_init = TRUE
+	var/initialized = FALSE
+	var/sanity_damage = 0
+
+	var/light_power = 1 // Intensity of the light.
+	var/light_range = 0 // Range in tiles of the light.
+	var/light_color     // Hexadecimal RGB string representing the colour of the light.
+
+	var/can_buckle = FALSE
+	var/buckle_movable = 0
+	var/buckle_dir = 0
+	var/buckle_lying = -1 //bed-like behavior, forces mob.lying = buckle_lying if != -1
+	var/buckle_pixel_shift = "x=0;y=0" //where the buckled mob should be pixel shifted to, or null for no pixel shift control
+	var/buckle_require_restraints = 0 //require people to be handcuffed before being able to buckle. eg: pipes
+	var/mob/living/buckled_mob = null
+
+	var/was_bloodied
+	var/blood_color
+	var/fingerprintslast
+	var/list/fingerprints
+	var/list/fingerprintshidden
+	var/list/blood_DNA
+	var/list/original_atom // Detective Work, used for the duplicate data points kept in the scanners
+	var/list/statverbs
+	var/list/atom_colours // Inherent color, the colored paint applied on it, special color effect etc...
+	var/list/preloaded_reagents
 	var/datum/reagents/reagents
-	/// LAZYLIST of mobs currently climbing the atom.
-	var/list/climbers
-	/// Float. The multiplier applied to the `do_after()` timer when a mob climbs the atom.
-	var/climb_speed_mult = 1
-	/// Bitflag (Any of `INIT_*`). Flags for special/additional handling of the `Initialize()` chain. See `code\__defines\misc.dm`.
-	var/init_flags = FLAGS_OFF
-
-	/// This atom's cache of non-protected overlays, used for normal icon additions. Do not manipulate directly- See SSoverlays.
-	var/list/atom_overlay_cache
-
-	/// This atom's cache of overlays that can only be removed explicitly, like C4. Do not manipulate directly- See SSoverlays.
-	var/list/atom_protected_overlay_cache
+	var/tmp/list/light_sources       // Any light sources that are "inside" of us, for example, if src here was a mob that's carrying a flashlight, that flashlight's light source would be part of this list.
+	var/tmp/datum/light_source/light // Our light source. Don't fuck with this directly unless you have a good reason!
 
 
-/atom/New(loc, ...)
-	SHOULD_CALL_PARENT(TRUE)
-	if (GLOB.use_preloader && type == GLOB._preloader.target_path)
-		GLOB._preloader.load(src)
-	var/atom_init_stage = SSatoms.atom_init_stage
-	var/list/init_queue = SSatoms.init_queue
-	if (atom_init_stage > INITIALIZATION_INSSATOMS_LATE)
-		args[1] = atom_init_stage == INITIALIZATION_INNEW_MAPLOAD
-		if (SSatoms.InitAtom(src, args))
-			return
-	else if (init_queue)
-		var/list/argument_list
-		if (length(args) > 1)
-			argument_list = args.Copy(2)
-		if (argument_list || atom_init_stage == INITIALIZATION_INSSATOMS_LATE)
-			init_queue[src] = argument_list
-	if (atom_flags & ATOM_FLAG_CLIMBABLE)
-		verbs += /atom/proc/climb_on
-	..()
-
+/atom/proc/update_icon()
+	return
 
 /**
- * Initialization handler for atoms. It is preferred to use this over `New()`.
+ * Called when an atom is created in byond (built in engine proc)
  *
- * This is called after `New()` if the map is being loaded (`mapload` is `TRUE`), or called from the base of `New()` otherwise.
+ * Not a lot happens here in SS13 code, as we offload most of the work to the
+ * [Intialization][/atom/proc/Initialize] proc, mostly we run the preloader
+ * if the preloader is being used and then call [InitAtom][/datum/controller/subsystem/atoms/proc/InitAtom] of which the ultimate
+ * result is that the Intialize proc is called.
  *
- * All overrides should call parent or set the `ATOM_FLAG_INITIALIZED` flag and return a valid `INITIALIZE_HINT_*` value. All overrides must not sleep.
+ * We also generate a tag here if the DF_USE_TAG flag is set on the atom
+ */
+/atom/New(loc, ...)
+	init_plane()
+	update_plane()
+	init_light()
+
+	if(datum_flags & DF_USE_TAG)
+		GenerateTag()
+
+	var/do_initialize = SSatoms.initialized
+	if(do_initialize != INITIALIZATION_INSSATOMS)
+		args[1] = do_initialize == INITIALIZATION_INNEW_MAPLOAD
+		if(SSatoms.InitAtom(src, FALSE, args))
+			//we were deleted
+			return
+
+/**
+ * The primary method that objects are setup in SS13 with
  *
- * **Parameters**:
- * - `mapload` - Whether or not the initialization was called while the map was being loaded.
- * - All parameters except `loc` are passed directly from `New()`.
+ * we don't use New as we have better control over when this is called and we can choose
+ * to delay calls or hook other logic in and so forth
  *
- * Returns int (One of `INITIALIZE_HINT_*`). Return hint indicates what should be done with the atom once the initialization process is finished. See `code\__defines\__initialization.dm`.
+ * During roundstart map parsing, atoms are queued for intialization in the base atom/New(),
+ * After the map has loaded, then Initalize is called on all atoms one by one. NB: this
+ * is also true for loading map templates as well, so they don't Initalize until all objects
+ * in the map file are parsed and present in the world
+ *
+ * If you're creating an object at any point after SSInit has run then this proc will be
+ * immediately be called from New.
+ *
+ * mapload: This parameter is true if the atom being loaded is either being intialized during
+ * the Atom subsystem intialization, or if the atom is being loaded from the map template.
+ * If the item is being created at runtime any time after the Atom subsystem is intialized then
+ * it's false.
+ *
+ * You must always call the parent of this proc, otherwise failures will occur as the item
+ * will not be seen as initalized (this can lead to all sorts of strange behaviour, like
+ * the item being completely unclickable)
+ *
+ * You must not sleep in this proc, or any subprocs
+ *
+ * Any parameters from new are passed through (excluding loc), naturally if you're loading from a map
+ * there are no other arguments
+ *
+ * Must return an [initialization hint][INITIALIZE_HINT_NORMAL] or a runtime will occur.
+ *
+ * Note: the following functions don't call the base for optimization and must copypasta handling:
+ * * [/turf/proc/Initialize]
+ * * [/turf/open/space/proc/Initialize]
  */
 /atom/proc/Initialize(mapload, ...)
-	SHOULD_CALL_PARENT(TRUE)
-	SHOULD_NOT_SLEEP(TRUE)
-
-	if(atom_flags & ATOM_FLAG_INITIALIZED)
-		crash_with("Warning: [src]([type]) initialized multiple times!")
-	atom_flags |= ATOM_FLAG_INITIALIZED
-
-	if (IsAbstract())
-		log_debug("Abstract atom [type] created!")
-		return INITIALIZE_HINT_QDEL
+	if(initialized)
+		CRASH("Warning: [src]([type]) initialized multiple times!")
+	initialized = TRUE
 
 	if(light_power && light_range)
 		update_light()
 
-	if(opacity)
-		updateVisibility(src)
-		var/turf/T = loc
-		if(istype(T))
-			T.recalc_atom_opacity()
+	update_plane()
 
-	if (health_max)
-		health_current = health_max
+	if(preloaded_reagents)
+		if(!reagents)
+			var/volume = 0
+			for(var/reagent in preloaded_reagents)
+				volume += preloaded_reagents[reagent]
+			create_reagents(volume)
+		for(var/reagent in preloaded_reagents)
+			reagents.add_reagent(reagent, preloaded_reagents[reagent])
 
 	return INITIALIZE_HINT_NORMAL
 
 /**
- * Late initialization handler.
- * Called after the `Initialize()` chain for any atoms that returned `INITIALIZE_HINT_LATELOAD`.
- * Primarily used for atoms that rely on initialized values from other atoms.
+ * Late Intialization, for code that should run after all atoms have run Intialization
  *
- * **Parameters**:
- * - `mapload` - Whether or not the initialization was called while the map was being loaded.
- * - All parameters except `loc` are passed directly from `New()`.
+ * To have your LateIntialize proc be called, your atoms [Initalization][/atom/proc/Initialize]
+ *  proc must return the hint
+ * [INITIALIZE_HINT_LATELOAD] otherwise you will never be called.
  *
- * Has no return value.
+ * useful for doing things like finding other machines on GLOB.machines because you can guarantee
+ * that all atoms will actually exist in the "WORLD" at this time and that all their Intialization
+ * code has been run
  */
-/atom/proc/LateInitialize(mapload, ...)
-	return
-
-/atom/Destroy()
-	QDEL_NULL(reagents)
-	QDEL_NULL(light)
-	. = ..()
+/atom/proc/LateInitialize()
+	set waitfor = FALSE
 
 /**
- * Called when the atom is affected by luminol. Reveals blood present on the atom, or blood decal atoms.
+ * Top level of the destroy chain for most atoms
+ *
+ * Cleans up the following:
+ * * Removes alternate apperances from huds that see them
+ * * qdels the reagent holder from atoms if it exists
+ * * Clears itself from any targeting-related vars that hold a reference to it
+ * * clears the orbiters list
+ * * clears overlays and priority overlays
+ * * clears the light object
  */
+/atom/Destroy()
+	if(buckled_mob)
+		unbuckle_mob()
+	if(light)
+		light.destroy()
+		light = null
+	if(statverbs)
+		statverbs.Cut()
+	if(reagents)
+		QDEL_NULL(reagents)
+
+	SEND_SIGNAL(src, COMSIG_NULL_TARGET)
+	SEND_SIGNAL(src, COMSIG_NULL_SECONDARY_TARGET)
+
+	update_openspace()
+	return ..()
+
+///Generate a tag for this atom
+/atom/proc/GenerateTag()
+	return
+
 /atom/proc/reveal_blood()
 	return
 
-/**
- * Whether or not the atom is permitted to 'zoom' - I.e., binocular or scope handlers.
- *
- * Returns boolean.
- */
-/atom/proc/MayZoom()
-	return TRUE
-
-
-/**
- * Handler for receiving gas.
- *
- * **Parameters**:
- * - `giver` - The gas mixture to receive gas from.
- */
 /atom/proc/assume_air(datum/gas_mixture/giver)
 	return null
 
-
-/**
- * Removes air from the atom.
- *
- * **Parameters**:
- * - `amount` integer - The number of moles to remove.
- *
- * Returns instance of `/datum/gas_mixture`. The air that was removed from the atom.
- */
 /atom/proc/remove_air(amount)
 	return null
 
-/**
- * Retrieves the atom's air contents. Used for subtypes that implement their own forms of air contents.
- *
- * Returns instance of `/datum/gas_mixture`.
- */
 /atom/proc/return_air()
 	if(loc)
 		return loc.return_air()
 	else
 		return null
 
-/**
- * Determines sight flags that should be added to user's sight var.
- *
- * Returns bitflag or `-1` to indicate the view should be cancelled.
- */
+//return flags that should be added to the viewer's sight var.
+//Otherwise return a negative number to indicate that the view should be cancelled.
 /atom/proc/check_eye(user as mob)
-	if (istype(user, /mob/living/silicon/ai)) // WHYYYY
+	if (isAI(user)) // WHYYYY
 		return 0
 	return -1
 
-
-/**
- * Retrieves additional sight flags the atom may provide. Called on atoms contained in a mob's `additional_vision_handlers` list. See `/mob/proc/get_accumulated_vision_handlers()`.
- *
- * Returns bitflag (Any valid flag for `sight` - See DM reference).
- */
-/atom/proc/additional_sight_flags()
-	return 0
-
-
-/**
- * Retrieves see invisible values the atom may provide. Called on atoms contained in a mob's `additional_vision_handlers` list. See `/mob/proc/get_accumulated_vision_handlers()`.
- *
- * Returns int.
- */
-/atom/proc/additional_see_invisible()
-	return 0
-
-/**
- * Called whenever the contents of the atom's `reagents` changes.
- */
 /atom/proc/on_reagent_change()
 	return
 
-/**
- * Handler for color changes related to transferred reagents. For atoms whos color is based on the contents of
- * `reagents`.
- */
-/atom/proc/on_color_transfer_reagent_change()
-	return
-
-/**
- * Called when an object 'bumps' into the atom, typically by entering or attempting to enter the same tile.
- *
- * **Parameters**:
- * - `AM` - The atom that bumped into src.
- */
 /atom/proc/Bumped(AM as mob|obj)
 	return
 
-/**
- * Whether or not the atom is considered an open container for chemistry handling.
- *
- * TODO: Redundant. Replace with flat bit check.
- *
- * Returns int (`ATOM_FLAG_OPEN_CONTAINER` or `0`).
- */
+// Convenience procs to see if a container is open for chemistry handling
 /atom/proc/is_open_container()
-	return atom_flags & ATOM_FLAG_OPEN_CONTAINER
+	return is_refillable() && is_drainable()
+
+/atom/proc/is_injectable(allowmobs = TRUE)
+	return reagents && (reagent_flags & (INJECTABLE | REFILLABLE))
+
+/atom/proc/is_drawable(allowmobs = TRUE)
+	return reagents && (reagent_flags & (DRAWABLE | DRAINABLE))
+
+/atom/proc/is_refillable()
+	return reagents && (reagent_flags & REFILLABLE)
+
+/atom/proc/is_drainable()
+	return reagents && (reagent_flags & DRAINABLE)
 
 
-/**
- * Used to check if this atom blocks another atom's movement to the target turf. Called on all atom's in `mover`'s current location.
- *
- * **Parameters**:
- * - `mover` - The atom that's attempting to move.
- * - `target` - The detination turf `mover` is attempting to move to.
- *
- * Returns boolean. If `FALSE`, blocks movement and calls `mover.Bump(src, TRUE)`.
- */
-/atom/proc/CheckExit(atom/movable/mover, turf/target)
+/atom/proc/CheckExit()
 	return TRUE
 
-/**
- * Called when an atom moves into 'proximity' (Currently, `range(1)`) of src. Only called on atoms that have the `MOVABLE_FLAG_PROXMOVE` flag in `movable_flags`.
- *
- * **Parameters**:
- * - `AM` - The movable atom triggering the call.
- */
+// If you want to use this, the atom must have the PROXMOVE flag, and the moving
+// atom must also have the PROXMOVE flag currently to help with lag. ~ ComicIronic
 /atom/proc/HasProximity(atom/movable/AM as mob|obj)
 	return
 
-/**
- * Called when the atom is affected by an EMP.
- *
- * **Parameters**:
- * - `severity` Integer. The strength of the EMP, ranging from 1 to 3. NOTE: Lower numbers are stronger.
- */
 /atom/proc/emp_act(severity)
-	SHOULD_CALL_PARENT(TRUE)
-	if (get_max_health())
-		// No hitsound here - Doesn't make sense for EMPs.
-		// Generalized - 75-125 damage at max, 38-63 at medium, 25-42 at minimum severities.
-		damage_health(rand(75, 125) / severity, DAMAGE_EMP, severity = severity)
-	GLOB.empd_event.raise_event(src, severity)
+	return
 
 
-/**
- * Sets the atom's density, raises the density set event, and updates turfs for dense atom checks.
- *
- * **Parameters**:
- * - `new_density` boolean - The new density value to set.
- */
-/atom/proc/set_density(new_density)
-	var/changed = density != new_density
-	if(changed)
-		density = !density
-		if (isturf(loc))
-			var/turf/T = loc
-			if (density)
-				T.has_dense_atom = TRUE
-			else
-				T.has_dense_atom = null
-		GLOB.density_set_event.raise_event(src, !density, density)
-
-
-/**
- * Called when a projectile impacts the atom.
- *
- * **Parameters**:
- * - `P` - The projectile impacting the atom.
- * - `def_zone` (string) - The targeting zone the projectile is hitting.
- *
- * Returns boolean. Whether or not the projectile should pass through the atom.
- */
 /atom/proc/bullet_act(obj/item/projectile/P, def_zone)
-	P.on_hit(src, 0, def_zone)
-	. = 0
-	if (get_max_health())
-		var/damage = P.damage
-		if (GET_FLAGS(health_flags, HEALTH_FLAG_STRUCTURE))
-			damage = P.get_structure_damage()
-		if (!can_damage_health(damage, P.damage_type, P.damage_flags))
-			return
-		playsound(src, use_weapon_hitsound ? P.hitsound : damage_hitsound, 75)
-		damage_health(damage, P.damage_type, P.damage_flags, skip_can_damage_check = TRUE)
+	P.on_hit(src, def_zone)
+	. = FALSE
 
-/**
- * Determines whether or not the atom is in the contents of the container or an instance of container if provided as a
- * path.
- *
- * TODO: Only used once, and the usage is redundant. Replace with `istype(loc)` check.
- *
- * **Parameters**:
- * - `container` instance or path of `/atom`
- *
- * Returns boolean.
- */
+/atom/proc/block_bullet(mob/user, obj/item/projectile/damage_source, def_zone)
+	return 0
+
 /atom/proc/in_contents_of(container)//can take class or object instance as argument
 	if(ispath(container))
 		if(istype(src.loc, container))
-			return 1
+			return FALSE
 	else if(src in container)
-		return 1
+		return TRUE
 	return
 
-/**
- * Recursively searches all atom contents for a given path.
+/*
+ *	atom/proc/search_contents_for(path, list/filter_path=null)
+ * Recursevly searches all atom contens (including contents contents and so on).
  *
- * **Parameters**:
- * - `path` type path - The type path to search for.
- * - `filter_path` list (type paths) - Any paths provided here will not be searched if found during the recursive search.
+ * ARGS: path - search atom contents for atoms of this type
+ *	   list/filter_path - if set, contents of atoms not of types in this list are excluded from search.
  *
- * Returns list (Instances of `/atom`). All found matches.
+ * RETURNS: list of found atoms
  */
-/atom/proc/search_contents_for(path,list/filter_path=null)
+
+/atom/proc/search_contents_for(path, list/filter_path=null)
 	var/list/found = list()
 	for(var/atom/A in src)
 		if(istype(A, path))
@@ -341,468 +266,449 @@
 				pass |= istype(A, type)
 			if(!pass)
 				continue
-		if(length(A.contents))
-			found += A.search_contents_for(path,filter_path)
+		if(A.contents.len)
+			found += A.search_contents_for(path, filter_path)
 	return found
 
-/**
- * Recursively searches containers for a given path, and returns the first match.
- */
-/atom/proc/get_container(container_type)
-	var/atom/A = src
-	while (!isarea(A))
-		if (istype(A.loc, container_type))
-			return A.loc
-		A = A.loc
-
-/**
- * Called when a user examines the atom. This proc and its overrides handle displaying the text that appears in chat
- * during examines.
- *
- * Any overrides must either call parent, or return `TRUE`. There is no need to check the return value of `..()`, this
- * is only used by the calling `examinate()` proc to validate the call chain.
- *
- * For `infix` and `suffix`, generally, these are inserted at the beginning of the examine text, as:
- * `That's \a [name][infix]. [suffix]`.
- *
- * **Parameters**:
- * - `user` - The mob performing the examine.
- * - `distance` - The distance in tiles from `user` to `src`.
- * - `is_adjacent` - Whether `user` is adjacent to `src`.
- * - `infix` String - String that is appended immediately after the atom's name.
- * - `suffix` String - Additional string appended after the atom's name and infix.
- *
- * Returns boolean - The caller always expects TRUE
- *  This is used rather than SHOULD_CALL_PARENT as it enforces that subtypes of a type that explicitly returns still call parent
- */
-/atom/proc/examine(mob/user, distance, is_adjacent, infix = "", suffix = "")
-	//This reformat names to get a/an properly working on item descriptions when they are bloody
-	var/f_name = "\a [src][infix]."
-	if(blood_color && !istype(src, /obj/decal))
-		if(gender == PLURAL)
-			f_name = "some "
-		else
-			f_name = "a "
-		f_name += "[SPAN_COLOR(blood_color, "stained")] [name][infix]!"
-
-	to_chat(user, "[icon2html(src, user)] That's [f_name] [suffix]")
-	to_chat(user, desc)
-	if (get_max_health())
-		examine_damage_state(user)
-
-	if (IsFlameSource())
-		to_chat(user, SPAN_DANGER("It has an open flame."))
-	else if (distance <= 1 && IsHeatSource())
-		to_chat(user, SPAN_WARNING("It's hot to the touch."))
-
-	return TRUE
-
-/// Works same as /atom/proc/Examine(), only this output comes immediately after any and all made by /atom/proc/Examine()
-/atom/proc/LateExamine(mob/user, distance, is_adjacent)
-	SHOULD_NOT_SLEEP(TRUE)
-
-	user.ForensicsExamination(src, distance)
-	return TRUE
-
-/**
- * Called when a mob with this atom as their machine, pulledby, loc, buckled, or other relevant var atom attempts to move.
- */
-/atom/proc/relaymove()
+//This proc is called on the location of an atom when the atom is Destroy()'d
+/atom/proc/handle_atom_del(atom/A)
 	return
 
 
-/**
- * Sets the atom's direction and raises the dir set event.
- *
- * **Parameters**:
- * - new_dir direction - The new direction to set.
- *
- * Returns boolean. Whether or not the direction was changed.
- */
+
+/*
+Beam code by Gunbuddy
+
+Beam() proc will only allow one beam to come from a source at a time.  Attempting to call it more than
+once at a time per source will cause graphical errors.
+Also, the icon used for the beam will have to be vertical and 32x32.
+The math involved assumes that the icon is vertical to begin with so unless you want to adjust the math,
+its easier to just keep the beam vertical.
+*/
+/atom/proc/Beam(atom/BeamTarget, icon_state="b_beam", icon='icons/effects/beam.dmi',time=50, maxdistance=10)
+	//BeamTarget represents the target for the beam, basically just means the other end.
+	//Time is the duration to draw the beam
+	//Icon is obviously which icon to use for the beam, default is beam.dmi
+	//Icon_state is what icon state is used. Default is b_beam which is a blue beam.
+	//Maxdistance is the longest range the beam will persist before it gives up.
+	var/EndTime=world.time+time
+	while(BeamTarget&&world.time<EndTime&&get_dist(src, BeamTarget)<maxdistance&&z==BeamTarget.z)
+	//If the BeamTarget gets deleted, the time expires, or the BeamTarget gets out
+	//of range or to another z-level, then the beam will stop.  Otherwise it will
+	//continue to draw.
+
+		set_dir(get_dir(src, BeamTarget))	//Causes the source of the beam to rotate to continuosly face the BeamTarget.
+
+		for(var/obj/effect/overlay/beam/O in orange(10, src))	//This section erases the previously drawn beam because I found it was easier to
+			if(O.BeamSource==src)				//just draw another instance of the beam instead of trying to manipulate all the
+				qdel(O)							//pieces to a new orientation.
+		var/Angle=round(Get_Angle(src, BeamTarget))
+		var/icon/I=new(icon, icon_state)
+		I.Turn(Angle)
+		var/DX=(32*BeamTarget.x+BeamTarget.pixel_x)-(32*x+pixel_x)
+		var/DY=(32*BeamTarget.y+BeamTarget.pixel_y)-(32*y+pixel_y)
+		var/N=0
+		var/length=round(sqrt((DX)**2+(DY)**2))
+		for(N, N<length, N+=32)
+			var/obj/effect/overlay/beam/X=new(loc)
+			X.BeamSource=src
+			if(N+32>length)
+				var/icon/II=new(icon, icon_state)
+				II.DrawBox(null, 1, (length-N), 32, 32)
+				II.Turn(Angle)
+				X.icon=II
+			else X.icon=I
+			var/Pixel_x=round(sin(Angle)+32*sin(Angle)*(N+16)/32)
+			var/Pixel_y=round(cos(Angle)+32*cos(Angle)*(N+16)/32)
+			if(DX==0) Pixel_x=0
+			if(DY==0) Pixel_y=0
+			if(Pixel_x>32)
+				for(var/a=0, a<=Pixel_x, a+=32)
+					X.x++
+					Pixel_x-=32
+			if(Pixel_x<-32)
+				for(var/a=0, a>=Pixel_x, a-=32)
+					X.x--
+					Pixel_x+=32
+			if(Pixel_y>32)
+				for(var/a=0, a<=Pixel_y, a+=32)
+					X.y++
+					Pixel_y-=32
+			if(Pixel_y<-32)
+				for(var/a=0, a>=Pixel_y, a-=32)
+					X.y--
+					Pixel_y+=32
+			X.pixel_x=Pixel_x
+			X.pixel_y=Pixel_y
+		sleep(3)	//Changing this to a lower value will cause the beam to follow more smoothly with movement, but it will also be more laggy.
+					//I've found that 3 ticks provided a nice balance for my use.
+	for(var/obj/effect/overlay/beam/O in orange(10, src)) if(O.BeamSource==src) qdel(O)
+
+
+//All atoms
+/atom/proc/examine(mob/user, extra_description = "")
+	//This reformat names to get a/an properly working on item descriptions when they are bloody
+	var/full_name = "\a [src]."
+	var/output = ""
+	if(blood_DNA && !istype(src, /obj/effect/decal))
+		if(gender == PLURAL)
+			full_name = "some "
+		else
+			full_name = "a "
+		if(blood_color != "#030303")
+			full_name += "<span class='danger'>blood-stained</span> [name]!"
+		else
+			full_name += "oil-stained [name]."
+
+	output += "<div id='examine'>"
+	output += "\icon[src] This is [full_name]"
+	if(desc)
+		output += "\n[desc]"
+	if(extra_description)
+		output += "\n[extra_description]"
+
+	if(reagents)
+		if(reagent_flags & TRANSPARENT)
+			if(LAZYLEN(reagents.reagent_list) > 1)
+				if(user.can_see_reagents())
+					output += SPAN_NOTICE("\nIt contains:")
+					for(var/datum/reagent/R in reagents.reagent_list)
+						output += SPAN_NOTICE("\n[R.volume] units of [R.name]")
+				else
+					output += SPAN_NOTICE("\nIt contains [reagents.total_volume] units of various reagents.")
+			else
+				output += SPAN_NOTICE("\nIt contains [reagents.total_volume] units of [user.can_see_reagents() ? reagents.reagent_list[1].name : "something"]")
+		else if(reagent_flags & AMOUNT_VISIBLE)
+			output += SPAN_NOTICE("[reagents.total_volume ? "\nIt has [reagents.total_volume] units left." : "\nIt's empty."]")
+
+	var/desc_info = get_description_info()
+	if(desc_info)
+		output += "\n<font color='#084b8a'><b>[desc_info]</b></font>"
+
+	var/desc_fluff = get_description_fluff()
+	if(desc_fluff)
+		output += "\n<font color='#298a08'><b>[desc_fluff]</b></font>"
+
+	var/desc_antag = (isghost(user) || player_is_antag(user.mind)) ? get_description_antag() : null
+	if(desc_antag)
+		output += "\n<font color='#8a0808'><b>[desc_antag]</b></font>"
+
+	output += "</div>"
+
+	if(isobserver(user))
+		to_chat(user, output)
+	else
+		user.visible_message("<font size=1>[user.name] looks at [src].</font>", output)
+
+	to_chat(user, show_stat_verbs()) //rewrite to show_stat_verbs(user)?
+
+	if(ishuman(user) && user.stats && user.stats.getPerk(/datum/perk/greenthumb))
+		var/datum/perk/greenthumb/P = user.stats.getPerk(/datum/perk/greenthumb)
+		P.virtual_scanner.afterattack(src, user, get_dist(src, user) <= 1)
+
+	SEND_SIGNAL_OLD(src, COMSIG_EXAMINE, user)
+
+	return (get_dist(src, user) <= world.view) || isobserver(user)
+
+// called by mobs when e.g. having the atom as their machine, pulledby, loc (AKA mob being inside the atom) or buckled var set.
+// see code/modules/mob/mob_movement.dm for more.
+/atom/proc/relaymove()
+	return
+
+//called to set the atom's dir and used to add behaviour to dir-changes
 /atom/proc/set_dir(new_dir)
 	var/old_dir = dir
 	if(new_dir == old_dir)
 		return FALSE
+
+	for(var/i in src.contents)
+		var/atom/A = i
+		A.container_dir_changed(new_dir)
 	dir = new_dir
-	GLOB.dir_set_event.raise_event(src, old_dir, dir)
-
-	//Lighting
-	if(light_source_solo)
-		if(light_source_solo.light_angle)
-			light_source_solo.source_atom.update_light()
-	else if(light_source_multi)
-		var/datum/light_source/L
-		for(var/thing in light_source_multi)
-			L = thing
-			if(L.light_angle)
-				L.source_atom.update_light()
-
 	return TRUE
 
-/**
- * Sets the atom's icon state, also updating the base icon state extension if present. You should only use this proc if
- * you intend to permanently alter the base state.
- *
- * **Parameters**:
- * - `new_icon_state` icon state.
- */
-/atom/proc/set_icon_state(new_icon_state)
-	if(has_extension(src, /datum/extension/base_icon_state))
-		var/datum/extension/base_icon_state/bis = get_extension(src, /datum/extension/base_icon_state)
-		bis.base_icon_state = new_icon_state
-		update_icon()
-	else
-		icon_state = new_icon_state
-
-/**
- * Updates the atom's icon. You should call this to trigger icon updates, but should not override it. Override
- * `on_update_icon()` instead.
- *
- * If you're expecting to be calling a lot of icon updates at once, use `queue_icon_update()` instead.
- */
-/atom/proc/update_icon()
-	if (QDELETED(src))
-		return
-	on_update_icon(arglist(args))
-
-
-/**
- * Handler for updating the atom's icon and overlay states. Generally, all changes to `overlays`, `underlays`, `icon`,
- * `icon_state`, `item_state`, etc should be contained in here.
- *
- * Do not call this directly. Use `update_icon()` or `queue_icon_update()` instead.
- */
-/atom/proc/on_update_icon()
+/atom/proc/container_dir_changed(new_dir)
 	return
 
+// Explosion action proc , should never SLEEP, and should avoid icon updates , overlays and other visual stuff as much as possible , since they cause massive time delays
+// in explosion processing.
+/atom/proc/explosion_act(target_power, explosion_handler/handler)
+	return 0
 
-/**
- * Called when an explosion affects the atom.
- *
- * **Parameters**:
- * - `severity` Integer (One of `EX_ACT_*`) - The strength of the explosion affecting the atom. NOTE: Lower numbers are
- * stronger.
- */
-/atom/proc/ex_act(severity, turf_breaker)
-	var/max_health = get_max_health()
-	if (max_health)
-		// No hitsound here to avoid noise spam.
-		// Damage is based on severity and maximum health, with DEVASTATING being guaranteed death without any resistances.
-		var/damage_flags = turf_breaker ? DAMAGE_FLAG_TURF_BREAKER : FLAGS_OFF
-		var/damage = 0
-		switch (severity)
-			if (EX_ACT_DEVASTATING)
-				damage = round(max_health * (rand(100, 200) / 100)) // So that even atoms resistant to explosions may still be heavily damaged at this severity. Effective range of 100% to 200%.
-			if (EX_ACT_HEAVY)
-				damage = round(max_health * (rand(50, 100) / 100)) // Effective range of 50% to 100%.
-			if (EX_ACT_LIGHT)
-				damage = round(max_health * (rand(10, 50) / 100)) // Effective range of 10% to 50%.
-		if (damage)
-			damage_health(damage, DAMAGE_EXPLODE, damage_flags, severity)
-
-
-/**
- * Handler for the effects of being emagged by a cryptographic sequencer. Other situations may also call this for
- * certain atoms, such as EMP'd or hacked machinery, or antagonist robots.
- *
- * **Parameters**:
- * - `remaining_charges` - The number of emag charges left on the atom used to perform the emag.
- * - `user` - The user performing the emag.
- * - `emag_source` - The atom used to perform the emag.
- *
- * Returns integer. The amount of emag charges to expend. If `NO_EMAG_ACT`, then emag interactions are skipped and the
- * emag will be passed on to other interaction checks.
- */
 /atom/proc/emag_act(remaining_charges, mob/user, emag_source)
 	return NO_EMAG_ACT
 
-/**
- * Called when fire affects the atom.
- *
- * **Parameters**:
- * - `air` - Air contents of the turf that's on fire and affecting this atom. It could be from the current atom's turf
- * or an adjacent one.
- * - `exposed_temperature` - The temperature of the fire affecting the atom. Usually, this is `air.temperature`.
- * - `exposed_volume` - The volume of the air for the fire affecting the atom. Usually, this is `air.volume`.
- */
-/atom/proc/fire_act(datum/gas_mixture/air, exposed_temperature, exposed_volume)
-	var/melting_point = get_material_melting_point()
-	if (get_max_health() && exposed_temperature > melting_point)
-		// No hitsound here to avoid noise spam.
-		// 1 point of damage for every 100 kelvin above 300 (~27 C), minimum of 1.
-		damage_health(max(round((exposed_temperature - melting_point) / 100), 1), DAMAGE_FIRE)
+/atom/proc/fire_act()
+	return
 
-/**
- * Handler for melting from heat or other sources. Called by terrain generation and some instances of `fire_act()` or
- * `lava_act()`.
- */
 /atom/proc/melt()
 	return
 
-/**
- * Called when lava affects the atom. By default, this melts and deletes the atom.
- *
- * Returns boolean. Whether or not the atom was destroyed.
- */
-/atom/proc/lava_act(datum/gas_mixture/air, temperature, pressure)
-	if (is_damage_immune(DAMAGE_FIRE))
-		return FALSE
-	if (get_max_health())
-		fire_act(air, temperature)
-		if (!health_dead())
+/atom/proc/ignite_act()	//Proc called on connected igniter activation
+	return
+
+/atom/proc/hitby(atom/movable/AM as mob|obj)
+	if (density)
+		AM.throwing = FALSE
+	return
+
+/atom/proc/add_hiddenprint(mob/living/M)
+	if(isnull(M)) return
+	if(isnull(M.key)) return
+	if (ishuman(M))
+		var/mob/living/carbon/human/H = M
+		if (H.gloves)
+			if(src.fingerprintslast != H.key)
+				src.fingerprintshidden += text("\[[time_stamp()]\] (Wearing gloves). Real name: [], Key: []", H.real_name, H.key)
+				src.fingerprintslast = H.key
 			return FALSE
-	visible_message(SPAN_DANGER("\The [src] sizzles and melts away, consumed by the lava!"))
-	playsound(src, 'sound/effects/flare.ogg', 100, 3)
-	qdel(src)
-	. = TRUE
+		if (!( src.fingerprints ))
+			if(src.fingerprintslast != H.key)
+				src.fingerprintshidden += text("\[[time_stamp()]\] Real name: [], Key: []", H.real_name, H.key)
+				src.fingerprintslast = H.key
+			return TRUE
+	else
+		if(src.fingerprintslast != M.key)
+			src.fingerprintshidden += text("\[[time_stamp()]\] Real name: [], Key: []", M.real_name, M.key)
+			src.fingerprintslast = M.key
+	return
 
-/**
- * Called when the atom is hit by a thrown object.
- *
- * **Parameters**:
- * - `AM` - The atom impacting `src`.
- * - `TT` - The thrownthing datum associated with the impact.
- */
-/atom/proc/hitby(atom/movable/AM, datum/thrownthing/TT)//already handled by throw impact
-	if(isliving(AM) && !isturf(src)) // See `/turf/hitby()` for turf handling of mob impacts
-		var/mob/living/M = AM
-		M.apply_damage(TT.speed * 5, DAMAGE_BRUTE)
+/atom/proc/add_fingerprint(mob/living/M, ignoregloves = FALSE)
+	if(isnull(M) || isnull(M.key) || isAI(M))
+		return
 
-	if (get_max_health())
-		var/damage = 0
-		var/damage_type = DAMAGE_BRUTE
-		var/damage_flags = FLAGS_OFF
-		var/damage_hitsound = src.damage_hitsound
-		if (isobj(AM))
-			var/obj/O = AM
-			damage = O.throwforce
-			damage_type = O.damtype
-			if (use_weapon_hitsound && isitem(O))
-				var/obj/item/I = O
-				damage_hitsound = I.hitsound
-		else if (ismob(AM))
-			var/mob/M = AM
-			damage = M.mob_size
-		damage = damage * (TT.speed / THROWFORCE_SPEED_DIVISOR)
-		if (!can_damage_health(damage, damage_type))
-			playsound(src, damage_hitsound, 50)
-			AM.visible_message(SPAN_NOTICE("\The [AM] bounces off \the [src] harmlessly."))
-			return
-		damage_health(damage, damage_type, damage_flags, skip_can_damage_check = TRUE)
-		AM.visible_message(SPAN_WARNING("\The [AM] impacts \the [src], causing damage!"))
+	if(ishuman(M))
+		//Add the list if it does not exist.
+		if(!fingerprintshidden)
+			fingerprintshidden = list()
+
+		//Fibers~
+		add_fibers(M)
+
+		//He has no prints!
+		if(get_active_mutation(M, MUTATION_NOPRINTS))
+			if(fingerprintslast != M.key)
+				fingerprintshidden += "(Has no fingerprints) Real name: [M.real_name], Key: [M.key]"
+				fingerprintslast = M.key
+			return FALSE		//Now, lets get to the dirty work.
+		//First, make sure their DNA makes sense.
+		var/mob/living/carbon/human/H = M
+		if(!H.fingers_trace)
+			H.fingers_trace = md5(H.real_name)
+
+		//Now, deal with gloves.
+		if (H.gloves && H.gloves != src)
+			if(fingerprintslast != H.key)
+				fingerprintshidden += text("\[[]\](Wearing gloves). Real name: [], Key: []", time_stamp(), H.real_name, H.key)
+				fingerprintslast = H.key
+			H.gloves.add_fingerprint(M)
+
+		//Deal with gloves the pass finger/palm prints.
+		if(!ignoregloves)
+			if(H.gloves != src)
+				if(prob(75) && istype(H.gloves, /obj/item/clothing/gloves/latex))
+					return FALSE
+				else if(H.gloves && !istype(H.gloves, /obj/item/clothing/gloves/latex))
+					return FALSE
+
+		//More adminstuffz
+		if(fingerprintslast != H.key)
+			fingerprintshidden += text("\[[]\]Real name: [], Key: []", time_stamp(), H.real_name, H.key)
+			fingerprintslast = H.key
+
+		//Make the list if it does not exist.
+		if(!fingerprints)
+			fingerprints = list()
+
+		//Hash this shit.
+		var/full_print = H.get_full_print()
+
+		// Add the fingerprints
+		//
+		if(fingerprints[full_print])
+			switch(stringpercent(fingerprints[full_print]))		//tells us how many stars are in the current prints.
+
+				if(28 to 32)
+					if(prob(1))
+						fingerprints[full_print] = full_print 		// You rolled a one buddy.
+					else
+						fingerprints[full_print] = stars(full_print, rand(0, 40)) // 24 to 32
+
+				if(24 to 27)
+					if(prob(3))
+						fingerprints[full_print] = full_print     	//Sucks to be you.
+					else
+						fingerprints[full_print] = stars(full_print, rand(15, 55)) // 20 to 29
+
+				if(20 to 23)
+					if(prob(5))
+						fingerprints[full_print] = full_print		//Had a good run didn't ya.
+					else
+						fingerprints[full_print] = stars(full_print, rand(30, 70)) // 15 to 25
+
+				if(16 to 19)
+					if(prob(5))
+						fingerprints[full_print] = full_print		//Welp.
+					else
+						fingerprints[full_print]  = stars(full_print, rand(40, 100))  // 0 to 21
+
+				if(0 to 15)
+					if(prob(5))
+						fingerprints[full_print] = stars(full_print, rand(0, 50)) 	// small chance you can smudge.
+					else
+						fingerprints[full_print] = full_print
+
+		else
+			fingerprints[full_print] = stars(full_print, rand(0, 20))	//Initial touch, not leaving much evidence the first time.
 
 
-/**
- * Adds blood effects and DNA to the atom.
- *
- * **Parameters**:
- * - `M` - The mob the blood and DNA originated from.
- *
- * Returns boolean - `TRUE` if the atom was bloodied, `FALSE` otherwise.
- */
-/atom/proc/add_blood(mob/living/carbon/human/M as mob)
-	if(!istype(M))
-		return 0
-	if (!istype(M.dna, /datum/dna))
-		M.dna = new /datum/dna(null)
-		M.dna.real_name = M.real_name
-	M.check_dna()
-	return add_blood_custom(M.species.get_blood_colour(M), 3, list(M.dna))
+		return TRUE
+	else
+		//Smudge up dem prints some
+		if(fingerprintslast != M.key)
+			fingerprintshidden += text("\[[]\]Real name: [], Key: []", time_stamp(), M.real_name, M.key)
+			fingerprintslast = M.key
 
-/**
- * Adds custom blood effects and DNA to the atom.
- *
- * **Parameters**:
- * - `colour` - The blood colour to apply.
- * - `colour` - The blood colour to apply.
- * - `colour` - The blood colour to apply.
- *
- * Returns boolean - `TRUE` if the atom was bloodied, `FALSE` otherwise.
- */
-/atom/proc/add_blood_custom(source_blood_color = COLOR_BLOOD_HUMAN, amount = 1, list/source_blood_DNA = list())
-	if(atom_flags & ATOM_FLAG_NO_BLOOD)
-		return 0
+	//Cleaning up shit.
+	if(fingerprints && !fingerprints.len)
+		fingerprints = null
+	return
 
-	if(!blood_DNA || !islist(blood_DNA))	//if our list of DNA doesn't exist yet (or isn't a list) initialise it.
+
+/atom/proc/transfer_fingerprints_to(atom/A)
+
+	if(!istype(A.fingerprints,/list))
+		A.fingerprints = list()
+
+	if(!istype(A.fingerprintshidden,/list))
+		A.fingerprintshidden = list()
+
+	if(!istype(fingerprintshidden, /list))
+		fingerprintshidden = list()
+
+	//skytodo
+	//A.fingerprints |= fingerprints            //detective
+	//A.fingerprintshidden |= fingerprintshidden    //admin
+	if(A.fingerprints && fingerprints)
+		A.fingerprints |= fingerprints.Copy()            //detective
+	if(A.fingerprintshidden && fingerprintshidden)
+		A.fingerprintshidden |= fingerprintshidden.Copy()    //admin	A.fingerprintslast = fingerprintslast
+
+
+//returns 1 if made bloody, returns 0 otherwise
+/atom/proc/add_blood(mob/living/carbon/human/M)
+	if(flags & NOBLOODY)
+		return FALSE
+
+	if(!blood_DNA || !istype(blood_DNA, /list))	//if our list of DNA doesn't exist yet (or isn't a list) initialise it.
 		blood_DNA = list()
 
-	was_bloodied = 1
-	blood_color = source_blood_color
-	blood_DNA |= source_blood_DNA.Copy()
-	blood_transfer_amount = max(amount, blood_transfer_amount)
-	. = 1
-	return 1
+	was_bloodied = TRUE
+	blood_color = "#A10808"
+	if(istype(M))
+		if(!M.fingers_trace)
+			M.fingers_trace = md5(M.real_name)
+		if (M.species)
+			blood_color = M.species.blood_color
+			if(!blood_color)
+				return FALSE
+	return TRUE
 
-/**
- * Transfers existing blood effects to the target.
- *
- * **Parameters**:
- * - `target` - The target mob to transfer to.
- * - `target_zone` - Optional target zone for humanoid mobs to apply to a specific part of the body.
- *
- * Returns boolean - `TRUE` if the atom was bloodied, `FALSE` otherwise.
- */
-/atom/proc/transfer_blood(mob/living/carbon/human/target, target_zone)
-	if (!ishuman(target))
-		return 0
-	var/taken = rand(min(1, blood_transfer_amount), blood_transfer_amount)
-	if(!taken)
-		return 0
-	var/obj/item/clothing/equipped_item = target.get_covering_equipped_item_by_zone(target_zone)
-	if(istype(equipped_item))
-		equipped_item.add_blood_custom(blood_color, taken, blood_DNA)
-	else
-		switch(target_zone)
-			if(BP_L_HAND , BP_R_HAND)
-				target.bloody_hands_custom(blood_color, 3, blood_DNA)
-			if(BP_CHEST, BP_GROIN, BP_L_ARM , BP_R_ARM, BP_L_LEG , BP_R_LEG)
-				target.bloody_body_custom(blood_color, taken, blood_DNA)
-	blood_transfer_amount -= taken
-	return 1
+/atom/proc/add_vomit_floor(mob/living/carbon/M, toxvomit = FALSE)
+	if( istype(src, /turf) )
+		var/obj/effect/decal/cleanable/vomit/this = new /obj/effect/decal/cleanable/vomit(src)
 
-/mob/living/proc/handle_additional_vomit_reagents(obj/decal/cleanable/vomit/vomit)
-	vomit.reagents.add_reagent(/datum/reagent/acid/stomach, 5)
+		// Make toxins vomit look different
+		if(toxvomit)
+			this.icon_state = "vomittox_[pick(1, 4)]"
 
-/**
- * Removes all blood, DNA, residue, germs, etc from the atom.
- *
- * Returns boolean. If `TRUE`, blood DNA was present and removed.
- */
 /atom/proc/clean_blood()
 	if(!simulated)
 		return
-	fluorescent = ATOM_FLOURESCENCE_NONE
-	germ_level = 0
-	blood_color = null
-	gunshot_residue = null
-	if(islist(blood_DNA))
+	fluorescent = 0
+	if(istype(blood_DNA, /list))
 		blood_DNA = null
-		return 1
+		return TRUE
 
-/**
- * Retrieves the atom's x and y coordinates from the global map.
- *
- * TODO: Unused. Remove.
- *
- * Returns list ("x" and "y" values as integers), `null` if there is no global map, or `0` if the atom has no position
- * within the global map..
- */
 /atom/proc/get_global_map_pos()
-	if (!islist(GLOB.global_map) || !length(GLOB.global_map))
-		return
-	var/cur_x = null
-	var/cur_y = null
-	var/list/y_arr = null
-	for(cur_x = 1 to length(GLOB.global_map))
-		y_arr = GLOB.global_map[cur_x]
+	if(!islist(global_map) || isemptylist(global_map)) return
+	var/cur_x
+	var/cur_y
+	var/list/y_arr
+	for(cur_x=1, cur_x<=global_map.len, cur_x++)
+		y_arr = global_map[cur_x]
 		cur_y = y_arr.Find(src.z)
 		if(cur_y)
 			break
-//	log_debug("X = [cur_x]; Y = [cur_y]")
-
 	if(cur_x && cur_y)
-		return list("x"=cur_x,"y"=cur_y)
+		return list("x"=cur_x, "y"=cur_y)
 	else
-		return 0
+		return FALSE
 
-/**
- * Whether or not the atom allows the given passflag to pass through it.
- *
- * **Parameters**
- * `passflag` bitfield (Any of `PASS_FLAG_*`) - The passflag(s) to check.
- *
- * Returns bitfield (Any of `PASS_FLAG_*`). All matching bitflags provided in `passflag` that the atom allows to pass through, or `0` if the atom does not allow them.
- */
 /atom/proc/checkpass(passflag)
 	return pass_flags&passflag
 
-/**
- * Whether or not the atom is in space.
- *
- * TODO: Redundant.
- *
- * Returns boolean.
- */
 /atom/proc/isinspace()
 	if(istype(get_turf(src), /turf/space))
-		return 1
+		return TRUE
 	else
-		return 0
+		return FALSE
 
+//Multi-z falling procs
+
+
+//Execution by grand piano!
+/atom/movable/proc/get_fall_damage(turf/from, turf/dest)
+	return 42
+
+/atom/movable/proc/fall_impact(turf/from, turf/dest)
+
+//If atom stands under open space, it can prevent fall, or not
+/atom/proc/can_prevent_fall(above, atom/movable/thing)
+	return FALSE
 
 // Show a message to all mobs and objects in sight of this atom
 // Use for objects performing visible actions
 // message is output to anyone who can see, e.g. "The [src] does something!"
 // blind_message (optional) is what blind people will hear e.g. "You hear something!"
-/**
- * Shows a message to all atoms in sight of this item. Use for objects performing visible actions.
- *
- * **Parameters**:
- * - `message` string - The message to display.
- * - `blind_message` string - If set, this message is displayed to blind mobs in range.
- * - `range` int (Default `world.view`) - The range, in tiles, the message should display.
- * - `checkghosts` path (`/datum/client_preference`) - If set, will also display for ghosts with the provided preference
- * enabled. Typically, `ghost_sight`.
- * - `exclude_objs` LAZYLIST of instances of `/obj` - If provided, objects in this list will not be displayed the
- * message.
- * - `exclude_mobs` LAZYLIST of instances of `/mob` - Ig provided, mobs in this list will not be displayed the message.
- */
-/atom/proc/visible_message(message, blind_message, range = world.view, checkghosts = null, list/exclude_objs = null, list/exclude_mobs = null)
-	set waitfor = FALSE
+/atom/proc/visible_message(message, blind_message, range = world.view)
 	var/turf/T = get_turf(src)
 	var/list/mobs = list()
 	var/list/objs = list()
-	get_mobs_and_objs_in_view_fast(T,range, mobs, objs, checkghosts)
+	get_mobs_and_objs_in_view_fast(T,range, mobs, objs, ONLY_GHOSTS_IN_VIEW)
 
-	for(var/o in objs)
-		var/obj/O = o
-		if (length(exclude_objs) && (O in exclude_objs))
-			exclude_objs -= O
-			continue
-		O.show_message(message, VISIBLE_MESSAGE, blind_message, AUDIBLE_MESSAGE)
+	for(var/obj/O as anything in objs)
+		if(!QDELETED(O))
+			O.show_message(message,1,blind_message,2)
 
 	for(var/m in mobs)
 		var/mob/M = m
-		if (length(exclude_mobs) && (M in exclude_mobs))
-			exclude_mobs -= M
-			continue
 		if(M.see_invisible >= invisibility)
-			M.show_message(message, VISIBLE_MESSAGE, blind_message, AUDIBLE_MESSAGE)
+			M.show_message(message,1,blind_message,2)
 		else if(blind_message)
-			M.show_message(blind_message, AUDIBLE_MESSAGE)
+			M.show_message(blind_message, 2)
 
 
-/**
- * Shows a message to all mobs and objects within earshot of this atom. Use for objects performing audible actions.
- *
- * Calls `show_message()` on all valid mobs and objects in range.
- *
- * **Parameters**:
- * - `message` (string) - The message output to anyone who can hear.
- * - `deaf_message` (string) - The message output to anyone who is deaf.
- * - `hearing_distance` (int) - The range of the message in tiles.
- * - `checkghosts` (null or `/datum/client_preference/ghost_sight`) - If set, will also display to any ghosts with global ears turned on.
- * - `exclude_objs` - List of objects to not display the message to.
- * - `exclude_mobs` - List of mobs to not display the message to.
- */
-/atom/proc/audible_message(message, deaf_message, hearing_distance = world.view, checkghosts = null, list/exclude_objs = null, list/exclude_mobs = null)
+// Show a message to all mobs and objects in earshot of this atom
+// Use for objects performing audible actions
+// message is the message output to anyone who can hear.
+// deaf_message (optional) is what deaf people will see.
+// hearing_distance (optional) is the range, how many tiles away the message can be heard.
+/atom/proc/audible_message(message, deaf_message, hearing_distance)
+
+	var/range = world.view
+	if(hearing_distance)
+		range = hearing_distance
 	var/turf/T = get_turf(src)
 	var/list/mobs = list()
 	var/list/objs = list()
-	get_mobs_and_objs_in_view_fast(T, hearing_distance, mobs, objs, checkghosts)
+	get_mobs_and_objs_in_view_fast(T,range, mobs, objs, ONLY_GHOSTS_IN_VIEW)
 
 	for(var/m in mobs)
 		var/mob/M = m
-		if (length(exclude_mobs) && (M in exclude_mobs))
-			exclude_mobs -= M
-			continue
 		M.show_message(message,2,deaf_message,1)
-
 	for(var/o in objs)
 		var/obj/O = o
-		if (length(exclude_objs) && (O in exclude_objs))
-			exclude_objs -= O
-			continue
 		O.show_message(message,2,deaf_message,1)
 
 /atom/movable/proc/dropInto(atom/destination)
@@ -813,297 +719,145 @@
 		destination = drop_destination
 	return forceMove(null)
 
-/**
- * Handler for items being dropped onto or into the atom. Called by `dropInto()`.
- *
- * **Parameters**:
- * - `AM` - The atom being dragged and dropped.
- *
- * Returns instance of `/atom` or `null`. The atom to `forceMove()` `AM` into. If `null`, assumes `src`.
- */
 /atom/proc/onDropInto(atom/movable/AM)
-	return
+	return // If onDropInto returns null, then dropInto will forceMove AM into us.
 
 /atom/movable/onDropInto(atom/movable/AM)
-	return loc
+	return loc // If onDropInto returns something, then dropInto will attempt to drop AM there.
 
-/**
- * Returns a list of contents that can be inserted and/or removed. By default, this simply returns `contents`.
- */
-/atom/proc/InsertedContents()
-	return contents
 
-//all things climbable
+/atom/Entered(atom/movable/AM, atom/old_loc, special_event)
+	GLOB.moved_event.raise_event(AM, old_loc, AM.loc)
+	GLOB.entered_event.raise_event(src, AM, old_loc)
 
-/atom/attack_hand(mob/user)
-	..()
-	if(LAZYLEN(climbers) && !(user in climbers))
-		user.visible_message(SPAN_WARNING("[user.name] shakes \the [src]."), \
-					SPAN_NOTICE("You shake \the [src]."))
-		object_shaken()
+	// This code makes the light be queued for update when it is moved.
+	// Entered() should handle it, however Exited() can do it if it is being moved to nullspace (as there would be no Entered() call in that situation).
+	if(AM && old_loc != src)
+		for(var/A in AM.light_sources) // Cycle through the light sources on this atom and tell them to update.
+			var/datum/light_source/L = A
+			L.source_atom.update_light()
+	if(loc && special_event)
+		AM.forceMove(destination = loc, special_event = TRUE)
+		return CANCEL_MOVE_EVENT
 
-/**
- * Verb to allow climbing onto an object. Passes directly to `/atom/proc/do_climb(usr)`.
- */
-/atom/proc/climb_on()
+/atom/Exited(atom/movable/Obj, atom/newloc)
+	GLOB.exited_event.raise_event(src, Obj, newloc)
 
-	set name = "Climb"
-	set desc = "Climbs onto an object."
-	set category = "Object"
-	set src in oview(1)
+	if(!newloc && Obj && newloc != src) // Incase the atom is being moved to nullspace, we handle queuing for a lighting update here.
+		for(var/A in Obj.light_sources) // Cycle through the light sources on this atom and tell them to update.
+			var/datum/light_source/L = A
+			L.source_atom.update_light()
 
-	do_climb(usr)
-
-/**
- * Whether or not a mob can climb this atom.
- *
- * If this check fails, it generally also sends a feedback message to `user`.
- *
- * **Parameters**:
- * - `user` - The mob attempting the climb check.
- * - `post_climb_check` boolean default `FALSE` - If set, skips checking the `climbers` list for if the mob is already attempting to climb.
- * - `check_silicon` boolean default `TRUE` - If set, blocks silicon mobs. Passed directly to `can_touch()`.
- *
- * Returns boolean.
- */
-/atom/proc/can_climb(mob/living/user, post_climb_check=FALSE, check_silicon=TRUE)
-	if (!(atom_flags & ATOM_FLAG_CLIMBABLE) || !can_touch(user, check_silicon) || (!post_climb_check && climbers && (user in climbers)))
-		return 0
-
-	if (!user.Adjacent(src))
-		to_chat(user, SPAN_DANGER("You can't climb there, the way is blocked."))
-		return 0
-
-	var/obj/occupied = turf_is_crowded(user)
-	//because Adjacent() has exceptions for windows, those must be handled here
-	if(!occupied && istype(src, /obj/structure/wall_frame))
-		var/original_dir = get_dir(src, user.loc)
-		var/progress_dir = original_dir
-		for(var/atom/A in loc.contents)
-			if(A.atom_flags & ATOM_FLAG_CHECKS_BORDER)
-				var/obj/structure/window/W = A
-				if(istype(W))
-					//progressively check if a window matches the X or Y component of the dir, if collision, set the dir bit off
-					if(W.is_fulltile() || (progress_dir &= ~W.dir) == 0) //if dir components are 0, fully blocked on diagonal
-						occupied = A
-						break
-		//if true, means one dir was blocked and bit set off, so check the unblocked
-		if(progress_dir != original_dir && progress_dir != 0)
-			var/turf/here = get_turf(src)
-			if(!here.Adjacent_free_dir(user, progress_dir))
-				to_chat(user, SPAN_DANGER("You can't climb there, the way is blocked."))
-				return FALSE
-
-	if(occupied)
-		to_chat(user, SPAN_DANGER("There's \a [occupied] in the way."))
-		return 0
-	return 1
-
-/**
- * Checks if a mob can perform certain physical interactions with the atom. Primarily used for climbing and flipping tables.
- *
- * If this check fails, it generally also sends a feedback mesage to `user`.
- *
- * **Parameters**:
- * - `user` - The mob attempting the interaction check.
- * - `check_silicon` boolean default `TRUE` - If set, blocks silicon mobs.
- *
- * Returns boolean.
- */
-/atom/proc/can_touch(mob/user, check_silicon=TRUE)
-	if (!user)
-		return 0
-	if(!Adjacent(user))
-		return 0
-	if (user.restrained() || user.buckled)
-		to_chat(user, SPAN_NOTICE("You need your hands and legs free for this."))
-		return 0
-	if (user.incapacitated())
-		return 0
-	if (check_silicon && issilicon(user))
-		to_chat(user, SPAN_NOTICE("You need hands for this."))
-		return 0
-	return 1
-
-/**
- * Whether or not dense atoms exist on the same turf.
- *
- * **Parameters**:
- * - `ignore` - If set, this atom will be ignored during checks.
- *
- * Returns instance of `/atom` (The atom with density found on the turf) or `FALSE` (No dense atoms were found).
- */
-/atom/proc/turf_is_crowded(atom/ignore)
-	var/turf/T = get_turf(src)
-	if(!istype(T))
-		return 0
-	for(var/atom/A in T.contents)
-		if(ignore && ignore == A)
-			continue
-		if(A.atom_flags & ATOM_FLAG_CLIMBABLE)
-			continue
-		if(A.density && !(A.atom_flags & ATOM_FLAG_CHECKS_BORDER)) //ON_BORDER structures are handled by the Adjacent() check.
-			return A
-	return 0
-
-/**
- * Handles climbing atoms for mobs. This proc includes a `do_after()` timer.
- *
- * **Parameters**:
- * - `user` - The mob attempting to climb the atom.
- * - `check_silicon` boolean (default `TRUE`) - Passed directly to `/atom/proc/can_climb()` - If set, will block silicon
- *     mobs.
- *
- * Returns boolean. Whether or not the mob successfully completed the climb action.
- */
-/atom/proc/do_climb(mob/living/user, check_silicon=TRUE)
-	if (!can_climb(user, check_silicon=check_silicon))
-		return 0
-
-	add_fingerprint(user)
-	user.visible_message(SPAN_WARNING("\The [user] starts climbing onto \the [src]!"))
-	LAZYDISTINCTADD(climbers,user)
-
-	if(!do_after(user,(issmall(user) ? MOB_CLIMB_TIME_SMALL : MOB_CLIMB_TIME_MEDIUM) * climb_speed_mult, src, DO_DEFAULT | DO_USER_UNIQUE_ACT | DO_BAR_OVER_USER))
-		LAZYREMOVE(climbers,user)
-		return 0
-
-	if(!can_climb(user, post_climb_check=1, check_silicon=check_silicon))
-		LAZYREMOVE(climbers,user)
-		return 0
-
-	var/target_turf = get_turf(src)
-
-	//climbing over border objects like railings
-	if((atom_flags & ATOM_FLAG_CHECKS_BORDER) && get_turf(user) == target_turf)
-		target_turf = get_step(src, dir)
-
-	user.forceMove(target_turf)
-
-	if (get_turf(user) == target_turf)
-		user.visible_message(SPAN_WARNING("\The [user] climbs onto \the [src]!"))
-	LAZYREMOVE(climbers,user)
-	return 1
-
-/**
- * Handler for atoms being moved, shaken, or otherwise interacted with in a manner that would affect atoms on top of if.
- */
-/atom/proc/object_shaken()
-	for(var/mob/living/M in climbers)
-		M.Weaken(1)
-		to_chat(M, SPAN_DANGER("You topple as you are shaken off \the [src]!"))
-		climbers.Cut(1,2)
-
-	for(var/mob/living/M in get_turf(src))
-		if(M.lying) return //No spamming this on people.
-
-		M.Weaken(3)
-		to_chat(M, SPAN_DANGER("You topple as \the [src] moves under you!"))
-
-		if(prob(25))
-
-			var/damage = rand(15,30)
-			var/mob/living/carbon/human/H = M
-			if(!istype(H))
-				to_chat(H, SPAN_DANGER("You land heavily!"))
-				M.adjustBruteLoss(damage)
-				return
-
-			var/obj/item/organ/external/affecting
-			var/list/limbs = BP_ALL_LIMBS //sanity check, can otherwise be shortened to affecting = pick(BP_ALL_LIMBS)
-			if(length(limbs))
-				affecting = H.get_organ(pick(limbs))
-
-			if(affecting)
-				to_chat(M, SPAN_DANGER("You land heavily on your [affecting.name]!"))
-				affecting.take_external_damage(damage, 0)
-				if(affecting.parent)
-					affecting.parent.add_autopsy_data("Misadventure", damage)
-			else
-				to_chat(H, SPAN_DANGER("You land heavily!"))
-				H.adjustBruteLoss(damage)
-
-			H.UpdateDamageIcon()
-			H.updatehealth()
+/atom/proc/get_footstep_sound()
 	return
 
-/atom/MouseDrop_T(mob/target, mob/user)
-	var/mob/living/H = user
-	if(istype(H) && can_climb(H) && target == user)
-		do_climb(target)
-		return TRUE
-	else
-		return ..()
+/atom/proc/set_density(new_density)
+	if(density != new_density)
+		density = !!new_density
 
-/**
- * Returns the atom's current color or white if it has no color.
- */
-/atom/proc/get_color()
-	return isnull(color) ? COLOR_WHITE : color
+//This proc is called when objects are created during the round by players.
+//This allows them to behave differently from objects that are mapped in, adminspawned, or purchased
+/atom/proc/Created(mob/user)
+	return
+	//Should be called when:
+		//An item is printed at an autolathe or protolathe **COMPLETE**
+		//Item is created at mech fab, organ printer, prosthetics builder, or any other machine which creates things
+		//An item is constructed from sheets or any similar crafting system
 
-/**
- * Handler for setting the atom's color.
- */
-/atom/proc/set_color(color)
-	src.color = color
+	//Should NOT be called when:
+		//An item is mapped in
+		//An item is adminspawned
+		//An item is spawned by events
+		//An item is delivered on the cargo shuttle
+		//An item is purchased or dispensed from a vendor (Those things contain premade items and just release them)
 
-/**
- * Retrieves the atom's power cell, if it has one.
- *
- * Returns instance of `/obj/item/cell` or `null`.
- */
 /atom/proc/get_cell()
 	return
 
-/**
- * Called when a mob walks into the atom while confused.
- *
- * **Parameters**:
- * - `L` - The mob that walked into the atom.
- */
-/atom/proc/slam_into(mob/living/L)
-	L.Weaken(2)
-	L.visible_message(SPAN_WARNING("\The [L] [pick("ran", "slammed")] into \the [src]!"))
-	playsound(L, "punch", 25, 1, FALSE)
+/atom/proc/get_coords()
+	var/turf/T = get_turf(src)
+	if (T)
+		return new /datum/coords(T)
 
-
-/atom/proc/create_bullethole(obj/item/projectile/Proj)
-	var/p_x = Proj.p_x + rand(-8, 8)
-	var/p_y = Proj.p_y + rand(-8, 8)
-	var/obj/overlay/bullet_hole/bullet_hole = new(src)
-
-	bullet_hole.pixel_x = p_x
-	bullet_hole.pixel_y = p_y
-
-	// offset correction
-	bullet_hole.pixel_x--
-	bullet_hole.pixel_y--
-
-	if(Proj.damage >= 50)
-		bullet_hole.icon_state = "scorch"
-		bullet_hole.set_dir(pick(NORTH,SOUTH,EAST,WEST)) // random scorch design
-	else
-		bullet_hole.icon_state = "light_scorch"
-
-/atom/proc/clear_bulletholes()
-	for(var/obj/overlay/bullet_hole/bullet_hole in src)
-		qdel(bullet_hole)
-
-/atom/proc/get_overhead_text_x_offset()
-	return 0
-
-/atom/proc/get_overhead_text_y_offset()
-	return 0
-
-/atom/proc/get_affecting_weather()
+/atom/proc/change_area(area/old_area, area/new_area)
 	return
 
-/atom/proc/is_outside()
-	var/turf/turf = get_turf(src)
-	return istype(turf) ? turf.is_outside() : OUTSIDE_UNCERTAIN
+//Bullethole shit.
+/atom/proc/create_bullethole(obj/item/projectile/Proj)
+	var/p_x = Proj.p_x + rand(-8,8) // really ugly way of coding "sometimes offset Proj.p_x!"
+	var/p_y = Proj.p_y + rand(-8,8) // Used for bulletholes
+	var/obj/effect/overlay/bmark/BM = new(src)
 
-/// Set this atom's color and light to match origin
-/atom/proc/copy_light_and_color(atom/origin)
-	if (istype(origin))
-		color = origin.color
-		set_light(origin.light_range, origin.light_power)
+	BM.pixel_x = p_x
+	BM.pixel_y = p_y
+	// offset correction
+	BM.pixel_x--
+	BM.pixel_y--
+
+	if(Proj.get_structure_damage() >= WEAPON_FORCE_DANGEROUS)//If it does a lot of damage it makes a nice big black hole.
+		BM.icon_state = "scorch"
+		BM.set_dir(pick(NORTH,SOUTH,EAST,WEST)) // random scorch design
+	else //Otherwise it's a light dent.
+		BM.icon_state = "light_scorch"
+
+/atom/proc/clear_bulletholes()
+	for(var/obj/effect/overlay/bmark/BM in src)
+		qdel(BM)
+
+
+//Returns a list of things in this atom, can be overridden for more nuanced behaviour
+/atom/proc/get_contents()
+	return contents
+
+
+/atom/proc/get_recursive_contents()
+	var/list/result = list()
+	for (var/atom/a in contents)
+		result += a
+		result |= a.get_recursive_contents()
+	return result
+
+/atom/proc/AllowDrop()
+	return FALSE
+
+/atom/proc/drop_location()
+	var/atom/L = loc
+	if(!L)
+		return null
+	return L.AllowDrop() ? L : L.drop_location()
+
+//Return flags that may be added as part of a mobs sight
+/atom/proc/additional_sight_flags()
+	return 0
+
+/atom/proc/additional_see_invisible()
+	return 0
+/atom/proc/lava_act()
+	visible_message("<span class='danger'>\The [src] sizzles and melts away, consumed by the lava!</span>")
+	playsound(src, 'sound/effects/flare.ogg', 100, 3)
+	if(ismob(src))
+		var/mob/M = src
+		M.death(FALSE, FALSE)
+	qdel(src)
+	. = TRUE
+
+// Passes Stat Panel clicks to the game and calls client click on an atom
+/atom/Topic(href, list/href_list)
+	. = ..()
+	if(!usr?.client)
+		return
+	var/client/usr_client = usr.client
+	var/list/paramslist = list()
+	if(href_list["statpanel_item_shiftclick"])
+		paramslist["shift"] = "1"
+	if(href_list["statpanel_item_ctrlclick"])
+		paramslist["ctrl"] = "1"
+	if(href_list["statpanel_item_altclick"])
+		paramslist["alt"] = "1"
+	if(href_list["statpanel_item_click"])
+		var/mouseparams = list2params(paramslist)
+		usr_client.Click(src, loc, null, mouseparams)
+
+// Called after we wrench/unwrench this object
+/obj/proc/wrenched_change()
+	return

@@ -1,41 +1,25 @@
 #define OUTFIT_JOB_NAME(job_name) ("Job - " + job_name)
 
-#define BACKPACK_OVERRIDE_CHEMISTRY \
-backpack_overrides[/singleton/backpack_outfit/backpack]      = /obj/item/storage/backpack/chemistry; \
-backpack_overrides[/singleton/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/chem; \
-backpack_overrides[/singleton/backpack_outfit/messenger_bag] = /obj/item/storage/backpack/messenger/chem;
-
 #define BACKPACK_OVERRIDE_ENGINEERING \
-backpack_overrides[/singleton/backpack_outfit/backpack]      = /obj/item/storage/backpack/industrial; \
-backpack_overrides[/singleton/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/eng; \
-backpack_overrides[/singleton/backpack_outfit/messenger_bag] = /obj/item/storage/backpack/messenger/engi;
+backpack_overrides[/decl/backpack_outfit/backpack]      = /obj/item/storage/backpack/industrial; \
+backpack_overrides[/decl/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/industrial; \
 
 #define BACKPACK_OVERRIDE_MEDICAL \
-backpack_overrides[/singleton/backpack_outfit/backpack]      = /obj/item/storage/backpack/medic; \
-backpack_overrides[/singleton/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/med; \
-backpack_overrides[/singleton/backpack_outfit/messenger_bag] = /obj/item/storage/backpack/messenger/med;
+backpack_overrides[/decl/backpack_outfit/backpack]      = /obj/item/storage/backpack/medical; \
+backpack_overrides[/decl/backpack_outfit/backsport]     = /obj/item/storage/backpack/sport/white; \
+backpack_overrides[/decl/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/medical; \
 
 #define BACKPACK_OVERRIDE_RESEARCH \
-backpack_overrides[/singleton/backpack_outfit/backpack]      = /obj/item/storage/backpack/sci; \
-backpack_overrides[/singleton/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/sci; \
-backpack_overrides[/singleton/backpack_outfit/messenger_bag] = /obj/item/storage/backpack/messenger/sci;
-
-#define BACKPACK_OVERRIDE_RESEARCH_CORP \
-backpack_overrides[/singleton/backpack_outfit/backpack]      = /obj/item/storage/backpack/corpsci; \
-backpack_overrides[/singleton/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/corpsci; \
-backpack_overrides[/singleton/backpack_outfit/messenger_bag] = /obj/item/storage/backpack/messenger/corpsci;
+backpack_overrides[/decl/backpack_outfit/backpack]      = /obj/item/storage/backpack/purple/scientist; \
+backpack_overrides[/decl/backpack_outfit/backsport]     = /obj/item/storage/backpack/sport/purple; \
+backpack_overrides[/decl/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/purple/scientist; \
 
 #define BACKPACK_OVERRIDE_SECURITY \
-backpack_overrides[/singleton/backpack_outfit/backpack]      = /obj/item/storage/backpack/security; \
-backpack_overrides[/singleton/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/sec; \
-backpack_overrides[/singleton/backpack_outfit/messenger_bag] = /obj/item/storage/backpack/messenger/sec;
+backpack_overrides[/decl/backpack_outfit/backpack]      = /obj/item/storage/backpack/ironhammer; \
+backpack_overrides[/decl/backpack_outfit/backsport]     = /obj/item/storage/backpack/sport/ironhammer; \
+backpack_overrides[/decl/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/ironhammer; \
 
-#define BACKPACK_OVERRIDE_SECURITY_EXO \
-backpack_overrides[/singleton/backpack_outfit/backpack]      = /obj/item/storage/backpack/security/exo; \
-backpack_overrides[/singleton/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/sec/exo; \
-backpack_overrides[/singleton/backpack_outfit/messenger_bag] = /obj/item/storage/backpack/messenger/sec/exo;
-
-#define BACKPACK_OVERRIDE_COMMAND \
-backpack_overrides[/singleton/backpack_outfit/backpack]		= /obj/item/storage/backpack/command; \
-backpack_overrides[/singleton/backpack_outfit/satchel]		= /obj/item/storage/backpack/satchel/com; \
-backpack_overrides[/singleton/backpack_outfit/messenger_bag]	= /obj/item/storage/backpack/messenger/com;
+#define BACKPACK_OVERRIDE_NEOTHEOLOGY \
+	backpack_overrides[/decl/backpack_outfit/backpack]      = /obj/item/storage/backpack/neotheology; \
+	backpack_overrides[/decl/backpack_outfit/backsport]     = /obj/item/storage/backpack/sport/neotheology; \
+	backpack_overrides[/decl/backpack_outfit/satchel]       = /obj/item/storage/backpack/satchel/neotheology; \

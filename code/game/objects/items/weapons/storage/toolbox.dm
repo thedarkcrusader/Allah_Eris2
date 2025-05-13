@@ -1,91 +1,116 @@
 /obj/item/storage/toolbox
 	name = "toolbox"
-	desc = "Bright red toolboxes like these are one of the most common sights in maintenance corridors on virtually every ship in the galaxy."
-	icon = 'icons/obj/tools/toolboxes.dmi'
+	desc = "Danger. Very robust."
+	icon = 'icons/obj/storage.dmi'
 	icon_state = "red"
 	item_state = "toolbox_red"
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
-	force = 20
-	attack_cooldown = 21
-	melee_accuracy_bonus = -15
-	throwforce = 10
+	flags = CONDUCT
+	force = WEAPON_FORCE_PAINFUL
+	structure_damage_factor = STRUCTURE_DAMAGE_BLUNT
+	throwforce = WEAPON_FORCE_NORMAL
 	throw_speed = 1
 	throw_range = 7
-	base_parry_chance = 15
-	w_class = ITEM_SIZE_LARGE
+	w_class = ITEM_SIZE_BULKY
+	matter = list(MATERIAL_STEEL = 6)
 	max_w_class = ITEM_SIZE_NORMAL
-	max_storage_space = ITEM_SIZE_NORMAL * 7
+	max_storage_space = 14 //enough to hold all starting contents
 	origin_tech = list(TECH_COMBAT = 1)
 	attack_verb = list("robusted")
-	use_sound = 'sound/effects/storage/toolbox.ogg'
-	matter = list(MATERIAL_STEEL = 5000)
-	allow_slow_dump = TRUE
+	spawn_blacklisted = FALSE
+	rarity_value = 10
+	spawn_frequency = 10
+	spawn_tags = SPAWN_TAG_TOOLBOX
+	bad_type = /obj/item/storage/toolbox
 
 /obj/item/storage/toolbox/emergency
 	name = "emergency toolbox"
-	startswith = list(
-		/obj/item/crowbar/red,
-		/obj/item/extinguisher/mini,
-		/obj/item/device/radio,
-		/obj/item/weldingtool/mini,
-		/obj/item/welder_tank/mini
-	)
+	icon_state = "red"
+	item_state = "toolbox_red"
+	rarity_value = 30
 
-/obj/item/storage/toolbox/emergency/Initialize()
-	. = ..()
-	var/item = pick(list(/obj/item/device/flashlight, /obj/item/device/flashlight/flare,  /obj/item/device/flashlight/flare/glowstick/red))
-	new item(src)
-
+/obj/item/storage/toolbox/emergency/populate_contents()
+	new /obj/item/tool/crowbar(src)
+	new /obj/item/extinguisher/mini(src)
+	if(prob(40))
+		new /obj/item/device/lighting/toggleable/flashlight(src)
+	else if(prob(30))
+		new /obj/item/gun/projectile/flare_gun(src)
+		new /obj/item/ammo_casing/flare(src)
+	else
+		new /obj/item/device/lighting/glowstick/flare(src)
+	if (prob(40))
+		new /obj/item/tool/tape_roll(src)
+	new /obj/item/device/radio(src)
 
 /obj/item/storage/toolbox/mechanical
 	name = "mechanical toolbox"
-	desc = "Bright blue toolboxes like these are one of the most common sights in maintenance corridors on virtually every ship in the galaxy."
 	icon_state = "blue"
 	item_state = "toolbox_blue"
-	startswith = list(
-		/obj/item/screwdriver,
-		/obj/item/wrench,
-		/obj/item/weldingtool,
-		/obj/item/crowbar,
-		/obj/item/device/scanner/gas,
-		/obj/item/wirecutters
-	)
+
+/obj/item/storage/toolbox/mechanical/populate_contents()
+	new /obj/item/tool/screwdriver(src)
+	new /obj/item/tool/wrench(src)
+	new /obj/item/tool/weldingtool(src)
+	new /obj/item/tool/crowbar(src)
+	if(prob(50))
+		new /obj/item/tool/wirecutters(src)
+	else
+		new /obj/item/tool/wirecutters/pliers(src)
+	new /obj/item/device/scanner/gas(src)
 
 /obj/item/storage/toolbox/electrical
 	name = "electrical toolbox"
-	desc = "Bright yellow toolboxes like these are one of the most common sights in maintenance corridors on virtually every ship in the galaxy."
 	icon_state = "yellow"
 	item_state = "toolbox_yellow"
-	startswith = list(
-		/obj/item/screwdriver,
-		/obj/item/wirecutters,
-		/obj/item/device/t_scanner,
-		/obj/item/crowbar
-	)
+	rarity_value = 20
 
-/obj/item/storage/toolbox/electrical/Initialize()
-	. = ..()
-	new /obj/random/single/color/cable_coil(src,30)
-	new /obj/random/single/color/cable_coil(src,30)
+/obj/item/storage/toolbox/electrical/populate_contents()
+	var/color = pick("red","yellow","green","blue","pink","orange","cyan","white")
+
+	new /obj/item/tool/screwdriver(src)
+	if(prob(50))
+		new /obj/item/tool/wirecutters(src)
+	else
+		new /obj/item/tool/wirecutters/pliers(src)
+	new /obj/item/device/t_scanner(src)
+	new /obj/item/tool/crowbar(src)
+	new /obj/item/stack/cable_coil(src,30,color)
+	new /obj/item/stack/cable_coil(src,30,color)
+
 	if(prob(5))
 		new /obj/item/clothing/gloves/insulated(src)
+	else if(prob(10))
+		new /obj/item/tool/multitool(src)
 	else
-		new /obj/random/single/color/cable_coil(src,30)
+		new /obj/item/stack/cable_coil(src,30,color)
+
+	if(prob(60))
+		new /obj/item/tool/tape_roll(src)
 
 /obj/item/storage/toolbox/syndicate
-	name = "black and red toolbox"
-	desc = "A toolbox in black, with stylish red trim. This one feels particularly heavy, yet balanced."
+	name = "suspicious looking toolbox"
 	icon_state = "syndicate"
 	item_state = "toolbox_syndi"
-	origin_tech = list(TECH_COMBAT = 1, TECH_ESOTERIC = 1)
-	attack_cooldown = 10
-	base_parry_chance = 30
-	startswith = list(
-		/obj/item/clothing/gloves/insulated,
-		/obj/item/screwdriver,
-		/obj/item/wrench,
-		/obj/item/weldingtool,
-		/obj/item/crowbar,
-		/obj/item/wirecutters,
-		/obj/item/device/multitool
-	)
+	origin_tech = list(TECH_COMBAT = 1, TECH_COVERT = 1)
+	force = WEAPON_FORCE_DANGEROUS
+	spawn_blacklisted = TRUE
+
+/obj/item/storage/toolbox/syndicate/populate_contents()
+	var/obj/item/tool/cell_tool
+
+	new /obj/item/clothing/gloves/insulated(src)
+
+	cell_tool = new /obj/item/tool/screwdriver/combi_driver(src)
+	qdel(cell_tool.cell)
+	cell_tool.cell = new /obj/item/cell/small/super(cell_tool)
+
+	cell_tool = new /obj/item/tool/crowbar/pneumatic(src)
+	qdel(cell_tool.cell)
+	cell_tool.cell = new /obj/item/cell/medium/super(cell_tool)
+
+	new /obj/item/tool/weldingtool/advanced(src)
+	new /obj/item/tool/wirecutters/armature(src)
+	new /obj/item/tool/multitool(src)
+	new /obj/item/cell/medium/super(src)
+	new /obj/item/cell/small/super(src)
+

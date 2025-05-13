@@ -1,5 +1,5 @@
-<!--
-Title: Cryo Cell Status UI
+<!-- 
+Title: Cryo Cell Status UI 
 Used In File(s): \code\game\machinery\cryo.dm
  -->
 <h3>Cryo Cell Status</h3>
@@ -8,7 +8,43 @@ Used In File(s): \code\game\machinery\cryo.dm
 	{{if !data.hasOccupant}}
 		<div class="line">Cell Unoccupied</div>
 	{{else}}
-		{{:data.occupant}}
+		<div class="line">
+			{{:data.occupant.name}}&nbsp;=>&nbsp;
+			{{if data.occupant.stat == 0}}
+				<span class="good">Conscious</span>
+			{{else data.occupant.stat == 1}}
+				<span class="average">Unconscious</span>
+			{{else}}
+				<span class="bad">DEAD</span>
+			{{/if}}
+		</div>
+	
+		{{if data.occupant.stat < 2}}
+			<div class="line">
+				<div class="statusLabel">Health:</div>
+				{{:helper.displayBar(data.occupant.health, 0, data.occupant.maxHealth, data.occupant.health >= 0 ? 'good' : 'average', helper.round(data.occupant.health))}}
+			</div>
+		
+			<div class="line">
+				<div class="statusLabel">=&gt; Brute Damage:</div>
+				{{:helper.displayBar(data.occupant.bruteLoss, 0, data.occupant.maxHealth, 'bad', helper.round(data.occupant.bruteLoss))}}
+			</div>
+		
+			<div class="line">
+				<div class="statusLabel">=&gt; Resp. Damage:</div>
+				{{:helper.displayBar(data.occupant.oxyLoss, 0, data.occupant.maxHealth, 'bad', helper.round(data.occupant.oxyLoss))}}
+			</div>
+		
+			<div class="line">
+				<div class="statusLabel">=&gt; Toxin Damage:</div>
+				{{:helper.displayBar(data.occupant.toxLoss, 0, data.occupant.maxHealth, 'bad', helper.round(data.occupant.toxLoss))}}
+			</div>
+		
+			<div class="line">
+				<div class="statusLabel">=&gt; Burn Severity:</div>
+				{{:helper.displayBar(data.occupant.fireLoss, 0, data.occupant.maxHealth, 'bad', helper.round(data.occupant.fireLoss))}}
+			</div>
+		{{/if}}
 	{{/if}}
 	<hr>
 	<div class="line">
@@ -36,7 +72,7 @@ Used In File(s): \code\game\machinery\cryo.dm
 		Beaker:
 	</div>
 	<div class="itemContent" style="width: 40%;">
-		{{if data.isBeakerLoaded}}
+		{{if data.isBeakerLoaded}}		
 			{{:data.beakerLabel ? data.beakerLabel : '<span class="average">No label</span>'}}<br>
 			{{if data.beakerVolume}}
 				<span class="highlight">{{:data.beakerVolume}} units remaining</span><br>
@@ -50,16 +86,4 @@ Used In File(s): \code\game\machinery\cryo.dm
 	<div class="itemContent" style="width: 26%;">
 		{{:helper.link('Eject Beaker', 'eject', {'ejectBeaker' : 1}, data.isBeakerLoaded ? null : 'disabled')}}
 	</div>
-</div>
-<div class="item">&nbsp;</div>
-<div class="item">
-	<div class="itemLabel">
-		Cryostasis Intensity:
-	</div>
-	<div class="itemContent" style="width: 40%;">
-		{{:helper.link('Low', null, {'goFast' : 1}, data.current_stasis_mult === data.fast_stasis_mult ? 'selected' : null)}}
-		{{:helper.link('Standard', null, {'goRegular' : 1}, data.current_stasis_mult === 1 ? 'selected' : null)}}
-		{{:helper.link('High', null, {'goSlow' : 1}, data.current_stasis_mult === data.slow_stasis_mult ? 'selected' : null)}}
-	</div>
-</div>
 </div>

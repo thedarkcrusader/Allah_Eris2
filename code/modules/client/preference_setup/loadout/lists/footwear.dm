@@ -1,76 +1,101 @@
-
+// Shoelocker
 /datum/gear/shoes
-	sort_category = "Shoes and Footwear"
+	display_name = "workboots"
+	path = /obj/item/clothing/shoes/workboots
 	slot = slot_shoes
-	category = /datum/gear/shoes
+	sort_category = "Shoes and Footwear"
 
-/datum/gear/shoes/athletic
-	display_name = "athletic shoes, colour select"
-	path = /obj/item/clothing/shoes/athletic
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/shoes/jackboots
+	display_name = "jackboots, selection"
+	path = /obj/item/clothing/shoes/jackboots
 
-/datum/gear/shoes/boots
-	display_name = "boot selection"
-	path = /obj/item/clothing/shoes
-	cost = 2
-
-/datum/gear/shoes/boots/New(boots = list())
+/datum/gear/shoes/jackboots/New()
 	..()
-	boots += /obj/item/clothing/shoes/jackboots
-	boots += /obj/item/clothing/shoes/workboots
-	boots += /obj/item/clothing/shoes/dutyboots
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(boots)
+	var/jackboots = list(
+		"Standard"			=	/obj/item/clothing/shoes/jackboots,
+		"Duty"				=	/obj/item/clothing/shoes/jackboots/duty,
+		"Duty, long"		=	/obj/item/clothing/shoes/jackboots/duty/long,
+		"Service"			= 	/obj/item/clothing/shoes/jackboots/ironhammer,
+		"Oberth"			= 	/obj/item/clothing/shoes/jackboots/german
+	)
+	gear_tweaks += new /datum/gear_tweak/path(jackboots)
 
-/datum/gear/shoes/color
-	display_name = "shoe selection"
-	path = /obj/item/clothing/shoes
 
-/datum/gear/shoes/color/New()
-	..()
-	var/shoes = list()
-	shoes += /obj/item/clothing/shoes/black
-	shoes += /obj/item/clothing/shoes/blue
-	shoes += /obj/item/clothing/shoes/brown
-	shoes += /obj/item/clothing/shoes/laceup
-	shoes += /obj/item/clothing/shoes/dress/white
-	shoes += /obj/item/clothing/shoes/green
-	shoes += /obj/item/clothing/shoes/leather
-	shoes += /obj/item/clothing/shoes/orange
-	shoes += /obj/item/clothing/shoes/purple
-	shoes += /obj/item/clothing/shoes/rainbow
-	shoes += /obj/item/clothing/shoes/red
-	shoes += /obj/item/clothing/shoes/white
-	shoes += /obj/item/clothing/shoes/yellow
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(shoes)
+/datum/gear/shoes/workboots
+	display_name = "workboots"
+	path = /obj/item/clothing/shoes/workboots
 
-/datum/gear/shoes/flats
-	display_name = "flats, colour select"
-	path = /obj/item/clothing/shoes/flats
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/shoes/high
-	display_name = "high tops selection"
-	path = /obj/item/clothing/shoes/hightops
-	flags = GEAR_HAS_TYPE_SELECTION
-
-/datum/gear/shoes/sandal
-	display_name = "wooden sandals"
+/datum/gear/shoes/sandals
+	display_name = "sandals"
 	path = /obj/item/clothing/shoes/sandal
 
-/datum/gear/shoes/heels
-	display_name = "high heels, colour select"
-	path = /obj/item/clothing/shoes/heels
+/datum/gear/shoes/lacey
+	display_name = "shoes, classy"
+	path = /obj/item/clothing/shoes/reinforced
+
+/datum/gear/shoes/lacey
+	display_name = "classy shoes, selection"
+	path = /obj/item/clothing/shoes/reinforced
+
+/datum/gear/shoes/lacey/New()
+	..()
+	var/lacey = list(
+		"Standard"			=	/obj/item/clothing/shoes/reinforced,
+		"Leather"			=	/obj/item/clothing/shoes/leather,
+		"Service"			=	/obj/item/clothing/shoes/reinforced/ironhammer
+	)
+	gear_tweaks += new /datum/gear_tweak/path(lacey)
+
+
+
+/*//Same with /datum/gear/shoes/lacey
+
+/datum/gear/shoes/dress
+	display_name = "shoes, dress"
+	path = /obj/item/clothing/shoes/reinforced*/
+
+/datum/gear/shoes/rainbow
+	display_name = "shoes, rainbow"
+	path = /obj/item/clothing/shoes/color/rainbow
+
+/datum/gear/shoes/colorable
+	display_name = "shoes, colorable"
 	flags = GEAR_HAS_COLOR_SELECTION
+	path = /obj/item/clothing/shoes/color
 
-/datum/gear/shoes/foamclog
-	display_name = "foam clogs"
-	path = /obj/item/clothing/shoes/foamclog
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/shoes/color_presets
+	display_name = "shoes, color presets"
+	path = /obj/item/clothing/shoes/color/black
 
-/datum/gear/shoes/flipflobster
-	display_name = "flip flobsters"
-	path = /obj/item/clothing/shoes/foamclog/flipflobster
+/datum/gear/shoes/color_presets/New()
+	..()
+	var/shoes = list(
+		"Black"			=	/obj/item/clothing/shoes/color/black,
+		"White"			=	/obj/item/clothing/shoes/color/white,
+		"Grey"			= 	/obj/item/clothing/shoes/color/grey,
+		"Brown"			=	/obj/item/clothing/shoes/color/brown,
+		"Red"			=	/obj/item/clothing/shoes/color/red,
+		"Orange"		=	/obj/item/clothing/shoes/color/orange,
+		"Yellow"		=	/obj/item/clothing/shoes/color/yellow,
+		"Green"			=	/obj/item/clothing/shoes/color/green,
+		"Blue"			=	/obj/item/clothing/shoes/color/blue,
+		"Purple"		=	/obj/item/clothing/shoes/color/purple
+	)
+	gear_tweaks += new /datum/gear_tweak/path(shoes)
 
-/datum/gear/shoes/slippers
-	display_name = "bunny slippers"
-	path = /obj/item/clothing/shoes/slippers
+/datum/gear/shoes/sneaker_colors
+	display_name = "sneakers, color presets"
+	path = /obj/item/clothing/shoes/sneakersred
+
+/datum/gear/shoes/sneaker_colors/New()
+	..()
+	var/sneaker_colors = list(
+		"Red" 		=	 /obj/item/clothing/shoes/sneakersred,
+		"Blue" 		=	 /obj/item/clothing/shoes/sneakersblue,
+		"Purple"	=	 /obj/item/clothing/shoes/sneakerspurple
+	)
+	gear_tweaks += new /datum/gear_tweak/path(sneaker_colors)
+
+/datum/gear/shoes/spurs
+	display_name = "spurs"
+	path = /obj/item/clothing/shoes/spurs

@@ -1,40 +1,36 @@
-/singleton/hierarchy/outfit/job/engineering
-	hierarchy_type = /singleton/hierarchy/outfit/job/engineering
-	belt = /obj/item/storage/belt/utility/full
+/decl/hierarchy/outfit/job/engineering
+	hierarchy_type = /decl/hierarchy/outfit/job/engineering
+	belt = /obj/item/storage/belt/utility/technomancer
 	l_ear = /obj/item/device/radio/headset/headset_eng
 	shoes = /obj/item/clothing/shoes/workboots
+	gloves = /obj/item/clothing/gloves/thick
 	pda_slot = slot_l_store
-	flags = OUTFIT_FLAGS_JOB_DEFAULT | OUTFIT_EXTENDED_SURVIVAL
+	r_pocket = /obj/item/device/t_scanner
+	flags = OUTFIT_HAS_BACKPACK|OUTFIT_EXTENDED_SURVIVAL
 
-/singleton/hierarchy/outfit/job/engineering/New()
+/decl/hierarchy/outfit/job/engineering/New()
 	..()
 	BACKPACK_OVERRIDE_ENGINEERING
 
-/singleton/hierarchy/outfit/job/engineering/chief_engineer
-	name = OUTFIT_JOB_NAME("Chief engineer")
+/decl/hierarchy/outfit/job/engineering/exultant
+	name = OUTFIT_JOB_NAME("Technomancer Exultant")
 	head = /obj/item/clothing/head/hardhat/white
-	uniform = /obj/item/clothing/under/rank/chief_engineer
+	uniform = /obj/item/clothing/under/rank/exultant
+	suit = /obj/item/clothing/suit/storage/te_coat
 	l_ear = /obj/item/device/radio/headset/heads/ce
-	gloves = /obj/item/clothing/gloves/thick
-	id_types = list(/obj/item/card/id/engineering/head)
+	id_type = /obj/item/card/id/ce
 	pda_type = /obj/item/modular_computer/pda/heads/ce
+	backpack_contents = list(/obj/item/gun/projectile/selfload/makarov = 1, /obj/item/ammo_magazine/pistol/rubber = 2) //TE got the excel gun as a war trophy same as the hatton
 
-/singleton/hierarchy/outfit/job/engineering/engineer
-	name = OUTFIT_JOB_NAME("Engineer")
-	head = /obj/item/clothing/head/hardhat
+/decl/hierarchy/outfit/job/engineering/engineer
+	name = OUTFIT_JOB_NAME("Technomancer")
+	head = /obj/item/clothing/head/armor/helmet/technomancer
 	uniform = /obj/item/clothing/under/rank/engineer
-	r_pocket = /obj/item/device/t_scanner
-	id_types = list(/obj/item/card/id/engineering)
+	suit = /obj/item/clothing/suit/storage/vest/insulated
+	id_type = /obj/item/card/id/engie
 	pda_type = /obj/item/modular_computer/pda/engineering
 
-/singleton/hierarchy/outfit/job/engineering/engineer/void
-	name = OUTFIT_JOB_NAME("Engineer - Voidsuit")
-	head = /obj/item/clothing/head/helmet/space/void/engineering
+/decl/hierarchy/outfit/job/engineering/engineer/void
+	name = OUTFIT_JOB_NAME("Technomancer - Voidsuit")
 	mask = /obj/item/clothing/mask/breath
 	suit = /obj/item/clothing/suit/space/void/engineering
-
-/singleton/hierarchy/outfit/job/engineering/atmos
-	name = OUTFIT_JOB_NAME("Atmospheric technician")
-	uniform = /obj/item/clothing/under/rank/atmospheric_technician
-	belt = /obj/item/storage/belt/utility/atmostech
-	pda_type = /obj/item/modular_computer/pda/engineering

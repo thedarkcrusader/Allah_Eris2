@@ -52,7 +52,7 @@
 			if (pod.arming_controller)
 				pod.arming_controller.arm()
 
-/datum/evacuation_controller/shuttle/call_evacuation(mob/user, _emergency_evac, forced, skip_announce, autotransfer)
+/datum/evacuation_controller/shuttle/call_evacuation(var/mob/user, var/_emergency_evac, var/forced, var/skip_announce, var/autotransfer)
 	if(..())
 		autopilot = 1
 		shuttle_launch_time = evac_no_return
@@ -78,7 +78,7 @@
 	return ..()
 
 // This is largely handled by the emergency shuttle datum.
-/datum/evacuation_controller/shuttle/process()
+/datum/evacuation_controller/shuttle/Process()
 	if(state == EVAC_PREPPING)
 		if(!isnull(shuttle_launch_time) && world.time > shuttle_launch_time && shuttle.moving_status == SHUTTLE_IDLE)
 			shuttle.launch()

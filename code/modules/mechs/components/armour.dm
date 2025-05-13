@@ -1,67 +1,49 @@
-/datum/extension/armor/mech
-	under_armor_mult = 0.3
+/*
+/datum/extension/armor/exosuit/apply_damage_modifications(damage, damage_type, damage_flags, mob/living/victim, armor_pen, silent = TRUE)
+	if(prob(get_blocked(damage_type, damage_flags, armor_pen) * 100)) //extra removal of sharp and edge on account of us being big robots
+		damage_flags &= ~(DAM_SHARP | DAM_EDGE)
+	. = ..()
+
 
 /obj/item/robot_parts/robot_component/armour/exosuit
-	name = "exosuit armour plating"
-	desc = "A pair of flexible armor plates, used to protect the internals of exosuits and its pilot."
-	armor = list(
-		melee = ARMOR_MELEE_MAJOR,
-		bullet = ARMOR_BALLISTIC_PISTOL,
-		laser = ARMOR_LASER_HANDGUNS,
-		energy = ARMOR_ENERGY_MINOR,
-		bomb = ARMOR_BOMB_PADDED,
-		bio = ARMOR_BIO_SHIELDED,
-		rad = ARMOR_RAD_MINOR
-		)
+	name = "exosuit armor plating"
+	armor = list(melee = 20, bullet = 8, energy = 2, bomb = 100, bio = 100, rad = 0)
 	origin_tech = list(TECH_MATERIAL = 1)
+	matter = list(MATERIAL_STEEL = 7)
+	spawn_tags = SPAWN_TAG_MECH_QUIPMENT
+	rarity_value = 10
+	spawn_blacklisted = TRUE
 
-/obj/item/robot_parts/robot_component/armour/exosuit/radproof
-	name = "radiation-proof armour plating"
-	desc = "A fully enclosed radiation hardened shell designed to protect the pilot from radiation."
-	icon_state = "armor_r"
-	icon_state_broken = "armor_r_broken"
-	armor = list(
-		melee = ARMOR_MELEE_RESISTANT,
-		bullet = ARMOR_BALLISTIC_PISTOL,
-		laser = ARMOR_LASER_HANDGUNS,
-		energy = ARMOR_ENERGY_MINOR,
-		bomb = ARMOR_BOMB_PADDED,
-		bio = ARMOR_BIO_SHIELDED,
-		rad = ARMOR_RAD_SHIELDED
-		)
-	origin_tech = list(TECH_MATERIAL = 3)
+/obj/item/robot_parts/robot_component/armour/exosuit/Initialize(newloc)
+	. = ..()
+	// HACK
+	// All robot components add "robot" to the name on init - remove that on exosuit armor
+	name = initial(name)
 
-/obj/item/robot_parts/robot_component/armour/exosuit/em
-	name = "EM-shielded armour plating"
-	desc = "A shielded plating that sorrounds the eletronics and protects them from electromagnetic radiation."
-	icon_state = "armor_e"
-	icon_state_broken = "armor_e_broken"
-	armor = list(
-		melee = ARMOR_MELEE_RESISTANT ,
-		bullet = ARMOR_BALLISTIC_SMALL,
-		laser = ARMOR_LASER_SMALL,
-		energy = ARMOR_ENERGY_SHIELDED,
-		bomb = ARMOR_BOMB_MINOR,
-		bio = ARMOR_BIO_SHIELDED,
-		rad = ARMOR_RAD_SMALL
-		)
+/obj/item/robot_parts/robot_component/armour/exosuit/plain
+	name = "standard exosuit plating"
+	desc = "A sturdy hunk of steel and plasteel plating, offers decent protection from physical harm and environmental hazards whilst being cheap to produce."
+	armor = list(melee = 24, bullet = 10, energy = 9, bomb = 125, bio = 100, rad = 100)
 	origin_tech = list(TECH_MATERIAL = 3)
+	matter = list(MATERIAL_STEEL = 15, MATERIAL_PLASTEEL = 10) //Plasteel for the shielding
+	spawn_blacklisted = FALSE
+	price_tag = 400
+
+/obj/item/robot_parts/robot_component/armour/exosuit/ablative
+	name = "ablative exosuit armor plating"
+	desc = "This plating is built to shrug off laser impacts and block electromagnetic pulses, but is rather vulnerable to brute trauma."
+	armor = list(melee = 16, bullet = 6, energy = 38, bomb = 50, bio = 100, rad = 50)
+	origin_tech = list(TECH_MATERIAL = 3)
+	matter = list(MATERIAL_STEEL = 15, MATERIAL_PLASMA = 5)
+	spawn_blacklisted = FALSE
+	price_tag = 550
 
 /obj/item/robot_parts/robot_component/armour/exosuit/combat
-	name = "heavy combat plating"
+	name = "heavy combat exosuit plating"
 	desc = "Plating designed to deflect incoming attacks and explosions."
-	icon_state = "armor_c"
-	icon_state_broken = "armor_c_broken"
-	armor = list(
-		melee = ARMOR_MELEE_MAJOR,
-		bullet = ARMOR_BALLISTIC_RESISTANT,
-		laser = ARMOR_LASER_HANDGUNS,
-		energy = ARMOR_ENERGY_MINOR,
-		bomb = ARMOR_BOMB_RESISTANT,
-		bio = ARMOR_BIO_SHIELDED
-		)
+	armor = list(melee = 32, bullet = 24, energy = 16, bomb = 300, bio = 100, rad = 50) // 32 melee. That's 10 damage from a STOCK circular saw.
 	origin_tech = list(TECH_MATERIAL = 5)
-
-/obj/item/robot_parts/robot_component/armour/exosuit/Initialize()
-	. = ..()
-	set_extension(src, /datum/extension/armor/mech, armor)
+	matter = list(MATERIAL_STEEL = 20, MATERIAL_DIAMOND = 5, MATERIAL_URANIUM = 5)
+	spawn_blacklisted = FALSE
+	price_tag = 1000
+*/

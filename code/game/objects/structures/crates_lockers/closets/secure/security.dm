@@ -1,255 +1,234 @@
-/obj/structure/closet/secure_closet/captains
+/obj/structure/closet/secure_closet/reinforced/captains
 	name = "captain's locker"
 	req_access = list(access_captain)
-	closet_appearance = /singleton/closet_appearance/secure_closet/command
+	icon_state = "cap"
 
-/obj/structure/closet/secure_closet/captains/WillContain()
-	return list(
-		new/datum/atom_creator/weighted(list(/obj/item/storage/backpack/command, /obj/item/storage/backpack/satchel/com)),
-		new/datum/atom_creator/simple(/obj/item/storage/backpack/dufflebag/com, 50),
-		/obj/item/clothing/suit/captunic,
-		/obj/item/clothing/suit/captunic/capjacket,
-		/obj/item/clothing/head/caphat/cap,
-		/obj/item/clothing/under/rank/captain,
-		/obj/item/clothing/suit/armor/vest/nt,
-		/obj/item/clothing/head/helmet,
-		/obj/item/clothing/shoes/brown,
-		/obj/item/device/radio/headset/heads/captain,
-		/obj/item/clothing/gloves/captain,
-		/obj/item/gun/energy/gun,
-		/obj/item/clothing/suit/armor/captain,
-		/obj/item/melee/telebaton,
-		/obj/item/clothing/under/dress/dress_cap,
-		/obj/item/clothing/head/caphat/formal,
-		/obj/item/clothing/under/captainformal,
-	)
+/obj/structure/closet/secure_closet/reinforced/captains/populate_contents()
+	new /obj/item/storage/backpack/captain(src)
+	new /obj/item/storage/backpack/satchel/captain(src)
+	new /obj/item/clothing/under/rank/captain(src)
+	new /obj/item/clothing/suit/storage/captain(src)
+	new /obj/item/clothing/suit/armor/vest(src)
+	new /obj/item/clothing/head/armor/helmet(src)
+	new /obj/item/clothing/shoes/jackboots(src)
+	new /obj/item/device/radio/headset/heads/captain(src)
+	new /obj/item/clothing/gloves/captain(src)
+	new /obj/item/storage/pouch/holster/belt/sheath(src)
+	new /obj/item/tool/sword/saber(src)
+	new /obj/item/ammo_magazine/magnum/rubber(src)
+	new /obj/item/ammo_magazine/magnum/rubber(src)
+	new /obj/item/ammo_magazine/magnum/rubber(src)
+	new /obj/item/melee/telebaton(src)
+	new /obj/item/storage/pouch/holster(src)
 
-/obj/structure/closet/secure_closet/hop
-	name = "head of personnel's locker"
-	closet_appearance = /singleton/closet_appearance/secure_closet/command/hop
+/obj/structure/closet/secure_closet/reinforced/hop
+	name = "First Officer's locker"
 	req_access = list(access_hop)
+	icon_state = "hop"
 
-/obj/structure/closet/secure_closet/hop/WillContain()
-	return list(
-		/obj/item/clothing/glasses/sunglasses,
-		/obj/item/clothing/suit/armor/vest/nt,
-		/obj/item/clothing/head/helmet,
-		/obj/item/device/radio/headset/heads/hop,
-		/obj/item/storage/box/ids = 2,
-		/obj/item/device/flash
-	)
+/obj/structure/closet/secure_closet/reinforced/hop/populate_contents()
+	new /obj/item/clothing/glasses/sunglasses(src)
+	new /obj/item/clothing/under/rank/first_officer(src)
+	new /obj/item/clothing/head/caphat/hop(src)
+	new /obj/item/clothing/suit/armor/vest(src)
+	new /obj/item/clothing/head/armor/helmet(src)
+	new /obj/item/device/radio/headset/heads/hop(src)
+	new /obj/item/storage/box/ids(src)
+	new /obj/item/storage/box/ids( src )
+	new /obj/item/storage/pouch/holster/belt/sheath(src)
+	new /obj/item/tool/sword/saber(src)
+	new /obj/item/ammo_magazine/magnum/rubber(src)
+	new /obj/item/ammo_magazine/magnum/rubber(src)
+	new /obj/item/ammo_magazine/magnum/rubber(src)
+	new /obj/item/device/flash(src)
+	new /obj/item/storage/pouch/holster(src)
 
-/obj/structure/closet/secure_closet/hop2
-	name = "head of personnel's attire"
-	req_access = list(access_hop)
-	closet_appearance = /singleton/closet_appearance/secure_closet/command/hop
-
-/obj/structure/closet/secure_closet/hop2/WillContain()
-	return list(
-		/obj/item/clothing/under/rank/head_of_personnel,
-		/obj/item/clothing/under/dress/dress_hop,
-		/obj/item/clothing/under/dress/dress_hr,
-		/obj/item/clothing/under/lawyer/female,
-		/obj/item/clothing/under/lawyer/black,
-		/obj/item/clothing/under/lawyer/red,
-		/obj/item/clothing/under/lawyer/oldman,
-		/obj/item/clothing/shoes/brown,
-		/obj/item/clothing/shoes/black,
-		/obj/item/clothing/shoes/leather,
-		/obj/item/clothing/shoes/white,
-		/obj/item/clothing/under/rank/head_of_personnel_whimsy,
-		/obj/item/clothing/head/caphat/hop
-	)
-
-/obj/structure/closet/secure_closet/hos
-	name = "head of security's locker"
+/obj/structure/closet/secure_closet/reinforced/hos
+	name = "Ironhammer Commander locker"
 	req_access = list(access_hos)
-	closet_appearance = /singleton/closet_appearance/secure_closet/security/hos
+	icon_state = "hos"
 
-/obj/structure/closet/secure_closet/hos/WillContain()
-	return list(
-		new/datum/atom_creator/weighted(list(/obj/item/storage/backpack/security, /obj/item/storage/backpack/satchel/sec)),
-		/obj/item/clothing/head/HoS,
-		/obj/item/clothing/head/helmet/nt,
-		/obj/item/clothing/suit/armor/vest/nt,
-		/obj/item/clothing/suit/storage/vest/nt/hos,
-		/obj/item/clothing/under/rank/head_of_security/jensen,
-		/obj/item/clothing/under/rank/head_of_security/corp,
-		/obj/item/clothing/suit/armor/hos/jensen,
-		/obj/item/clothing/suit/armor/hos,
-		/obj/item/clothing/head/HoS/dermal,
-		/obj/item/device/radio/headset/heads/hos,
-		/obj/item/clothing/glasses/hud/security/prot/sunglasses,
-		/obj/item/taperoll/police,
-		/obj/item/shield/riot,
-		/obj/item/storage/box/flashbangs,
-		/obj/item/storage/belt/holster/security,
-		/obj/item/device/flash,
-		/obj/item/melee/baton/loaded,
-		/obj/item/gun/energy/gun,
-		/obj/item/clothing/accessory/storage/holster/waist,
-		/obj/item/melee/telebaton,
-		/obj/item/clothing/head/beret/sec/corporate/hos,
-		/obj/item/device/holowarrant
-	)
+/obj/structure/closet/secure_closet/reinforced/hos/populate_contents()
+	if(prob(50))
+		new /obj/item/storage/backpack/ironhammer(src)
+	else
+		new /obj/item/storage/backpack/sport/ironhammer(src)
+	new /obj/item/storage/backpack/satchel/ironhammer(src)
+	new /obj/item/clothing/head/beret/sec/navy/hos(src)
+	new /obj/item/clothing/head/HoS(src)
+	new /obj/item/clothing/head/caphat/ihc(src)
+	new /obj/item/clothing/mask/gas/ihs(src)
+	new /obj/item/clothing/suit/storage/greatcoat/ironhammer(src)
+	new /obj/item/clothing/under/rank/ih_commander(src)
+	new /obj/item/device/radio/headset/heads/hos(src)
+	new /obj/item/clothing/glasses/sunglasses/sechud/tactical(src)
+	new /obj/item/storage/belt/tactical/ironhammer(src)
+	new /obj/item/clothing/gloves/stungloves(src)
+	new /obj/item/cell/medium/high(src)
+	new /obj/item/ammo_magazine/magnum/rubber(src)
+	new /obj/item/ammo_magazine/magnum/rubber(src)
+	new /obj/item/ammo_magazine/magnum/rubber(src)
+	new /obj/item/cell/small/high(src)
+	new /obj/item/cell/small/high(src)
+	new /obj/item/gun/energy/gun/martin(src)
+	new /obj/item/clothing/accessory/holster(src)
+	new /obj/item/melee/telebaton(src)
+	new /obj/item/clothing/accessory/badge/commander(src)
+	new /obj/item/storage/pouch/holster(src)
+	new /obj/item/storage/pouch/holster/baton(src)
 
 /obj/structure/closet/secure_closet/warden
-	name = "warden's locker"
+	name = "Gunnery Sergeant's locker"
 	req_access = list(access_armory)
-	closet_appearance = /singleton/closet_appearance/secure_closet/security/warden
+	icon_state = "warden"
 
-/obj/structure/closet/secure_closet/warden/WillContain()
-	return list(
-		new/datum/atom_creator/weighted(list(/obj/item/storage/backpack/security, /obj/item/storage/backpack/satchel/sec)),
-		new/datum/atom_creator/simple(/obj/item/storage/backpack/dufflebag/sec, 50),
-		/obj/item/clothing/head/helmet/nt,
-		/obj/item/clothing/suit/armor/vest/nt,
-		/obj/item/clothing/suit/storage/vest/nt/warden,
-		/obj/item/clothing/under/rank/warden,
-		/obj/item/clothing/under/rank/warden/corp,
-		/obj/item/clothing/suit/armor/vest/warden,
-		/obj/item/clothing/head/warden,
-		/obj/item/device/radio/headset/headset_sec,
-		/obj/item/clothing/glasses/hud/security/prot/sunglasses,
-		/obj/item/taperoll/police,
-		/obj/item/storage/box/flashbangs,
-		/obj/item/storage/box/teargas,
-		/obj/item/storage/belt/holster/security,
-		/obj/item/reagent_containers/spray/pepper,
-		/obj/item/melee/baton/loaded,
-		/obj/item/gun/energy/gun,
-		/obj/item/storage/box/holobadge,
-		/obj/item/clothing/head/beret/sec/corporate/warden,
-		/obj/item/device/holowarrant
-	)
+/obj/structure/closet/secure_closet/warden/populate_contents()
+	if(prob(50))
+		new /obj/item/storage/backpack/ironhammer(src)
+	else
+		new /obj/item/storage/backpack/sport/ironhammer(src)
+	new /obj/item/storage/backpack/satchel/ironhammer(src)
+	new /obj/item/clothing/under/rank/warden(src)
+	new /obj/item/clothing/head/beret/sec/navy/warden(src)
+	new /obj/item/device/radio/headset/headset_sec(src)
+	new /obj/item/clothing/glasses/sunglasses/sechud/tactical(src)
+	new /obj/item/storage/belt/tactical/ironhammer(src)
+	new /obj/item/clothing/suit/storage/vest/ironhammer(src)
+	new /obj/item/clothing/suit/armor/vest/warden/ironhammer(src)
+	new /obj/item/clothing/under/rank/security/turtleneck(src)
+	new /obj/item/clothing/mask/gas/ihs(src)
+	new /obj/item/storage/box/teargas(src)
+	new /obj/item/storage/box/flashbangs(src)
+	new /obj/item/ammo_magazine/pistol/rubber(src)
+	new /obj/item/ammo_magazine/pistol/rubber(src)
+	new	/obj/item/gun/projectile/paco(src)
+	new /obj/item/ammo_magazine/ihclrifle/rubber(src)
+	new /obj/item/ammo_magazine/ihclrifle/rubber(src)
+	new /obj/item/gun/projectile/automatic/sol(src)
+	new /obj/item/storage/box/holobadge(src)
+	new /obj/item/clothing/accessory/badge/holo/sergeant(src)
+	new /obj/item/storage/pouch/holster(src)
+	new /obj/item/storage/pouch/holster/baton(src)
+	new /obj/item/clothing/suit/armor/vest/ironhammer(src)
 
-/obj/structure/closet/secure_closet/security
-	name = "security officer's locker"
-	req_access = list(access_brig)
-	closet_appearance = /singleton/closet_appearance/secure_closet/security
+/obj/structure/closet/secure_closet/personal/security
+	name = "Ironhammer Operative locker"
+	req_access = list(access_hos)
+	access_occupy = list(access_brig)
+	icon_state = "sec"
 
-/obj/structure/closet/secure_closet/security/WillContain()
-	return list(
-		new/datum/atom_creator/weighted(list(/obj/item/storage/backpack/security, /obj/item/storage/backpack/satchel/sec)),
-		new/datum/atom_creator/simple(/obj/item/storage/backpack/dufflebag/sec, 50),
-		/obj/item/clothing/suit/armor/vest/nt,
-		/obj/item/clothing/head/helmet,
-		/obj/item/device/radio/headset/headset_sec,
-		/obj/item/storage/belt/holster/security,
-		/obj/item/device/flash,
-		/obj/item/reagent_containers/spray/pepper,
-		/obj/item/grenade/chem_grenade/teargas,
-		/obj/item/melee/baton/loaded,
-		/obj/item/clothing/glasses/hud/security/prot/sunglasses,
-		/obj/item/taperoll/police,
-		/obj/item/device/hailer,
-		/obj/item/clothing/accessory/storage/black_vest,
-		/obj/item/clothing/head/soft/sec/corp,
-		/obj/item/clothing/under/rank/security/corp,
-		/obj/item/gun/energy/taser,
-		/obj/item/device/holowarrant,
-	)
+/obj/structure/closet/secure_closet/personal/security/populate_contents()
+	if(prob(50))
+		new /obj/item/storage/backpack/ironhammer(src)
+	else
+		new /obj/item/storage/backpack/sport/ironhammer(src)
+	new /obj/item/storage/backpack/satchel/ironhammer(src)
+	new /obj/item/device/radio/headset/headset_sec(src)
+	new /obj/item/storage/belt/tactical/ironhammer(src)
+	new /obj/item/clothing/suit/storage/vest/ironhammer(src)
+	new /obj/item/clothing/under/rank/security/turtleneck(src)
+	new /obj/item/clothing/mask/gas/ihs(src)
+	new /obj/item/clothing/glasses/sunglasses/sechud/tactical(src)
+	new /obj/item/ammo_magazine/ihclrifle/rubber(src)
+	new /obj/item/ammo_magazine/ihclrifle/rubber(src)
+	new /obj/item/gun/projectile/automatic/sol(src)
+	new /obj/item/ammo_magazine/pistol/rubber(src)
+	new /obj/item/ammo_magazine/pistol/rubber(src)
+	new	/obj/item/gun/projectile/paco(src)
+	new /obj/item/storage/pouch/holster(src)
+	new /obj/item/storage/pouch/holster/baton(src)
+	new /obj/item/storage/ration_pack/ihr(src)
 
-/obj/structure/closet/secure_closet/security/cargo/WillContain()
-	return MERGE_ASSOCS_WITH_NUM_VALUES(..(), list(
-		/obj/item/clothing/accessory/armband/cargo,
-		/obj/item/device/encryptionkey/headset_cargo
-	))
+/obj/structure/closet/secure_closet/medspec
+	name = "Ironhammer Medical Specialist locker"
+	req_access = list(access_medspec)
+	icon_state = "sec"
 
-/obj/structure/closet/secure_closet/security/engine/WillContain()
-	return MERGE_ASSOCS_WITH_NUM_VALUES(..(), list(
-			/obj/item/clothing/accessory/armband/engine,
-			/obj/item/device/encryptionkey/headset_eng
-		))
-
-/obj/structure/closet/secure_closet/security/science/WillContain()
-	return MERGE_ASSOCS_WITH_NUM_VALUES(..(), list(/obj/item/device/encryptionkey/headset_sci))
-
-/obj/structure/closet/secure_closet/security/med/WillContain()
-	return MERGE_ASSOCS_WITH_NUM_VALUES(..(), list(
-			/obj/item/clothing/accessory/armband/medgreen,
-			/obj/item/device/encryptionkey/headset_med
-		))
+/obj/structure/closet/secure_closet/medspec/populate_contents()
+	new /obj/item/clothing/glasses/sunglasses/sechud/tactical(src)
+	new /obj/item/clothing/mask/gas/ihs(src)
+	new /obj/item/taperoll/police(src)
+	new /obj/item/clothing/under/rank/medspec(src)
+	new /obj/item/device/radio/headset/headset_sec(src)
+	new /obj/item/storage/belt/tactical/ironhammer(src)
+	new /obj/item/clothing/shoes/reinforced/ironhammer(src)
+	new /obj/item/clothing/gloves/stungloves(src)
+	new /obj/item/cell/medium/high(src)
+	new /obj/item/clothing/suit/storage/toggle/labcoat/medspec(src)
+	new /obj/item/ammo_magazine/smg/rubber(src)
+	new /obj/item/gun/projectile/automatic/molly(src)
+	new /obj/item/clothing/accessory/badge/holo/specialist(src)
+	new /obj/item/storage/pouch/holster(src)
+	new /obj/item/storage/briefcase/crimekit(src)
 
 /obj/structure/closet/secure_closet/detective
-	name = "detective's cabinet"
+	name = "Ironhammer Inspector locker"
 	req_access = list(access_forensics_lockers)
-	closet_appearance = /singleton/closet_appearance/cabinet/secure
+	icon_state = "cabinetdetective"
 
-/obj/structure/closet/secure_closet/detective/WillContain()
-	return list(
-		/obj/item/clothing/under/det,
-		/obj/item/clothing/under/det/grey,
-		/obj/item/clothing/under/det/black,
-		/obj/item/clothing/suit/storage/det_trench,
-		/obj/item/clothing/suit/storage/det_trench/grey,
-		/obj/item/clothing/suit/storage/forensics/blue,
-		/obj/item/clothing/suit/storage/forensics/red,
-		/obj/item/clothing/gloves/thick,
-		/obj/item/clothing/head/det,
-		/obj/item/clothing/head/det/grey,
-		/obj/item/clothing/shoes/laceup,
-		/obj/item/storage/box/evidence,
-		/obj/item/device/radio/headset/headset_sec,
-		/obj/item/clothing/suit/armor/vest/detective,
-		/obj/item/taperoll/police,
-		/obj/item/gun/projectile/pistol/sec/detective,
-		/obj/item/clothing/accessory/storage/holster/armpit,
-		/obj/item/reagent_containers/food/drinks/flask/detflask,
-		/obj/item/storage/briefcase/crimekit,
-		/obj/item/device/holowarrant
-	)
+/obj/structure/closet/secure_closet/detective/populate_contents()
+	new /obj/item/clothing/under/rank/det(src)
+	new /obj/item/clothing/under/rank/det/black(src)
+	new /obj/item/clothing/under/rank/inspector(src)
+	new /obj/item/clothing/suit/storage/detective(src)
+	new /obj/item/clothing/suit/storage/detective/brown(src)
+	new /obj/item/clothing/suit/storage/detective/black(src)
+	new /obj/item/clothing/mask/gas/ihs(src)
+	new /obj/item/clothing/gloves/thick(src)
+	new /obj/item/clothing/head/detective(src)
+	new /obj/item/clothing/head/detective/grey(src)
+	new /obj/item/clothing/head/detective/black(src)
+	new /obj/item/clothing/shoes/reinforced/ironhammer(src)
+	new /obj/item/storage/box/evidence(src)
+	new /obj/item/device/radio/headset/headset_sec(src)
+	new /obj/item/storage/belt/tactical/ironhammer(src)
+	new /obj/item/clothing/suit/armor/vest/detective(src)
+	new /obj/item/taperoll/police(src)
+	new /obj/item/clothing/glasses/sunglasses/sechud/tactical(src)
+	new /obj/item/cell/small/high(src)
+	new /obj/item/cell/small/high(src)
+	new /obj/item/device/taperecorder(src)
+	new /obj/item/gun/projectile/revolver/consul(src)
+	new /obj/item/clothing/accessory/holster(src)
+	new /obj/item/ammo_magazine/slmagnum/rubber(src)
+	new /obj/item/ammo_magazine/slmagnum/rubber(src)
+	new /obj/item/ammo_magazine/slmagnum/rubber(src)
+	new /obj/item/storage/pouch/holster(src)
+	new /obj/item/clothing/accessory/badge/inspector(src)
+	new /obj/item/storage/briefcase/crimekit(src)
+	new /obj/item/storage/box/syndie_kit/spy(src)
 
 /obj/structure/closet/secure_closet/injection
 	name = "lethal injections locker"
 	req_access = list(access_captain)
+	icon_state = "secure"
 
-/obj/structure/closet/secure_closet/injection/WillContain()
-	return list(/obj/item/reagent_containers/syringe/ld50_syringe/choral = 2)
+/obj/structure/closet/secure_closet/injection/populate_contents()
+	new /obj/item/reagent_containers/syringe/ld50_syringe/chlorine(src)
+	new /obj/item/reagent_containers/syringe/ld50_syringe/chlorine(src)
 
 /obj/structure/closet/secure_closet/brig
 	name = "brig locker"
 	req_access = list(access_brig)
 	anchored = TRUE
-	var/id = null
+	icon_state = "secure"
+	var/id
 
-/obj/structure/closet/secure_closet/brig/WillContain()
-	return list(
-		/obj/item/clothing/under/color/orange,
-		/obj/item/clothing/shoes/orange
-	)
+/obj/structure/closet/secure_closet/brig/populate_contents()
+	new /obj/item/clothing/under/color/orange(src)
+	new /obj/item/clothing/shoes/color/orange(src)
 
 /obj/structure/closet/secure_closet/courtroom
 	name = "courtroom locker"
-	req_access = list(access_lawyer)
-
-/obj/structure/closet/secure_closet/courtroom/WillContain()
-	return list(
-		/obj/item/clothing/shoes/brown,
-		/obj/item/paper = 3,
-		/obj/item/pen ,
-		/obj/item/clothing/suit/judgerobe,
-		/obj/item/clothing/head/powdered_wig ,
-		/obj/item/storage/briefcase,
-	)
-
-/obj/structure/closet/secure_closet/wall
-	name = "wall locker"
 	req_access = list(access_security)
-	closet_appearance = /singleton/closet_appearance/wall
+	icon_state = "sec"
 
-	//too small to put a man in
-	large = 0
-
-/obj/structure/closet/secure_closet/lawyer
-	name = "internal affairs secure closet"
-	req_access = list(access_lawyer)
-
-/obj/structure/closet/secure_closet/lawyer/WillContain()
-	return list(
-		/obj/item/device/flash = 2,
-		/obj/item/device/camera = 2,
-		/obj/item/device/camera_film = 2,
-		/obj/item/device/taperecorder = 2,
-		/obj/item/storage/secure/briefcase = 2,
-	)
+/obj/structure/closet/secure_closet/courtroom/populate_contents()
+	new /obj/item/clothing/shoes/color/brown(src)
+	new /obj/item/paper/court(src)
+	new /obj/item/paper/court(src)
+	new /obj/item/paper/court(src)
+	new /obj/item/pen(src)
+	new /obj/item/clothing/suit/judgerobe(src)
+	new /obj/item/clothing/head/powdered_wig(src)
+	new /obj/item/storage/briefcase(src)

@@ -2,7 +2,7 @@
 //These are shared by various items that have shield-like behaviour
 
 //bad_arc is the ABSOLUTE arc of directions from which we cannot block. If you want to fix it to e.g. the user's facing you will need to rotate the dirs yourself.
-/proc/check_shield_arc(mob/user, bad_arc, atom/damage_source = null, mob/attacker = null)
+/proc/check_parry_arc(mob/user, var/bad_arc, atom/damage_source = null, mob/attacker = null)
 	//check attack direction
 	var/attack_dir = 0 //direction from the user to the source of the attack
 	if(istype(damage_source, /obj/item/projectile))
@@ -17,7 +17,6 @@
 		return 1
 	return 0
 
-
 /proc/default_parry_check(mob/user, mob/attacker, atom/damage_source)
 	//parry only melee attacks
 	if(istype(damage_source, /obj/item/projectile) || (attacker && get_dist(user, attacker) > 1) || user.incapacitated())
@@ -25,278 +24,492 @@
 
 	//block as long as they are not directly behind us
 	var/bad_arc = reverse_direction(user.dir) //arc of directions from which we cannot block
-	if(!check_shield_arc(user, bad_arc, damage_source, attacker))
+	if(!check_parry_arc(user, bad_arc, damage_source, attacker))
 		return 0
 
 	return 1
 
-
 /obj/item/shield
 	name = "shield"
-	var/base_block_chance = 60
-	var/max_block = 0
+	var/base_block_chance = 30
+	var/slowdown_time = 1
+	var/shield_integrity = 100
+	var/shield_difficulty = 60
+	style = STYLE_NEG_HIGH
 
+/obj/item/shield/examine(mob/user, extra_description = "")
+	switch(get_block_chance(user))
+		if(0 to 30)
+			extra_description += "So heavy... You feel doubtful in your ability to parry with this shield using only one hand until you grow stronger."
+		if(31 to 45)
+			extra_description += "Holding this feels a little clumsy. Perhaps if you were a bit stronger..."
+		if(46 to 55)
+			extra_description += "A bit hefty, but you feel confident in your ability to parry with this shield."
+		if(56 to 70)
+			extra_description += "The weight of this shield feels comfortable and maneuverable."
+		if(71 to INFINITY)
+			extra_description += "You feel ready for a gladiator duel! Bring it on, roaches!"
+	..(user, extra_description)
 
-/obj/item/shield/handle_shield(mob/user, damage, atom/damage_source = null, mob/attacker = null, def_zone = null, attack_text = "the attack")
-	if(user.incapacitated())
+/obj/item/shield/proc/get_wielder_skill(mob/user, stat_type)
+	if(user && user.stats)
+		return max(1,user.stats.getStat(stat_type))
+
+	return 1 //STAT_LEVEL_MIN doesn't work due to division by zero error
+
+/obj/item/shield/handle_shield(mob/user, var/damage, atom/damage_source = null, mob/attacker = null, var/def_zone = null, var/attack_text = "the attack")
+
+	if(istype(damage_source, /obj/item/projectile) || (attacker && get_dist(user, attacker) > 1) || user.incapacitated())
 		return 0
 
 	//block as long as they are not directly behind us
 	var/bad_arc = reverse_direction(user.dir) //arc of directions from which we cannot block
-	if(check_shield_arc(user, bad_arc, damage_source, attacker))
-		if(prob(get_block_chance(user, damage, damage_source, attacker)))
+	if(check_parry_arc(user, bad_arc, damage_source, attacker))
+		if(prob(get_block_chance(user)))
 			user.visible_message(SPAN_DANGER("\The [user] blocks [attack_text] with \the [src]!"))
 			return 1
 	return 0
 
-/obj/item/shield/proc/get_block_chance(mob/user, damage, atom/damage_source = null, mob/attacker = null)
-	return base_block_chance
+/obj/item/shield/block_bullet(mob/user, var/obj/item/projectile/damage_source, def_zone)
+	var/bad_arc = reverse_direction(user.dir)
+	var/list/protected_area
+	if(prob(50))
+		protected_area = get_partial_protected_area(user)
+	else protected_area = get_protected_area(user)
+	if(protected_area.Find(def_zone) && check_shield_arc(user, bad_arc, damage_source))
+		if(!damage_source.check_penetrate(src))
+			visible_message(SPAN_DANGER("\The [user] blocks [damage_source] with \his [src]!"))
+			playsound(user.loc, 'sound/weapons/shield/shieldblock.ogg', 50, 1)
+			return 1
+	return 0
 
+/obj/item/shield/proc/check_shield_arc(mob/user, var/bad_arc, atom/damage_source = null, mob/attacker = null)
+	//shield direction
 
-/obj/item/shield/riot
-	name = "riot shield"
-	desc = "A shield adept at blocking blunt objects from connecting with the torso of the shield wielder."
-	icon = 'icons/obj/weapons/melee_physical.dmi'
-	icon_state = "riot"
-	item_state = "riot"
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
-	slot_flags = SLOT_BACK
-	force = 5.0
-	throwforce = 5.0
-	throw_speed = 1
-	throw_range = 4
-	w_class = ITEM_SIZE_HUGE
-	origin_tech = list(TECH_MATERIAL = 2)
-	matter = list(MATERIAL_GLASS = 7500, MATERIAL_STEEL = 1000)
-	attack_verb = list("shoved", "bashed")
-	var/cooldown = 0 //shield bash cooldown. based on world.time
-	var/can_block_lasers = FALSE
-
-
-/obj/item/shield/riot/handle_shield(mob/user)
-	. = ..()
-	if(.) playsound(user.loc, 'sound/weapons/Genhit.ogg', 50, 1)
-
-
-/obj/item/shield/riot/get_block_chance(mob/user, damage, atom/damage_source = null, mob/attacker = null)
+	var/shield_dir = 0
+	if(user.get_equipped_item(slot_l_hand) == src)
+		shield_dir = turn(user.dir, 90)
+	else if(user.get_equipped_item(slot_r_hand) == src)
+		shield_dir = turn(user.dir, -90)
+	//check attack direction
+	var/attack_dir = 0 //direction from the user to the source of the attack
 	if(istype(damage_source, /obj/item/projectile))
 		var/obj/item/projectile/P = damage_source
-		//plastic shields do not stop bullets or lasers, even in space. Will block beanbags, rubber bullets, and stunshots just fine though.
-		if(is_sharp(P) && damage >= max_block)
-			return 0
-		if(istype(P, /obj/item/projectile/beam) && (!can_block_lasers || (P.armor_penetration >= max_block)))
-			return 0
-	return base_block_chance
+		attack_dir = get_dir(get_turf(user), P.starting)
+	else if(attacker)
+		attack_dir = get_dir(get_turf(user), get_turf(attacker))
+	else if(damage_source)
+		attack_dir = get_dir(get_turf(user), get_turf(damage_source))
 
-
-/obj/item/shield/riot/use_tool(obj/item/W, mob/living/user, list/click_params)
-	if(istype(W, /obj/item/melee/baton))
-		if(cooldown < world.time - 25)
-			user.visible_message(SPAN_WARNING("\The [user] bashes \the [src] with \the [W]!"))
-			playsound(user.loc, 'sound/effects/shieldbash.ogg', 50, 1)
-			cooldown = world.time
+	//blocked directions
+	if(user.get_equipped_item(slot_back) == src)
+		if(attack_dir & bad_arc && attack_dir)
 			return TRUE
-	else
-		return ..()
+		else
+			return FALSE
 
+	if(wielded && !(attack_dir && (attack_dir & bad_arc)))
+		return TRUE
+	else if(!(attack_dir == bad_arc) && !(attack_dir == reverse_direction(shield_dir)) && !(attack_dir == (bad_arc | reverse_direction(shield_dir))))
+		return TRUE
+	return FALSE
 
-/obj/item/shield/riot/metal
-	name = "plasteel combat shield"
-	icon = 'icons/obj/weapons/melee_physical.dmi'
-	icon_state = "metal"
-	item_state = "metal"
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
-	slot_flags = SLOT_BACK
-	force = 6.0
-	throwforce = 7.0
-	throw_range = 3
-	w_class = ITEM_SIZE_HUGE
-	matter = list(MATERIAL_PLASTEEL = 8500)
-	max_block = 50
-	can_block_lasers = TRUE
-	slowdown_general = 0.5
+/obj/item/shield/proc/get_block_chance(mob/user)
+	return shield_difficulty/(1+100/get_wielder_skill(user,STAT_ROB))+base_block_chance
+
+/obj/item/shield/proc/get_protected_area(mob/user)
+	return BP_ALL_LIMBS
+
+/obj/item/shield/proc/get_partial_protected_area(mob/user)
+	return get_protected_area(user)
+
+/obj/item/shield/attack(mob/M, mob/user)
+	if(isliving(M))
+		var/mob/living/L = M
+		if(L.slowdown < slowdown_time * 3)
+			L.slowdown += slowdown_time
+	return ..()
 
 /obj/item/shield/buckler
-	name = "buckler"
-	desc = "A wooden buckler used to block sharp things from entering your body back in the day. Not very good at stopping projectiles, but still better than nothing."
-	icon = 'icons/obj/weapons/melee_physical.dmi'
-	icon_state = "buckler"
-	item_state = "buckler"
-	slot_flags = SLOT_BACK
-	force = 8
-	throwforce = 8
-	base_block_chance = 50
-	max_block = 15
-	throw_speed = 6
-	throw_range = 20
-	w_class = ITEM_SIZE_HUGE
-	origin_tech = list(TECH_MATERIAL = 1)
-	matter = list(MATERIAL_STEEL = 1000, MATERIAL_WOOD = 1000)
+	name = "tactical shield"
+	desc = "A compact personal shield made of pre-preg aramid fibres designed to stop or deflect bullets without slowing down its wielder."
+	icon = 'icons/obj/weapons.dmi'
+	icon_state = "tactical"
+	item_state = "tactical"
+	flags = CONDUCT
+	slot_flags = SLOT_BELT|SLOT_BACK
+	force = WEAPON_FORCE_PAINFUL
+	throwforce = WEAPON_FORCE_PAINFUL
+	throw_speed = 2
+	throw_range = 6
+	w_class = ITEM_SIZE_BULKY
+	origin_tech = list(TECH_MATERIAL = 2)
+	matter = list(MATERIAL_GLASS = 5, MATERIAL_STEEL = 5, MATERIAL_PLASTEEL = 12)
+	price_tag = 500
 	attack_verb = list("shoved", "bashed")
-
+	shield_integrity = 195
+	var/cooldown = 0 //shield bash cooldown. based on world.time
+	var/picked_by_human = FALSE
+	var/mob/living/carbon/human/picking_human
 
 /obj/item/shield/buckler/handle_shield(mob/user)
 	. = ..()
 	if(.) playsound(user.loc, 'sound/weapons/Genhit.ogg', 50, 1)
 
+/obj/item/shield/buckler/get_protected_area(mob/user)
+	var/list/p_area = list(BP_CHEST)
 
-/obj/item/shield/buckler/get_block_chance(mob/user, damage, atom/damage_source = null, mob/attacker = null)
-	if (istype(damage_source, /obj/item/projectile))
-		if (max_block && damage >= max_block)
-			return 0
-		else
-			return (base_block_chance / 2)
-	return base_block_chance
+	if(user.get_equipped_item(slot_back) == src)
+		return p_area
 
+	if(user.get_equipped_item(slot_l_hand) == src)
+		p_area.Add(BP_L_ARM)
+	else if(user.get_equipped_item(slot_r_hand) == src)
+		p_area.Add(BP_R_ARM)
 
-/obj/item/shield/energy
+	return p_area
+
+/obj/item/shield/buckler/get_partial_protected_area(mob/user)
+	var/list/p_area = get_protected_area(user)
+	p_area.Add(BP_GROIN, BP_HEAD)
+	return p_area
+
+/obj/item/shield/buckler/attackby(obj/item/W as obj, mob/user as mob)
+	if(istype(W, /obj/item/melee/baton))
+		on_bash(W, user)
+	else
+		..()
+
+/obj/item/shield/buckler/proc/on_bash(var/obj/item/W, var/mob/user)
+	if(cooldown < world.time - 25)
+		user.visible_message(SPAN_WARNING("[user] bashes [src] with \his [W]!"))
+		playsound(user.loc, 'sound/effects/shieldbash.ogg', 50, 1)
+		cooldown = world.time
+
+/obj/item/shield/riot
+	name = "ballistic shield"
+	desc = "A heavy personal shield made of pre-preg aramid fibres designed to stop or deflect bullets and other projectiles fired at its wielder at the cost of mobility."
+	icon = 'icons/obj/weapons.dmi'
+	icon_state = "riot"
+	item_state = "riot"
+	flags = CONDUCT
+	slot_flags = SLOT_BACK
+	force = WEAPON_FORCE_PAINFUL
+	throwforce = WEAPON_FORCE_PAINFUL
+	throw_speed = 1
+	throw_range = 4
+	w_class = ITEM_SIZE_HUGE
+	origin_tech = list(TECH_MATERIAL = 2)
+	matter = list(MATERIAL_GLASS = 10, MATERIAL_STEEL = 10, MATERIAL_PLASTEEL = 15)
+	price_tag = 500
+	base_block_chance = 45
+	shield_difficulty = 35
+	attack_verb = list("shoved", "bashed")
+	shield_integrity = 205
+	var/cooldown = 0 //shield bash cooldown. based on world.time
+	var/picked_by_human = FALSE
+	var/mob/living/carbon/human/picking_human
+
+/obj/item/shield/riot/handle_shield(mob/user)
+	. = ..()
+	if(.) playsound(user.loc, 'sound/weapons/shield/shieldmelee.ogg', 50, 1)
+
+/obj/item/shield/riot/get_block_chance(mob/user)
+	if(MOVING_QUICKLY(user))
+		return shield_difficulty/(1+100/get_wielder_skill(user,STAT_ROB))
+	if(MOVING_DELIBERATELY(user))
+		return shield_difficulty/(1+100/get_wielder_skill(user,STAT_ROB))+base_block_chance //diminishing returns
+
+/obj/item/shield/riot/get_protected_area(mob/user)
+	var/list/p_area = list(BP_CHEST, BP_GROIN, BP_HEAD)
+
+	if(user.get_equipped_item(slot_back) == src)
+		return p_area
+
+	if(MOVING_QUICKLY(user))
+		if(user.get_equipped_item(slot_l_hand) == src)
+			p_area = list(BP_L_ARM)
+		else if(user.get_equipped_item(slot_r_hand) == src)
+			p_area = list(BP_R_ARM)
+	else if(MOVING_DELIBERATELY(user) && wielded)
+		p_area = BP_ALL_LIMBS
+
+	if(user.get_equipped_item(slot_l_hand) == src)
+		p_area.Add(BP_L_ARM)
+	else if(user.get_equipped_item(slot_r_hand) == src)
+		p_area.Add(BP_R_ARM)
+	return p_area
+
+/obj/item/shield/riot/get_partial_protected_area(mob/user)
+	if(MOVING_DELIBERATELY(user))
+		return BP_ALL_LIMBS
+	else return get_protected_area(user)
+
+/obj/item/shield/riot/New()
+	RegisterSignal(src, COMSIG_ITEM_PICKED, PROC_REF(is_picked))
+	RegisterSignal(src, COMSIG_ITEM_DROPPED, PROC_REF(is_dropped))
+	return ..()
+
+/obj/item/shield/riot/proc/is_picked()
+	SIGNAL_HANDLER
+	var/mob/living/carbon/human/user = loc
+	if(istype(user))
+		picked_by_human = TRUE
+		picking_human = user
+		RegisterSignal(picking_human, COMSIG_HUMAN_WALKINTENT_CHANGE, PROC_REF(update_state))
+		update_state()
+
+/obj/item/shield/riot/proc/is_dropped()
+	SIGNAL_HANDLER
+	if(picked_by_human && picking_human)
+		UnregisterSignal(picking_human, COMSIG_HUMAN_WALKINTENT_CHANGE)
+		picked_by_human = FALSE
+		picking_human = null
+
+/obj/item/shield/riot/proc/update_state()
+	SIGNAL_HANDLER
+	if(!picking_human)
+		return
+	if(MOVING_QUICKLY(picking_human))
+		item_state = "[initial(item_state)]_run"
+		visible_message("[picking_human] lowers [gender_datums[picking_human.gender].his] [src.name].")
+	else
+		item_state = "[initial(item_state)]_walk"
+		visible_message("[picking_human] raises [gender_datums[picking_human.gender].his] [src.name] to cover [gender_datums[picking_human.gender].him]self!")
+	update_wear_icon()
+
+/obj/item/shield/riot/attackby(obj/item/W as obj, mob/user as mob)
+	if(istype(W, /obj/item/melee/baton))
+		on_bash(W, user)
+	else
+		..()
+
+/obj/item/shield/riot/proc/on_bash(var/obj/item/W, var/mob/user)
+	if(cooldown < world.time - 25)
+		user.visible_message(SPAN_WARNING("[user] bashes [src] with [W]!"))
+		playsound(user.loc, 'sound/effects/shieldbash.ogg', 50, 1)
+		cooldown = world.time
+
+/obj/item/shield/riot/dozershield
+	name = "bulldozer shield"
+	desc = "A crude beast of a shield hewn from slabs of metal welded to a locker door, it has been forged into a wall that stands between you and your foes."
+	icon = 'icons/obj/weapons.dmi'
+	icon_state = "dozershield"
+	item_state = "dozershield"
+	flags = CONDUCT
+	slot_flags = SLOT_BACK
+	force = WEAPON_FORCE_DANGEROUS
+	throwforce = WEAPON_FORCE_DANGEROUS
+	throw_speed = 1
+	throw_range = 4
+	w_class = ITEM_SIZE_HUGE
+	origin_tech = list()
+	matter = list(MATERIAL_GLASS = 20, MATERIAL_STEEL = 20, MATERIAL_PLASTEEL = 10)
+	price_tag = 200
+	base_block_chance = 55
+	shield_difficulty = 10
+	shield_integrity = 230
+	slowdown_hold = 1
+
+/obj/item/shield/riot/dozershield/attackby(obj/item/W as obj, mob/user as mob)
+	if(istype(W, /obj/item/tool/hammer) || istype(W, /obj/item/tool/sword))
+		on_bash(W, user)
+	else
+		..()
+
+/obj/item/shield/hardsuit
+	name = "hardsuit shield"
+	desc = "A massive ballistic shield that seems impossible to wield without mechanical assist."
+	icon = 'icons/obj/weapons.dmi'
+	icon_state = "hardshield"
+	item_state = "hardshield"
+	flags = CONDUCT
+	slot_flags = SLOT_BACK
+	force = WEAPON_FORCE_PAINFUL
+	throwforce = WEAPON_FORCE_PAINFUL
+	throw_speed = 1
+	throw_range = 4
+	w_class = ITEM_SIZE_HUGE
+	origin_tech = list()
+	matter = list()
+	price_tag = 0
+	base_block_chance = 60
+	shield_difficulty = 10
+	attack_verb = list("smashed", "bashed")
+	shield_integrity = 250
+	var/cooldown = 0 //shield bash cooldown. based on world.time
+	var/picked_by_human = FALSE
+	var/mob/living/carbon/human/picking_human
+	slowdown_hold = 3
+	var/mob/living/creator
+	var/cleanup = TRUE	// Should the shield despawn moments after being discarded by the summoner?
+	var/init_procees = TRUE
+	bad_type = /obj/item/shield/hardsuit
+
+/obj/item/shield/hardsuit/get_protected_area(mob/user)
+	var/list/p_area = list(BP_CHEST, BP_GROIN, BP_HEAD)
+
+	if(user.get_equipped_item(slot_l_hand) == src)
+		p_area.Add(BP_L_ARM)
+	else if(user.get_equipped_item(slot_r_hand) == src)
+		p_area.Add(BP_R_ARM)
+	return p_area
+
+/obj/item/shield/hardsuit/get_partial_protected_area(mob/user)
+	return BP_ALL_LIMBS
+
+/obj/item/shield/hardsuit/attackby(obj/item/W as obj, mob/user as mob)
+	if(istype(W, /obj/item/melee/baton))
+		on_bash(W, user)
+	else
+		..()
+
+/obj/item/shield/hardsuit/proc/on_bash(var/obj/item/W, var/mob/user)
+	if(cooldown < world.time - 25)
+		user.visible_message(SPAN_WARNING("[user] bashes [src] with \his [W]!"))
+		playsound(user.loc, 'sound/effects/shieldbash.ogg', 50, 1)
+		cooldown = world.time
+
+/obj/item/shield/hardsuit/Initialize(mapload)
+	. = ..()
+	if(init_procees)
+		START_PROCESSING(SSobj, src)
+
+/obj/item/shield/hardsuit/Destroy()
+	STOP_PROCESSING(SSobj, src)
+	. = ..()
+
+/obj/item/shield/hardsuit/dropped()
+	if(cleanup)
+		spawn(1) if(src) qdel(src)
+
+/obj/item/shield/hardsuit/Process()
+	if(!creator || loc != creator || (creator.l_hand != src && creator.r_hand != src))
+		// Tidy up a bit.
+		if(isliving(loc))
+			var/mob/living/carbon/human/host = loc
+			if(istype(host))
+				for(var/obj/item/organ/external/organ in host.organs)
+					for(var/obj/item/O in organ.implants)
+						if(O == src)
+							organ.implants -= src
+			host.pinned -= src
+			host.embedded -= src
+			host.drop_from_inventory(src)
+		if(cleanup)
+			spawn(1) if(src) qdel(src)
+
+/*
+ * Handmade shield
+ */
+
+/obj/item/shield/buckler/handmade
+	name = "round handmade shield"
+	desc = "A handmade stout shield, that protects the wielder while not weighting them down."
+	icon_state = "buckler"
+	item_state = "buckler"
+	flags = null
+	throw_speed = 2
+	throw_range = 6
+	matter = list(MATERIAL_STEEL = 6)
+	base_block_chance = 35
+	shield_difficulty = 65
+	shield_integrity = 170
+
+/obj/item/shield/buckler/handmade/attackby(obj/item/W as obj, mob/user as mob)
+	if(istype(W, /obj/item/extinguisher) || istype(W, /obj/item/storage/toolbox) || istype(W, /obj/item/melee))
+		on_bash(W, user)
+	else
+		..()
+
+/obj/item/shield/riot/tray
+	name = "tray shield"
+	desc = "A thin makeshift shield, but with a good size."
+	icon_state = "tray_shield"
+	item_state = "tray_shield"
+	flags = CONDUCT
+	throw_speed = 2
+	throw_range = 4
+	matter = list(MATERIAL_STEEL = 4)
+	base_block_chance = 40
+	shield_difficulty = 30
+	shield_integrity = 155
+
+/obj/item/shield/riot/tray/get_protected_area(mob/user)
+	var/list/p_area = list(BP_CHEST, BP_HEAD, BP_L_ARM, BP_R_ARM, BP_GROIN)
+	if(MOVING_DELIBERATELY(user) && wielded)
+		p_area = BP_ALL_LIMBS
+	return p_area
+
+/obj/item/shield/riot/tray/get_partial_protected_area(mob/user)
+	return BP_ALL_LIMBS
+
+/obj/item/shield/riot/tray/get_block_chance(mob/user)
+	return shield_difficulty/(1+100/get_wielder_skill(user,STAT_ROB))+base_block_chance
+
+/*
+ * Energy Shield
+ */
+
+/obj/item/shield/buckler/energy
 	name = "energy combat shield"
 	desc = "A shield capable of stopping most projectile and melee attacks. It can be retracted, expanded, and stored anywhere."
-	icon = 'icons/obj/weapons/melee_energy.dmi'
-	icon_state = "eshield0"
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
-	force = 3.0
-	throwforce = 5.0
+	icon = 'icons/obj/weapons.dmi'
+	icon_state = "eshield0" // eshield1 for expanded
+	item_state = "eshield0"
+	flags = CONDUCT
+	force = 3
+	throwforce = 5
 	throw_speed = 1
 	throw_range = 4
 	w_class = ITEM_SIZE_SMALL
-	origin_tech = list(TECH_MATERIAL = 4, TECH_MAGNET = 3, TECH_ESOTERIC = 4)
+	origin_tech = list(TECH_MATERIAL = 4, TECH_MAGNET = 3, TECH_COVERT = 4)
 	attack_verb = list("shoved", "bashed")
-	var/active = FALSE
-	var/next_action
-	var/sound_token
-	var/sound_id
-	var/damaged = FALSE
-	var/disabled
-	var/datum/effect/spark_spread/sparks
+	var/active = 0
+	base_block_chance = 35
+	shield_difficulty = 70
+	shield_integrity = 200
 
-
-/obj/item/shield/energy/Destroy()
-	QDEL_NULL(sound_token)
-	QDEL_NULL(sparks)
-	return ..()
-
-
-/obj/item/shield/energy/Initialize()
+/obj/item/shield/buckler/energy/handle_shield(mob/user)
+	if(!active)
+		return 0 //turn it on first!
 	. = ..()
-	sound_id = "[sequential_id(/obj/item/shield/energy)]"
-	sparks = new
 
+	if(.)
+		var/datum/effect/effect/system/spark_spread/spark_system = new
+		spark_system.set_up(5, 0, user.loc)
+		spark_system.start()
+		playsound(user.loc, 'sound/weapons/blade1.ogg', 50, 1)
 
-/obj/item/shield/energy/on_update_icon()
+/obj/item/shield/buckler/energy/attack_self(mob/living/user as mob)
+/*	if ((CLUMSY in user.mutations) && prob(50))
+		to_chat(user, SPAN_WARNING("You beat yourself in the head with [src]."))
+		user.take_organ_damage(5)
+	active = !active
+*/
+	if(active)
+		force = WEAPON_FORCE_PAINFUL
+		update_icon()
+		w_class = ITEM_SIZE_BULKY
+		playsound(user, 'sound/weapons/saberon.ogg', 50, 1)
+		to_chat(user, SPAN_NOTICE("\The [src] is now active."))
+
+	else
+		force = 3
+		update_icon()
+		w_class = ITEM_SIZE_TINY
+		playsound(user, 'sound/weapons/saberoff.ogg', 50, 1)
+		to_chat(user, SPAN_NOTICE("\The [src] can now be concealed."))
+
+	add_fingerprint(user)
+	return
+
+/obj/item/shield/buckler/energy/update_icon()
 	icon_state = "eshield[active]"
-	if (active)
-		set_light(1.5, 1.5, "#006aff")
+	item_state = "eshield[active]"
+	update_wear_icon()
+	if(active)
+		set_light(1.5, 1.5, COLOR_LIGHTING_BLUE_BRIGHT)
 	else
 		set_light(0)
 
-
-/obj/item/shield/energy/proc/activate(mob/living/user)
-	var/time = world.time
-
-	if (active)
-		return
-
-	if (time < next_action)
-		return
-
-	if (damaged)
-		if (world.time < disabled)
-			if (user)
-				user.show_message(SPAN_WARNING("\The [src] sputters. It's not going to work right now!"))
-			return
-		user.visible_message(SPAN_NOTICE("\The [src] resonates perfectly, once again."))
-		damaged = FALSE
-
-	next_action = time + 3 SECONDS
-	active = !active
-
-	if (active)
-		playsound(src, 'sound/obj/item/shield/energy/shield-start.ogg', 40)
-		force = 10
-		w_class = ITEM_SIZE_NO_CONTAINER
-
-	if (istype(user,/mob/living/carbon/human))
-		var/mob/living/carbon/human/H = user
-		H.update_inv_l_hand()
-		H.update_inv_r_hand()
-
-	update_icon()
-	addtimer(new Callback(src, PROC_REF(UpdateSoundLoop)), 0.25 SECONDS)
-
-
-/obj/item/shield/energy/proc/deactivate(mob/living/user)
-	if (!active)
-		return
-
-	active = !active
-
-	if (!active)
-		playsound(src, 'sound/obj/item/shield/energy/shield-stop.ogg', 40)
-		force = initial(force)
-		w_class = initial(w_class)
-
-	update_icon()
-
-	if (istype(user,/mob/living/carbon/human))
-		var/mob/living/carbon/human/H = user
-		H.update_inv_l_hand()
-		H.update_inv_r_hand()
-
-	addtimer(new Callback(src, PROC_REF(UpdateSoundLoop)), 0.1 SECONDS)
-
-
-/obj/item/shield/energy/attack_self(mob/living/user)
-	if (!active)
-		activate(user)
-	else
-		deactivate(user)
-	return
-
-
-/obj/item/shield/energy/handle_shield(mob/living/user)
-	if (!active && damaged)
-		return FALSE
-	. = ..()
-	if (!.)
-		return
-	sparks.set_up(2, loca = user)
-	sparks.start()
-
-
-/obj/item/shield/energy/get_block_chance(mob/living/user, damage, atom/damage_source, mob/living/attacker)
-	if (isprojectile(damage_source))
-		if (damage > 10 && is_sharp(damage_source) || isbeam(damage_source))
-			return base_block_chance - round(damage / 2.5)
-	return base_block_chance
-
-
-/obj/item/shield/energy/emp_act(severity)
-	SHOULD_CALL_PARENT(FALSE)
-	if (!active)
-		return
-	if (damaged)
-		return
-	var/disabletime = 30 SECONDS
-	if (severity == EMP_ACT_HEAVY)
-		disabletime = 1 MINUTES
-
-	visible_message(SPAN_DANGER("\The [src] violently shudders!"))
-	new /obj/overlay/emp_pulse (get_turf(src))
-
-	disabled = world.time + disabletime
-	damaged = TRUE
-	var/mob/living/carbon/M = loc
-	if (M)
-		deactivate(M)
-	else
-		deactivate()
-	update_icon()
-	GLOB.empd_event.raise_event(src, severity)
-
-
-/obj/item/shield/energy/proc/UpdateSoundLoop()
-	if (!active)
-		QDEL_NULL(sound_token)
-		return
-	sound_token = GLOB.sound_player.PlayLoopingSound(src, sound_id,'sound/obj/item/shield/energy/shield-loop.ogg', 10, 4)

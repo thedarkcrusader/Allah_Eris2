@@ -1,89 +1,77 @@
 /obj
-	layer = OBJ_LAYER
-	animate_movement = 2
-
-	var/obj_flags
-
-	var/list/matter //Used to store information about the contents of the object.
+	//Used to store information about the contents of the object.
+	var/list/matter
+	var/list/matter_reagents
 	var/w_class // Size of the object.
-	var/unacidable = FALSE //universal "unacidabliness" var, here so you can use it in any obj.
-	var/throwforce = 0
-	///// whether this object cuts
-	var/sharp = FALSE
-	///Whether this object is more likely to dismember
-	var/edge = FALSE
-	///For items that can puncture e.g. thick plastic but aren't necessarily sharp. Called in can_puncture()
-	var/puncture = FALSE
+	var/unacidable = 0 //universal "unacidabliness" var, here so you can use it in any obj.
+	animate_movement = 2
+	var/throwforce = 1
+	var/sharp = FALSE		// whether this object cuts
+	var/edge = FALSE		// whether this object is more likely to dismember
 	var/in_use = 0 // If we have a user using us, this will be set on. We will check if the user has stopped using us, and thus stop updating and LAGGING EVERYTHING!
-	var/damtype = DAMAGE_BRUTE
-	var/armor_penetration = 0
-	var/anchor_fall = FALSE
-	var/holographic = 0 //if the obj is a holographic object spawned by the holodeck
+	var/damtype = "brute"
+	var/armor_divisor = 1
+	var/corporation
+	var/heat = 0
+
+
+/obj/proc/is_hot()
+	return heat
+
+/obj/get_fall_damage(turf/from, turf/dest)
+	return w_class * 2
 
 /obj/Destroy()
-	STOP_PROCESSING(SSobj, src)
-	return ..()
+	if(!ismachinery(src))
+		STOP_PROCESSING(SSobj, src) // TODO: Have a processing bitflag to reduce on unnecessary loops through the processing lists
+	SSnano.close_uis(src)
+	. = ..()
 
-/obj/MouseDrop_T(atom/dropped, mob/living/user)
-	// Handle tabling objects
-	if (dropped != src && HAS_FLAGS(obj_flags, OBJ_FLAG_RECEIVE_TABLE) && isobj(dropped))
-		var/obj/object = dropped
-		if (HAS_FLAGS(object.obj_flags, OBJ_FLAG_CAN_TABLE))
-			if (object.anchored)
-				USE_FEEDBACK_FAILURE("\The [object] is firmly anchored and cannot be moved.")
-				return TRUE
-			if (!isturf(loc))
-				USE_FEEDBACK_FAILURE("\The [src] must be on a turf to lift \the [dropped] onto it.")
-				return TRUE
-			if (!user.skill_check(SKILL_HAULING, SKILL_BASIC))
-				USE_FEEDBACK_FAILURE("You're not strong enough to lift \the [dropped] onto \the [src].")
-				return TRUE
-			var/has_blocker = FALSE
-			for (var/atom/thing as anything in get_turf(src))
-				if (thing == src)
-					continue
-				if (ismob(thing) || thing.density)
-					has_blocker = thing
-					break
-			if (has_blocker)
-				USE_FEEDBACK_FAILURE("You can't lift \the [dropped] onto \the [src]. \The [has_blocker] is in the way.")
-				return TRUE
-			user.visible_message(
-				SPAN_NOTICE("\The [user] starts lifting \the [dropped] onto \the [src]."),
-				SPAN_NOTICE("You start lifting \the [dropped] onto \the [src].")
-			)
-			if (!user.do_skilled(6 SECONDS, SKILL_HAULING, src, do_flags = DO_PUBLIC_UNIQUE) || !user.use_sanity_check(src, dropped))
-				return TRUE
-			if (!HAS_FLAGS(obj_flags, OBJ_FLAG_RECEIVE_TABLE))
-				USE_FEEDBACK_FAILURE("\The [src]'s state has changed.")
-				return TRUE
-			if (!HAS_FLAGS(object.obj_flags, OBJ_FLAG_CAN_TABLE))
-				USE_FEEDBACK_FAILURE("\The [dropped]'s state has changed.")
-				return TRUE
-			if (object.anchored)
-				USE_FEEDBACK_FAILURE("\The [object] is firmly anchored and cannot be moved.")
-				return TRUE
-			if (!isturf(loc))
-				USE_FEEDBACK_FAILURE("\The [src] must be on a turf to lift \the [dropped] onto it.")
-				return TRUE
-			has_blocker = FALSE
-			for (var/atom/thing as anything in get_turf(src))
-				if (thing == src)
-					continue
-				if (ismob(thing) || thing.density)
-					has_blocker = thing
-					break
-			if (has_blocker)
-				USE_FEEDBACK_FAILURE("You can't lift \the [dropped] onto \the [src]. \The [has_blocker] is in the way.")
-				return TRUE
-			object.forceMove(loc)
-			user.visible_message(
-				SPAN_NOTICE("\The [user] lifts \the [dropped] onto \the [src]."),
-				SPAN_NOTICE("You lift \the [dropped] onto \the [src].")
-			)
-			return TRUE
+/obj/Topic(href, href_list, var/datum/nano_topic_state/state = GLOB.default_state)
+	if(..())
+		return 1
 
-	return ..()
+	// In the far future no checks are made in an overriding Topic() beyond if(..()) return
+	// Instead any such checks are made in CanUseTopic()
+	if(CanUseTopic(usr, state, href_list) == STATUS_INTERACTIVE)
+		CouldUseTopic(usr)
+		return OnTopic(usr, href_list, state)
+
+	CouldNotUseTopic(usr)
+	return 1
+
+/obj/proc/OnTopic(mob/user, href_list, datum/nano_topic_state/state)
+	return TOPIC_NOACTION
+
+/obj/CanUseTopic(mob/user, datum/nano_topic_state/state)
+	if(user.CanUseObjTopic(src))
+		return ..()
+	return STATUS_CLOSE
+
+/mob/living/silicon/CanUseObjTopic(obj/O)
+	var/id = src.GetIdCard()
+	return O.check_access(id)
+
+/mob/proc/CanUseObjTopic()
+	return 1
+
+/obj/proc/CouldUseTopic(mob/user)
+	user.AddTopicPrint(src)
+
+/mob/proc/AddTopicPrint(obj/target)
+	target.add_hiddenprint(src)
+
+/mob/living/AddTopicPrint(obj/target)
+	if(Adjacent(target))
+		target.add_fingerprint(src)
+	else
+		target.add_hiddenprint(src)
+
+/mob/living/silicon/ai/AddTopicPrint(obj/target)
+	target.add_hiddenprint(src)
+
+/obj/proc/CouldNotUseTopic(mob/user)
+	// Nada
 
 /obj/item/proc/is_used_on(obj/O, mob/user)
 
@@ -108,14 +96,25 @@
 /obj/proc/updateUsrDialog()
 	if(in_use)
 		var/is_in_use = 0
-		var/list/nearby = viewers(1, src) | usr
+		var/list/nearby = viewers(1, src)
 		for(var/mob/M in nearby)
 			if ((M.client && M.machine == src))
-				if(CanUseTopic(M, DefaultTopicState()) > STATUS_CLOSE)
+				is_in_use = 1
+				src.attack_hand(M)
+		if (isAI(usr) || isrobot(usr))
+			if (!(usr in nearby))
+				if (usr.client && usr.machine==src) // && M.machine == src is omitted because if we triggered this by using the dialog, it doesn't matter if our machine changed in between triggering it and this - the dialog is probably still supposed to refresh.
 					is_in_use = 1
-					interact(M)
-				else
-					M.unset_machine()
+					src.attack_ai(usr)
+
+		// check for TK users
+
+		if (ishuman(usr))
+			if(istype(usr.l_hand, /obj/item/tk_grab) || istype(usr.r_hand, /obj/item/tk_grab/))
+				if(!(usr in nearby))
+					if(usr.client && usr.machine==src)
+						is_in_use = 1
+						src.attack_hand(usr)
 		in_use = is_in_use
 
 /obj/proc/updateDialog()
@@ -125,22 +124,16 @@
 		var/is_in_use = 0
 		for(var/mob/M in nearby)
 			if ((M.client && M.machine == src))
-				if(CanUseTopic(M, DefaultTopicState()) > STATUS_CLOSE)
-					is_in_use = 1
-					interact(M)
-				else
-					M.unset_machine()
+				is_in_use = 1
+				src.interact(M)
 		var/ai_in_use = AutoUpdateAI(src)
 
 		if(!ai_in_use && !is_in_use)
 			in_use = 0
 
 /obj/attack_ghost(mob/user)
-	ui_interact(user)
+	nano_ui_interact(user)
 	..()
-
-/obj/proc/interact(mob/user)
-	return
 
 /mob/proc/unset_machine()
 	src.machine = null
@@ -158,167 +151,114 @@
 		src.attack_self(M)
 
 /obj/proc/hide(hide)
-	set_invisibility(hide ? INVISIBILITY_MAXIMUM : initial(invisibility))
+	invisibility = hide ? INVISIBILITY_MAXIMUM : initial(invisibility)
+	SEND_SIGNAL_OLD(src, COMSIG_OBJ_HIDE, hide)
 
 /obj/proc/hides_under_flooring()
-	return level == ATOM_LEVEL_UNDER_TILE
+	return level == BELOW_PLATING_LEVEL
 
-/obj/proc/hear_talk(mob/M as mob, text, verb, datum/language/speaking)
+/obj/proc/hear_talk(mob/M as mob, text, verb, datum/language/speaking, speech_volume)
 	if(talking_atom)
 		talking_atom.catchMessage(text, M)
 /*
 	var/mob/mo = locate(/mob) in src
 	if(mo)
-		var/rendered = SPAN_CLASS("game say", "[SPAN_CLASS("name", "[M.name]: ")] [SPAN_CLASS("message", text))]"
+		var/rendered = "<span class='game say'><span class='name'>[M.name]: </span> <span class='message'>[text]</span></span>"
 		mo.show_message(rendered, 2)
 		*/
 	return
 
-/obj/proc/see_emote(mob/M as mob, text, emote_type)
+/obj/proc/see_emote(mob/M, text, emote_type)
 	return
 
 /obj/proc/show_message(msg, type, alt, alt_type)//Message, type of message (1 or 2), alternative message, alt message type (1 or 2)
 	return
 
-/obj/proc/damage_flags()
-	. = 0
-	if(has_edge(src))
-		. |= DAMAGE_FLAG_EDGE
-	if(is_sharp(src))
-		. |= DAMAGE_FLAG_SHARP
-	if (damtype == DAMAGE_BURN)
-		. |= DAMAGE_FLAG_LASER
+/obj/proc/add_hearing()
+	InitiateHearerTracking()
+	//GLOB.hearing_objects |= src
 
-/obj/use_tool(obj/item/tool, mob/living/user, list/click_params)
-	if (isWrench(tool) && HAS_FLAGS(obj_flags, OBJ_FLAG_ANCHORABLE))
-		wrench_floor_bolts(user, tool)
-		return TRUE
-	return ..()
+/obj/proc/remove_hearing()
+	chunkHearerClearSelf()
+	//GLOB.hearing_objects.Remove(src)
 
-/**
- * Whether or not the object can be anchored in its current state/position. Assumes the anchorable flag has already been checked.
- *
- * **Parameters**:
- * - `tool` - Tool being used to un/anchor the object.
- * - `user` - User performing the interaction.
- * - `silent` (Boolean, default `FALSE`) - If set, does not send user feedback messages on failure.
- *
- * Returns boolean.
- */
-/obj/proc/can_anchor(obj/item/tool, mob/user, silent = FALSE)
-	if (isinspace())
-		if (!silent)
-			USE_FEEDBACK_FAILURE("\The [src] cannot be anchored in space.")
+/obj/proc/eject_item(obj/item/I, mob/living/user)
+	if(!I || !user.IsAdvancedToolUser() || user.stat || !user.Adjacent(I))
 		return FALSE
+	user.put_in_hands(I)
+	playsound(src.loc, 'sound/weapons/guns/interact/pistol_magin.ogg', 75, 1)
+	user.visible_message(
+		"[user] removes [I] from [src].",
+		SPAN_NOTICE("You remove [I] from [src].")
+	)
 	return TRUE
 
-
-/obj/proc/wrench_floor_bolts(mob/user, obj/item/tool, delay = 2 SECONDS)
-	if (!can_anchor(tool, user))
-		return
-	user.visible_message(
-		SPAN_NOTICE("\The [user] begins [anchored ? "un" : ""]securing \the [src] [anchored ? "from" : "to"] the floor with \a [tool]."),
-		SPAN_NOTICE("You begin [anchored ? "un" : ""]securing \the [src] [anchored ? "from" : "to"] the floor with \the [tool].")
-	)
-	playsound(src, 'sound/items/Ratchet.ogg', 50, TRUE)
-	if (!user.do_skilled((tool.toolspeed * delay), SKILL_CONSTRUCTION, src, do_flags = DO_REPAIR_CONSTRUCT) || !user.use_sanity_check(src, tool))
-		return
-	user.visible_message(
-		SPAN_NOTICE("\The [user] [anchored ? "un" : ""]secures \the [src] [anchored ? "from" : "to"] the floor with \a [tool]."),
-		SPAN_NOTICE("You [anchored ? "un" : ""]secure \the [src] [anchored ? "from" : "to"] the floor with \the [tool].")
-	)
-	playsound(src, 'sound/items/Ratchet.ogg', 50, TRUE)
-	anchored = !anchored
-	post_anchor_change()
-	return
-
-
-/**
- * Called when the object's anchor state is changed via `wrench_floor_bolts()`.
- */
-/obj/proc/post_anchor_change()
-	update_icon()
-	return
-
-
-/obj/attack_hand(mob/living/user)
-	. = ..()
-	if (.)
-		return
-	if (Adjacent(user))
-		add_fingerprint(user)
-
-	if (ishuman(user) && !isitem(src) && user.a_intent == I_HURT && get_max_health())
-		var/mob/living/carbon/human/assailant = user
-		var/datum/unarmed_attack/attack = assailant.get_unarmed_attack(src)
-		if (!attack)
-			return ..()
-		assailant.do_attack_animation(src)
-		assailant.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-		var/damage = attack.damage + rand(1,5)
-		var/attack_verb = "[pick(attack.attack_verb)]"
-
-		if (MUTATION_FERAL in user.mutations)
-			attack_verb = "smashes"
-			damage = 10
-
-		if (!can_damage_health(damage, attack.get_damage_type()))
-			playsound(loc, use_weapon_hitsound? attack.attack_sound : damage_hitsound, 25, TRUE, -1)
-			user.visible_message(
-				SPAN_WARNING("\The [user] hits \the [src], but doesn't even leave a dent!"),
-				SPAN_WARNING("You hit \the [src], but cause no visible damage and hurt yourself!")
-			)
-			if (!(MUTATION_FERAL in user.mutations))
-				user.apply_damage(3, DAMAGE_BRUTE, user.hand ? BP_L_HAND : BP_R_HAND)
-				return TRUE
-
-		playsound(loc, use_weapon_hitsound? attack.attack_sound : damage_hitsound, 25, TRUE, -1)
-		assailant.visible_message(
-				SPAN_WARNING("\The [assailant] [attack_verb] \the [src]!"),
-				SPAN_WARNING("You [attack_verb] \the [src]!")
-				)
-		damage_health(damage, attack.get_damage_type(), attack.damage_flags())
-		return TRUE
-
-/obj/is_fluid_pushable(amt)
-	return ..() && w_class <= round(amt/20)
-
-/obj/proc/can_embed()
-	return is_sharp(src)
-
-/obj/AltClick(mob/user)
-	if(obj_flags & OBJ_FLAG_ROTATABLE)
-		rotate(user)
-		return TRUE
-	return ..()
-
-/obj/examine(mob/user)
-	. = ..()
-	if((obj_flags & OBJ_FLAG_ROTATABLE))
-		to_chat(user, SPAN_SUBTLE("Can be rotated with alt-click."))
-	if((obj_flags & OBJ_FLAG_ANCHORABLE))
-		to_chat(user, SPAN_SUBTLE("Can be [anchored? "unsecured from the floor" : "secured to the floor"] using a wrench."))
-
-/obj/proc/rotate(mob/user)
-	if(!CanPhysicallyInteract(user))
-		to_chat(user, SPAN_NOTICE("You can't interact with \the [src] right now!"))
-		return
-
-	if(anchored)
-		to_chat(user, SPAN_NOTICE("\The [src] is secured to the floor!"))
-		return
-
-	set_dir(turn(dir, 90))
-	update_icon()
-
-//For things to apply special effects after damaging an organ, called by organ's take_damage
-/obj/proc/after_wounding(obj/item/organ/external/organ, datum/wound)
-
-/**
- * Test for if stepping on a tile containing this obj is safe to do, used for things like landmines and cliffs.
- */
-/obj/proc/is_safe_to_step(mob/living/L)
+/obj/proc/insert_item(obj/item/I, mob/living/user)
+	if(!I || !istype(user) || user.stat || !user.unEquip(I))
+		return FALSE
+	I.forceMove(src)
+	playsound(src.loc, 'sound/weapons/guns/interact/pistol_magout.ogg', 75, 1)
+	to_chat(user, SPAN_NOTICE("You insert [I] into [src]."))
 	return TRUE
 
-/obj/get_mass()
-	return min(2**(w_class-1), 100)
+/obj/proc/replace_item(obj/item/I_old, obj/item/I_new, mob/living/user)
+	if(!I_old || !I_new || !istype(user) || user.stat || !user.Adjacent(I_new) || !user.Adjacent(I_old) || !user.unEquip(I_new))
+		return FALSE
+	I_new.forceMove(src)
+	user.put_in_hands(I_old)
+	playsound(src.loc, 'sound/weapons/guns/interact/pistol_magout.ogg', 75, 1)
+	spawn(2)
+		playsound(src.loc, 'sound/weapons/guns/interact/pistol_magin.ogg', 75, 1)
+	user.visible_message(
+		"[user] replaces [I_old] with [I_new] in [src].",
+		SPAN_NOTICE("You replace [I_old] with [I_new] in [src]."))
+	return TRUE
+
+//Returns the list of matter in this object
+//You can override it to customise exactly what is returned.
+/atom/proc/get_matter()
+	return list()
+
+/obj/get_matter()
+	return matter ? matter.Copy() : list()
+
+//Drops the materials in matter list on into target location
+//Use for deconstrction
+// Dropper is whoever is handling these materials if any , causes them to leave fingerprints on the sheets.
+/atom/proc/drop_materials(target_loc, mob/living/dropper)
+	var/list/materials = get_matter()
+
+	for(var/mat_name in materials)
+		var/material/material = get_material_by_name(mat_name)
+		if(!material)
+			continue
+
+		material.place_material(target_loc, materials[mat_name], dropper)
+
+//To be called from things that spill objects on the floor.
+//Makes an object move around randomly for a couple of tiles
+/obj/proc/tumble(var/dist = 2)
+	set waitfor = FALSE
+	if (dist >= 1)
+		dist += rand(0,1)
+		for(var/i = 1, i <= dist, i++)
+			if(src)
+				step(src, pick(NORTH,SOUTH,EAST,WEST))
+				sleep(rand(2,4))
+
+
+//Intended for gun projectiles, but defined at this level for various things that aren't of projectile type
+/obj/proc/multiply_projectile_damage(newmult)
+	throwforce = initial(throwforce) * newmult
+
+//Same for AP
+/obj/proc/add_projectile_penetration(newmult)
+	armor_divisor = initial(armor_divisor) + newmult
+
+/obj/proc/multiply_pierce_penetration(newmult)
+
+/obj/proc/multiply_ricochet(newmult)
+
+/obj/proc/multiply_projectile_step_delay(newmult)
+
+/obj/proc/multiply_projectile_halloss(newmult)

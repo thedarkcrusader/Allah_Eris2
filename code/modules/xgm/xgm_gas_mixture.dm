@@ -9,23 +9,21 @@
 	var/total_moles = 0
 	//Volume of this mix.
 	var/volume = CELL_VOLUME
-	//Size of the group this gas_mixture is representing.  1 for Singletons.
+	//Size of the group this gas_mixture is representing.  1 for singletons.
 	var/group_multiplier = 1
 
 	//List of active tile overlays for this gas_mixture.  Updated by check_tile_graphic()
 	var/list/graphic = list()
-	//Cache of gas overlay objects
+
 	var/list/tile_overlay_cache
 
-/datum/gas_mixture/New(_volume = CELL_VOLUME, _temperature = 0, _group_multiplier = 1)
-	volume = _volume
-	temperature = _temperature
-	group_multiplier = _group_multiplier
+/datum/gas_mixture/New(vol = CELL_VOLUME)
+	volume = vol
 
-/datum/gas_mixture/proc/get_gas(gasid)
-	if(!length(gas))
-		return 0 //if the list is empty BYOND treats it as a non-associative list, which runtimes
-	return gas[gasid] * group_multiplier
+/datum/gas_mixture/Destroy()
+	gas = null
+	graphic = null
+	return ..()
 
 /datum/gas_mixture/proc/get_total_moles()
 	return total_moles * group_multiplier
@@ -67,9 +65,9 @@
 
 //Variadic version of adjust_gas().  Takes any number of gas and mole pairs and applies them.
 /datum/gas_mixture/proc/adjust_multi()
-	ASSERT(!(length(args) % 2))
+	ASSERT(!(args.len % 2))
 
-	for(var/i = 1; i < length(args); i += 2)
+	for(var/i = 1; i < args.len; i += 2)
 		adjust_gas(args[i], args[i+1], update = 0)
 
 	update_values()
@@ -77,9 +75,9 @@
 
 //Variadic version of adjust_gas_temp().  Takes any number of gas, mole and temperature associations and applies them.
 /datum/gas_mixture/proc/adjust_multi_temp()
-	ASSERT(!(length(args) % 3))
+	ASSERT(!(args.len % 3))
 
-	for(var/i = 1; i < length(args); i += 3)
+	for(var/i = 1; i < args.len; i += 3)
 		adjust_gas_temp(args[i], args[i + 1], args[i + 2], update = 0)
 
 	update_values()
@@ -87,7 +85,7 @@
 
 //Merges all the gas from another mixture into this one.  Respects group_multipliers and adjusts temperature correctly.
 //Does not modify giver in any way.
-/datum/gas_mixture/proc/merge(datum/gas_mixture/giver)
+/datum/gas_mixture/proc/merge(const/datum/gas_mixture/giver)
 	if(!giver)
 		return
 
@@ -107,15 +105,12 @@
 
 	update_values()
 
-// Used to equalize the mixture between two zones before sleeping an edge.
+
 /datum/gas_mixture/proc/equalize(datum/gas_mixture/sharer)
+	if(!sharer)
+		return
 	var/our_heatcap = heat_capacity()
 	var/share_heatcap = sharer.heat_capacity()
-
-	// Special exception: there isn't enough air around to be worth processing this edge next tick, zap both to zero.
-	if(total_moles + sharer.total_moles <= MINIMUM_AIR_TO_SUSPEND)
-		gas.Cut()
-		sharer.gas.Cut()
 
 	for(var/g in gas|sharer.gas)
 		var/comb = gas[g] + sharer.gas[g]
@@ -126,9 +121,6 @@
 	if(our_heatcap + share_heatcap)
 		temperature = ((temperature * our_heatcap) + (sharer.temperature * share_heatcap)) / (our_heatcap + share_heatcap)
 	sharer.temperature = temperature
-
-	update_values()
-	sharer.update_values()
 
 	return 1
 
@@ -142,8 +134,7 @@
 
 
 //Adds or removes thermal energy. Returns the actual thermal energy change, as in the case of removing energy we can't go below TCMB.
-/datum/gas_mixture/proc/add_thermal_energy(thermal_energy)
-
+/datum/gas_mixture/proc/add_thermal_energy(var/thermal_energy)
 	if (total_moles == 0)
 		return 0
 
@@ -157,7 +148,7 @@
 	return thermal_energy
 
 //Returns the thermal energy change required to get to a new temperature
-/datum/gas_mixture/proc/get_thermal_energy_change(new_temperature)
+/datum/gas_mixture/proc/get_thermal_energy_change(var/new_temperature)
 	return heat_capacity()*(max(new_temperature, 0) - temperature)
 
 
@@ -167,7 +158,7 @@
 
 //Returns the ideal gas specific entropy of the whole mix. This is the entropy per mole of /mixed/ gas.
 /datum/gas_mixture/proc/specific_entropy()
-	if (!length(gas) || total_moles == 0)
+	if (!gas.len || total_moles == 0)
 		return SPECIFIC_ENTROPY_VACUUM
 
 	. = 0
@@ -187,15 +178,14 @@
 	So returning a constant/(partial pressure) would probably do what most players expect. Although the version I have implemented below is a bit more nuanced than simply 1/P in that it scales in a way
 	which is bit more realistic (natural log), and returns a fairly accurate entropy around room temperatures and pressures.
 */
-/datum/gas_mixture/proc/specific_entropy_gas(gasid)
+/datum/gas_mixture/proc/specific_entropy_gas(var/gasid)
 	if (!(gasid in gas) || gas[gasid] == 0)
 		return SPECIFIC_ENTROPY_VACUUM	//that gas isn't here
 
 	//group_multiplier gets divided out in volume/gas[gasid] - also, V/(m*T) = R/(partial pressure)
 	var/molar_mass = gas_data.molar_mass[gasid]
 	var/specific_heat = gas_data.specific_heat[gasid]
-	var/safe_temp = max(temperature, TCMB) // We're about to divide by this.
-	return R_IDEAL_GAS_EQUATION * ( log( (IDEAL_GAS_ENTROPY_CONSTANT*volume/(gas[gasid] * safe_temp)) * (molar_mass*specific_heat*safe_temp)**(2/3) + 1 ) +  15 )
+	return R_IDEAL_GAS_EQUATION * ( log( (IDEAL_GAS_ENTROPY_CONSTANT*volume/(gas[gasid] * temperature)) * (molar_mass*specific_heat*temperature)**(2/3) + 1 ) +  15 )
 
 	//alternative, simpler equation
 	//var/partial_pressure = gas[gasid] * R_IDEAL_GAS_EQUATION * temperature / volume
@@ -242,7 +232,7 @@
 /datum/gas_mixture/proc/remove_ratio(ratio, out_group_multiplier = 1)
 	if(ratio <= 0)
 		return null
-	out_group_multiplier = clamp(out_group_multiplier, 1, group_multiplier)
+	out_group_multiplier = between(1, out_group_multiplier, group_multiplier)
 
 	ratio = min(ratio, 1)
 
@@ -268,15 +258,15 @@
 
 //Removes moles from the gas mixture, limited by a given flag.  Returns a gax_mixture containing the removed air.
 /datum/gas_mixture/proc/remove_by_flag(flag, amount)
-	var/datum/gas_mixture/removed = new
-
 	if(!flag || amount <= 0)
-		return removed
+		return
 
 	var/sum = 0
 	for(var/g in gas)
 		if(gas_data.flags[g] & flag)
 			sum += gas[g]
+
+	var/datum/gas_mixture/removed = new
 
 	for(var/g in gas)
 		if(gas_data.flags[g] & flag)
@@ -297,7 +287,7 @@
 			. += gas[g]
 
 //Copies gas and temperature from another gas_mixture.
-/datum/gas_mixture/proc/copy_from(datum/gas_mixture/sample)
+/datum/gas_mixture/proc/copy_from(const/datum/gas_mixture/sample)
 	gas = sample.gas.Copy()
 	temperature = sample.temperature
 
@@ -307,15 +297,8 @@
 
 
 //Checks if we are within acceptable range of another gas_mixture to suspend processing or merge.
-/datum/gas_mixture/proc/compare(datum/gas_mixture/sample, vacuum_exception = 0)
+/datum/gas_mixture/proc/compare(const/datum/gas_mixture/sample)
 	if(!sample) return 0
-
-	if(vacuum_exception)
-		// Special case - If one of the two is zero pressure, the other must also be zero.
-		// This prevents suspending processing when an air-filled room is next to a vacuum,
-		// an edge case which is particually obviously wrong to players
-		if(total_moles == 0 && sample.total_moles != 0 || sample.total_moles == 0 && total_moles != 0)
-			return 0
 
 	var/list/marked = list()
 	for(var/g in gas)
@@ -324,9 +307,6 @@
 		(gas[g] > (1 + MINIMUM_AIR_RATIO_TO_SUSPEND) * sample.gas[g])))
 			return 0
 		marked[g] = 1
-
-	if(abs(return_pressure() - sample.return_pressure()) > MINIMUM_PRESSURE_DIFFERENCE_TO_SUSPEND)
-		return 0
 
 	for(var/g in sample.gas)
 		if(!marked[g])
@@ -343,14 +323,15 @@
 
 	return 1
 
+
+/datum/gas_mixture/proc/react()
+	zburn(null, force_burn=0, no_check=0) //could probably just call zburn() here with no args but I like being explicit.
+
+
 //Rechecks the gas_mixture and adjusts the graphic list if needed.
 //Two lists can be passed by reference if you need know specifically which graphics were added and removed.
-/datum/gas_mixture/proc/check_tile_graphic(list/graphic_add = null, list/graphic_remove = null)
-	for(var/obj/gas_overlay/O in graphic)
-		if(istype(O, /obj/gas_overlay/heat))
-			continue
-		if(istype(O, /obj/gas_overlay/cold))
-			continue
+/datum/gas_mixture/proc/check_tile_graphic(list/graphic_add = list(), list/graphic_remove = list())
+	for(var/obj/effect/gas_overlay/O in graphic)
 		if(gas[O.gas_id] <= gas_data.overlay_limit[O.gas_id])
 			LAZYADD(graphic_remove, O)
 	for(var/g in gas_data.overlay_limit)
@@ -361,54 +342,18 @@
 				LAZYADD(graphic_add, tile_overlay)
 	. = 0
 
-	var/heat_overlay = get_tile_overlay(GAS_HEAT)
-	//If it's hot add something
-	if(temperature >= CARBON_LIFEFORM_FIRE_RESISTANCE)
-		if(!(heat_overlay in graphic))
-			LAZYADD(graphic_add, heat_overlay)
-	else if (heat_overlay in graphic)
-		LAZYADD(graphic_remove, heat_overlay)
-
-	var/cold_overlay = get_tile_overlay(GAS_COLD)
-	if(temperature <= FOGGING_TEMPERATURE && (return_pressure() >= (ONE_ATMOSPHERE / 4)))
-		if(!(cold_overlay in graphic))
-			LAZYADD(graphic_add, cold_overlay)
-	else if (cold_overlay in graphic)
-		LAZYADD(graphic_remove, cold_overlay)
 
 	//Apply changes
-	if(graphic_add && length(graphic_add))
+	if(graphic_add && graphic_add.len)
 		graphic |= graphic_add
 		. = 1
-	if(graphic_remove && length(graphic_remove))
+	if(graphic_remove && graphic_remove.len)
 		graphic -= graphic_remove
 		. = 1
-	if(length(graphic))
-		var/pressure_mod = clamp(return_pressure() / ONE_ATMOSPHERE, 0, 2)
-		for(var/obj/gas_overlay/O in graphic)
-			if(istype(O, /obj/gas_overlay/heat)) //Heat based
-				var/new_alpha = clamp(max(125, 255 * ((temperature - CARBON_LIFEFORM_FIRE_RESISTANCE) / CARBON_LIFEFORM_FIRE_RESISTANCE * 4)), 125, 255)
-				if(new_alpha != O.alpha)
-					O.update_alpha_animation(new_alpha)
-				continue
-			if(istype(O, /obj/gas_overlay/cold))
-				var/new_alpha = clamp(max(125, 200 * (1 - ((temperature - MAX_FOG_TEMPERATURE) / (FOGGING_TEMPERATURE - MAX_FOG_TEMPERATURE)))), 125, 200)
-				if(new_alpha != O.alpha)
-					O.update_alpha_animation(new_alpha)
-				continue
-			var/concentration_mod = clamp(gas[O.gas_id] / total_moles, 0.1, 1)
-			var/new_alpha = min(230, round(pressure_mod * concentration_mod * 180, 5))
-			if(new_alpha != O.alpha)
-				O.update_alpha_animation(new_alpha)
 
 /datum/gas_mixture/proc/get_tile_overlay(gas_id)
 	if(!LAZYACCESS(tile_overlay_cache, gas_id))
-		if(gas_id == GAS_HEAT) //Not a real gas but functionally same thing
-			LAZYSET(tile_overlay_cache, gas_id, new/obj/gas_overlay/heat(null, GAS_HEAT))
-		else if(gas_id == GAS_COLD) //Not a real gas but functionally same thing
-			LAZYSET(tile_overlay_cache, gas_id, new/obj/gas_overlay/cold(null, GAS_COLD))
-		else
-			LAZYSET(tile_overlay_cache, gas_id, new/obj/gas_overlay(null, gas_id))
+		LAZYSET(tile_overlay_cache, gas_id, new/obj/effect/gas_overlay(null, gas_id))
 	return tile_overlay_cache[gas_id]
 
 //Simpler version of merge(), adjusts gas amounts directly and doesn't account for temperature or group_multiplier.
@@ -474,8 +419,10 @@
 	if(full_heat_capacity + s_full_heat_capacity)
 		temp_avg = (temperature * full_heat_capacity + other.temperature * s_full_heat_capacity) / (full_heat_capacity + s_full_heat_capacity)
 
-	if(length(sharing_lookup_table) >= connecting_tiles) //6 or more interconnecting tiles will max at 42% of air moved per tick.
+	//WOOT WOOT TOUCH THIS AND YOU ARE A RETARD.
+	if(sharing_lookup_table.len >= connecting_tiles) //6 or more interconnecting tiles will max at 42% of air moved per tick.
 		ratio = sharing_lookup_table[connecting_tiles]
+	//WOOT WOOT TOUCH THIS AND YOU ARE A RETARD
 
 	for(var/g in avg_gas)
 		gas[g] = max(0, (gas[g] - avg_gas[g]) * (1 - ratio) + avg_gas[g])
@@ -495,6 +442,7 @@
 //A wrapper around share_ratio for spacing gas at the same rate as if it were going into a large airless room.
 /datum/gas_mixture/proc/share_space(datum/gas_mixture/unsim_air)
 	return share_ratio(unsim_air, unsim_air.group_multiplier, max(1, max(group_multiplier + 3, 1) + unsim_air.group_multiplier), one_way = 1)
+
 
 //Equalizes a list of gas mixtures.  Used for pipe networks.
 /proc/equalize_gases(list/datum/gas_mixture/gases)

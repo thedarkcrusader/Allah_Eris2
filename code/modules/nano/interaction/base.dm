@@ -1,32 +1,21 @@
-/datum/proc/nano_host()
+/datum/proc/nano_host(ui_status_check=FALSE)
 	return src
 
 /datum/proc/nano_container()
 	return src
 
-/datum/proc/CanUseTopic(mob/user, datum/topic_state/state = GLOB.default_state)
-	var/datum/src_object = nano_host()
+/datum/proc/CanUseTopic(mob/user, datum/nano_topic_state/state = GLOB.default_state)
+	var/datum/src_object = nano_host(TRUE)
 	return state.can_use_topic(src_object, user)
 
-/mob/CanUseTopic(mob/user, datum/topic_state/state, href_list)
-	if(href_list && href_list["flavor_more"])
-		return STATUS_INTERACTIVE
-	return ..()
-
-/datum/proc/CanUseTopicPhysical(mob/user)
-	return CanUseTopic(user, GLOB.physical_state)
-
-/datum/topic_state
-	var/check_access = TRUE // Whether this topic state should bypass access checks or not.
-
-/datum/topic_state/proc/href_list(mob/user)
+/datum/nano_topic_state/proc/href_list(var/mob/user)
 	return list()
 
-/datum/topic_state/proc/can_use_topic(src_object, mob/user)
+/datum/nano_topic_state/proc/can_use_topic(var/src_object, var/mob/user)
 	return STATUS_CLOSE
 
 /mob/proc/shared_nano_interaction()
-	if (src.stat || !client)
+	if (stat || !client)
 		return STATUS_CLOSE						// no updates, close the interface
 	else if (incapacitated())
 		return STATUS_UPDATE					// update only (orange visibility)
@@ -41,7 +30,7 @@
 
 /mob/living/silicon/robot/shared_nano_interaction()
 	. = STATUS_INTERACTIVE
-	if(!cell || cell.charge <= 0)
+	if(!cell || cell.is_empty())
 		return STATUS_CLOSE
 	if(lockcharge)
 		. = STATUS_DISABLED

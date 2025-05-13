@@ -1,209 +1,253 @@
-/obj/item/rig/use_tool(obj/item/W, mob/living/user, list/click_params)
-	if(electrified != 0)
-		if(shock(user)) //Handles removing charge from the cell, as well. No need to do that here.
-			return TRUE
+/obj/item/rig/attackby(obj/item/I, mob/user)
 
-	// Pass repair items on to the chestpiece.
-	if(chest && (istype(W,/obj/item/stack/material) || isWelder(W)))
-		return chest.use_tool(W,user)
-
-	// Lock or unlock the access panel.
-	if(W.GetIdCard())
-		if(subverted)
-			locked = 0
-			to_chat(user, SPAN_DANGER("It looks like the locking system has been shorted out."))
-			return TRUE
-
-		if(!length(req_access))
-			locked = 0
-			to_chat(user, SPAN_DANGER("\The [src] doesn't seem to have a locking mechanism."))
-			return TRUE
-
-		if(security_check_enabled && !src.allowed(user))
-			to_chat(user, SPAN_DANGER("Access denied."))
-			return TRUE
-
-		locked = !locked
-		to_chat(user, "You [locked ? "lock" : "unlock"] \the [src] access panel.")
-		return TRUE
-
-	if (isCrowbar(W))
-
-		if(!open && locked)
-			to_chat(user, SPAN_WARNING("The access panel is locked shut."))
-			return TRUE
-
-		open = !open
-		to_chat(user, "You [open ? "open" : "close"] the access panel.")
-		return TRUE
-
-	if (isScrewdriver(W))
-		p_open = !p_open
-		to_chat(user, "You [p_open ? "open" : "close"] the wire cover.")
-		return TRUE
-
-	// Hacking.
-	if (isWirecutter(W) || isMultitool(W))
-		if(p_open)
-			wires.Interact(user)
-		else
-			to_chat(user, SPAN_WARNING("You can't reach the wiring."))
-		return TRUE
-
-	if(open)
-		// Air tank.
-		if(istype(W,/obj/item/tank)) //Todo, some kind of check for suits without integrated air supplies.
-
-			if(air_supply)
-				to_chat(user, SPAN_WARNING("\The [src] already has a tank installed."))
-				return TRUE
-			if (istype(W, /obj/item/tank/scrubber))
-				to_chat(user, SPAN_WARNING("\The [W] is far too large to attach to \the [src]."))
-				return TRUE
-			if(!user.unEquip(W))
-				FEEDBACK_UNEQUIP_FAILURE(user, W)
-				return TRUE
-			air_supply = W
-			W.forceMove(src)
-			to_chat(user, "You slot \the [W] into \the [src] and tighten the connecting valve.")
-			return TRUE
-
-		// Check if this is a hardsuit upgrade or a modification.
-		if (istype(W,/obj/item/rig_module))
-			var/obj/item/rig_module/mod = W
-			if (!mod.can_install(src, user))
-				return TRUE
-
-			to_chat(user, "You begin installing \the [mod] into \the [src].")
-			if(!do_after(user, 4 SECONDS, src, DO_PUBLIC_UNIQUE))
-				return TRUE
-			if(!user || !W || !mod.can_install(src, user))
-				return TRUE
-			if(!user.unEquip(mod))
-				FEEDBACK_UNEQUIP_FAILURE(user, mod)
-				return TRUE
-			to_chat(user, "You install \the [mod] into \the [src].")
-			LAZYADD(installed_modules, mod)
-			installed_modules |= mod
-			mod.forceMove(src)
-			mod.installed(src)
-			update_icon()
-			return TRUE
-
-		if (!cell && istype(W,/obj/item/cell))
-
-			if(!user.unEquip(W))
-				FEEDBACK_UNEQUIP_FAILURE(user, W)
-				return TRUE
-			to_chat(user, "You jack \the [W] into \the [src]'s battery mount.")
-			W.forceMove(src)
-			cell = W
-			return TRUE
-
-		if (isWrench(W))
-			var/list/current_mounts = list()
-			if(cell) current_mounts   += "cell"
-			if(air_supply) current_mounts += "tank"
-			if(istype(chest, /obj/item/clothing/suit/space/rig))
-				if (length(chest?.storage?.contents)) current_mounts += "storage"
-			if(installed_modules && length(installed_modules)) current_mounts += "system module"
-			var/to_remove = input("Which would you like to modify?") as null|anything in current_mounts
-			if(!to_remove)
-				return TRUE
-
-			if(istype(src.loc,/mob/living/carbon/human) && to_remove != "cell" && to_remove != "tank")
-				var/mob/living/carbon/human/H = src.loc
-				if(H.back == src)
-					to_chat(user, SPAN_WARNING("You can't remove an installed device while the hardsuit is being worn."))
-					return TRUE
-
-			switch(to_remove)
-				if("cell")
-					if(cell)
-						to_chat(user, "You detach \the [cell] from \the [src]'s battery mount.")
-						for(var/obj/item/rig_module/module in installed_modules)
-							module.deactivate()
-						user.put_in_hands(cell)
-						cell = null
-					else
-						to_chat(user, "There is nothing loaded in that mount.")
-
-				if("tank")
-					if(!air_supply)
-						to_chat(user, SPAN_WARNING("There is no tank to remove."))
-						return TRUE
-
-					user.put_in_hands(air_supply)
-					to_chat(user, "You detach and remove \the [air_supply].")
-					air_supply = null
-
-				if ("storage")
-					if (!length(chest?.storage?.contents))
-						to_chat(user, SPAN_WARNING("There is nothing in the storage to remove."))
-						return TRUE
-					chest.storage.DoQuickEmpty()
-					user.visible_message(
-						SPAN_ITALIC("\The [user] ejects the contents of \a [src]'s storage."),
-						SPAN_ITALIC("You eject the contents of \the [src]'s storage."),
-						SPAN_ITALIC("You hear things clatter to the floor."),
-						range = 5
-					)
-
-				if("system module")
-					var/list/possible_removals = list()
-					for(var/obj/item/rig_module/module in installed_modules)
-						if(module.permanent)
-							continue
-						possible_removals[module.name] = module
-
-					if(!length(possible_removals))
-						to_chat(user, SPAN_WARNING("There are no installed modules to remove."))
-						return TRUE
-
-					var/removal_choice = input("Which module would you like to remove?") as null|anything in possible_removals
-					if(!removal_choice)
-						return TRUE
-
-					var/obj/item/rig_module/removed = possible_removals[removal_choice]
-					to_chat(user, "You detach \the [removed] from \the [src].")
-					removed.dropInto(loc)
-					removed.removed()
-					installed_modules -= removed
-					update_icon()
-					return TRUE
-
-		if (istype(W,/obj/item/stack/nanopaste)) //EMP repair
-			var/obj/item/stack/S = W
-			if(malfunctioning || malfunction_delay)
-				if(S.use(1))
-					to_chat(user, "You pour some of \the [S] over \the [src]'s control circuitry and watch as the nanites do their work with impressive speed and precision.")
-					malfunctioning = 0
-					malfunction_delay = 0
-				else
-					to_chat(user, "\The [S] is empty!")
-			else
-				to_chat(user, "You don't see any use for \the [S].")
-			return TRUE
-
-	// If we've gotten this far, all we have left to do before we pass off to root procs
-	// is check if any of the loaded modules want to use the item we've been given.
-	for(var/obj/item/rig_module/module in installed_modules)
-		if(module.accepts_item(W,user)) //Item is handled in this proc
-			return TRUE
-	return ..()
-
-
-/obj/item/rig/attack_hand(mob/user)
+	if(!isliving(user))
+		return
 
 	if(electrified != 0)
 		if(shock(user)) //Handles removing charge from the cell, as well. No need to do that here.
 			return
+
+
+
+	// Lock or unlock the access panel.
+	if(I.GetIdCard())
+		if(subverted)
+			locked = 0
+			to_chat(user, SPAN_DANGER("It looks like the locking system has been shorted out."))
+			return
+
+		if(locked == -1)
+			to_chat(user, SPAN_DANGER("The lock clicks uselessly."))
+			return
+
+		if((!req_access || !req_access.len) && (!req_one_access || !req_one_access.len))
+			locked = 0
+			to_chat(user, SPAN_DANGER("\The [src] doesn't seem to have a locking mechanism."))
+			return
+
+		if(security_check_enabled && !src.allowed(user))
+			to_chat(user, SPAN_DANGER("Access denied."))
+			return
+
+		locked = !locked
+		to_chat(user, "You [locked ? "lock" : "unlock"] \the [src] access panel.")
+		return
+
+	var/list/usable_qualities = list(QUALITY_PRYING, QUALITY_WELDING,QUALITY_WIRE_CUTTING, QUALITY_PULSING, QUALITY_CUTTING, QUALITY_BOLT_TURNING, QUALITY_SCREW_DRIVING)
+	var/tool_type = I.get_tool_type(user, usable_qualities, src)
+	switch(tool_type)
+		if(QUALITY_SCREW_DRIVING)
+			if (is_worn())
+				to_chat(user, "You can't remove an installed device while the hardsuit is being worn.")
+				return 1
+
+			if(open)
+				if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, tool_type, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
+					var/list/current_mounts = list()
+					if(cell) current_mounts   += "cell"
+					if(installed_modules && installed_modules.len) current_mounts += "system module"
+
+					var/to_remove = input("Which would you like to modify?") as null|anything in current_mounts
+					if(!to_remove)
+						return
+
+
+					switch(to_remove)
+						if("cell")
+							if(cell)
+								to_chat(user, "You detach \the [cell] from \the [src]'s battery mount.")
+								for(var/obj/item/rig_module/module in installed_modules)
+									module.deactivate()
+								user.put_in_hands(cell)
+								cell = null
+							else
+								to_chat(user, "There is nothing loaded in that mount.")
+
+						if("system module")
+							var/list/possible_removals = list()
+							for(var/obj/item/rig_module/module in installed_modules)
+								if(module.permanent)
+									continue
+								possible_removals[module.name] = module
+
+							if(!possible_removals.len)
+								to_chat(user, "There are no installed modules to remove.")
+								return
+
+							var/removal_choice = input("Which module would you like to remove?") as null|anything in possible_removals
+							if(!removal_choice)
+								return
+
+							if (can_uninstall(possible_removals[removal_choice], user, TRUE))
+								uninstall(possible_removals[removal_choice], user)
+							return TRUE
+			else
+				to_chat(user, "\The [src] access panel is closed.")
+				return
+
+		if(QUALITY_WIRE_CUTTING)
+			if(open)
+				wires.Interact(user)
+				return
+			else
+				to_chat(user, "\The [src] access panel is closed.")
+				return
+
+		if(QUALITY_PULSING)
+			if(open)
+				wires.Interact(user)
+				return
+			else
+				to_chat(user, "\The [src] access panel is closed.")
+				return
+
+		if(QUALITY_CUTTING)
+			if(open)
+				wires.Interact(user)
+				return
+			else
+				to_chat(user, "\The [src] access panel is closed.")
+				return
+
+		if(QUALITY_PRYING)
+			if(locked != 1)
+				if(I.use_tool(user, src, WORKTIME_NORMAL, tool_type, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
+					open = !open
+					to_chat(user, SPAN_NOTICE("You [open ? "open" : "close"] the access panel."))
+					return
+			else
+				to_chat(user, SPAN_DANGER("\The [src] access panel is locked."))
+				return
+
+		if(QUALITY_BOLT_TURNING)
+			if(open)
+				if(!air_supply)
+					to_chat(user, "There is not tank to remove.")
+					return
+
+				if (is_worn())
+					to_chat(user, "You can't remove an installed tank while the hardsuit is being worn.")
+					return 1
+
+				if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, tool_type, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
+					user.put_in_hands(air_supply)
+					to_chat(user, "You detach and remove \the [air_supply].")
+					air_supply = null
+					return
+			else
+				to_chat(user, "\The [src] access panel is closed.")
+				return
+
+		if(QUALITY_WELDING)
+			//Cutting through the cover lock. This allows access to the wires inside so you can disable access requirements
+			//Ridiculously difficult to do, hijacking a rig will take a long time if you don't have good mechanical training
+			if(locked == 1 && user.a_intent == I_HURT)
+				to_chat(user, SPAN_NOTICE("You start cutting through the access panel's cover lock. This is a delicate task."))
+				if(I.use_tool(user, src, WORKTIME_EXTREMELY_LONG, tool_type, FAILCHANCE_VERY_HARD, required_stat = STAT_MEC))
+					locked = -1 //Broken, it can never be locked again
+					to_chat(user, SPAN_NOTICE("Success! The tension in the panel loosens with a dull click"))
+					playsound(src.loc, 'sound/weapons/guns/interact/pistol_magin.ogg', 75, 1)
+				return
+			else if (user.a_intent == I_HURT)
+				to_chat(user, "\The [src] access panel is not locked, there's no need to cut it.")
+				//No return here, incase they're trying to repair
+
+			if (ablative_max <= ablative_armor)
+				to_chat(user, SPAN_WARNING("There is no damage on \the [src]'s armor layers to repair."))
+
+			else if(I.use_tool(user, src, WORKTIME_SLOW, QUALITY_WELDING, FAILCHANCE_ZERO, required_stat = STAT_MEC, instant_finish_tier = INFINITY)) // no instant repairs
+				ablative_armor = min(ablative_armor + 2, ablative_max)
+				to_chat(user, SPAN_NOTICE("You repair the damage on the [src]'s armor layers."))
+				return
+
+		if(ABORT_CHECK)
+			return
+
+	// Pass repair items on to the chestpiece.
+	if(chest && (istype(I,/obj/item/stack/material) || (QUALITY_WELDING in I.tool_qualities)))
+		return chest.attackby(I,user)
+
+	if(open)
+		// Air tank.
+		if(istype(I,/obj/item/tank)) //Todo, some kind of check for suits without integrated air supplies.
+			if(air_supply)
+				to_chat(user, "\The [src] already has a tank installed.")
+				return
+
+			if(!user.unEquip(I))
+				return
+			air_supply = I
+			I.forceMove(src)
+			to_chat(user, "You slot [I] into [src] and tighten the connecting valve.")
+			return
+
+		// Check if this is a hardsuit upgrade or a modification.
+		else if(istype(I,/obj/item/rig_module))
+			if (can_install(I, user, TRUE))
+				install(I, user)
+			return TRUE
+		else if(!cell && istype(I,/obj/item/cell/large))
+			if(!user.unEquip(I))
+				return
+			to_chat(user, "You jack \the [I] into \the [src]'s battery mount.")
+			I.forceMove(src)
+			src.cell = I
+			return
+
+		return
+
+	// If we've gotten this far, all we have left to do before we pass off to root procs
+	// is check if any of the loaded modules want to use the item we've been given.
+	for(var/obj/item/rig_module/module in installed_modules)
+		if(module.accepts_item(I,user)) //Item is handled in this proc
+			return
 	..()
 
-/obj/item/rig/emag_act(remaining_charges, mob/user)
+
+/obj/item/rig/attack_hand(var/mob/user)
+	if(electrified != 0)
+		if(shock(user)) //Handles removing charge from the cell, as well. No need to do that here.
+			return
+
+	//If the rig has a storage module, we can attempt to access it
+	if (storage && (is_worn() || is_held()))
+		//This will return false if we're done, or true to tell us to keep going and call parent attackhand
+		if (!storage.handle_attack_hand(user))
+			return
+	.=..()
+
+
+//For those pesky items which incur effects on the rigsuit, an altclick will force them to go in if possible
+/obj/item/rig/AltClick(var/mob/user)
+	if (storage && user.get_active_hand())
+		if (user == loc || Adjacent(user)) //Rig must be on or near you
+			storage.accepts_item(user.get_active_hand())
+			return
+	.=..()
+
+//When not wearing a rig, you can drag it onto yourself to access the internal storage
+/obj/item/rig/MouseDrop(obj/over_object)
+	if (storage && storage.handle_mousedrop(usr, over_object))
+		return TRUE
+	return ..()
+
+/obj/item/rig/emag_act(var/remaining_charges, var/mob/user)
 	if(!subverted)
 		req_access.Cut()
-		locked = 0
+		req_one_access.Cut()
+		if (locked != -1)
+			locked = 0
 		subverted = 1
 		to_chat(user, SPAN_DANGER("You short out the access protocol for the suit."))
 		return 1
+
+/obj/item/rig/proc/block_explosion(mob/user, power) // Returns damage to block
+	if(!active || !ablative_armor)
+		return FALSE
+
+	var/ablative_stack = max((ablative_armor * 8) - power, 0) // Used to determine damage to RIG
+	power = ablative_armor * 8
+
+	ablative_armor -= max(-(ablative_stack - ablative_armor * 8) / ablation, 0) // Damage blocked (not halloss) reduces ablative armor
+
+	return power

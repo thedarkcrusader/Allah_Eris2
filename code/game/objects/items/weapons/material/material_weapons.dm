@@ -2,124 +2,117 @@
 // This class of weapons takes force and appearance data from a material datum.
 // They are also fragile based on material data and many can break/smash apart.
 /obj/item/material
+	health = 10
 	hitsound = 'sound/weapons/bladeslice.ogg'
 	gender = NEUTER
 	throw_speed = 3
 	throw_range = 7
 	w_class = ITEM_SIZE_NORMAL
-	health_max = 10
-
+	sharp = FALSE
+	edge = FALSE
+	bad_type = /obj/item/material
+	spawn_tags = SPAWN_TAG_WEAPON
+	icon = 'icons/obj/weapons.dmi'
+	var/applies_material_colour = 1
+	var/unbreakable
+	var/force_divisor = 1
+	var/thrown_force_divisor = 0.5
 	var/default_material = MATERIAL_STEEL
 	var/material/material
-
-	var/applies_material_colour = 1
-	var/applies_material_name = 1 //if false, does not rename item to 'material item.name'
+	var/drops_debris = 1
 	var/furniture_icon  //icon states for non-material colorable overlay, i.e. handles
 
-	var/max_force = 40	 //any damage above this is added to armor penetration value
-	var/max_pen = 100 //any penetration above this value is ignored
-	var/force_multiplier = 0.5	// multiplier to material's generic damage value for this specific type of weapon
-	var/thrown_force_multiplier = 0.5
-
-	var/attack_cooldown_modifier = 0
-	var/unbreakable
-	var/drops_debris = 1
-	var/worth_multiplier = 1
-
-
-/obj/item/material/New(newloc, material_key)
+/obj/item/material/New(var/newloc, var/material_key)
+	..(newloc)
 	if(!material_key)
 		material_key = default_material
 	set_material(material_key)
-	..(newloc)
-	queue_icon_update()
 	if(!material)
 		qdel(src)
 		return
 
 	matter = material.get_matter()
-	if(length(matter))
+	if(matter.len)
 		for(var/material_type in matter)
 			if(!isnull(matter[material_type]))
-				matter[material_type] *= force_multiplier // May require a new var instead.
+				matter[material_type] = round(max(1, matter[material_type] * force_divisor)) // current system uses rounded values, so no less than 1.
 
 /obj/item/material/get_material()
 	return material
 
 /obj/item/material/proc/update_force()
-	var/new_force
 	if(edge || sharp)
-		new_force = material.get_edge_damage()
+		force = material.hardness
 	else
-		new_force = material.get_blunt_damage()
-	new_force = round(new_force*force_multiplier)
-	force = min(new_force, max_force)
-
-	if(new_force > max_force)
-		armor_penetration = initial(armor_penetration) + new_force - max_force
-	armor_penetration += 2*max(0, material.brute_armor - 2)
-	armor_penetration = min(max_pen, armor_penetration)
-
-	throwforce = round(material.get_blunt_damage()*thrown_force_multiplier)
-	attack_cooldown = material.get_attack_cooldown() + attack_cooldown_modifier
+		force = material.get_blunt_damage()
+	force = min(25, round(force*force_divisor))
+	throwforce = min(15, round(material.get_blunt_damage()*thrown_force_divisor))
 	//spawn(1)
-//		log_debug("[src] has force [force] and throwforce [throwforce] when made from default material [material.name]")
+	//	world << "[src] has force [force] and throwforce [throwforce] when made from default material [material.name]"
 
-/obj/item/material/proc/set_material(new_material)
-	material = SSmaterials.get_material_by_name(new_material)
+/obj/item/material/proc/set_material(var/new_material)
+	material = get_material_by_name(new_material)
 	if(!material)
 		qdel(src)
 	else
-		set_max_health(round(material.integrity / 5))
-		restore_health(get_max_health())
+		name = "[material.display_name] [initial(name)]"
+		health = round(material.integrity/10)
+		if(applies_material_colour)
+			color = material.icon_colour
 		if(material.products_need_process())
 			START_PROCESSING(SSobj, src)
-		if(material.conductive)
-			obj_flags |= OBJ_FLAG_CONDUCTIBLE
-		else
-			obj_flags &= (~OBJ_FLAG_CONDUCTIBLE)
 		update_force()
-		if(applies_material_name)
-			SetName("[material.display_name] [initial(name)]")
-		update_icon()
-
-/obj/item/material/on_update_icon()
-	ClearOverlays()
-	if(applies_material_colour && istype(material))
-		color = material.icon_colour
-		alpha = 100 + material.opacity * 255
-	if(furniture_icon)
-		var/image/I = image(icon, icon_state = furniture_icon)
-		I.appearance_flags = DEFAULT_APPEARANCE_FLAGS | RESET_COLOR
-		AddOverlays(I)
 
 /obj/item/material/Destroy()
 	STOP_PROCESSING(SSobj, src)
 	. = ..()
 
-/obj/item/material/apply_hit_effect(mob/living/target, mob/living/user, hit_zone)
-	. = ..()
-	if(material.is_brittle() || target.get_blocked_ratio(hit_zone, DAMAGE_BRUTE, damage_flags(), armor_penetration, force) * 100 >= material.hardness/5)
-		check_shatter()
-
-/obj/item/material/on_parry(damage_source)
-	if(istype(damage_source, /obj/item/material))
-		check_shatter()
-
-/obj/item/material/proc/check_shatter()
-	if(!unbreakable && prob(material.hardness))
+/obj/item/material/apply_hit_effect()
+	..()
+	if(!unbreakable)
 		if(material.is_brittle())
-			kill_health()
-		else
-			damage_health(1)
+			health = 0
+		else if(!prob(material.hardness))
+			health--
+		check_health()
 
-/obj/item/material/on_death()
-	shatter()
+/obj/item/material/proc/check_health(var/consumed)
+	if(health<=0)
+		shatter(consumed)
 
-/obj/item/material/proc/shatter()
+/obj/item/material/proc/shatter(var/consumed)
 	var/turf/T = get_turf(src)
 	T.visible_message(SPAN_DANGER("\The [src] [material.destruction_desc]!"))
+	if(isliving(loc))
+		var/mob/living/M = loc
+		M.drop_from_inventory(src)
 	playsound(src, "shatter", 70, 1)
-	if(drops_debris)
-		material.place_shard(T)
+	if(!consumed && drops_debris) material.place_shard(T)
 	qdel(src)
+/*
+Commenting this out pending rebalancing of radiation based on small objects.
+/obj/item/material/Process()
+	if(!material.radioactivity)
+		return
+	for(var/mob/living/L in range(1,src))
+		L.apply_effect(round(material.radioactivity/30),IRRADIATE,0)
+*/
+
+/*
+// Commenting this out while fires are so spectacularly lethal, as I can't seem to get this balanced appropriately.
+/obj/item/material/fire_act(datum/gas_mixture/air, exposed_temperature, exposed_volume)
+	TemperatureAct(exposed_temperature)
+
+// This might need adjustment. Will work that out later.
+/obj/item/material/proc/TemperatureAct(temperature)
+	health -= material.combustion_effect(get_turf(src), temperature, 0.1)
+	check_health(1)
+
+/obj/item/material/attackby(obj/item/W as obj, mob/user as mob)
+	if(istype(W,/obj/item/tool/weldingtool))
+		var/obj/item/tool/weldingtool/WT = W
+		if(material.ignition_point && WT.remove_fuel(0, user))
+			TemperatureAct(150)
+	else
+		return ..()
+*/

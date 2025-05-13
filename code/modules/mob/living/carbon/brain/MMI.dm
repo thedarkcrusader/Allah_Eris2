@@ -1,137 +1,134 @@
 //This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:32
-/obj/item/device/mmi/digital
-	atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_NO_TOOLS
 
 /obj/item/device/mmi/digital/New()
-	src.brainmob = new(src)
-	src.brainmob.set_stat(CONSCIOUS)
-	src.brainmob.add_language("Robot Talk")
-	src.brainmob.add_language("Encoded Audio Language")
-
-	src.brainmob.container = src
-	src.brainmob.silent = 0
-	PickName()
+	brainmob = new(src)
+	brainmob.stat = CONSCIOUS
+	brainmob.add_language(LANGUAGE_ROBOT)
+	brainmob.container = src
+	brainmob.silent = 0
 	..()
 
-/obj/item/device/mmi/digital/proc/PickName()
-	return
-
-/obj/item/device/mmi/digital/attack_self()
-	return
-
 /obj/item/device/mmi/digital/transfer_identity(mob/living/carbon/H)
-	brainmob.dna = H.dna
+	brainmob.b_type = H.b_type
+	brainmob.dna_trace = H.dna_trace
+	brainmob.fingers_trace = H.fingers_trace
 	brainmob.timeofhostdeath = H.timeofdeath
-	brainmob.set_stat(CONSCIOUS)
+	brainmob.stat = 0
 	if(H.mind)
 		H.mind.transfer_to(brainmob)
 	return
 
 /obj/item/device/mmi
-	name = "\improper Man-Machine Interface"
-	desc = "A complex life support shell that interfaces between a brain and electronic devices."
-	icon = 'icons/obj/assemblies/assemblies.dmi'
+	name = "man-machine interface"
+	desc = "The Warrior's bland acronym, MMI, obscures the true horror of this monstrosity."
+	description_info = "Brains can be inserted by clicking on it. Brains can be removed by swiping a ID with roboticist access and clicking with an empty hand."
+	icon = 'icons/obj/assemblies.dmi'
 	icon_state = "mmi_empty"
 	w_class = ITEM_SIZE_NORMAL
 	origin_tech = list(TECH_BIO = 3)
-
+	matter = list(MATERIAL_STEEL = 5, MATERIAL_GLASS = 3)
 	req_access = list(access_robotics)
 
 	//Revised. Brainmob is now contained directly within object of transfer. MMI in this case.
 
 	var/locked = 0
 	var/mob/living/carbon/brain/brainmob = null//The current occupant.
-	var/obj/item/organ/internal/brain/brainobj = null	//The current brain organ.
+	var/obj/item/organ/internal/vital/brain/brainobj = null	//The current brain organ.
 
+/obj/item/device/mmi/attackby(var/obj/item/O as obj, var/mob/user as mob)
+	if(istype(O,/obj/item/organ/internal/vital/brain) && !brainmob) //Time to stick a brain in it --NEO
 
-/obj/item/device/mmi/use_tool(obj/item/tool, mob/user, list/click_params)
-	// Brain - Install brain
-	if (istype(tool, /obj/item/organ/internal/brain))
-		if (brainobj)
-			USE_FEEDBACK_FAILURE("\The [src] already has \a [brainobj].")
-			return TRUE
-		var/obj/item/organ/internal/brain/brain = tool
-		if (brain.damage >= brain.max_damage)
-			USE_FEEDBACK_FAILURE("\The [tool] is too damaged to install in \the [src].")
-			return TRUE
-		if (!brain.brainmob || !brain.can_use_mmi)
-			USE_FEEDBACK_FAILURE("\The [src] doesn't accept \the [tool].")
-			return TRUE
-		if (!user.unEquip(tool, src))
-			FEEDBACK_UNEQUIP_FAILURE(user, tool)
-			return TRUE
-		brainmob = brain.brainmob
-		brain.brainmob = null
-		brainmob.forceMove(src)
+		var/obj/item/organ/internal/vital/brain/B = O
+		if(B.health <= 0)
+			to_chat(user, "\red That brain is well and truly dead.")
+			return
+		else if(!B.brainmob)
+			to_chat(user, "\red You aren't sure where this brain came from, but you're pretty sure it's a useless brain.")
+			return
+		var/mob/living/carbon/brain/BM = B.brainmob
+		if(!BM.client)
+			for(var/mob/observer/ghost/G in GLOB.player_list)
+				if(G.can_reenter_corpse && G.mind == BM.mind)
+					G.reenter_corpse()
+					break
+			if(!BM.client)
+				to_chat(user, SPAN_WARNING("\The [src] indicates that \the [B] is unresponsive."))
+				return
+
+		for(var/mob/V in viewers(src, null))
+			V.show_message(text("\blue [user] sticks \a [O] into \the [src]."))
+
+		brainmob = B.brainmob
+		brainmob.loc = src
 		brainmob.container = src
-		brainmob.set_stat(CONSCIOUS)
-		brainmob.switch_from_dead_to_living_mob_list()
-		brainobj = brain
-		SetName("[initial(name)]: ([brainmob.real_name])")
-		locked = TRUE
-		update_icon()
-		user.visible_message(
-			SPAN_NOTICE("\The [user] installs \a [tool] into \a [src]."),
-			SPAN_NOTICE("You install \the [tool] into \the [src].")
-		)
-		return TRUE
+		brainmob.stat = 0
+		GLOB.dead_mob_list -= brainmob//Update dem lists
+		GLOB.living_mob_list += brainmob
 
-	// ID - Toggle MMI lock
-	var/obj/item/card/id/id = tool.GetIdCard()
-	if (istype(id))
-		if (!brainmob)
-			USE_FEEDBACK_FAILURE("\The [src] has no brain to lock.")
-			return TRUE
-		var/id_name = GET_ID_NAME(id, tool)
-		if (!check_access(id))
-			USE_FEEDBACK_ID_CARD_DENIED(src, id_name)
-			return TRUE
-		locked = !locked
-		user.visible_message(
-			SPAN_NOTICE("\The [user] toggles \a [src]'s lock with \a [tool]."),
-			SPAN_NOTICE("You [locked ? "lock" : "unlock"] \the [src] with [id_name].")
-		)
-		return TRUE
+		user.drop_item()
+		brainobj = O
+		brainobj.loc = src
 
-	return ..()
+		name = "Man-Machine Interface: [brainmob.real_name]"
+		icon_state = "mmi_full"
+
+		locked = 1
+
+
+
+		return
+
+	if((istype(O,/obj/item/card/id)||istype(O,/obj/item/modular_computer/pda)) && brainmob)
+		if(allowed(user))
+			locked = !locked
+			to_chat(user, "\blue You [locked ? "lock" : "unlock"] the brain holder.")
+		else
+			to_chat(user, "\red Access denied.")
+		return
+	if(brainmob)
+		O.attack(brainmob, user)//Oh noooeeeee
+		return
+	..()
 
 	//TODO: ORGAN REMOVAL UPDATE. Make the brain remain in the MMI so it doesn't lose organ data.
 /obj/item/device/mmi/attack_self(mob/user as mob)
 	if(!brainmob)
-		to_chat(user, SPAN_WARNING("You upend the MMI, but there's nothing in it."))
+		to_chat(user, "\red You upend the MMI, but there's nothing in it.")
 	else if(locked)
-		to_chat(user, SPAN_WARNING("You upend the MMI, but the brain is clamped into place."))
+		to_chat(user, "\red You upend the MMI, but the brain is clamped into place.")
 	else
-		to_chat(user, SPAN_NOTICE("You upend the MMI, spilling the brain onto the floor."))
-		var/obj/item/organ/internal/brain/brain
+		to_chat(user, "\blue You upend the MMI, spilling the brain onto the floor.")
+		var/obj/item/organ/internal/vital/brain/brain
 		if (brainobj)	//Pull brain organ out of MMI.
-			brainobj.forceMove(user.loc)
+			brainobj.loc = user.loc
 			brain = brainobj
 			brainobj = null
 		else	//Or make a new one if empty.
 			brain = new(user.loc)
 		brainmob.container = null//Reset brainmob mmi var.
-		brainmob.forceMove(brain)//Throw mob into brain.
-		brainmob.remove_from_living_mob_list() //Get outta here
+		brainmob.loc = brain//Throw mob into brain.
+		GLOB.living_mob_list -= brainmob//Get outta here
 		brain.brainmob = brainmob//Set the brain to use the brainmob
 		brainmob = null//Set mmi brainmob var to null
 
-		update_icon()
-		SetName(initial(name))
+		icon_state = "mmi_empty"
+		name = "Man-Machine Interface"
 
-/obj/item/device/mmi/proc/transfer_identity(mob/living/carbon/human/H)//Same deal as the regular brain proc. Used for human-->robot people.
+/obj/item/device/mmi/proc/transfer_identity(var/mob/living/carbon/human/H)//Same deal as the regular brain proc. Used for human-->robot people.
 	brainmob = new(src)
-	brainmob.SetName(H.real_name)
+	brainmob.name = H.real_name
 	brainmob.real_name = H.real_name
-	brainmob.dna = H.dna
+	brainmob.b_type = H.b_type
+	brainmob.dna_trace = H.dna_trace
+	brainmob.fingers_trace = H.fingers_trace
 	brainmob.container = src
 
-	SetName("[initial(name)]: [brainmob.real_name]")
-	update_icon()
+	name = "Man-Machine Interface: [brainmob.real_name]"
+	icon_state = "mmi_full"
 	locked = 1
 	return
 
-/obj/item/device/mmi/relaymove(mob/user, direction)
+/obj/item/device/mmi/relaymove(var/mob/user, var/direction)
 	if(user.stat || user.stunned)
 		return
 	var/obj/item/rig/rig = src.get_rig()
@@ -142,8 +139,10 @@
 	if(isrobot(loc))
 		var/mob/living/silicon/robot/borg = loc
 		borg.mmi = null
-	QDEL_NULL(brainmob)
-	return ..()
+	if(brainmob)
+		qdel(brainmob)
+		brainmob = null
+	. = ..()
 
 /obj/item/device/mmi/radio_enabled
 	name = "radio-enabled man-machine interface"
@@ -152,47 +151,47 @@
 
 	var/obj/item/device/radio/radio = null//Let's give it a radio.
 
-
 /obj/item/device/mmi/radio_enabled/New()
-	..()
-	radio = new(src)
-	radio.broadcasting = TRUE
+	. = ..()
+	radio = new(src)//Spawns a radio inside the MMI.
+	radio.broadcasting = 1//So it's broadcasting from the start.
 
-
+//Allows the brain to toggle the radio functions.
 /obj/item/device/mmi/radio_enabled/verb/Toggle_Broadcasting()
 	set name = "Toggle Broadcasting"
 	set desc = "Toggle broadcasting channel on or off."
 	set category = "MMI"
-	set popup_menu = FALSE
-	set src = usr.loc
-	if (brainmob.stat)
-		to_chat(brainmob, "Can't do that while incapacitated or dead.")
-	radio.listening = !radio.listening
-	to_chat(brainmob, SPAN_NOTICE("Radio is [radio.broadcasting==1 ? "now" : "no longer"] broadcasting."))
+	set src = usr.loc//In user location, or in MMI in this case.
+	set popup_menu = 0//Will not appear when right clicking.
 
+	if(brainmob.stat)//Only the brainmob will trigger these so no further check is necessary.
+		to_chat(brainmob, "Can't do that while incapacitated or dead.")
+
+	radio.broadcasting = radio.broadcasting==1 ? 0 : 1
+	to_chat(brainmob, "\blue Radio is [radio.broadcasting==1 ? "now" : "no longer"] broadcasting.")
 
 /obj/item/device/mmi/radio_enabled/verb/Toggle_Listening()
 	set name = "Toggle Listening"
 	set desc = "Toggle listening channel on or off."
 	set category = "MMI"
-	set popup_menu = FALSE
 	set src = usr.loc
-	if (brainmob.stat)
-		to_chat(brainmob, "Can't do that while incapacitated or dead.")
-	radio.listening = !radio.listening
-	to_chat(brainmob, SPAN_NOTICE("Radio is [radio.listening==1 ? "now" : "no longer"] receiving broadcast."))
+	set popup_menu = 0
 
+	if(brainmob.stat)
+		to_chat(brainmob, "Can't do that while incapacitated or dead.")
+
+	radio.listening = radio.listening==1 ? 0 : 1
+	to_chat(brainmob, "\blue Radio is [radio.listening==1 ? "now" : "no longer"] receiving broadcast.")
 
 /obj/item/device/mmi/emp_act(severity)
 	if(!brainmob)
 		return
 	else
 		switch(severity)
-			if(EMP_ACT_HEAVY)
+			if(1)
 				brainmob.emp_damage += rand(20,30)
-			if(EMP_ACT_LIGHT)
+			if(2)
 				brainmob.emp_damage += rand(10,20)
+			if(3)
+				brainmob.emp_damage += rand(0,10)
 	..()
-
-/obj/item/device/mmi/on_update_icon()
-	icon_state = brainmob ? "mmi_full" : "mmi_empty"

@@ -1,61 +1,124 @@
+// PRESETS
+var/global/list/station_networks = list(
+	NETWORK_FIRST_SECTION,
+	NETWORK_SECOND_SECTION,
+	NETWORK_THIRD_SECTION,
+	NETWORK_FOURTH_SECTION,
+	NETWORK_COMMAND,
+	NETWORK_ENGINE,
+	NETWORK_ENGINEERING,
+	NETWORK_CEV_ERIS,
+	NETWORK_MEDICAL,
+	NETWORK_MINE,
+	NETWORK_RESEARCH,
+	NETWORK_ROBOTS,
+	NETWORK_PRISON,
+	NETWORK_SECURITY
+)
+
+var/global/list/engineering_networks = list(
+	NETWORK_ENGINE,
+	NETWORK_ENGINEERING,
+	"Atmosphere Alarms",
+	"Fire Alarms",
+	"Power Alarms"
+)
+
+/obj/machinery/camera/network/crescent
+	network = list(NETWORK_CRESCENT)
+
+/obj/machinery/camera/network/fist_section
+	network = list(NETWORK_FIRST_SECTION)
+
+/obj/machinery/camera/network/second_section
+	network = list(NETWORK_SECOND_SECTION)
+
+/obj/machinery/camera/network/third_section
+	network = list(NETWORK_THIRD_SECTION)
+
+/obj/machinery/camera/network/fourth_section
+	network = list(NETWORK_FOURTH_SECTION)
+
+/obj/machinery/camera/network/command
+	network = list(NETWORK_COMMAND)
+
+/obj/machinery/camera/network/engine
+	network = list(NETWORK_ENGINE)
+
 /obj/machinery/camera/network/engineering
 	network = list(NETWORK_ENGINEERING)
 
-/obj/machinery/camera/network/ert
-	network = list(NETWORK_ERT)
-
-/obj/machinery/camera/network/medbay
-	network = list(NETWORK_MEDICAL)
-
-/obj/machinery/camera/network/mercenary
-	network = list(NETWORK_MERCENARY)
+/obj/machinery/camera/network/cev_eris
+	network = list(NETWORK_CEV_ERIS)
 
 /obj/machinery/camera/network/mining
 	network = list(NETWORK_MINE)
 
+/obj/machinery/camera/network/prison
+	network = list(NETWORK_PRISON)
+
+/obj/machinery/camera/network/medbay
+	network = list(NETWORK_MEDICAL)
+
 /obj/machinery/camera/network/research
 	network = list(NETWORK_RESEARCH)
+
+/obj/machinery/camera/network/research_outpost
+	network = list(NETWORK_RESEARCH_OUTPOST)
 
 /obj/machinery/camera/network/security
 	network = list(NETWORK_SECURITY)
 
+/obj/machinery/camera/network/telecom
+	network = list(NETWORK_TELECOM)
+
 /obj/machinery/camera/network/thunder
 	network = list(NETWORK_THUNDER)
 
-/obj/machinery/camera/network/helmet
-	network = list(NETWORK_HELMETS)
-
 // EMP
 
-/obj/machinery/camera/emp_proof/Initialize()
+/obj/machinery/camera/emp_proof/New()
 	..()
-	. = upgradeEmpProof()
+	upgradeEmpProof()
 
 // X-RAY
 
 /obj/machinery/camera/xray
 	icon_state = "xraycam" // Thanks to Krutchen for the icons.
 
-/obj/machinery/camera/xray/Initialize()
-	. = ..()
+/obj/machinery/camera/xray/security
+	network = list(NETWORK_SECURITY)
+
+/obj/machinery/camera/xray/medbay
+	network = list(NETWORK_MEDICAL)
+
+/obj/machinery/camera/xray/research
+	network = list(NETWORK_RESEARCH)
+
+/obj/machinery/camera/xray/New()
+	..()
 	upgradeXRay()
 
 // MOTION
 
-/obj/machinery/camera/motion/Initialize()
-	. = ..()
+/obj/machinery/camera/motion/New()
+	..()
 	upgradeMotion()
+
+/obj/machinery/camera/motion/security
+	network = list(NETWORK_SECURITY)
 
 // ALL UPGRADES
 
-/obj/machinery/camera/all/Initialize()
-	. = ..()
+
+/obj/machinery/camera/all/command
+	network = list(NETWORK_COMMAND)
+
+/obj/machinery/camera/all/New()
+	..()
 	upgradeEmpProof()
 	upgradeXRay()
 	upgradeMotion()
-
-// AUTONAME left as a map stub
-/obj/machinery/camera/autoname
 
 // CHECKS
 
@@ -88,7 +151,7 @@
 /obj/machinery/camera/proc/upgradeMotion()
 	assembly.upgrades.Add(new /obj/item/device/assembly/prox_sensor(assembly))
 	setPowerUsage()
-	STOP_PROCESSING_MACHINE(src, MACHINERY_PROCESS_SELF)
+	START_PROCESSING(SSmachines, src)
 	update_coverage()
 
 /obj/machinery/camera/proc/setPowerUsage()
@@ -97,4 +160,4 @@
 		mult++
 	if (isMotion())
 		mult++
-	change_power_consumption(mult*initial(active_power_usage), POWER_USE_ACTIVE)
+	active_power_usage = mult*initial(active_power_usage)

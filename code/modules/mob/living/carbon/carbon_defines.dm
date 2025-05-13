@@ -1,44 +1,37 @@
 /mob/living/carbon
 	gender = MALE
-	pronouns = PRONOUNS_THEY_THEM
-	var/singleton/species/species //Contains icon generation and language information, set during New().
+	var/datum/species/species //Contains icon generation and language information, set during New().
+	var/list/stomach_contents = list()
 
 	var/life_tick = 0      // The amount of life ticks that have processed on this mob.
-	var/obj/item/handcuffed = null //Whether or not the mob is handcuffed
-	//Surgery info
-	var/list/surgeries_in_progress
+	var/analgesic = 0 // when this is set, the mob isn't affected by shock or pain
+					  // life should decrease this by 1 every tick
+	// total amount of wounds on mob, used to spread out healing and the like over all wounds
+	var/obj/item/handcuffed //Whether or not the mob is handcuffed
+	var/obj/item/legcuffed  //Same as handcuffs but for legs. Bear traps use this.
 	//Active emote/pose
-	var/pose = null
-	var/list/chem_effects = list()
-	var/list/chem_doses = list()
-	var/datum/reagents/metabolism/bloodstr = null
-	var/datum/reagents/metabolism/touching = null
+	var/pose
+
+	//Values from all base organs should add up to this
+	var/total_blood_req = 40
+	var/total_oxygen_req = 50
+	var/total_nutriment_req = DEFAULT_HUNGER_FACTOR
+
+	var/datum/reagents/metabolism/bloodstr
+	var/datum/reagents/metabolism/ingested
+	var/datum/reagents/metabolism/touching
+	var/datum/metabolism_effects/metabolism_effects
 	var/losebreath = 0 //if we failed to breathe last tick
 
-	var/coughedtime = null
-
-	var/cpr_time = 1.0
+	var/coughedtime
 	var/lastpuke = 0
-	var/nutrition = 400
-	var/hydration = 400
 
-	var/obj/item/tank/internal = null//Human/Monkey
+	var/cpr_time = 1
+	nutrition = 400//Carbon
+
+	var/obj/item/tank/internal //Human/Monkey
 
 
-	//these two help govern taste. The first is the last time a taste message was shown to the plaer.
-	//the second is the message in question.
-	var/last_taste_time = 0
-	var/last_taste_text = ""
+	bad_type = /mob/living/carbon
+	//TODO: move to brain
 
-	// organ-related variables, see organ.dm and human_organs.dm
-	var/list/internal_organs = list()
-	var/list/organs = list()
-	var/list/obj/item/organ/external/organs_by_name = list() // map organ names to organs
-	var/list/internal_organs_by_name = list() // so internal organs have less ickiness too
-
-	var/list/stasis_sources = list()
-	var/stasis_value
-
-	var/player_triggered_sleeping = 0
-	///Reagents towards which there is an active allergy.
-	var/list/active_allergies = list()

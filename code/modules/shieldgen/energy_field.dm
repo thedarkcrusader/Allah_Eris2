@@ -1,40 +1,42 @@
-
 //---------- actual energy field
 
-/obj/energy_field
+/obj/effect/energy_field
 	name = "energy field"
 	desc = "Impenetrable field of energy, capable of blocking anything as long as it's active."
+	description_antag = "Can be disabled with the use of a diffuser or a powerfull EMP blast."
 	icon = 'icons/obj/machines/shielding.dmi'
 	icon_state = "shield_normal"
 	anchored = TRUE
-	layer = PROJECTILE_LAYER
+	plane = GAME_PLANE
+	layer = ABOVE_ALL_MOB_LAYER
 	density = FALSE
-	invisibility = INVISIBILITY_ABSTRACT
+	invisibility = 101
 	var/strength = 0
 	var/ticks_recovering = 10
 
-/obj/energy_field/New()
+/obj/effect/energy_field/New()
 	..()
 	update_nearby_tiles()
 
-/obj/energy_field/Destroy()
+/obj/effect/energy_field/Destroy()
 	set_density(0)
 	update_nearby_tiles()
 	. = ..()
 
-/obj/energy_field/ex_act(severity)
-	Stress(0.5 + severity)
+/obj/effect/energy_field/explosion_act(target_power, explosion_handler/handler)
+	Stress(0.5 + target_power / 100)
+	return 0
 
-/obj/energy_field/bullet_act(obj/item/projectile/Proj)
+/obj/effect/energy_field/bullet_act(var/obj/item/projectile/Proj)
 	Stress(Proj.get_structure_damage() / 10)
 
-/obj/energy_field/proc/Stress(severity)
+/obj/effect/energy_field/proc/Stress(var/severity)
 	strength -= severity
 
 	//if we take too much damage, drop out - the generator will bring us back up if we have enough power
 	ticks_recovering = min(ticks_recovering + 2, 10)
 	if(strength < 1)
-		set_invisibility(INVISIBILITY_ABSTRACT)
+		set_invisibility(101)
 		set_density(0)
 		ticks_recovering = 10
 		strength = 0
@@ -42,7 +44,7 @@
 		set_invisibility(0)
 		set_density(1)
 
-/obj/energy_field/proc/Strengthen(severity)
+/obj/effect/energy_field/proc/Strengthen(var/severity)
 	strength += severity
 	if (strength < 0)
 		strength = 0
@@ -53,13 +55,13 @@
 		set_invisibility(0)
 		set_density(1)
 	else if(strength < 1)
-		set_invisibility(INVISIBILITY_ABSTRACT)
+		set_invisibility(101)
 		set_density(0)
 
 	if (density != old_density)
 		update_nearby_tiles()
 
-/obj/energy_field/CanPass(atom/movable/mover, turf/target, height=1.5, air_group = 0)
+/obj/effect/energy_field/CanPass(atom/movable/mover, turf/target, height=1.5, air_group = 0)
 	//Purpose: Determines if the object (or airflow) can pass this atom.
 	//Called by: Movement, airflow.
 	//Inputs: The moving atom (optional), target turf, "height" and air group

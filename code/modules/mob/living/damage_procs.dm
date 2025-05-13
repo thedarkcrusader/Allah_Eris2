@@ -1,116 +1,141 @@
-/*
-	apply_damage() args
-	damage - How much damage to take
-	damage_type - What type of damage to take, brute, burn
-	def_zone - Where to take the damage if its brute or burn
 
+/*
+	apply_damage(a,b,c)
+	args
+	a:damage - How much damage to take
+	b:damage_type - What type of damage to take, brute, burn
+	c:def_zone - Where to take the damage if its brute or burn
 	Returns
 	standard 0 if fail
 */
-/mob/living/proc/apply_damage(damage = 0, damagetype = DAMAGE_BRUTE, def_zone = null, damage_flags = FLAGS_OFF, used_weapon, armor_pen, silent = FALSE)
-	if(!damage)
-		return FALSE
-
-	var/list/after_armor = modify_damage_by_armor(def_zone, damage, damagetype, damage_flags, src, armor_pen, silent)
-	damage = after_armor[1]
-	damagetype = after_armor[2]
-	damage_flags = after_armor[3] // args modifications in case of parent calls
-	if(!damage)
-		return FALSE
-
-	switch (damagetype)
-		if (DAMAGE_EMP, DAMAGE_FIRE)
-			return FALSE // These damages are handled separately by existing legacy code
-		if (DAMAGE_BIO)
-			damagetype = DAMAGE_TOXIN
-		if (DAMAGE_EXPLODE, DAMAGE_PSIONIC)
-			damagetype = DAMAGE_BRUTE
-
+/mob/living/proc/apply_damage(damage = 0, damagetype = BRUTE, def_zone = null, armor_divisor = 1, wounding_multiplier = 1, sharp = FALSE, edge = FALSE, used_weapon = null) // After melee rebalance set wounding_multiplier to 0 to activate melee wounding level determination
+	activate_ai()
 	switch(damagetype)
-		if (DAMAGE_BRUTE)
-			adjustBruteLoss(damage)
-		if (DAMAGE_BURN)
-			if(MUTATION_COLD_RESISTANCE in mutations)
-				damage = 0
-			adjustFireLoss(damage)
-		if (DAMAGE_TOXIN)
+		if(BRUTE)
+			wounding_multiplier = wound_check(injury_type, wounding_multiplier, edge, sharp)
+			adjustBruteLoss(damage * wounding_multiplier)
+		if(BURN)
+//			if(COLD_RESISTANCE in mutations)
+//				damage = 0
+			wounding_multiplier = wound_check(injury_type, wounding_multiplier, edge, sharp) // Why not?
+			adjustFireLoss(damage * wounding_multiplier)
+		if(TOX)
 			adjustToxLoss(damage)
-		if (DAMAGE_OXY)
+		if(OXY)
 			adjustOxyLoss(damage)
-		if (DAMAGE_GENETIC)
+		if(CLONE)
 			adjustCloneLoss(damage)
-		if (DAMAGE_STUN, DAMAGE_PAIN)
+		if(HALLOSS)
 			adjustHalLoss(damage)
-		if (DAMAGE_SHOCK)
-			electrocute_act(damage, used_weapon, 1, def_zone)
-		if (DAMAGE_RADIATION)
-			apply_radiation(damage)
-		if (DAMAGE_BRAIN)
-			adjustBrainLoss(damage)
 
+	flash_weak_pain()
 	updatehealth()
+
 	return TRUE
 
 
-/mob/living/proc/apply_radiation(damage = 0)
-	if(!damage)
+/mob/living/proc/apply_damages(var/brute = 0, var/burn = 0, var/tox = 0, var/oxy = 0, var/clone = 0, var/halloss = 0, var/def_zone = null)
+	activate_ai()
+	if(brute)	apply_damage(brute, BRUTE, def_zone)
+	if(burn)	apply_damage(burn, BURN, def_zone)
+	if(tox)		apply_damage(tox, TOX, def_zone)
+	if(oxy)		apply_damage(oxy, OXY, def_zone)
+	if(clone)	apply_damage(clone, CLONE, def_zone)
+	if(halloss) apply_damage(halloss, HALLOSS, def_zone)
+
+	return TRUE
+
+
+
+/mob/living/proc/apply_effect(var/effect = 0, var/effecttype = STUN, var/armor_value = 0, var/check_protection = 1)
+	activate_ai()
+
+	if(!effect)
 		return FALSE
 
-	radiation += damage
-	return TRUE
-
-
-/mob/living/proc/apply_damages(brute = 0, burn = 0, tox = 0, oxy = 0, clone = 0, halloss = 0, def_zone = null, damage_flags = 0)
-	if (brute)
-		apply_damage(brute, DAMAGE_BRUTE, def_zone)
-	if(burn)
-		apply_damage(burn, DAMAGE_BURN, def_zone)
-	if(tox)
-		apply_damage(tox, DAMAGE_TOXIN, def_zone)
-	if (oxy)
-		apply_damage(oxy, DAMAGE_OXY, def_zone)
-	if (clone)
-		apply_damage(clone, DAMAGE_GENETIC, def_zone)
-	if (halloss)
-		apply_damage(halloss, DAMAGE_PAIN, def_zone)
-	return TRUE
-
-
-/mob/living/proc/apply_effect(effect = 0, effecttype = EFFECT_STUN, blocked = 0)
-	if(!effect || (blocked >= 100))	return FALSE
+	if(armor_value)
+		effect = effect * ( ( 100 - armor_value ) / 100 )
 
 	switch(effecttype)
-		if (EFFECT_STUN)
-			Stun(effect * blocked_mult(blocked))
-		if (EFFECT_WEAKEN)
-			Weaken(effect * blocked_mult(blocked))
-		if (EFFECT_PARALYZE)
-			Paralyse(effect * blocked_mult(blocked))
-		if (EFFECT_PAIN)
-			adjustHalLoss(effect * blocked_mult(blocked))
-		if (EFFECT_STUTTER)
-			if(status_flags & CANSTUN) // stun is usually associated with stutter - TODO CANSTUTTER flag?
-				stuttering = max(stuttering, effect * blocked_mult(blocked))
-		if (EFFECT_EYE_BLUR)
-			eye_blurry = max(eye_blurry, effect * blocked_mult(blocked))
-		if (EFFECT_DROWSY)
-			drowsyness = max(drowsyness, effect * blocked_mult(blocked))
+
+		if(STUN)
+			Stun(effect)
+		if(WEAKEN)
+			Weaken(effect)
+		if(PARALYZE)
+			Paralyse(effect)
+		if(IRRADIATE)
+			var/rad_protection = check_protection ? getarmor(null, ARMOR_RAD) / 100 : 0
+			radiation += max((1 - rad_protection) * effect, 0)//Rads auto check armor
+		if(STUTTER)
+			if(status_flags & CANSTUN) // stun is usually associated with stutter
+				stuttering = max(stuttering,(effect))
+		if(EYE_BLUR)
+			eye_blurry = max(eye_blurry,(effect))
+		if(DROWSY)
+			drowsyness = max(drowsyness,(effect))
+
 	updatehealth()
+
 	return TRUE
 
-/mob/living/proc/apply_effects(stun = 0, weaken = 0, paralyze = 0, stutter = 0, eyeblur = 0, drowsy = 0, agony = 0, blocked = 0)
-	if (stun)
-		apply_effect(stun, EFFECT_STUN, blocked)
-	if (weaken)
-		apply_effect(weaken, EFFECT_WEAKEN, blocked)
-	if (paralyze)
-		apply_effect(paralyze, EFFECT_PARALYZE, blocked)
-	if (stutter)
-		apply_effect(stutter, EFFECT_STUTTER, blocked)
-	if (eyeblur)
-		apply_effect(eyeblur, EFFECT_EYE_BLUR, blocked)
-	if (drowsy)
-		apply_effect(drowsy, EFFECT_DROWSY, blocked)
-	if (agony)
-		apply_effect(agony, EFFECT_PAIN, blocked)
-	return TRUE
+
+/mob/living/proc/apply_effects(var/stun = 0, var/weaken = 0, var/paralyze = 0, var/irradiate = 0, var/stutter = 0, var/eyeblur = 0, var/drowsy = 0, var/agony = 0, var/armor_value = 0)
+	activate_ai()
+	if(stun)		apply_effect(stun, STUN, armor_value)
+	if(weaken)		apply_effect(weaken, WEAKEN, armor_value)
+	if(paralyze)	apply_effect(paralyze, PARALYZE, armor_value)
+	if(irradiate)	apply_effect(irradiate, IRRADIATE, armor_value)
+	if(stutter)		apply_effect(stutter, STUTTER, armor_value)
+	if(eyeblur)		apply_effect(eyeblur, EYE_BLUR, armor_value)
+	if(drowsy)		apply_effect(drowsy, DROWSY, armor_value)
+	return 1
+
+
+// heal ONE external organ, organ gets randomly selected from damaged ones.
+/mob/living/proc/heal_organ_damage(var/brute, var/burn, var/additionally_brute_percent = 0, var/additionaly_burn_percent = 0)
+	adjustBruteLoss(-(brute + getBruteLoss()/100 * additionally_brute_percent))
+	adjustFireLoss(-(burn + getFireLoss()/100 * additionaly_burn_percent))
+	src.updatehealth()
+
+// damage ONE external organ, organ gets randomly selected from damaged ones.
+/mob/living/proc/take_organ_damage(var/brute, var/burn, var/emp=0)
+	activate_ai()
+	if(status_flags & GODMODE)
+		return FALSE	//godmode
+	adjustBruteLoss(brute)
+	adjustFireLoss(burn)
+	src.updatehealth()
+
+// heal MANY external organs, in random order
+/mob/living/proc/heal_overall_damage(var/brute, var/burn)
+	adjustBruteLoss(-brute)
+	adjustFireLoss(-burn)
+	src.updatehealth()
+
+// damage MANY external organs, in random order
+/mob/living/take_overall_damage(var/brute, var/burn, var/used_weapon = null)
+	if(status_flags & GODMODE)
+		return FALSE	//godmode
+	adjustBruteLoss(brute)
+	adjustFireLoss(burn)
+	src.updatehealth()
+
+
+/mob/living/get_fall_damage(var/turf/from, var/turf/dest)
+	activate_ai()
+	var/damage = min(15, maxHealth*0.4)
+
+	//If damage is multiplied by the number of floors you fall simultaneously
+	if (from && dest)
+		damage *= abs(from.z - dest.z)+1
+	return damage
+
+/mob/living/fall_impact(var/turf/from, var/turf/dest)
+	activate_ai()
+	var/damage = get_fall_damage(from, dest)
+	if (damage > 0)
+		take_overall_damage(damage)
+		playsound(src, pick(punch_sound), 100, 1, 10)
+		Weaken(4)
+		updatehealth()

@@ -1,14 +1,15 @@
-/obj/item/stock_parts/computer/scanner/medical
+/obj/item/computer_hardware/scanner/medical
 	name = "medical scanner module"
 	desc = "A medical scanner module. It can be used to scan patients and display medical information."
 
-/obj/item/stock_parts/computer/scanner/medical/do_on_afterattack(mob/user, atom/target, proximity)
+/obj/item/computer_hardware/scanner/medical/do_on_afterattack(mob/user, atom/target, proximity)
 	if(!can_use_scanner(user, target, proximity))
 		return
-
-	var/dat = medical_scan_action(target, user, loc, 1)
-
+	if (!scan_power_use())
+		return
+	var/dat = medical_scan_action(target, user, holder2, 1)
 	if(dat && driver && driver.using_scanner)
-		playsound(src, 'sound/effects/fastbeep.ogg', 20)
-		driver.data_buffer = html2pencode(dat)
-		SSnano.update_uis(driver.NM)
+		driver.data_buffer = dat
+		if(!SSnano.update_uis(driver.NM))
+			holder2.run_program(driver.filename)
+			driver.NM.nano_ui_interact(user)

@@ -1,43 +1,6 @@
-/**
- * Generic attack and damage proc, called on the attacked atom.
- *
- * **Parameters**:
- * - `user` - The attacking mob.
- * - `damage` (int) - The damage value.
- * - `attack_verb` (string) - The verb/string used for attack messages.
- * - `wallbreaker` (boolean) - Whether or not the attack is considered a 'wallbreaker' attack.
- * - `damtype` (string, one of `DAMAGE_*`) - The attack's damage type.
- * - `armorcheck` (string) - TODO: Unused. Remove.
- * - `dam_flags` (bitfield, any of `DAMAGE_FLAG_*`) - Damage flags associated with the attack.
- *
- * Returns boolean.
- */
-/atom/proc/attack_generic(mob/user, damage, attack_verb = "hits", wallbreaker = FALSE, damtype = DAMAGE_BRUTE, armorcheck = "melee", dam_flags = FLAGS_OFF)
-	if (damage && get_max_health())
-		user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-		user.do_attack_animation(src)
-		if (!can_damage_health(damage, damtype))
-			playsound(src, damage_hitsound, 50, TRUE)
-			user.visible_message(
-				SPAN_WARNING("\The [user] bonks \the [src] harmlessly!"),
-				SPAN_WARNING("You bonk \the [src] harmlessly!")
-			)
-			return
-		var/damage_flags = FLAGS_OFF
-		if (wallbreaker)
-			SET_FLAGS(damage_flags, DAMAGE_FLAG_TURF_BREAKER)
-		playsound(src, damage_hitsound, 75, TRUE)
-		if (damage_health(damage, damtype, damage_flags, skip_can_damage_check = TRUE))
-			user.visible_message(
-				SPAN_DANGER("\The [user] smashes through \the [src]!"),
-				SPAN_DANGER("You smash through \the [src]!")
-			)
-		else
-			user.visible_message(
-				SPAN_DANGER("\The [user] [attack_verb] \the [src]!"),
-				SPAN_DANGER("You [attack_verb] \the [src]!")
-			)
-
+// Generic damage proc (slimes and monkeys).
+/atom/proc/attack_generic(mob/user as mob)
+	return 0
 
 /*
 	Humans:
@@ -45,7 +8,7 @@
 
 	Otherwise pretty standard.
 */
-/mob/living/carbon/human/UnarmedAttack(atom/A, proximity)
+/mob/living/carbon/human/UnarmedAttack(var/atom/A, var/proximity, params)
 
 	if(!..())
 		return
@@ -54,79 +17,141 @@
 	// If the gloves do anything, have them return 1 to stop
 	// normal attack_hand() here.
 	var/obj/item/clothing/gloves/G = gloves // not typecast specifically enough in defines
-	if(istype(G) && G.Touch(A,1))
+	if(istype(G) && G.Touch(A, 1))
 		return
 
-	A.attack_hand(src)
+	A.attack_hand(src, params)
 
+/atom/proc/attack_hand(mob/user as mob, params)
+	. = FALSE
+	// if(!(interaction_flags_atom & INTERACT_ATOM_NO_FINGERPRINT_ATTACK_HAND))
+	// 	add_fingerprint(user)
+	// if(SEND_SIGNAL_OLD(src, COMSIG_ATOM_ATTACK_HAND, user, modifiers) & COMPONENT_CANCEL_ATTACK_CHAIN)
+	// 	. = TRUE
+	// if(interaction_flags_atom & INTERACT_ATOM_ATTACK_HAND)
+	. = _try_interact(user)
 
-/**
- * Called when the atom is clicked on by a mob with an empty hand.
- *
- * **Parameters**:
- * - `user` - The mob that clicked on the atom.
- */
-/atom/proc/attack_hand(mob/user)
-	return
+//Return a non FALSE value to cancel whatever called this from propagating, if it respects it.
+/atom/proc/_try_interact(mob/user)
+	if(is_admin(user) && isghost(user)) //admin abuse
+		return interact(user)
+	if(can_interact(user))
+		return interact(user)
+	return FALSE
 
+/atom/proc/can_interact(mob/user, require_adjacent_turf = TRUE)
+	// if(!user.can_interact_with(src, interaction_flags_atom & INTERACT_ATOM_ALLOW_USER_LOCATION))
+	// 	return FALSE
+	// if((interaction_flags_atom & INTERACT_ATOM_REQUIRES_DEXTERITY) && !ISADVANCEDTOOLUSER(user))
+	// 	to_chat(user, span_warning("You don't have the dexterity to do this!"))
+	// 	return FALSE
+	// BANAID: advanced tool usrs can only interact uis
+	if(!user.IsAdvancedToolUser())
+		to_chat(user, span_warning("You don't have the dexterity to do this!"))
+		return FALSE
 
-/**
- * Called when a mob attempts to use an empty hand on itself.
- *
- * **Parameters**:
- * - `bp_hand` (string, `BP_R_HAND` or `BP_L_HAND`) - The targeted and used hand's bodypart slot.
- */
-/mob/proc/attack_empty_hand(bp_hand)
-	return
+	// if(!(interaction_flags_atom & INTERACT_ATOM_IGNORE_INCAPACITATED))
+	// 	var/ignore_flags = NONE
+	// 	if(interaction_flags_atom & INTERACT_ATOM_IGNORE_RESTRAINED)
+	// 		ignore_flags |= IGNORE_RESTRAINTS
+	// 	if(!(interaction_flags_atom & INTERACT_ATOM_CHECK_GRAB))
+	// 		ignore_flags |= IGNORE_GRAB
 
+	// 	if(user.incapacitated(ignore_flags))
+	// 		return FALSE
+	return TRUE
 
-/mob/living/carbon/human/RestrainedClickOn(atom/A)
-	return
-
-/mob/living/CtrlClickOn(atom/A)
+/atom/ui_status(mob/user)
 	. = ..()
-	if(!. && a_intent == I_GRAB && length(available_maneuvers))
-		. = perform_maneuver(prepared_maneuver || available_maneuvers[1], A)
+	//Check if both user and atom are at the same location
+	if(!can_interact(user))
+		. = min(., UI_UPDATE)
 
-/mob/living/carbon/human/RangedAttack(atom/A, params)
-	//Climbing up open spaces
-	if((istype(A, /turf/simulated/floor) || istype(A, /turf/unsimulated/floor) || istype(A, /obj/structure/lattice) || istype(A, /obj/structure/catwalk)) && isturf(loc) && bound_overlay && !is_physically_disabled()) //Climbing through openspace
-		return climb_up(A)
-
-	if(gloves)
-		var/obj/item/clothing/gloves/G = gloves
-		if(istype(G) && G.Touch(A,0)) // for magic gloves
-			return TRUE
-
+/atom/movable/can_interact(mob/user)
 	. = ..()
+	if(!.)
+		return
+	// if(!anchored && (interaction_flags_atom & INTERACT_ATOM_REQUIRES_ANCHORED))
+	// 	return FALSE
 
-/mob/living/RestrainedClickOn(atom/A)
+/atom/proc/interact(mob/user)
+	// Eugh. Wont implement interaction_flags_atom yet so here u go.
+	add_fingerprint(user)
+	return ui_interact(user)
+
+	// if(interaction_flags_atom & INTERACT_ATOM_NO_FINGERPRINT_INTERACT)
+	// 	add_hiddenprint(user)
+	// else
+	// 	add_fingerprint(user)
+	// if(interaction_flags_atom & INTERACT_ATOM_UI_INTERACT)
+	// 	SEND_SIGNAL_OLD(src, COMSIG_ATOM_UI_INTERACT, user)
+	// 	return ui_interact(user)
+	// return FALSE
+
+/mob/living/carbon/human/RestrainedClickOn(var/atom/A)
 	return
 
-/*
-	Aliens
-*/
+/mob/living/carbon/human/RangedAttack(var/atom/A)
+	if((istype(A, /turf/floor) || istype(A, /obj/structure/catwalk)) && isturf(loc) && shadow && !is_physically_disabled()) //Climbing through openspace
+		var/turf/T = get_turf(A)
+		if(T.Adjacent(shadow))
+			for(var/obj/structure/S in shadow.loc)
+				if(S.density)
+					return
 
-/mob/living/carbon/alien/RestrainedClickOn(atom/A)
+			var/list/objects_to_stand_on = list(
+				/obj/item/stool,
+				/obj/structure/bed,
+				/obj/structure/table,
+				/obj/structure/closet/crate
+			)
+			var/atom/helper
+			var/area/location = get_area(loc)
+			if(!location.has_gravity)
+				helper = src
+			else
+				for(var/type in objects_to_stand_on)
+					helper = locate(type) in src.loc
+					if(helper)
+						break
+				if(!helper)
+					return
+
+			visible_message(SPAN_WARNING("[src] starts climbing onto \the [A]!"))
+			shadow.visible_message(SPAN_WARNING("[shadow] starts climbing onto \the [A]!"))
+			var/delay = 50
+			if(do_after(src, max(delay * src.stats.getMult(STAT_VIG, STAT_LEVEL_EXPERT), delay * 0.66), helper))
+				visible_message(SPAN_WARNING("[src] climbs onto \the [A]!"))
+				shadow.visible_message(SPAN_WARNING("[shadow] climbs onto \the [A]!"))
+				src.Move(T)
+			else
+				visible_message(SPAN_WARNING("[src] gives up on trying to climb onto \the [A]!"))
+				shadow.visible_message(SPAN_WARNING("[shadow] gives up on trying to climb onto \the [A]!"))
+			return
+
+	//PERK_ABSOLUTE_GRAB
+	if(get_dist_euclidian(get_turf(A), get_turf(src)) < 4 && ishuman(A))
+		if(stats.getPerk(PERK_ABSOLUTE_GRAB) && a_intent == I_GRAB)
+			leap(A)
+			return
+
+//	if((LASER in mutations) && a_intent == I_HURT)
+//		LaserEyes(A) // moved into a proc below
+	if(get_active_mutation(src, MUTATION_TELEKINESIS))
+		A.attack_tk(src)
+
+/mob/living/RestrainedClickOn(var/atom/A)
 	return
-
-/mob/living/carbon/alien/UnarmedAttack(atom/A, proximity)
-
-	if(!..())
-		return 0
-
-	setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-	A.attack_generic(src,rand(5,6),"bitten")
 
 /*
 	Slimes
 	Nothing happening here
 */
 
-/mob/living/carbon/slime/RestrainedClickOn(atom/A)
+/mob/living/carbon/slime/RestrainedClickOn(var/atom/A)
 	return
 
-/mob/living/carbon/slime/UnarmedAttack(atom/A, proximity)
+/mob/living/carbon/slime/UnarmedAttack(var/atom/A, var/proximity)
 
 	if(!..())
 		return
@@ -137,21 +162,21 @@
 			Feedstop()
 		return
 
-	//should have already been set if we are attacking a mob, but it doesn't hurt and will cover attacking non-mobs too
-	setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
 	var/mob/living/M = A
-	if(!istype(M))
-		A.attack_generic(src, (is_adult ? rand(20,40) : rand(5,25)), "glomped") // Basic attack.
-	else
-		var/power = max(0, min(10, (powerlevel + rand(0, 3))))
+	if (istype(M))
 
 		switch(src.a_intent)
 			if (I_HELP) // We just poke the other
 				M.visible_message(SPAN_NOTICE("[src] gently pokes [M]!"), SPAN_NOTICE("[src] gently pokes you!"))
 			if (I_DISARM) // We stun the target, with the intention to feed
 				var/stunprob = 1
+				var/power = max(0, min(10, (powerlevel + rand(0, 3))))
+				if (powerlevel > 0 && !isslime(A))
+					if(ishuman(M))
+						var/mob/living/carbon/human/H = M
+						stunprob *= H.species.siemens_coefficient
 
-				if (powerlevel > 0 && !istype(A, /mob/living/carbon/slime))
+
 					switch(power * 10)
 						if(0) stunprob *= 10
 						if(1 to 2) stunprob *= 20
@@ -162,8 +187,18 @@
 						if(10) 	   stunprob *= 95
 
 				if(prob(stunprob))
-					var/shock_damage = max(0, powerlevel-3) * rand(6,10)
-					M.electrocute_act(shock_damage, src, 1.0, ran_zone())
+					powerlevel = max(0, powerlevel-3)
+					M.visible_message(SPAN_DANGER("[src] has shocked [M]!"), SPAN_DANGER("[src] has shocked you!"))
+					M.Weaken(power)
+					M.Stun(power)
+					M.stuttering = max(M.stuttering, power)
+
+					var/datum/effect/effect/system/spark_spread/s = new /datum/effect/effect/system/spark_spread
+					s.set_up(5, 1, M)
+					s.start()
+
+					if(prob(stunprob) && powerlevel >= 8)
+						M.adjustFireLoss(powerlevel * rand(6, 10))
 				else if(prob(40))
 					M.visible_message(SPAN_DANGER("[src] has pounced at [M]!"), SPAN_DANGER("[src] has pounced at you!"))
 					M.Weaken(power)
@@ -173,12 +208,9 @@
 			if (I_GRAB) // We feed
 				Wrap(M)
 			if (I_HURT) // Attacking
-				if(iscarbon(M) && prob(15))
-					M.visible_message(SPAN_DANGER("[src] has pounced at [M]!"), SPAN_DANGER("[src] has pounced at you!"))
-					M.Weaken(power)
-				else
-					A.attack_generic(src, (is_adult ? rand(20,40) : rand(5,25)), "glomped")
-
+				A.attack_generic(src, (is_adult ? rand(20, 40) : rand(5, 25)), "glomped")
+	else
+		A.attack_generic(src, (is_adult ? rand(20, 40) : rand(5, 25)), "glomped") // Basic attack.
 /*
 	New Players:
 	Have no reason to click on anything at all.
@@ -189,28 +221,15 @@
 /*
 	Animals
 */
-/mob/living/simple_animal/UnarmedAttack(atom/A, proximity)
-	if (!..())
+/mob/living/simple_animal/UnarmedAttack(var/atom/A, var/proximity)
+
+	if(!..())
 		return
-	setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-	if (istype(A,/mob/living))
-		if (!get_natural_weapon() || a_intent == I_HELP)
-			custom_emote(VISIBLE_MESSAGE, "[friendly] [A]!")
-			return
-		if (ckey)
-			admin_attack_log(src, A, "Has attacked its victim.", "Has been attacked by its attacker.")
-	if (a_intent == I_HELP)
-		A.attack_animal(src)
-	else if (get_natural_weapon())
-		var/obj/item/weapon = get_natural_weapon()
-		weapon.resolve_attackby(A, src)
 
+	if(melee_damage_upper == 0 && isliving(A))
+		custom_emote(1, "[friendly] [A]!")
+		return
 
-/**
- * Called when a `simple_animal` mob clicks on the atom with an 'empty hand.'
- *
- * **Parameters**:
- * - `user` - The mob clicking on the atom.
- */
-/atom/proc/attack_animal(mob/user)
-	return attack_hand(user)
+	var/damage = rand(melee_damage_lower, melee_damage_upper)
+	if(A.attack_generic(src, damage, attacktext, environment_smash) && loc && attack_sound)
+		playsound(loc, attack_sound, 50, 1, 1)

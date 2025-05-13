@@ -31,13 +31,7 @@
 		if ("play")
 			src.player.song.playing = value
 			if (src.player.song.playing)
-				GLOB.instrument_synchronizer.raise_event(player.actual_instrument)
 				src.player.song.play_song(usr)
-		if ("wait")
-			if(value)
-				src.player.wait = weakref(usr)
-			else
-				src.player.wait = null
 		if ("newsong")
 			src.player.song.lines.Cut()
 			src.player.song.tempo = src.player.song.sanitize_tempo(5) // default 120 BPM
@@ -65,7 +59,7 @@
 						src.player.song.tempo = src.player.song.sanitize_tempo(5)
 				else
 					src.player.song.tempo = src.player.song.sanitize_tempo(5) // default 120 BPM
-				if(length(src.player.song.lines) > maximum_lines)
+				if(src.player.song.lines.len > maximum_lines)
 					to_chat(usr,"Too many lines!")
 					src.player.song.lines.Cut(maximum_lines+1)
 				var/linenum = 1
@@ -78,12 +72,12 @@
 		if ("show_song_editor")
 			if (!src.song_editor)
 				src.song_editor = new (host = src.owner, song = src.player.song)
-			src.song_editor.ui_interact(usr)
+			src.song_editor.nano_ui_interact(usr)
 
 		if ("show_usage")
 			if (!src.usage_info)
 				src.usage_info = new (owner, src.player)
-			src.usage_info.ui_interact(usr)
+			src.usage_info.nano_ui_interact(usr)
 		if ("volume")
 			src.player.volume = min(max(min(player.volume+text2num(value), 100), 0), player.max_volume)
 		if ("transposition")
@@ -103,20 +97,19 @@
 			new_coeff = round(min(max(new_coeff, GLOB.musical_config.gentlest_drop), GLOB.musical_config.steepest_drop), 0.001)
 			src.player.song.soft_coeff = new_coeff
 		if ("instrument")
-			if (!islist(instruments))
-				return
-			var/list/as_list = instruments
 			var/list/categories = list()
-			for (var/key in as_list)
-				var/datum/instrument/instrument = instruments[key]
+			var/list/instrumentsList = instruments // typecasting it to list from datum
+
+			for (var/key in instrumentsList)
+				var/datum/instrument/instrument = instrumentsList[key]
 				categories |= instrument.category
 
 			var/category = input(usr, "Choose a category") as null|anything in categories
 			if(!CanInteractWith(usr, owner, GLOB.physical_state))
 				return
 			var/list/instruments_available = list()
-			for (var/key in as_list)
-				var/datum/instrument/instrument = instruments[key]
+			for (var/key in instrumentsList)
+				var/datum/instrument/instrument = instrumentsList[key]
 				if (instrument.category == category)
 					instruments_available += key
 
@@ -124,7 +117,7 @@
 			if(!CanInteractWith(usr, owner, GLOB.physical_state))
 				return
 			if (new_instrument)
-				src.player.song.instrument_data = instruments[new_instrument]
+				src.player.song.instrument_data = instrumentsList[new_instrument]
 		if ("autorepeat") src.player.song.autorepeat = value
 		if ("decay") src.player.song.linear_decay = value
 		if ("echo") src.player.apply_echo = value
@@ -132,14 +125,14 @@
 			if (GLOB.musical_config.env_settings_available)
 				if (!src.env_editor)
 					src.env_editor = new (src.player)
-				src.env_editor.ui_interact(usr)
+				src.env_editor.nano_ui_interact(usr)
 			else
 				to_chat(usr, "Virtual environment is disabled")
 
 		if ("show_echo_editor")
 			if (!src.echo_editor)
 				src.echo_editor = new (src.player)
-			src.echo_editor.ui_interact(usr)
+			src.echo_editor.nano_ui_interact(usr)
 
 		if ("select_env")
 			if (value in -1 to 26)
@@ -151,13 +144,12 @@
 
 
 
-/datum/real_instrument/proc/ui_call(mob/user, ui_key, datum/nanoui/ui = null, force_open = 0)
+/datum/real_instrument/proc/ui_call(mob/user, ui_key, var/datum/nanoui/ui = null, var/force_open = 0)
 	var/list/data
 	data = list(
 		"playback" = list(
 			"playing" = src.player.song.playing,
 			"autorepeat" = src.player.song.autorepeat,
-			"wait" = src.player.wait != null
 		),
 		"basic_options" = list(
 			"cur_instrument" = src.player.song.instrument_data.name,
@@ -180,13 +172,13 @@
 			"soft_coeff" = src.player.song.soft_coeff
 		),
 		"show" = list(
-			"playback" = length(src.player.song.lines) > 0,
+			"playback" = src.player.song.lines.len > 0,
 			"custom_env_options" = GLOB.musical_config.is_custom_env(src.player.virtual_environment_selected),
 			"env_settings" = GLOB.musical_config.env_settings_available
 		),
 		"status" = list(
 			"channels" = src.player.song.available_channels,
-			"events" = length(src.player.event_manager.events),
+			"events" = src.player.event_manager.events.len,
 			"max_channels" = GLOB.musical_config.channels_per_instrument,
 			"max_events" = GLOB.musical_config.max_events,
 		)
@@ -205,7 +197,6 @@
 /datum/real_instrument/Destroy()
 	QDEL_NULL(player)
 	owner = null
-	return ..()
 
 /obj/structure/synthesized_instrument
 	var/datum/real_instrument/real_instrument
@@ -214,7 +205,6 @@
 	var/datum/instrument/instruments = list()
 	var/path = /datum/instrument
 	var/sound_player = /datum/sound_player
-	obj_flags = OBJ_FLAG_ANCHORABLE
 
 /obj/structure/synthesized_instrument/Initialize()
 	. = ..()
@@ -227,27 +217,36 @@
 
 /obj/structure/synthesized_instrument/Destroy()
 	QDEL_NULL(src.real_instrument)
-	if (islist(instruments))
-		var/list/as_list = instruments
-		for (var/key in as_list)
-			qdel(as_list[key])
+
+	var/list/instrumentsList = instruments // typecasting it to list from datum
+	for(var/key in instrumentsList)
+		qdel(instrumentsList[key])
 	instruments = null
 	. = ..()
 
+/obj/structure/synthesized_instrument/attackby(var/obj/item/tool/tool, mob/user)
+	if (tool.use_tool(user, src, WORKTIME_NORMAL, QUALITY_BOLT_TURNING, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
+		anchored = !anchored
+		user.visible_message( \
+					"[user] [anchored ? "tightens" : "loosens"] \the [src]'s casters.", \
+					SPAN_NOTICE("You have [anchored ? "tightened" : "loosened"] \the [src]."), \
+					"You hear ratchet.")
+	else
+		..()
 
 /obj/structure/synthesized_instrument/attack_hand(mob/user)
 	src.interact(user)
 
 
 /obj/structure/synthesized_instrument/interact(mob/user) // CONDITIONS ..(user) that shit in subclasses
-	src.ui_interact(user)
+	src.nano_ui_interact(user)
 
 
-/obj/structure/synthesized_instrument/ui_interact(mob/user, ui_key = "instrument", datum/nanoui/ui = null, force_open = 0)
+/obj/structure/synthesized_instrument/nano_ui_interact(mob/user, ui_key = "instrument", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	real_instrument.ui_call(user,ui_key,ui,force_open)
 
 
-/obj/structure/synthesized_instrument/proc/shouldStopPlaying(mob/user)
+/obj/structure/synthesized_instrument/proc/should_stop_playing(mob/user)
 	return 0
 
 
@@ -281,10 +280,10 @@
 
 /obj/item/device/synthesized_instrument/Destroy()
 	QDEL_NULL(src.real_instrument)
-	if (islist(instruments))
-		var/list/as_list = instruments
-		for (var/key in as_list)
-			qdel(as_list[key])
+
+	var/list/instrumentsList = instruments // typecasting it to list from datum
+	for(var/key in instrumentsList)
+		qdel(instrumentsList[key])
 	instruments = null
 	. = ..()
 
@@ -294,15 +293,14 @@
 
 
 /obj/item/device/synthesized_instrument/interact(mob/user) // CONDITIONS ..(user) that shit in subclasses
-	src.ui_interact(user)
+	src.nano_ui_interact(user)
 
 
-/obj/item/device/synthesized_instrument/ui_interact(mob/user, ui_key = "instrument", datum/nanoui/ui = null, force_open = 0)
-	if (real_instrument)
-		real_instrument.ui_call(user,ui_key,ui,force_open)
+/obj/item/device/synthesized_instrument/nano_ui_interact(mob/user, ui_key = "instrument", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
+	real_instrument.ui_call(user,ui_key,ui,force_open)
 
 
-/obj/item/device/synthesized_instrument/proc/shouldStopPlaying(mob/user)
+/obj/item/device/synthesized_instrument/proc/should_stop_playing(mob/user)
 	return !(src && in_range(src, user))
 
 /obj/item/device/synthesized_instrument/Topic(href, href_list)

@@ -1,98 +1,75 @@
+#define PROGRESSBAR_HEIGHT 6
 
 /datum/progressbar
-	var/max_progress
+	var/goal = 1
+	var/image/bar
+	var/shown = 0
+	var/mob/user
+	var/client/client
+	var/listindex
+
+/datum/progressbar/New(mob/User, goal_number, atom/target)
+	. = ..()
+	if(!istype(target))
+		EXCEPTION("Invalid target given")
+	else if(!isturf(target.loc))
+		var/turf/T = get_turf(target)
+		if(T)
+			target = T
+	if(goal_number)
+		goal = goal_number
+	bar = image('icons/effects/progessbar.dmi', target, "prog_bar_0", HUD_LAYER)
+	bar.alpha = 0
+	bar.plane = HUD_PLANE
+	bar.appearance_flags = APPEARANCE_UI_IGNORE_ALPHA
+	bar.mouse_opacity = 0
+	user = User
+	if(user)
+		client = user.client
+
+	LAZYINITLIST(user.progressbars)
+	LAZYINITLIST(user.progressbars[bar.loc])
+	var/list/bars = user.progressbars[bar.loc]
+	bars.Add(src)
+	listindex = bars.len
+	animate(bar, pixel_y = 32 + (PROGRESSBAR_HEIGHT * (listindex - 1)), alpha = 255, time = 5, easing = SINE_EASING)
 
 /datum/progressbar/proc/update(progress)
-
-
-/datum/progressbar/private
-	var/mob/actor
-	var/image/bar
-	var/client/client
-	var/visible
-	var/shown
-
-/datum/progressbar/private/Destroy()
-	if (client && bar)
-		client.images -= bar
-	actor = null
-	bar = null
-	client = null
-	return ..()
-
-/datum/progressbar/private/New(mob/actor, max_progress, atom/actee, display_on_actor = FALSE)
-	actee = actee || actor
-	if (!istype(actee))
-		EXCEPTION("Invalid progressbar/private instance")
-	src.actor = actor
-	src.max_progress = max_progress
-	client = actor.client
-	visible = actor.get_preference_value(/datum/client_preference/show_progress_bar) == GLOB.PREF_SHOW
-	if (!visible)
+	if(!user || !user.client)
+		shown = 0
 		return
-	bar = image('icons/effects/progessbar.dmi', display_on_actor ? actor : actee, "priv_prog_bar_0", HUD_ABOVE_ITEM_LAYER)
-	bar.appearance_flags = DEFAULT_APPEARANCE_FLAGS | APPEARANCE_UI_IGNORE_ALPHA
-	bar.pixel_y = WORLD_ICON_SIZE
-	bar.plane = HUD_PLANE
-
-/datum/progressbar/private/update(progress)
-	if (!visible || !actor || !actor.client)
-		shown = FALSE
-		return
-	if (actor.client != client)
-		if (client)
+	if(user.client != client)
+		if(client)
 			client.images -= bar
-			shown = FALSE
-		client = actor.client
-	progress = clamp(progress, 0, max_progress)
-	bar.icon_state = "priv_prog_bar_[round(progress * 100 / max_progress, 5)]"
-	if (!shown)
-		client.images += bar
-		shown = TRUE
+		if(user.client)
+			user.client.images += bar
 
+	progress = CLAMP(progress, 0, goal)
+	bar.icon_state = "prog_bar_[round(((progress / goal) * 100), 5)]"
+	if(!shown && user.get_preference_value(/datum/client_preference/show_progress_bar) == GLOB.PREF_SHOW)
+		user.client.images += bar
+		shown = 1
 
-/datum/progressbar/public
-	var/atom/movable/actor
-	var/atom/movable/actee
-	var/atom/movable/bar
-	var/display_on_actor = FALSE
+/datum/progressbar/proc/shiftDown()
+	--listindex
+	var/shiftheight = bar.pixel_y - PROGRESSBAR_HEIGHT
+	animate(bar, pixel_y = shiftheight, time = 5, easing = SINE_EASING)
 
-/datum/progressbar/public/Destroy()
-	if (actor && bar)
-		actor.remove_vis_contents(bar)
-	actor = null
-	actee = null
-	qdel(bar)
-	return ..()
+/datum/progressbar/Destroy()
+	for(var/I in user.progressbars[bar.loc])
+		var/datum/progressbar/P = I
+		if(P != src && P.listindex > listindex)
+			P.shiftDown()
 
-/datum/progressbar/public/New(atom/movable/actor, max_progress, atom/movable/actee, display_on_actor = FALSE)
-	actee = actee || actor
-	if (!istype(actee))
-		EXCEPTION("Invalid progressbar/public instance")
-	src.actor = actor
-	src.max_progress = max_progress
-	src.actee = actee
-	src.display_on_actor = display_on_actor
-	bar = new()
-	bar.mouse_opacity = 0
-	bar.icon = 'icons/effects/progessbar.dmi'
-	bar.icon_state = "pub_prog_bar_0"
-	calculate_position()
-	bar.layer = ABOVE_HUMAN_LAYER
-	actor.add_vis_contents(bar)
+	var/list/bars = user.progressbars[bar.loc]
+	bars.Remove(src)
+	if(!bars.len)
+		LAZYREMOVE(user.progressbars, bar.loc)
+	animate(bar, alpha = 0, time = 5)
+	spawn(5)
+		if(client)
+			client.images -= bar
+		qdel(bar)
+	. = ..()
 
-/datum/progressbar/public/update(progress)
-	if (!actor || !actee)
-		return
-	progress = clamp(progress, 0, max_progress)
-	bar.icon_state = "pub_prog_bar_[round(progress * 100 / max_progress, 5)]"
-	calculate_position()
-
-
-/// Calculates and sets `bar`'s `pixel_x` and `pixel_y` positions based on the positions of `actor` and `actee`. If `display_on_actor` is set, the bar will be tracked over `actor` instead of `actee`.
-/datum/progressbar/public/proc/calculate_position()
-	if (display_on_actor)
-		bar.pixel_y = WORLD_ICON_SIZE
-	else
-		bar.pixel_x = (actee.x - actor.x) * WORLD_ICON_SIZE
-		bar.pixel_y = (actee.y - actor.y) * WORLD_ICON_SIZE + WORLD_ICON_SIZE
+#undef PROGRESSBAR_HEIGHT

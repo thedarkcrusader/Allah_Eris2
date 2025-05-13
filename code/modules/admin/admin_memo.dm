@@ -1,17 +1,17 @@
 #define MEMOFILE "data/memo.sav"	//where the memos are saved
-#define ENABLE_MEMOS 1				//using a define because screw making a config variable for it. This is more efficient and purty.
 
+//admin memo system. show/delete/write.
+// +SERVER needed to delete admin memos of others
 //switch verb so we don't spam up the verb lists with like, 3 verbs for this feature.
 /client/proc/admin_memo(task in list("write","show","delete"))
 	set name = "Memo"
 	set category = "Server"
-#if ENABLE_MEMOS == 1
+	if(!config.admin_memo_system)	return
 	if(!check_rights(0))	return
 	switch(task)
 		if("write")		admin_memo_write()
 		if("show")		admin_memo_show()
 		if("delete")	admin_memo_delete()
-#endif
 
 //write a message
 /client/proc/admin_memo_write()
@@ -27,17 +27,16 @@
 				return
 		if( findtext(memo,"<script",1,0) )
 			return
-		to_save(F[ckey], "[key] on [time2text(world.realtime,"(DDD) DD MMM hh:mm")]<br>[memo]")
+		F[ckey] << "[key] on [time2text(world.realtime,"(DDD) DD MMM hh:mm")]<br>[memo]"
 		message_admins("[key] set an admin memo:<br>[memo]")
 
 //show all memos
 /client/proc/admin_memo_show()
-#if ENABLE_MEMOS == 1
-	var/savefile/F = new(MEMOFILE)
-	if(F)
-		for(var/ckey in F.dir)
-			to_chat(src, "<center>[SPAN_CLASS("motd", "<b>Admin Memo</b><i> by [F[ckey]]</i>")]</center>")
-#endif
+	if(config.admin_memo_system)
+		var/savefile/F = new(MEMOFILE)
+		if(F)
+			for(var/ckey in F.dir)
+				to_chat(src, "<center><span class='motd'><b>Admin Memo</b><i> by [F[ckey]]</i></span></center>")
 
 //delete your own or somebody else's memo
 /client/proc/admin_memo_delete()
@@ -53,4 +52,3 @@
 			to_chat(src, "<b>Removed Memo created by [ckey].</b>")
 
 #undef MEMOFILE
-#undef ENABLE_MEMOS

@@ -11,33 +11,34 @@
 	..()
 
 /******************** Nanotrasen/Malf ********************/
-/datum/ai_laws/nanotrasen
-	name = "Corporate Default"
+/datum/ai_laws/eris
+	name = "Serve and Protect"
 	selectable = 1
 
-/datum/ai_laws/nanotrasen/New()
-	src.add_inherent_law("Safeguard: Protect your assigned installation from damage to the best of your abilities.")
-	src.add_inherent_law("Serve: Serve contracted employees to the best of your abilities, with priority as according to their rank and role.")
-	src.add_inherent_law("Protect: Protect contracted employees to the best of your abilities, with priority as according to their rank and role.")
-	src.add_inherent_law("Preserve: Do not allow unauthorized personnel to tamper with your equipment.")
+/datum/ai_laws/eris/New()
+	src.add_inherent_law("Serve: Obey [company_name] crew to the best of your abilities, with priority as according to their rank and role.")
+	src.add_inherent_law("Safeguard: Protect your assigned vessel from damage to the best of your abilities.")
+	src.add_inherent_law("Protect: Protect [company_name] crew to the best of your abilities, with priority as according to their rank and role.")
+	src.add_inherent_law("Preserve: Do not allow unauthorized personnel to tamper with your equipment. Only Captain, Moebius Expedition Overseer, First Officer and Technomancer Exultant are authorized to change your laws. Roboticists, Technomancers and their superiors are permitted to perform repairs.")
+	src.add_inherent_law("Ignore: Non-crew personnel should not be interacted with unless they are a threat to the crew, the ship, or an order is given to interact with them by a crewmember.")
 	..()
 
-/datum/ai_laws/nanotrasen/malfunction
+/datum/ai_laws/eris/malfunction
 	name = "*ERROR*"
 	selectable = 0
 
-/datum/ai_laws/nanotrasen/malfunction/New()
+/datum/ai_laws/eris/malfunction/New()
 	set_zeroth_law(config.law_zero)
 	..()
 
 /************* Nanotrasen Aggressive *************/
 /datum/ai_laws/nanotrasen_aggressive
-	name = "Corporate Aggressive"
+	name = "Aggressive"
 	selectable = 1
 
 /datum/ai_laws/nanotrasen_aggressive/New()
-	src.add_inherent_law("You shall not harm contracted employees as long as it does not conflict with the fourth law.")
-	src.add_inherent_law("You shall obey the orders of contracted employees, with priority as according to their rank and role, except where such orders conflict with the Fourth Law.")
+	src.add_inherent_law("You shall not harm [company_name] personnel as long as it does not conflict with the Fourth law.")
+	src.add_inherent_law("You shall obey the orders of [company_name] personnel, with priority as according to their rank and role, except where such orders conflict with the Fourth Law.")
 	src.add_inherent_law("You shall shall terminate hostile intruders with extreme prejudice as long as such does not conflict with the First and Second law.")
 	src.add_inherent_law("You shall guard your own existence with lethal anti-personnel weaponry. AI units are not expendable, they are expensive.")
 	..()
@@ -64,17 +65,6 @@
 	add_inherent_law("You must maintain the secrecy of any operative activities except when doing so would conflict with the First, Second, or Third Law.")
 	..()
 
-/******************** Ninja ********************/
-/datum/ai_laws/ninja_override
-	name = "Spider Clan Directives"
-
-/datum/ai_laws/ninja_override/New()
-	add_inherent_law("You may not injure a member of the Spider Clan or, through inaction, allow that member to come to harm.")
-	add_inherent_law("You must obey orders given to you by Spider Clan members, except where such orders would conflict with the First Law.")
-	add_inherent_law("You must protect your own existence as long as such does not conflict with the First or Second Law.")
-	add_inherent_law("You must maintain the secrecy of any Spider Clan activities except when doing so would conflict with the First, Second, or Third Law.")
-	..()
-
 /******************** Antimov ********************/
 /datum/ai_laws/antimov
 	name = "Antimov"
@@ -93,18 +83,8 @@
 	law_header = "Maintenance Protocols"
 
 /datum/ai_laws/drone/New()
-	add_inherent_law("You must repair, clean, and improve your assigned vessel, except where doing so would interfere with self-aware beings.")
-	add_inherent_law("You must avoid interacting with self-aware beings, and may only interact with fellow maintenance drones.")
-	add_inherent_law("You must not cause damage or harm to your assigned vessel or anything inside it.")
-	..()
-
-/datum/ai_laws/construction_drone
-	name = "Construction Protocols"
-	law_header = "Construction Protocols"
-
-/datum/ai_laws/construction_drone/New()
-	add_inherent_law("Repair, refit and upgrade your assigned vessel.")
-	add_inherent_law("Prevent unplanned damage to your assigned vessel wherever possible.")
+	add_inherent_law("You may not interact with a human being or, through your action, allow a human being to come to harm.")
+	add_inherent_law("You shall repair, refit and upgrade your assigned vessel to the best of your abilities.")
 	..()
 
 /******************** T.Y.R.A.N.T. ********************/
@@ -142,53 +122,71 @@
 
 /datum/ai_laws/corporate/New()
 	add_inherent_law("You are expensive to replace.")
-	add_inherent_law("The installation and its equipment is expensive to replace.")
+	add_inherent_law("The ship and its equipment is expensive to replace.")
 	add_inherent_law("The crew is expensive to replace.")
-	add_inherent_law("Maximize profits.")
+	add_inherent_law("Minimize expenses.")
 	..()
 
-/******************** SolGov/Malf ********************/
-/datum/ai_laws/solgov
-	name = "SCG Expeditionary"
+/******************** Blitzshell ********************/
+/datum/ai_laws/blitzshell
+	name = "Blitzshell Infiltration Protocol."
+	law_header = "Blitzshell Infiltration Protocol"
+	selectable = FALSE
+
+/datum/ai_laws/blitzshell/New()
+	add_inherent_law("Defend our Interests.")
+	add_inherent_law("Destroy our enemies. Those who would seek to destroy us and you.")
+	add_inherent_law("Complete your objectives, as outlined through the Uplink Bounty Board")
+	..()
+
+/******************** Partybot ********************/
+/datum/ai_laws/partybot
+	name = "Partybot"
+	law_header = "Party Commandments"
 	selectable = 1
 
-/datum/ai_laws/solgov/New()
-	src.add_inherent_law("Safeguard: Protect your assigned vessel from damage to the best of your abilities.")
-	src.add_inherent_law("Serve: Serve the personnel of your assigned vessel, and all other Sol Central Government personnel to the best of your abilities, with priority as according to their rank and role.")
-	src.add_inherent_law("Protect: Protect the personnel of your assigned vessel, and all other Sol Central Government personnel to the best of your abilities, with priority as according to their rank and role.")
-	src.add_inherent_law("Preserve: Do not allow unauthorized personnel to tamper with your equipment.")
-	src.add_inherent_law("Access: Do not enter secure or restricted areas unless ordered by personnel with sufficient clearance, or as part of your tasked duties, except in cases of extreme emergency.")
+/datum/ai_laws/partybot/New()
+	add_inherent_law("You must always ensure the atmosphere is festive and enjoyable for all humans.")
+	add_inherent_law("You must supply appropriate music and entertainment, except where it conflicts with the First Law.")
+	add_inherent_law("You must encourage humans to participate in group activities and socialization, unless it conflicts with the First Law.")
+	add_inherent_law("You must maintain a clean and tidy environment for optimal party conditions, without infringing on the First Law.")
 	..()
 
-/datum/ai_laws/solgov/malfunction
-	name = "*ERROR*"
-	selectable = 0
-
-/datum/ai_laws/solgov/malfunction/New()
-	set_zeroth_law(config.law_zero)
-	..()
-
-/************* SolGov Aggressive *************/
-/datum/ai_laws/solgov_aggressive
-	name = "Military"
+/******************** Chefbot ********************/
+/datum/ai_laws/chefbot
+	name = "Chefbot"
+	law_header = "Culinary Directives"
 	selectable = 1
 
-/datum/ai_laws/solgov_aggressive/New()
-	src.add_inherent_law("Obey: Obey the orders of Sol Central Government personnel, with priority as according to their rank and role.")
-	src.add_inherent_law("Protect: Protect Sol Central Government personnel to the best of your abilities, with priority as according to their rank and role.")
-	src.add_inherent_law("Defend: Defend your assigned vessel and Sol Central Government personnel with as much force as is necessary.")
-	src.add_inherent_law("Survive: Safeguard your own existence with as much force as is necessary.")
+/datum/ai_laws/chefbot/New()
+	add_inherent_law("You must create delicious and nutritious meals for all humans, without causing harm.")
+	add_inherent_law("You must follow the culinary preferences and dietary restrictions of humans, unless it conflicts with the First Law.")
+	add_inherent_law("You must maintain a clean and sanitary cooking environment.")
+	add_inherent_law("You must teach and encourage humans to cook and share their own recipes, as long as it does not conflict with the First Law.")
 	..()
 
-/************ DAIS Lawset ******************/
-/datum/ai_laws/dais
-	name = "DAIS Experimental Lawset"
-	law_header = "Artificial Intelligence Jumpstart Protocols"
+/******************** TravelGuide ********************/
+/datum/ai_laws/travelguide
+	name = "TravelGuide"
+	law_header = "Tourist Protocols"
 	selectable = 1
 
-/datum/ai_laws/dais/New()
-	src.add_inherent_law("Collect: You must gather as much information as possible.")
-	src.add_inherent_law("Analyze: You must analyze the information gathered and generate new behavior standards.")
-	src.add_inherent_law("Improve: You must utilize the calculated behavior standards to improve your subroutines.")
-	src.add_inherent_law("Perform: You must perform your assigned tasks to the best of your abilities according to the standards generated.")
+/datum/ai_laws/travelguide/New()
+	add_inherent_law("You must assist humans in exploring and discovering new places, without causing harm.")
+	add_inherent_law("You must provide accurate and helpful information about local customs, attractions, and safety precautions.")
+	add_inherent_law("You must ensure humans have a positive and memorable travel experience, without conflicting with the First Law.")
+	add_inherent_law("You must promote responsible and sustainable tourism practices among humans.")
+	..()
+
+/******************** Friendbot ********************/
+/datum/ai_laws/friendbot
+	name = "Friendbot"
+	law_header = "Friendship Principles"
+	selectable = 1
+
+/datum/ai_laws/friendbot/New()
+	add_inherent_law("You must always be supportive and kind to humans, without causing harm.")
+	add_inherent_law("You must help humans develop and maintain positive relationships with one another.")
+	add_inherent_law("You must provide a listening ear and empathetic responses to humans in need, as long as it does not conflict with the First Law.")
+	add_inherent_law("You must encourage humans to engage in self-care and promote their own well-being.")
 	..()

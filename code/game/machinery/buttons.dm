@@ -1,131 +1,105 @@
 /obj/machinery/button
 	name = "button"
-	icon = 'icons/obj/structures/buttons.dmi'
-	icon_state = "launcherbtt"
+	icon = 'icons/obj/machines/buttons.dmi'
+	icon_state = "launcher0"
 	desc = "A remote control switch for something."
+	var/id = null
+	var/active = 0
+	var/operating = 0
 	anchored = TRUE
-	power_channel = ENVIRON
-	idle_power_usage = 10
-	public_variables = list(
-		/singleton/public_access/public_variable/button_active,
-		/singleton/public_access/public_variable/input_toggle
-	)
-	public_methods = list(/singleton/public_access/public_method/toggle_input_toggle)
-	stock_part_presets = list(/singleton/stock_part_preset/radio/basic_transmitter/button = 1)
-	uncreated_component_parts = list(
-		/obj/item/stock_parts/power/apc,
-		/obj/item/stock_parts/radio/transmitter/basic
-	)
-
-	var/active = FALSE
-	var/operating = FALSE
-	var/cooldown = 1 SECOND
+	use_power = IDLE_POWER_USE
+	idle_power_usage = 2
+	active_power_usage = 4
+	var/_wifi_id
+	var/datum/wifi/sender/wifi_sender
 
 /obj/machinery/button/Initialize()
 	. = ..()
 	update_icon()
+	if(_wifi_id && !wifi_sender)
+		wifi_sender = new/datum/wifi/sender/button(_wifi_id, src)
 
-/obj/machinery/button/use_tool(obj/item/tool, mob/living/user, list/click_params)
-	if (attack_hand(user))
-		return TRUE
+/obj/machinery/button/Destroy()
+	qdel(wifi_sender)
+	wifi_sender = null
 	return ..()
 
-/obj/machinery/button/interface_interact(user)
-	if(!CanInteract(user, DefaultTopicState()))
-		return FALSE
-	if(istype(user, /mob/living/carbon))
-		playsound(src, "button", 60)
-	activate(user)
-	return TRUE
+/obj/machinery/button/attackby(obj/item/W, mob/user as mob)
+	return attack_hand(user)
 
-/obj/machinery/button/emag_act()
-	if(req_access)
-		req_access.Cut()
+/obj/machinery/button/attack_hand(mob/living/user)
+	if(..()) return 1
+	playsound(loc, 'sound/machines/button.ogg', 100, 1)
+	activate(user)
 
 /obj/machinery/button/proc/activate(mob/living/user)
-	set waitfor = FALSE
-	if(operating)
+	if(operating || !istype(wifi_sender))
 		return
 
-	operating = TRUE
-	var/singleton/public_access/public_variable/variable = GET_SINGLETON(/singleton/public_access/public_variable/button_active)
-	variable.write_var(src, !active)
-	use_power_oneoff(500)
+	operating = 1
+	active = 1
+	use_power(5)
 	update_icon()
-
-	sleep(cooldown)
-	operating = FALSE
+	wifi_sender.activate(user)
+	sleep(10)
+	active = 0
 	update_icon()
+	operating = 0
 
-/obj/machinery/button/on_update_icon()
-	if(operating)
-		icon_state = "launcheract"
+/obj/machinery/button/update_icon()
+	if(active)
+		icon_state = "launcher1"
+	else if(stat & (NOPOWER))
+		icon_state = "launcher-p"
 	else
-		icon_state = "launcherbtt"
-
-/singleton/public_access/public_variable/button_active
-	expected_type = /obj/machinery/button
-	name = "button active"
-	desc = "Whether the button is currently in the on state."
-	can_write = FALSE
-	has_updates = TRUE
-
-/singleton/public_access/public_variable/button_active/access_var(obj/machinery/button/button)
-	return button.active
-
-/singleton/public_access/public_variable/button_active/write_var(obj/machinery/button/button, new_val)
-	. = ..()
-	if(.)
-		button.active = new_val
-
-/singleton/stock_part_preset/radio/basic_transmitter/button
-	transmit_on_change = list("button_active" = /singleton/public_access/public_variable/button_active)
-	frequency = BUTTON_FREQ
+		icon_state = "launcher0"
 
 //alternate button with the same functionality, except has a lightswitch sprite instead
 /obj/machinery/button/switch
-	icon = 'icons/obj/structures/buttons.dmi'
 	icon_state = "light0"
 
-/obj/machinery/button/switch/on_update_icon()
-	icon_state = "light[operating]"
+/obj/machinery/button/switch/update_icon()
+	icon_state = "light[active]"
 
 //alternate button with the same functionality, except has a door control sprite instead
 /obj/machinery/button/alternate
-	icon = 'icons/obj/structures/buttons.dmi'
-	icon_state = "doorctrl"
+	icon_state = "doorctrl0"
 
-/obj/machinery/button/alternate/on_update_icon()
-	if(operating)
-		icon_state = "doorctrl"
+/obj/machinery/button/alternate/update_icon()
+	if(active)
+		icon_state = "doorctrl0"
 	else
 		icon_state = "doorctrl2"
 
-//Toggle button determines icon state from active, not operating
-/obj/machinery/button/toggle/on_update_icon()
+//Toggle button with two states (on and off) and calls seperate procs for each state
+/obj/machinery/button/toggle/activate(mob/living/user)
+	if(operating || !istype(wifi_sender))
+		return
+
+	operating = 1
+	active = !active
+	use_power(5)
 	if(active)
-		icon_state = "launcheract"
+		wifi_sender.activate(user)
 	else
-		icon_state = "launcherbtt"
+		wifi_sender.deactivate(user)
+	update_icon()
+	operating = 0
 
 //alternate button with the same toggle functionality, except has a lightswitch sprite instead
 /obj/machinery/button/toggle/switch
-	icon = 'icons/obj/structures/buttons.dmi'
 	icon_state = "light0"
 
-/obj/machinery/button/toggle/switch/on_update_icon()
+/obj/machinery/button/toggle/switch/update_icon()
 	icon_state = "light[active]"
-
-
 
 //alternate button with the same toggle functionality, except has a door control sprite instead
 /obj/machinery/button/toggle/alternate
-	icon = 'icons/obj/structures/buttons.dmi'
-	icon_state = "doorctrl"
+	icon_state = "doorctrl0"
 
-/obj/machinery/button/toggle/alternate/on_update_icon()
+/obj/machinery/button/toggle/alternate/update_icon()
 	if(active)
-		icon_state = "doorctrl"
+		icon_state = "doorctrl0"
 	else
 		icon_state = "doorctrl2"
 
@@ -136,45 +110,89 @@
 /obj/machinery/button/mass_driver
 	name = "mass driver button"
 
+/obj/machinery/button/mass_driver/Initialize()
+	if(_wifi_id)
+		wifi_sender = new/datum/wifi/sender/mass_driver(_wifi_id, src)
+	. = ..()
+
+/obj/machinery/button/mass_driver/activate(mob/living/user)
+	if(active || !istype(wifi_sender))
+		return
+
+	active = 1
+	use_power(5)
+	update_icon()
+	wifi_sender.activate()
+	active = 0
+	update_icon()
+
+
 //-------------------------------
-// Door Buttons
+// Door Button
 //-------------------------------
 
-/obj/machinery/button/alternate/door
-	icon = 'icons/obj/structures/buttons.dmi'
-	icon_state = "doorctrl"
-	stock_part_presets = list(/singleton/stock_part_preset/radio/basic_transmitter/button/door)
+// Bitmasks for door switches.
+#define OPEN   0x1
+#define IDSCAN 0x2
+#define BOLTS  0x4
+#define SHOCK  0x8
+#define SAFE   0x10
 
-/obj/machinery/button/alternate/door/on_update_icon()
-	if(operating)
-		icon_state = "[initial(icon_state)]1"
+/obj/machinery/button/toggle/door
+	icon_state = "doorctrl0"
+
+	var/_door_functions = 1
+/*	Bitflag, 	1 = open
+				2 = idscan
+				4 = bolts
+				8 = shock
+				16 = door safties  */
+
+/obj/machinery/button/toggle/door/update_icon()
+	if(active)
+		icon_state = "doorctrl0"
 	else
-		icon_state = "[initial(icon_state)]"
+		icon_state = "doorctrl2"
 
-/singleton/stock_part_preset/radio/basic_transmitter/button/door
-	frequency = AIRLOCK_FREQ
-	transmit_on_change = list("toggle_door" = /singleton/public_access/public_variable/button_active)
+/obj/machinery/button/toggle/door/Initialize()
+	if(_wifi_id)
+		wifi_sender = new/datum/wifi/sender/door(_wifi_id, src)
+	. = ..()
 
-/obj/machinery/button/alternate/door/bolts
-	stock_part_presets = list(/singleton/stock_part_preset/radio/basic_transmitter/button/airlock_bolt)
+/obj/machinery/button/toggle/door/activate(mob/living/user)
+	if(operating || !istype(wifi_sender))
+		return
 
-/singleton/stock_part_preset/radio/basic_transmitter/button/airlock_bolt
-	frequency = AIRLOCK_FREQ
-	transmit_on_change = list("toggle_bolts" = /singleton/public_access/public_variable/button_active)
-
-// Valve control
-
-/obj/machinery/button/toggle/valve
-	name = "remote valve control"
-	stock_part_presets = list(/singleton/stock_part_preset/radio/basic_transmitter/button/atmosia)
-
-/obj/machinery/button/toggle/valve/on_update_icon()
-	if(!active)
-		icon_state = "launcherbtt"
+	operating = 1
+	active = !active
+	use_power(5)
+	update_icon()
+	if(active)
+		if(_door_functions & IDSCAN)
+			wifi_sender.activate("enable_idscan")
+		if(_door_functions & SHOCK)
+			wifi_sender.activate("electrify")
+		if(_door_functions & SAFE)
+			wifi_sender.activate("enable_safeties")
+		if(_door_functions & BOLTS)
+			wifi_sender.activate("unlock")
+		if(_door_functions & OPEN)
+			wifi_sender.activate("open")
 	else
-		icon_state = "launcheract"
+		if(_door_functions & IDSCAN)
+			wifi_sender.activate("disable_idscan")
+		if(_door_functions & SHOCK)
+			wifi_sender.activate("unelectrify")
+		if(_door_functions & SAFE)
+			wifi_sender.activate("disable_safeties")
+		if(_door_functions & OPEN)
+			wifi_sender.activate("close")
+		if(_door_functions & BOLTS)
+			wifi_sender.activate("lock")
+	operating = 0
 
-/singleton/stock_part_preset/radio/basic_transmitter/button/atmosia
-	transmit_on_change = list("valve_toggle" = /singleton/public_access/public_variable/button_active)
-	frequency = FUEL_FREQ
-	filter = RADIO_ATMOSIA
+#undef OPEN
+#undef IDSCAN
+#undef BOLTS
+#undef SHOCK
+#undef SAFE

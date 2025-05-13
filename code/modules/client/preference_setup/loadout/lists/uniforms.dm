@@ -1,221 +1,230 @@
+// Uniform slot
 /datum/gear/uniform
-	sort_category = "Uniforms and Casual Dress"
+	display_name = "kilt"
+	path = /obj/item/clothing/under/kilt
 	slot = slot_w_uniform
-	category = /datum/gear/uniform
+	sort_category = "Uniforms and Casual Dress"
 
-/datum/gear/uniform/jumpsuit
-	display_name = "jumpsuit, colour select"
-	path = /obj/item/clothing/under/color
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/uniform/jumpsuit/rainbow
+	display_name = "jumpsuit, rainbow"
+	path = /obj/item/clothing/under/rainbow
 
-/datum/gear/uniform/shortjumpskirt
-	display_name = "short jumpskirt, colour select"
-	path = /obj/item/clothing/under/shortjumpskirt
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/uniform/jumpsuit/color_presets
+	display_name = "jumpsuit, color presets"
+	path = /obj/item/clothing/under/color/grey
+	cost = 1
 
-/datum/gear/uniform/blackjumpshorts
-	display_name = "black jumpsuit shorts"
-	path = /obj/item/clothing/under/color/blackjumpshorts
-
-/datum/gear/uniform/roboticist_skirt
-	display_name = "skirt, roboticist"
-	path = /obj/item/clothing/under/rank/roboticist/skirt
-
-/datum/gear/uniform/suit
-	display_name = "clothes selection"
-	path = /obj/item/clothing/under
-
-/datum/gear/uniform/suit/New()
+/datum/gear/uniform/jumpsuit/color_presets/New()
 	..()
-	var/suits = list()
-	suits += /obj/item/clothing/under/sl_suit
-	suits += /obj/item/clothing/under/suit_jacket
-	suits += /obj/item/clothing/under/lawyer/blue
-	suits += /obj/item/clothing/under/suit_jacket/burgundy
-	suits += /obj/item/clothing/under/suit_jacket/charcoal
-	suits += /obj/item/clothing/under/suit_jacket/checkered
-	suits += /obj/item/clothing/under/suit_jacket/really_black
-	suits += /obj/item/clothing/under/suit_jacket/female
-	suits += /obj/item/clothing/under/gentlesuit
-	suits += /obj/item/clothing/under/suit_jacket/navy
-	suits += /obj/item/clothing/under/lawyer/oldman
-	suits += /obj/item/clothing/under/lawyer/purpsuit
-	suits += /obj/item/clothing/under/suit_jacket/red
-	suits += /obj/item/clothing/under/lawyer/red
-	suits += /obj/item/clothing/under/lawyer/black
-	suits += /obj/item/clothing/under/suit_jacket/tan
-	suits += /obj/item/clothing/under/scratch
-	suits += /obj/item/clothing/under/lawyer/bluesuit
-	suits += /obj/item/clothing/under/rank/internalaffairs/plain
-	suits += /obj/item/clothing/under/blazer
-	suits += /obj/item/clothing/under/blackjumpskirt
-	suits += /obj/item/clothing/under/kilt
-	suits += /obj/item/clothing/under/dress/dress_hr
-	suits += /obj/item/clothing/under/det
-	suits += /obj/item/clothing/under/det/black
-	suits += /obj/item/clothing/under/det/grey
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(suits)
+	var/jumpsuit = list(
+		"Black"			=	/obj/item/clothing/under/color/black,
+		"White"			=	/obj/item/clothing/under/color/white,
+		"Grey"			=	/obj/item/clothing/under/color/grey,
+		"Orange"		=	/obj/item/clothing/under/color/orange,
+		"Blue"			=	/obj/item/clothing/under/color/blue,
+		"Yellow"		= 	/obj/item/clothing/under/color/yellow,
+		"Red"			=	/obj/item/clothing/under/color/red,
+		"Janitor"		=	/obj/item/clothing/under/rank/janitor,
+		"Crewman"		= 	/obj/item/clothing/under/rank/crewman
+	)
+	gear_tweaks += new /datum/gear_tweak/path(jumpsuit)
 
-/datum/gear/uniform/scrubs
-	display_name = "standard medical scrubs"
-	path = /obj/item/clothing/under/rank/medical/scrubs
-	flags = GEAR_HAS_TYPE_SELECTION
-
-/datum/gear/uniform/scrubs/custom
-	display_name = "scrubs, colour select"
+/datum/gear/uniform/jumpsuit/colorable
+	display_name = "jumpsuit, colorable"
 	flags = GEAR_HAS_COLOR_SELECTION
+	path = /obj/item/clothing/under/color/white
+
+/datum/gear/uniform/hydroponics
+	display_name = "hydroponist uniform"
+	path = /obj/item/clothing/under/rank/hydroponics
+
+/datum/gear/uniform/virology
+	display_name = "virologist uniform"
+	path = /obj/item/clothing/under/rank/virologist
+
+/datum/gear/uniform/leisure
+	display_name = "leisure suits"
+	path = /obj/item/clothing/under/leisure
+
+/datum/gear/uniform/leisure/New()
+	..()
+	var/leisure = list(
+		"Brown Jacket" 			=	 /obj/item/clothing/under/leisure,
+		"White Blazer" 			=	 /obj/item/clothing/under/leisure/white,
+		"Patterned Pullover" 	=	 /obj/item/clothing/under/leisure/pullover,
+		"Business Casual, blue"	=	 /obj/item/clothing/under/leisure/casual/blue,
+		"Business Casual, red"	=	 /obj/item/clothing/under/leisure/joe
+	)
+	gear_tweaks += new /datum/gear_tweak/path(leisure)
 
 /datum/gear/uniform/dress
-	display_name = "dress selection"
-	path = /obj/item/clothing/under
+	display_name = "dresses"
+	path = /obj/item/clothing/under/dress/gray
 
 /datum/gear/uniform/dress/New()
 	..()
-	var/dresses = list()
-	dresses += /obj/item/clothing/under/sundress_white
-	dresses += /obj/item/clothing/under/dress/dress_fire
-	dresses += /obj/item/clothing/under/dress/dress_green
-	dresses += /obj/item/clothing/under/dress/dress_orange
-	dresses += /obj/item/clothing/under/dress/dress_pink
-	dresses += /obj/item/clothing/under/dress/dress_purple
-	dresses += /obj/item/clothing/under/sundress
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(dresses)
+	var/dress = list(
+		"Gray Dress" 	=	 /obj/item/clothing/under/dress/gray,
+		"Blue Dress" 	=	 /obj/item/clothing/under/dress/blue,
+		"Red Dress" 	=	 /obj/item/clothing/under/dress/red,
+		"Purple Dress" 	=	 /obj/item/clothing/under/dress/purple,
+		"White Dress" 	=	 /obj/item/clothing/under/dress/white,
+		"Gray Dress" 	=	 /obj/item/clothing/under/dress/gray
+	)
+	gear_tweaks += new /datum/gear_tweak/path(dress)
 
-/datum/gear/uniform/dress_c
-	display_name = "dresses, colour select"
-	path = /obj/item/clothing/under
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/uniform/security_skirt
+	display_name = "jumpskirt, operative"
+	path = /obj/item/clothing/under/rank/security/skirt
+	allowed_roles = list("Ironhammer Operative")
 
-/datum/gear/uniform/dress_c/New()
+/datum/gear/uniform/medspec_skirt
+	display_name = "jumpskirt, medical specialist"
+	path = /obj/item/clothing/under/rank/medspec/skirt
+	allowed_roles = list("Ironhammer Medical Specialist")
+
+/datum/gear/uniform/warden_skirt
+	display_name = "jumpskirt, warden"
+	path = /obj/item/clothing/under/rank/warden/skirt
+	allowed_roles = list("Ironhammer Gunnery Sergeant")
+
+/datum/gear/uniform/hos_skirt
+	display_name = "jumpskirt, commander"
+	path = /obj/item/clothing/under/rank/ih_commander/skirt
+	allowed_roles = list("Ironhammer Commander")
+
+/*/datum/gear/uniform/skirt
+	display_name = "plaid skirt, blue"
+	path = /obj/item/clothing/under/dress/plaid_blue
+
+/datum/gear/uniform/skirt/purple
+	display_name = "plaid skirt, purple"
+	path = /obj/item/clothing/under/dress/plaid_purple
+
+/datum/gear/uniform/skirt/red
+	display_name = "plaid skirt, red"
+	path = /obj/item/clothing/under/dress/plaid_red*/
+
+/*/datum/gear/uniform/suit  //amish
+	display_name = "suit, amish"
+	path = /obj/item/clothing/under/sl_suit*/
+
+/datum/gear/uniform/scrubs/color_presets
+	display_name = "scrubs, color presets"
+	path = /obj/item/clothing/under/rank/medical/blue
+
+/datum/gear/uniform/scrubs/color_presets/New()
 	..()
-	var/dress_c = list()
-	dress_c += /obj/item/clothing/under/cheongsam
-	dress_c += /obj/item/clothing/under/skirt_c/dress
-	dress_c += /obj/item/clothing/under/skirt_c/dress_long
-	dress_c += /obj/item/clothing/under/skirt_c/dress_long/gown
-	dress_c += /obj/item/clothing/under/skirt_c/dress_elegant
-	dress_c += /obj/item/clothing/under/skirt_c/dress_stripes
-	dress_c += /obj/item/clothing/under/skirt_c/dress_flowers
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(dress_c)
+	var/jumpsuit = list(
+		"green"			=	/obj/item/clothing/under/rank/medical/green,
+		"purple"		=	/obj/item/clothing/under/rank/medical/purple,
+		"blue"			=	/obj/item/clothing/under/rank/medical/blue
+	)
+	gear_tweaks += new /datum/gear_tweak/path(jumpsuit)
 
-/datum/gear/uniform/abaya
-	display_name = "abaya, colour select"
-	path = /obj/item/clothing/under/abaya
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/uniform/neon
+	display_name = "neon tracksuits, color presets"
+	path = /obj/item/clothing/under/neon
 
-/datum/gear/uniform/skirt
-	display_name = "skirt selection"
-	path = /obj/item/clothing/under/skirt
-	flags = GEAR_HAS_TYPE_SELECTION
-
-/datum/gear/uniform/skirt_c
-	display_name = "short skirt, colour select"
-	path = /obj/item/clothing/under/skirt_c
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/uniform/casual_pants
-	display_name = "casual pants selection"
-	path = /obj/item/clothing/under/casual_pants
-	flags = GEAR_HAS_TYPE_SELECTION
-
-/datum/gear/uniform/formal_pants
-	display_name = "formal pants selection"
-	path = /obj/item/clothing/under/formal_pants
-	flags = GEAR_HAS_TYPE_SELECTION
-
-/datum/gear/uniform/formal_pants/custom
-	display_name = "suit pants, colour select"
-	path = /obj/item/clothing/under/formal_pants
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/uniform/formal_pants/baggycustom
-	display_name = "baggy suit pants, colour select"
-	path = /obj/item/clothing/under/formal_pants/baggy
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/uniform/shorts
-	display_name = "shorts selection"
-	path = /obj/item/clothing/under/shorts/jeans
-	flags = GEAR_HAS_TYPE_SELECTION
-
-/datum/gear/uniform/shorts/custom
-	display_name = "athletic shorts, colour select"
-	path = /obj/item/clothing/under/shorts
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/uniform/turtleneck
-	display_name = "sweater, colour select"
-	path = /obj/item/clothing/under/rank/psych/turtleneck/sweater
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/uniform/kimono
-	display_name = "kimono, colour select"
-	path = /obj/item/clothing/under/kimono
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/uniform/corporate
-	display_name = "corporate uniform selection"
-	path = /obj/item/clothing/under
-
-/datum/gear/uniform/corporate/New()
+/datum/gear/uniform/neon/New()
 	..()
-	var/corps = list()
-	corps += /obj/item/clothing/under/rank/scientist/nanotrasen
-	corps += /obj/item/clothing/under/rank/scientist/heph
-	corps += /obj/item/clothing/under/rank/scientist/zeng
-	corps += /obj/item/clothing/under/mbill
-	corps += /obj/item/clothing/under/saare
-	corps += /obj/item/clothing/under/aether
-	corps += /obj/item/clothing/under/hephaestus
-	corps += /obj/item/clothing/under/pcrc
-	corps += /obj/item/clothing/under/pcrcsuit
-	corps += /obj/item/clothing/under/wardt
-	corps += /obj/item/clothing/under/grayson
-	corps += /obj/item/clothing/under/focal
-	corps += /obj/item/clothing/under/rank/ntwork
-	corps += /obj/item/clothing/under/morpheus
-	corps += /obj/item/clothing/under/skinner
-	corps += /obj/item/clothing/under/dais
-	corps += /obj/item/clothing/under/rank/roboticist/bishop
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(corps)
+	var/neon = list(
+		"green"		=	/obj/item/clothing/under/neon,
+		"yellow"	=	/obj/item/clothing/under/neon/yellow,
+		"blue"		=	/obj/item/clothing/under/neon/blue,
+		"red" 		= 	/obj/item/clothing/under/neon/red
+	)
+	gear_tweaks += new /datum/gear_tweak/path(neon)
 
-/datum/gear/uniform/corp_exec
-	display_name = "corporate colours, senior researcher"
-	path = /obj/item/clothing/under/rank/scientist/executive
-	flags = GEAR_HAS_TYPE_SELECTION
+/datum/gear/uniform/cyber
+	display_name = "augmented jumpsuit"
+	path = /obj/item/clothing/under/cyber
 
-/datum/gear/uniform/corp_overalls
-	display_name = "corporate colours, coveralls"
-	path = /obj/item/clothing/under/rank/ntwork
-	flags = GEAR_HAS_TYPE_SELECTION
+/datum/gear/uniform/generic
+	display_name = "generic outfit, color presets"
+	path = /obj/item/clothing/under/genericb
 
-/datum/gear/uniform/corp_flight
-	display_name = "corporate colours, flight suit"
-	path = /obj/item/clothing/under/rank/ntpilot
-	flags = GEAR_HAS_TYPE_SELECTION
+/datum/gear/uniform/generic/New()
+	..()
+	var/generic = list(
+		"blue" 			=	 /obj/item/clothing/under/genericb,
+		"red" 			=	 /obj/item/clothing/under/genericr,
+		"white" 		=	 /obj/item/clothing/under/genericw,
+		"beige" 		=	 /obj/item/clothing/under/aerostatic,
+		"brown" 		=	 /obj/item/clothing/under/jamrock,
+		"tank top" 		=	 /obj/item/clothing/under/wifebeater
+	)
+	gear_tweaks += new /datum/gear_tweak/path(generic)
 
-/datum/gear/uniform/corp_exec_jacket
-	display_name = "corporate colours, liason suit"
-	path = /obj/item/clothing/under/suit_jacket/corp
-	flags = GEAR_HAS_TYPE_SELECTION
+/datum/gear/uniform/punk
+	display_name = "punk outfit, selection"
+	path = /obj/item/clothing/under/johnny
 
-/datum/gear/uniform/sterile
-	display_name = "sterile jumpsuit"
-	path = /obj/item/clothing/under/sterile
-	flags = GEAR_HAS_TYPE_SELECTION
+/datum/gear/uniform/punk/New()
+	..()
+	var/punk = list(
+		"punk" 			=	 /obj/item/clothing/under/johnny,
+		"elvis" 		=	 /obj/item/clothing/under/raider,
+		"jersey" 		=	 /obj/item/clothing/under/jersey,
+		"tracksuit" 	=	 /obj/item/clothing/under/storage/tracksuit
+	)
+	gear_tweaks += new /datum/gear_tweak/path(punk)
 
-/datum/gear/uniform/hazard
-	display_name = "hazard jumpsuit"
-	path = /obj/item/clothing/under/hazard
+/datum/gear/uniform/suits
+	display_name = "suits, selection"
+	path = /obj/item/clothing/under/black
 
-/datum/gear/uniform/frontier
-	display_name = "frontier clothes"
-	path = /obj/item/clothing/under/frontier
+/datum/gear/uniform/suits/New()
+	..()
+	var/suits = list(
+		"green" 		=	 /obj/item/clothing/under/green,
+		"red" 			=	 /obj/item/clothing/under/red,
+		"red formal" 	=	 /obj/item/clothing/under/helltaker,
+		"white" 		=	 /obj/item/clothing/under/white,
+		"ash" 			=	 /obj/item/clothing/under/grey,
+		"charcoal" 		=	 /obj/item/clothing/under/black,
+		"black formal" 	=	 /obj/item/clothing/under/tuxedo,
+		"tailcoat"		=	 /obj/item/clothing/under/blazer,
+		"tuxedo" 		=	 /obj/item/clothing/under/assistantformal
+	)
+	gear_tweaks += new /datum/gear_tweak/path(suits)
 
-/datum/gear/uniform/pj_red
-	display_name = "red pajamas"
-	path = /obj/item/clothing/under/redpyjamas
+/datum/gear/uniform/security_formal
+	display_name = "formal security outfit"
+	path = /obj/item/clothing/under/security_formal
+	allowed_roles = list(JOBS_SECURITY)
 
-/datum/gear/uniform/pj_blue
-	display_name = "blue pajamas"
-	path = /obj/item/clothing/under/bluepyjamas
+/datum/gear/uniform/camopants
+	display_name = "turtleneck and camo pants"
+	path = /obj/item/clothing/under/camopants
+
+/datum/gear/uniform/syndicate
+	display_name = "Syndicate turtleneck"
+	path = /obj/item/clothing/under/syndicate
+
+/*/datum/gear/uniform/uniform_hop
+	display_name = "uniform, HoP's dress"
+	path = /obj/item/clothing/under/dress/dress_hop
+	allowed_roles = list("First Officer")*/
+
+/datum/gear/uniform/battledress_serb
+	display_name = "battle dress uniform, serbian"
+	path = /obj/item/clothing/under/serbiansuit
+
+/datum/gear/uniform/battledress_serb/New()
+	..()
+	var/battledress_serb = list(
+		"green"	=	/obj/item/clothing/under/serbiansuit,
+		"brown"	=	/obj/item/clothing/under/serbiansuit/brown,
+		"black"	=	/obj/item/clothing/under/serbiansuit/black
+	)
+	gear_tweaks += new /datum/gear_tweak/path(battledress_serb)
+
+/datum/gear/uniform/battledress_german
+	display_name = "battle dress uniform, oberth"
+	path = /obj/item/clothing/under/germansuit
+
+/datum/gear/uniform/ntsec
+	display_name = "old security uniform"
+	path = /obj/item/clothing/under/oldsec
+	allowed_roles = list(ASSISTANT_TITLE)

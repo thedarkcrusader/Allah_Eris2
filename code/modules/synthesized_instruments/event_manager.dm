@@ -1,4 +1,4 @@
-/datum/musical_event
+datum/musical_event
 	var/datum/sound_player/source
 	var/time = 0
 	var/new_volume = 100
@@ -29,7 +29,7 @@
 
 
 /datum/musical_event/proc/update_sound()
-	src.token.SetVolume(new_volume)
+	src.token.set_volume(new_volume)
 
 
 /datum/musical_event/proc/destroy_sound()
@@ -72,7 +72,7 @@
 	if (active)	return 0
 	src.active = 1
 
-	addtimer(new Callback(src, PROC_REF(handle_events)), 0)
+	addtimer(CALLBACK(src, PROC_REF(handle_events)), 0)
 
 
 
@@ -88,4 +88,4 @@
 
 
 /datum/musical_event_manager/proc/is_overloaded()
-	return length(src.events) > GLOB.musical_config.max_events
+	return src.events.len > GLOB.musical_config.max_events

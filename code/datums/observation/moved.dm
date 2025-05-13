@@ -8,32 +8,26 @@
 //			/atom/old_loc: The loc before the move.
 //			/atom/new_loc: The loc after the move.
 
-GLOBAL_TYPED_NEW(moved_event, /singleton/observ/moved)
+GLOBAL_DATUM_INIT(moved_event, /decl/observ/moved, new)
 
-/singleton/observ/moved
+/decl/observ/moved
 	name = "Moved"
 	expected_type = /atom/movable
 
-/singleton/observ/moved/register(atom/movable/mover, datum/listener, proc_call)
+/decl/observ/moved/register(var/atom/movable/mover, var/datum/listener, var/proc_call)
 	. = ..()
 
 	// Listen to the parent if possible.
 	if(. && istype(mover.loc, expected_type))
-		register(mover.loc, mover, TYPE_PROC_REF(/atom/movable, recursive_move))
+		register(mover.loc, mover, /atom/movable/proc/recursive_move)
 
 /********************
 * Movement Handling *
 ********************/
 
-/atom/Entered(atom/movable/am, atom/old_loc)
+// Entered() typically lifts the moved event, but in the case of null-space we'll have to handle it.
+/atom/movable/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
+	var/old_loc = loc
 	. = ..()
-	GLOB.moved_event.raise_event(am, old_loc, am.loc)
-
-/atom/movable/Entered(atom/movable/am, atom/old_loc)
-	. = ..()
-	if(GLOB.moved_event.has_listeners(am))
-		GLOB.moved_event.register(src, am, TYPE_PROC_REF(/atom/movable, recursive_move))
-
-/atom/movable/Exited(atom/movable/am, atom/new_loc)
-	. = ..()
-	GLOB.moved_event.unregister(src, am, TYPE_PROC_REF(/atom/movable, recursive_move))
+	if(. && !loc)
+		GLOB.moved_event.raise_event(src, old_loc, null)

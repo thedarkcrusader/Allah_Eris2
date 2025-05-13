@@ -14,14 +14,14 @@ hr
 	height: 1px;
 }
 
-a, a:link, a:visited, a:active, .linkOn, .linkOff, input
+a, a:link, a:visited, a:active, .linkOn, .linkOff
 {
 	color: #ffffff;
 	text-decoration: none;
 	background: #40628a;
 	border: 1px solid #161616;
 	padding: 1px 4px 1px 4px;
-	margin: 0 1px 0 1px;
+	margin: 0 2px 0 0;
 	cursor:default;
 	white-space:nowrap;
 }
@@ -43,7 +43,14 @@ a.white, a.white:link, a.white:visited, a.white:active
 	cursor:default;
 }
 
-a.white:hover
+a.red, a.red:link, a.red:visited, a.red:active
+{
+	color: #444444;
+	background: #dd7c7c;
+	border-color: #444444;
+}
+
+a.white:hover, a.red:hover
 {
 	color: #ffffff;
 	background: #40628a;
@@ -83,10 +90,6 @@ ul
 	padding: 4px 0 0 10px;
 	margin: 0;
 	list-style-type: none;
-}
-
-dl dt {
-    font-weight: bold;
 }
 
 li
@@ -182,13 +185,9 @@ h4
 	color: #00ff00;
 }
 
-.mild {
-	color: #e0d000;
-}
-
 .average
 {
-	color: #f09000;
+	color: #d09000;
 }
 
 .bad
@@ -282,16 +281,10 @@ div.notice
 	background: #00ff00;
 }
 
-.progressFill.mild
-{
-	color: #ffffff;
-	background: #e0d000;
-}
-
 .progressFill.average
 {
 	color: #ffffff;
-	background: #f09000;
+	background: #d09000;
 }
 
 .progressFill.bad
@@ -336,51 +329,13 @@ div.notice
 	margin: 3px 0;
 }
 
-
-/* Data tables */
-table.data {
-	border-collapse: collapse;
-	width: 100%;
-}
-
-table.data thead th {
-	border-bottom: 2px solid #161616;
-	background: #383838;
-	color: #98B0C3;
-}
-
-table.data tbody th {
-	border-right: 2px solid #161616;
-	background: #383838;
-	color: #98B0C3;
-}
-
-table.data tbody td,
-table.data tbody th {
-	border-bottom: #40628a 1px solid;
-	vertical-align: top;
-}
-
-
-/* Hover tables */
-table.hover tr:hover,
-table tr.hover:hover,
-table tr.forcehover {
-	background: #294059;
-}
-
-
-/* Striped tables */
-table tr.stripe {
-	background: #383838;
-}
-
-
-/* Other misc table styles */
-table tr.disabled td,
-table tr.disabled th,
-table td.disabled,
-table th.disabled {
-	color: #999999;
-	font-style: italic;
+.roleDescription
+{
+	background: #000000;
+	color: #ffffff;
+	border: 1px solid #40628a;
+	padding: 4px;
+	margin: 3px 0;
+	font-family: verdana;
+	line-height: 140%;
 }

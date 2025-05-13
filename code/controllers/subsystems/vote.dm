@@ -1,196 +1,189 @@
 SUBSYSTEM_DEF(vote)
-	name = "Voting"
-	wait = 1 SECOND
-	priority = SS_PRIORITY_VOTE
-	flags = SS_NO_TICK_CHECK | SS_KEEP_TIMING
-	runlevels = RUNLEVELS_PREGAME | RUNLEVELS_GAME
+	name = "Vote"
+	wait = 1 SECONDS
+	flags = SS_KEEP_TIMING | SS_NO_INIT
+	runlevels = RUNLEVEL_LOBBY | RUNLEVELS_DEFAULT
 
-	var/last_started_time        //To enforce delay between votes.
-	var/antag_added              //Enforces a maximum of one added antag per round.
+	var/list/votes = list()
+	var/list/voters = list()	//List of clients with opened vote window
+	var/datum/poll/active_vote
+	var/vote_start_time = 0
 
-	var/datum/vote/active_vote   //The current vote. This handles most voting activity.
-	var/list/old_votes           //Stores completed votes for reference.
-	var/queued_auto_vote         //Used if a vote queues another vote to happen after it.
+/datum/controller/subsystem/vote/PreInit()
+	for(var/T in subtypesof(/datum/poll))
+		var/datum/poll/P = new T
+		votes[T] = P
 
-	var/list/voting = list()     //Clients recieving UI updates.
-	var/list/vote_prototypes     //To run checks on whether they are available.
+/datum/controller/subsystem/vote/proc/update_voters()
+	for(var/client/C in voters)
+		interface_client(C)
 
-/datum/controller/subsystem/vote/Initialize(start_uptime)
-	vote_prototypes = list()
-	for(var/vote_type in subtypesof(/datum/vote))
-		var/datum/vote/fake_vote = vote_type
-		if(initial(fake_vote.manual_allowed))
-			vote_prototypes[vote_type] = new vote_type
+/datum/controller/subsystem/vote/proc/interface_client(client/C)
+	var/datum/browser/panel = new(C.mob, "Vote","Vote", 500, 650)
+	panel.set_content(interface(C))
+	panel.open()
 
+/datum/controller/subsystem/vote/fire()
+	if(active_vote)
+		active_vote.Process()
 
-/datum/controller/subsystem/vote/fire(resumed = 0)
-	if(!active_vote)
-		if(queued_auto_vote)
-			initiate_vote(queued_auto_vote, automatic = 1)
-			queued_auto_vote = null
-		return
+		if(active_vote)//Need to check again because the active vote can be nulled during its process. For example if an admin forces start
+			if(get_vote_time() >= active_vote.time)
+				active_vote.check_winners()
+				stop_vote()
 
-	switch(active_vote.Process())
-		if(VOTE_PROCESS_ABORT)
-			QDEL_NULL(active_vote)
-			reset()
-			return
-		if(VOTE_PROCESS_COMPLETE)
-			active_vote.tally_result()      // Does math to figure out who won. Data is stored on the vote datum.
-			active_vote.report_result()     // Announces the result; possibly alerts other entities of the result.
-			LAZYADD(old_votes, active_vote) // Store the datum for future reference.
-			reset()
-			return
-		if(VOTE_PROCESS_ONGOING)
-			for(var/client/C in voting)
-				show_panel(C.mob)
+			update_voters()
 
-/datum/controller/subsystem/vote/UpdateStat(time)
-	if (PreventUpdateStat(time))
-		return ..()
-	..("Vote: [active_vote ? "[active_vote.name], [active_vote.time_remaining]" : "None"]")
+/datum/controller/subsystem/vote/proc/autostoryteller()
+	start_vote(/datum/poll/storyteller)
 
-/datum/controller/subsystem/vote/Recover()
-	last_started_time = SSvote.last_started_time
-	antag_added = SSvote.antag_added
-	active_vote = SSvote.active_vote
-	queued_auto_vote = SSvote.queued_auto_vote
-
-/datum/controller/subsystem/vote/proc/reset()
-	active_vote = null
-	for(var/client/C in voting)
-		close_panel(C.mob)
-	voting.Cut()
-
-//A false return means that a vote couldn't be started.
-/datum/controller/subsystem/vote/proc/initiate_vote(vote_type, mob/creator, automatic = 0)
+/datum/controller/subsystem/vote/proc/start_vote(newvote)
 	if(active_vote)
 		return FALSE
-	if(!automatic && (!istype(creator) || !creator.client))
+
+	var/datum/poll/poll
+
+	if(ispath(newvote) && (newvote in votes))
+		poll = votes[newvote]
+
+	//can_start check is done before calling this so that admins can skip it
+	if(!poll)
 		return FALSE
 
-	if(last_started_time != null && !(isadmin(creator) || automatic))
-		var/next_allowed_time = (last_started_time + config.vote_delay)
-		if(next_allowed_time > world.time)
-			return FALSE
+	if(!poll.start())
+		return
 
-	var/datum/vote/new_vote = new vote_type
-	if(!new_vote.setup(creator, automatic))
-		return FALSE
+	vote_start_time = world.time
 
-	active_vote = new_vote
-	last_started_time = world.time
+	var/text = "[poll.name] vote started by [poll.initiator]."
+	log_vote(text)
+	to_chat(world, {"<font color='purple'><b>[text]</b>\nType <b>vote</b> or click <a href='?src=\ref[src]'>here</a> to place your votes. <br>You have [poll.time] seconds to vote.</font>"})
+	sound_to(world, sound('sound/ambience/alarm4.ogg', repeat = 0, wait = 0, volume = 50, channel = GLOB.vote_sound_channel))
+
 	return TRUE
+
+/datum/controller/subsystem/vote/proc/stop_vote()
+	if(!active_vote)
+		return FALSE
+
+	active_vote.reset()
+	vote_start_time = 0
+	voters.Cut()
+	active_vote = null
+	return TRUE
+
+/datum/controller/subsystem/vote/proc/get_vote_time()	//How many seconds vote lasts
+	return round((world.time - vote_start_time)/10)
 
 /datum/controller/subsystem/vote/proc/interface(client/C)
 	if(!C)
 		return
-	var/admin = isadmin(C)
-	voting |= C
+	var/data = "<html><head><title>Voting Panel</title></head><body>"
 
-	. = list()
+	var/admin = check_rights(R_ADMIN, FALSE, C)
+
+	voters |= C
+
 	if(active_vote)
-		. += active_vote.interface(C.mob)
-		if(admin)
-			. += "(<a href='byond://?src=\ref[src];cancel=1'>Cancel Vote</a>) "
-	else
-		. += "<h2>Start a vote:</h2><hr><ul>"
-		for(var/vote_type in vote_prototypes)
-			var/datum/vote/vote_datum = vote_prototypes[vote_type]
-			. += "<li><a href='byond://?src=\ref[src];vote=\ref[vote_datum.type]'>"
-			if(vote_datum.can_run(C.mob))
-				. += "[capitalize(vote_datum.name)]"
+		data += "<h2>Vote: '[active_vote.question]'</h2>"
+		data += "Time Left: [active_vote.time - get_vote_time()] s<br>"
+		data += "Started by: <b>[active_vote.initiator]</b><hr>"
+
+		if(active_vote.multiple_votes)
+			data += "You can vote multiple choices.<br>"
+		else
+			data += "You can vote one choice.<br>"
+
+		if(active_vote.can_revote)
+			if(active_vote.can_unvote)
+				data += "You can either change vote or remove it."
 			else
-				. += SPAN_COLOR("grey", "[capitalize(vote_datum.name)] (Disallowed)")
-			. += "</a>"
-			var/toggle = vote_datum.check_toggle()
-			if(admin && toggle)
-				. += "\t(<a href='byond://?src=\ref[src];toggle=1;vote=\ref[vote_datum.type]'>toggle; currently [toggle]</a>)"
-			. += "</li>"
-		. += "</ul><hr>"
+				data += "You can change your vote."
+		else
+			data += "You can't change your vote."
 
-	. += "<a href='byond://?src=\ref[src];close=1' style='position:absolute;right:50px'>Close</a>"
-	return jointext(., null)
+		if (active_vote.description)
+			data += "<br>[active_vote.description]<br>"
 
-/datum/controller/subsystem/vote/proc/show_panel(mob/user)
-	var/win_x = 450
-	var/win_y = 740
-	if(active_vote)
-		win_x = active_vote.win_x
-		win_y = active_vote.win_y
-	var/datum/browser/popup = new(user, "vote", "Voting Panel", win_x, win_y)
-	popup.set_content(interface(user.client))
-	popup.open()
+		data += "<hr>"
+		data += "<table width = '100%'><tr><td align = 'center'><b>Choices</b></td><td align = 'center'><b>Votes</b></td>"
 
-/datum/controller/subsystem/vote/proc/close_panel(mob/user)
-	show_browser(user, null, "window=vote")
-	if(user)
-		voting -= user.client
+		for(var/datum/vote_choice/choice in active_vote.choices)
+			var/c_votes = (active_vote.see_votes || admin) ? choice.total_votes() : "*"
+			data += "<tr><td>"
+			if(C.key in choice.voters)
+				data += "<b><a href='?src=\ref[src];vote=\ref[choice]'>[choice.text]</a></b>"
+			else
+				data += "<a href='?src=\ref[src];vote=\ref[choice]'>[choice.text]</a>"
+			if(choice.desc)
+				data += "<br>\t<i>[choice.desc]</i>"
+			data += "</td><td align = 'center'>[c_votes]</td></tr>"
 
-/datum/controller/subsystem/vote/proc/cancel_vote(mob/user)
-	if(!isadmin(user))
-		return
-	active_vote.report_result() // Will not make announcement, but do any override failure reporting tasks.
-	QDEL_NULL(active_vote)
-	reset()
+		data += "</table><hr>"
+		if(admin)
+			data += "(<a href='?src=\ref[src];cancel=1'>Cancel Vote</a>) "
+	else
+		var/any_votes = FALSE
+		data += "<h2>Start a vote:</h2><hr><ul>"
+
+		for(var/P in votes)
+			var/datum/poll/poll = votes[P]
+			data += "<li>"
+			any_votes = TRUE
+
+			if(poll.can_start() && (!poll.only_admin || admin))
+				data += "<a href='?src=\ref[src];start_vote=\ref[poll]'>[poll.name]</a>"
+			else
+				data += "<s>[poll.name]</s>"
+				if (admin)
+					data += " <a href='?src=\ref[src];start_vote=\ref[poll]'>force</a> "
+
+			if(admin)
+				data += "\t(<a href='?src=\ref[src];toggle_admin=\ref[poll]'>[poll.only_admin?"Only admin":"Allowed"]</a>)"
+			data += "</li>"
+
+		if(!any_votes)
+			data += "<li><i>There is no available votes here now.</i></li>"
+
+		data += "</ul><hr>"
+	data += "<a href='?src=\ref[src];close=1' style='position:absolute;right:50px'>Close</a></body></html>"
+	return data
+
 
 /datum/controller/subsystem/vote/Topic(href,href_list[],hsrc)
-	if(!usr || !usr.client)
-		return	//not necessary but meh...just in-case somebody does something stupid
-
-	if(href_list["vote_panel"])
-		show_panel(usr)
-		return
-	if(href_list["cancel"])
-		cancel_vote(usr)
-		return
-	if(href_list["close"])
-		close_panel(usr)
-		return
-
 	if(href_list["vote"])
-		var/vote_path = locate(href_list["vote"])
-		if(!ispath(vote_path, /datum/vote))
+		if(active_vote)
+			var/datum/vote_choice/choice = locate(href_list["vote"]) in active_vote.choices
+			if(istype(choice) && usr && usr.client)
+				active_vote.vote(choice, usr.client)
+
+	if(href_list["toggle_admin"])
+		var/datum/poll/poll = locate(href_list["toggle_admin"])
+		if(istype(poll) && check_rights(R_ADMIN))
+			poll.only_admin = !poll.only_admin
+
+	if(href_list["start_vote"])
+		var/datum/poll/poll = locate(href_list["start_vote"])
+		if(istype(poll) && (check_rights(R_ADMIN) || (!poll.only_admin && poll.can_start())))
+			start_vote(poll.type)
+
+	if(href_list["cancel"])
+		if(active_vote && check_rights())
+			stop_vote()
+
+	if(href_list["debug"])
+		usr.client.debug_variables(src)
+
+	if(href_list["close"])
+		if(usr && usr.client)
+			voters.Remove(usr.client)
+			usr.client << browse(null,"window=Vote")
 			return
 
-		if(href_list["toggle"])
-			var/datum/vote/vote_datum = vote_prototypes[vote_path]
-			if(!vote_datum)
-				return
-			vote_datum.toggle(usr)
-			show_panel(usr)
-			return
-
-		initiate_vote(vote_path, usr, 0) // Additional permission checking happens in here.
-
-//Helper for certain votes.
-/datum/controller/subsystem/vote/proc/restart_world()
-	set waitfor = FALSE
-
-	to_world("World restarting due to vote...")
-	sleep(50)
-	log_game("Rebooting due to restart vote")
-	world.Reboot()
-
-// Helper proc for determining whether addantag vote can be called.
-/datum/controller/subsystem/vote/proc/is_addantag_allowed(mob/creator, automatic)
-	if(!config.allow_extra_antags)
-		return 0
-	// Gamemode has to be determined before we can add antagonists, so we can respect gamemode's add antag vote settings.
-	if((GAME_STATE <= RUNLEVEL_SETUP) || !SSticker.mode)
-		return 0
-	if(automatic)
-		return (SSticker.mode.addantag_allowed & ADDANTAG_AUTO) && !antag_added
-	if(isadmin(creator))
-		return SSticker.mode.addantag_allowed & (ADDANTAG_ADMIN|ADDANTAG_PLAYER)
-	else
-		return (SSticker.mode.addantag_allowed & ADDANTAG_PLAYER) && !antag_added
+	usr.vote()
 
 /mob/verb/vote()
 	set category = "OOC"
 	set name = "Vote"
 
-	if(GAME_STATE < RUNLEVEL_LOBBY)
-		to_chat(src, "It's too soon to do any voting!")
-		return
-	SSvote.show_panel(src)
+	SSvote.interface_client(client)

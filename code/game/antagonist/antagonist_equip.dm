@@ -1,41 +1,79 @@
-/datum/antagonist/proc/equip(mob/living/carbon/human/player)
+/datum/antagonist/proc/equip()
 
-	if(!istype(player))
-		return 0
+	if(owner && !ishuman(owner.current))
+		return FALSE
+	update_id()
+	owner.current.regenerate_icons()
+	return TRUE
 
-	if (required_language)
-		player.add_language(required_language)
-		player.set_default_language(all_languages[required_language])
+/datum/antagonist/proc/unequip()
+	if(owner && !ishuman(owner.current))
+		return FALSE
 
-	// This could use work.
-	if(flags & ANTAG_CLEAR_EQUIPMENT)
-		for(var/obj/item/thing in player.contents)
-			if(player.canUnEquip(thing))
-				qdel(thing)
-		//mainly for vox antag compatibility. Should not effect item spawning.
-		player.species.equip_survival_gear(player)
-	return 1
+	owner.current.regenerate_icons()
+	return TRUE
 
-/datum/antagonist/proc/unequip(mob/living/carbon/human/player)
-	if(!istype(player))
-		return 0
-	return 1
+/datum/antagonist/proc/clear_equipment()
+	if(!ishuman(owner.current))
+		return FALSE
 
-/datum/antagonist/proc/equip_rig(rig_type, mob/living/carbon/human/player)
-	set waitfor = 0
-	if(istype(player) && ispath(rig_type))
-		var/obj/item/rig/rig = new rig_type(player)
-		rig.seal_delay = 0
-		player.put_in_hands(rig)
-		player.equip_to_slot_or_del(rig,slot_back)
-		if(rig)
-			rig.visible_name = player.real_name
-			rig.toggle_seals(src,1)
-			rig.seal_delay = initial(rig.seal_delay)
-			if(rig.air_supply)
-				player.set_internals(rig.air_supply)
-		return rig
+	var/mob/living/carbon/human/player = owner.current
 
-//Some modes allow swapping to a vox from their initial mobs. Equip them here.
-/datum/antagonist/proc/equip_vox(mob/living/carbon/human/vox, mob/living/carbon/human/old)
-	return
+	for(var/obj/item/thing in player.contents)
+		player.drop_from_inventory(thing)
+		if(thing.loc != player)
+			qdel(thing)
+
+	return TRUE
+
+//Adds extra access to a player when they become antag
+/datum/antagonist/proc/update_id()
+	if(!owner || !owner.current)
+		return
+	if (!default_access || !default_access.len)
+		return
+	var/list/things = owner.current.get_recursive_contents()
+	for (var/obj/item/card/id/W in things)
+		W.access |= default_access
+
+/datum/antagonist/proc/create_id(var/assignment, var/equip = 1)
+	if(!owner || !owner.current || !ishuman(owner.current))
+		return
+
+
+
+	var/mob/living/carbon/human/player = owner.current
+	//Remove the old ID
+	if (player.wear_id)
+		QDEL_NULL(player.wear_id)
+
+	var/obj/item/card/id/W = new id_type(player)
+	if(!W) return
+	W.access |= default_access
+	W.assignment = "[assignment]"
+	player.set_id_info(W)
+	if(equip) player.equip_to_slot_or_del(W, slot_wear_id)
+	return W
+
+/datum/antagonist/proc/create_radio(var/freq)
+	if(!owner || !owner.current || !ishuman(owner.current))
+		return
+
+	var/mob/living/carbon/human/H = owner.current
+
+	var/obj/item/device/radio/R
+
+	if(freq == SYND_FREQ)
+		R = new/obj/item/device/radio/headset/syndicate(H)
+	else if(freq == YARR_FREQ)
+		R = new/obj/item/device/radio/headset/pirates(H)
+	else
+		R = new/obj/item/device/radio/headset(H)
+
+	R.set_frequency(freq)
+	H.equip_to_slot_or_del(R, slot_l_ear)
+	return R
+
+/datum/antagonist/proc/spawn_uplink(mob/living/carbon/human/contractor_mob, amount = DEFAULT_TELECRYSTAL_AMOUNT)
+	setup_uplink_source(contractor_mob, amount)
+

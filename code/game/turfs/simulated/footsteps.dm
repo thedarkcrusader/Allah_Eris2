@@ -1,74 +1,39 @@
-/proc/get_footstep(footstep_type, mob/caller)
-	. = caller && caller.get_footstep(footstep_type)
-	if(!.)
-		var/singleton/footsteps/FS = GET_SINGLETON(footstep_type)
-		. = pick(FS.footstep_sounds)
+//Only humans make footstep sounds
+/mob/proc/handle_footstep(var/turf/T)
+	return
 
-/turf/simulated/proc/get_footstep_sound(mob/caller)
-	for(var/obj/structure/S in contents)
-		if(S.footstep_type)
-			return get_footstep(S.footstep_type, caller)
+/mob/living/carbon/human/handle_footstep(var/turf/T)
+	if(!istype(T))
+		return
 
-	if(check_fluid_depth(10) && !is_flooded(TRUE))
-		return get_footstep(/singleton/footsteps/water, caller)
-
-	if(footstep_type)
-		return get_footstep(footstep_type, caller)
-
-	if(is_plating())
-		return get_footstep(/singleton/footsteps/plating, caller)
-
-/turf/simulated/floor/get_footstep_sound(mob/caller)
-	. = ..()
-	if(!.)
-		if(!flooring || !flooring.footstep_type)
-			return get_footstep(/singleton/footsteps/blank, caller)
-		else
-			return get_footstep(flooring.footstep_type, caller)
-
-/turf/simulated/Entered(mob/living/carbon/human/H)
-	..()
-	if(istype(H))
-		H.handle_footsteps()
-		H.step_count++
-
-/mob/living/carbon/human/proc/has_footsteps()
-	if(species.silent_steps || buckled || lying || throwing)
+	if(buckled || lying || throwing)
 		return //people flying, lying down or sitting do not step
 
-	if(shoes && (shoes.item_flags & ITEM_FLAG_SILENT))
+	//Step count is iterated in living.dm, living/move
+	if(step_count % 2) //every other turf makes a sound
+		return
+
+
+	if(shoes && (shoes.item_flags & SILENT))
 		return // quiet shoes
 
-	if(!has_organ(BP_L_FOOT) && !has_organ(BP_R_FOOT))
-		return //no feet no footsteps
+	if(is_floating)
+		if(step_count % 3) // don't need to step as often when you hop around
+			return
 
-	return TRUE
+	var/footsound = T.get_footstep_sound()
+	if(footsound)
 
-/mob/living/carbon/human/proc/handle_footsteps()
-	if(!has_footsteps())
-		return
+		var/range = -(world.view - 2)
+		var/volume = 70
+		if(MOVING_DELIBERATELY(src))
+			volume -= 45
+			range -= 0.333
+		if(!shoes)
+			volume -= 60
+			range -= 0.333
+		if(stats.getPerk(PERK_RAT))
+			volume -= 20
+			range -= 0.333
 
-	 //every other turf makes a sound
-	if((step_count % 2) && MOVING_QUICKLY(src))
-		return
-
-	// don't need to step as often when you hop around
-	if((step_count % 3) && !has_gravity())
-		return
-
-	if(istype(move_intent, /singleton/move_intent/creep)) //We don't make sounds if we're tiptoeing
-		return
-
-	var/turf/simulated/T = get_turf(src)
-	if(istype(T))
-		var/footsound = T.get_footstep_sound(src)
-		if(footsound)
-			var/range = -(world.view - 2)
-			var/volume = 70
-			if(MOVING_DELIBERATELY(src))
-				volume -= 45
-				range -= 0.333
-			if(!shoes)
-				volume -= 60
-				range -= 0.333
-			playsound(T, footsound, volume, 1, range)
+		mob_playsound(T, footsound, volume, 1, range)

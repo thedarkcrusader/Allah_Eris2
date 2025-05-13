@@ -1,218 +1,229 @@
+#define BORER_EXP_LEVEL_1 20
+#define BORER_EXP_LEVEL_2 40
+#define BORER_EXP_LEVEL_3 80
+#define BORER_EXP_LEVEL_4 160
+#define BORER_EXP_LEVEL_5 320
 /mob/living/simple_animal/borer
 	name = "cortical borer"
 	real_name = "cortical borer"
 	desc = "A small, quivering sluglike creature."
 	speak_emote = list("chirrups")
-	// emote_hear = list("chirrups")
 	response_help  = "pokes"
 	response_disarm = "prods"
 	response_harm   = "stomps on"
 	icon_state = "brainslug"
-	item_state = "voxslug" // For the lack of a better sprite...
-	icon_living = "brainslug"
-	icon_dead = "brainslug_dead"
-	speed = 5
+
+	health = 30
+	maxHealth = 30
+
+	speed = 4
+	see_in_dark = 8
+	see_invisible = SEE_INVISIBLE_NOLIGHTING
 	a_intent = I_HURT
+	stop_automated_movement = 1
 	status_flags = CANPUSH
-	natural_weapon = /obj/item/natural_weapon/bite/weak
+	attacktext = "nipped"
 	friendly = "prods"
-	pass_flags = PASS_FLAG_TABLE
-	universal_understand = TRUE
-	holder_type = /obj/item/holder/borer
-	mob_size = MOB_SMALL
-	can_escape = TRUE
+	wander = 0
+	hunger_enabled = FALSE
+	pass_flags = PASSTABLE
+	universal_understand = 1
+	faction = "borers"
+	can_pull_size = ITEM_SIZE_TINY
+	can_pull_mobs = MOB_PULL_NONE
 	density = FALSE
 
-	bleed_colour = "#816e12"
+	var/borer_level = 0
+	var/borer_exp = 0
+	var/used_dominate						// Time of last domination use for cooldown.
+	var/max_chemicals = 50					// Max chemicals produce without a host.
+	var/max_chemicals_inhost = 250          // Max chemicals produce within a host.
+	var/chemicals = 50                      // Chemicals used for reproduction and spitting neurotoxin.
+	var/mob/living/carbon/human/host        // Human host for the brain worm.
+	var/truename                            // Name used for brainworm-speak.
+	var/mob/living/captive_brain/host_brain // Used for swapping control of the body back and forth.
+	var/controlling = FALSE					// Used in human death check.
+	var/docile = FALSE                      // Sugar can stop borers from acting.
+	var/has_reproduced
+	var/roundstart
+	var/invisibility_cost = 5
 
-	var/static/list/chemical_types = list(
-		"bicaridine" = /datum/reagent/bicaridine,
-		"hyperzine" =  /datum/reagent/hyperzine,
-		"tramadol" =   /datum/reagent/tramadol,
-		"dermaline" =  /datum/reagent/dermaline,
-		"peridaxon" =  /datum/reagent/peridaxon,
-		"inaprovaline" =  /datum/reagent/inaprovaline,
-		"dylovene" =  /datum/reagent/dylovene
-	)
-
-	var/generation = 1
-	var/static/list/borer_names = list(
-		"Primary", "Secondary", "Tertiary", "Quaternary", "Quinary", "Senary",
-		"Septenary", "Octonary", "Novenary", "Decenary", "Undenary", "Duodenary",
+	// Abilities borer can use when outside the host
+	var/list/abilities_standalone = list(
+		/mob/living/proc/ventcrawl,
+		/mob/living/proc/hide,
+		/mob/living/simple_animal/borer/proc/paralyze_victim,
+		/mob/living/simple_animal/borer/proc/infest
 		)
 
-	var/image/aura_image
-	var/chemicals = 10                      // Chemicals used for reproduction and spitting neurotoxin.
-	var/truename                            // Name used for brainworm-speak.
-	var/controlling                         // Used in human death check.
-	var/docile = FALSE                      // Sugar can stop borers from acting.
-	var/has_reproduced                      // Whether or not the borer has reproduced, for objective purposes.
-	var/roundstart                          // Whether or not this borer has been mapped and should not look for a player initially.
-	var/neutered                            // 'borer lite' mode - fewer powers, less hostile to the host.
-	var/mob/living/carbon/human/host        // Human host for the brain worm.
-	var/mob/living/captive_brain/host_brain // Used for swapping control of the body back and forth.
+	// Abilities borer can use when inside the host, but not in control
+	var/list/abilities_in_host = list(
+		/mob/living/simple_animal/borer/proc/secrete_chemicals,
+		/mob/living/simple_animal/borer/proc/assume_control,
+		/mob/living/simple_animal/borer/proc/read_mind,
+		/mob/living/simple_animal/borer/proc/write_mind,
+		/mob/living/simple_animal/borer/proc/release_host,
+		/mob/living/simple_animal/borer/proc/reproduce
+	)
+
+	// Abilities borer can use when controlling the host
+	// (keep in mind that those have to be abilities of /mob/living/carbon, not /mob/living/simple_animal/borer)
+	var/list/abilities_in_control = list(
+		/mob/living/carbon/proc/release_control,
+		/mob/living/carbon/proc/talk_host,
+		/mob/living/carbon/human/proc/psychic_whisper,
+		/mob/living/carbon/proc/spawn_larvae
+	)
+
+	// Reagents the borer can secrete into host's blood
+	var/list/produced_reagents = list(
+		"alkysine",
+		"bicaridine", "kelotane", "dexalin", "anti_toxin",
+		"hyperzine", "tramadol", "space_drugs"
+		)
 
 /mob/living/simple_animal/borer/roundstart
 	roundstart = TRUE
 
-/mob/living/simple_animal/borer/neutered
-	neutered = TRUE
+/mob/living/simple_animal/borer/Destroy()
+	if(ishuman(host))
+		var/mob/living/carbon/human/H = host
+		var/obj/item/organ/external/head = H.get_organ(BP_HEAD)
+		head.implants.Remove(src) // This should be safe.
+	if(controlling)
+		detach()
+	return ..()
 
 /mob/living/simple_animal/borer/Login()
-	. = ..()
+	..()
+	if(!roundstart && mind && !mind.antagonist.len)
+		var/datum/antagonist/A = create_antag_instance(ROLE_BORER_REPRODUCED)
+		A.create_antagonist(mind,update = FALSE)
 	if(client)
-		client.screen |= hud_elements
-		client.screen |= hud_intent_selector
-	if(mind && !neutered)
-		GLOB.borers.add_antagonist(mind)
+		client.init_verbs()
 
-/mob/living/simple_animal/borer/Logout()
-	. = ..()
-	if(client)
-		client.screen -= hud_elements
-		client.screen -= hud_intent_selector
+/mob/living/simple_animal/borer/New()
+	..()
 
-/mob/living/simple_animal/borer/Initialize(mapload, gen=1)
+	add_language(LANGUAGE_CORTICAL)
+	update_abilities()
 
-	hud_intent_selector =  new
-	hud_inject_chemicals = new
-	hud_leave_host =       new
-	hud_elements = list(
-		hud_inject_chemicals,
-		hud_leave_host
-	)
-	if(!neutered)
-		hud_toggle_control = new
-		hud_elements += hud_toggle_control
+	truename = "[pick("Primary","Secondary","Tertiary","Quaternary")] [rand(1000,9999)]"
 
-	. = ..()
+	if(!roundstart) request_player()
 
-	add_language(LANGUAGE_BORER_GLOBAL)
-	verbs += /mob/living/proc/ventcrawl
-	verbs += /mob/living/proc/hide
+/mob/living/simple_animal/borer/proc/ghost_enter(mob/user)
+	if(stat || key)
+		return FALSE
+	var/confirmation = alert("Would you like to occupy \the [src]?", "", "Yes", "No")
+	if(confirmation == "No" || QDELETED(src))
+		return TRUE
+	if(key)
+		to_chat(user, SPAN_WARNING("Someone is already occupying this body."))
+		return TRUE
+	key = user.key
+	return TRUE
 
-	generation = gen
-	set_borer_name()
-
-	if(!roundstart)
-		request_player()
-
-	aura_image = create_aura_image(src)
-	aura_image.color = "#aaffaa"
-	aura_image.blend_mode = BLEND_SUBTRACT
-	aura_image.alpha = 125
-	aura_image.SetTransform(scale = 0.33)
-
-/mob/living/simple_animal/borer/death(gibbed, deathmessage, show_dead_message)
-	if(aura_image)
-		destroy_aura_image(aura_image)
-		aura_image = null
-	. = ..()
-
-/mob/living/simple_animal/borer/Destroy()
-	if(aura_image)
-		destroy_aura_image(aura_image)
-		aura_image = null
-	if(client)
-		client.screen -= hud_elements
-		client.screen -= hud_intent_selector
-	QDEL_NULL_LIST(hud_elements)
-	QDEL_NULL(hud_intent_selector)
-	hud_toggle_control =   null
-	hud_inject_chemicals = null
-	hud_leave_host =       null
-	. = ..()
-
-/mob/living/simple_animal/borer/proc/set_borer_name()
-	truename = "[borer_names[min(generation, length(borer_names))]] [random_id("borer[generation]", 1000, 9999)]"
-
-/mob/living/simple_animal/borer/Life()
-
-	sdisabilities = 0
-	if(host)
-		blinded = host.blinded
-		eye_blind = host.eye_blind
-		eye_blurry = host.eye_blurry
-		if(host.sdisabilities & BLINDED)
-			sdisabilities |= BLINDED
-		if(host.sdisabilities & DEAFENED)
-			sdisabilities |= DEAFENED
-	else
-		blinded =    FALSE
-		eye_blind =  0
-		eye_blurry = 0
-
+/mob/living/simple_animal/borer/attack_ghost(mob/user)
 	. = ..()
 	if(!.)
-		return FALSE
+		. = ghost_enter(user)
 
+
+/mob/living/simple_animal/borer/proc/update_abilities(force_host=FALSE)
+	// Remove all abilities
+	remove_verb(src, abilities_standalone)
+	remove_verb(src, abilities_in_host)
 	if(host)
+		remove_verb(host, abilities_in_control)
 
-		if(!stat && !host.stat)
+	// Re-grant some of the abilities, depending on the situation
+	if(!host)
+		add_verb(src, abilities_standalone)
+	else if(!controlling)
+		add_verb(src, abilities_in_host)
+		return
+	else
+		add_verb(host, abilities_in_control)
 
-			if(host.reagents.has_reagent(/datum/reagent/sugar))
-				if(!docile)
-					if(controlling)
-						to_chat(host, SPAN_NOTICE("You feel the soporific flow of sugar in your host's blood, lulling you into docility."))
-					else
-						to_chat(src, SPAN_NOTICE("You feel the soporific flow of sugar in your host's blood, lulling you into docility."))
-					docile = 1
-			else
-				if(docile)
-					if(controlling)
-						to_chat(host, SPAN_NOTICE("You shake off your lethargy as the sugar leaves your host's blood."))
-					else
-						to_chat(src, SPAN_NOTICE("You shake off your lethargy as the sugar leaves your host's blood."))
-					docile = 0
+// If borer is controlling a host directly, send messages to host instead of borer
+/mob/living/simple_animal/borer/proc/get_borer_control()
+	return (host && controlling) ? host : src
 
-			if(chemicals < 250 && host.nutrition >= (neutered ? 200 : 50))
-				host.nutrition--
-				chemicals++
+/mob/living/simple_animal/borer/proc/process_outer_chemical_regen()
+	if((chemicals < max_chemicals) && !invisibility)
+		chemicals++
 
-			if(controlling)
+/mob/living/simple_animal/borer/proc/process_invisibility()
+	if(invisibility)
+		chemicals -= invisibility_cost
+		if(chemicals <= max_chemicals/2 && (max_chemicals/2) - invisibility_cost <= chemicals)
+			to_chat(src, to_chat(src, "\red <B>Your invisibility will run out soon!</B>"))
+		if(chemicals <= invisibility_cost + 1)
+			invisible() // Disable invisibility
+			chemicals = 0
 
-				if(neutered)
-					host.release_control()
-					return
+/mob/living/simple_animal/borer/proc/host_death()
+	to_chat(host, SPAN_DANGER("You feel your control over your host suddenly stop."))
+	update_abilities()
+	spawn(1)
+		detach()
 
-				if(docile)
-					to_chat(host, SPAN_NOTICE("You are feeling far too docile to continue controlling your host..."))
-					host.release_control()
-					return
+/mob/living/simple_animal/borer/proc/process_host()
+	if(host && !stat)
+		// Regenerate if within a host
+		if(health < maxHealth)
+			adjustBruteLoss(-1)
 
-				if(prob(5))
-					host.adjustBrainLoss(0.1)
+		if(host.reagents.has_reagent("sugar"))
+			if(!docile)
+				to_chat(get_borer_control(), SPAN_DANGER("You feel the soporific flow of sugar in your host's blood, lulling you into docility."))
+				docile = TRUE
+		else
+			if(docile)
+				to_chat(get_borer_control(), SPAN_DANGER("You shake off your lethargy as the sugar leaves your host's blood."))
+				docile = FALSE
 
-				if(prob(host.getBrainLoss()/20))
-					host.say("*[pick(list("blink","blink_r","choke","aflap","drool","twitch","twitch_v","gasp"))]")
+		if(chemicals < max_chemicals_inhost)
+			chemicals += level + 1
 
-/mob/living/simple_animal/borer/Stat()
+		if(controlling)
+			if(docile)
+				to_chat(host, SPAN_DANGER("You are feeling far too docile to continue controlling your host..."))
+				host.release_control()
+				return FALSE
+			if(prob(5))
+				host.adjustBrainLoss(0.1)
+			if(prob(host.brainloss/20))
+				host.say("*[pick(list("blink","blink_r","choke","aflap","drool","twitch","twitch_s","gasp"))]")
+	return TRUE
+
+/mob/living/simple_animal/borer/Life()
+	..()
+
+	process_outer_chemical_regen()
+
+	process_invisibility()
+
+	// Keep at the end
+	process_host()
+
+/mob/living/simple_animal/borer/get_status_tab_items()
 	. = ..()
-	statpanel("Status")
+	. += list(list("Evolution Level: borer_level"))
+	. += list(list("Chemicals [host ? (chemicals/max_chemicals_inhost) : (chemicals/max_chemicals)]"))
+	if(host)
+		. += list(list("Host health [host.stat == DEAD ? "Deceased" : host.health]"))
+		. += list(list("Host brain damage: [host.getBrainLoss()]"))
 
-	if(evacuation_controller)
-		var/eta_status = evacuation_controller.get_status_panel_eta()
-		if(eta_status)
-			stat(null, eta_status)
-
-	if (client.statpanel == "Status")
-		stat("Chemicals", chemicals)
-
-/mob/living/simple_animal/borer/proc/detatch()
+/mob/living/simple_animal/borer/proc/detach()
 
 	if(!host || !controlling) return
 
-	if(istype(host,/mob/living/carbon/human))
-		var/mob/living/carbon/human/H = host
-		var/obj/item/organ/external/head = H.get_organ(BP_HEAD)
-		head.implants -= src
+	controlling = FALSE
 
-	controlling = 0
-
-	host.remove_language(LANGUAGE_BORER_GLOBAL)
-	host.verbs -= /mob/living/carbon/proc/release_control
-	host.verbs -= /mob/living/carbon/proc/punish_host
-	host.verbs -= /mob/living/carbon/proc/spawn_larvae
+	host.remove_language(LANGUAGE_CORTICAL)
+	update_abilities()
 
 	if(host_brain)
 
@@ -249,26 +260,18 @@
 
 	qdel(host_brain)
 
-#define COLOR_BORER_RED "#ff5555"
-/mob/living/simple_animal/borer/proc/set_ability_cooldown(amt)
-	last_special = world.time + amt
-	for(var/obj/thing in hud_elements)
-		thing.color = COLOR_BORER_RED
-	addtimer(new Callback(src, PROC_REF(reset_ui_callback)), amt)
-#undef COLOR_BORER_RED
-
 /mob/living/simple_animal/borer/proc/leave_host()
-
-	for(var/obj/thing in hud_elements)
-		thing.alpha =        0
-		thing.invisibility = INVISIBILITY_MAXIMUM
-
 	if(!host) return
 
 	if(host.mind)
-		GLOB.borers.remove_antagonist(host.mind)
+		clear_antagonist_type(host.mind, ROLE_BORER)
 
-	dropInto(host.loc)
+	if(ishuman(host))
+		var/mob/living/carbon/human/H = host
+		var/obj/item/organ/external/head = H.get_organ(BP_HEAD)
+		head.implants.Remove(src)
+
+	loc = get_turf(host)
 
 	reset_view(null)
 	machine = null
@@ -276,16 +279,93 @@
 	host.reset_view(null)
 	host.machine = null
 
-	var/mob/living/H = host
-	H.status_flags &= ~PASSEMOTES
+	host.status_flags &= ~PASSEMOTES
 	host = null
-	return
+	update_abilities()
+
 
 //Procs for grabbing players.
 /mob/living/simple_animal/borer/proc/request_player()
 	var/datum/ghosttrap/G = get_ghost_trap("cortical borer")
-	G.request_player(src, "A cortical borer needs a player.")
+	G.request_player(src, "A cortical borer needs a player.", ANIMAL)
 
-/mob/living/simple_animal/borer/flash_eyes(intensity, override_blindness_check, affect_silicon, visual, type)
-	intensity *= 1.5
-	. = ..()
+/mob/living/simple_animal/borer/proc/borer_add_exp(var/num)
+	borer_exp += num
+	update_borer_level()
+
+/mob/living/simple_animal/borer/proc/update_borer_level()
+	if((borer_exp >= BORER_EXP_LEVEL_1) && (borer_level < 1))
+		var/level = 1
+		var/added_reagents = list("inaprovaline", "tricordrazine", "synaptizine", "imidazoline", "hyronalin")
+		var/abilities_IH = list(/mob/living/simple_animal/borer/proc/say_host, /mob/living/simple_animal/borer/proc/whisper_host, /mob/living/simple_animal/borer/proc/commune)
+		var/abilities_SL = list(/mob/living/simple_animal/borer/proc/commune)
+
+		level_up(level, added_reagents, abilities_IH, abilities_SL)
+
+	if((borer_exp >= BORER_EXP_LEVEL_2) && (borer_level < 2))
+		var/level = 2
+		var/added_reagents = list("spaceacillin", "quickclot", "detox", "purger", "arithrazine")
+		var/abilities_SL = list(/mob/living/simple_animal/borer/proc/biograde)
+		var/abilities_IC = list(/mob/living/carbon/human/proc/commune)
+
+		level_up(level, added_reagents, null, abilities_SL, abilities_IC)
+
+	if((borer_exp >= BORER_EXP_LEVEL_3) && (borer_level < 3))
+		var/level = 3
+		var/added_reagents = list("meralyne", "dermaline", "dexalinp", "oxycodone", "ryetalyn")
+		var/abilities_SL = list(/mob/living/simple_animal/borer/proc/invisible)
+
+		level_up(level, added_reagents, null, abilities_SL)
+
+	if((borer_exp >= BORER_EXP_LEVEL_4) && (borer_level < 4))
+		var/level = 4
+		var/added_reagents = list("peridaxon", "rezadone", "ossisine", "kyphotorin", "aminazine")
+		health = 100
+		maxHealth = 100
+		speed = 1
+
+		level_up(level, added_reagents)
+
+	if((borer_exp >= BORER_EXP_LEVEL_5) && (borer_level < 5))
+		var/level = 5
+		var/added_reagents = list("violence", "steady", "bouncer", "prosurgeon", "cherry drops", "machine binding ritual")
+		var/abilities_IH = list(/mob/living/simple_animal/borer/proc/jumpstart)
+
+		level_up(level, added_reagents, abilities_IH)
+
+/mob/living/simple_animal/borer/proc/level_up(level, added_reagents = list(), abilities_IH= list(), abilities_SL= list(), abilities_IC= list())
+	borer_level = level
+
+	produced_reagents += added_reagents
+	abilities_in_host += abilities_IH
+	abilities_standalone += abilities_SL
+	abilities_in_control += abilities_IC
+
+	update_abilities()
+
+	to_chat(get_borer_control(), SPAN_NOTICE("Congratulations! You've reached Evolution Level [level], new synthesis reagents and new abilities are now available."))
+	max_chemicals += (borer_level * 10)
+	max_chemicals_inhost = max_chemicals * 5
+
+/mob/living/simple_animal/borer/cannot_use_vents()
+	return
+
+/mob/living/simple_animal/borer/death()
+	.=..()
+	if(invisibility)
+		alpha = 255
+		invisibility = 0
+	if(controlling || host)
+		detach()
+		leave_host()
+
+/mob/living/simple_animal/borer/update_sight()
+	if(stat == DEAD || eyeobj)
+		update_dead_sight()
+	else
+		if (is_ventcrawling)
+			sight |= SEE_TURFS|SEE_OBJS|BLIND
+		else
+			//sight = initial(sight)
+			see_in_dark = initial(see_in_dark)
+

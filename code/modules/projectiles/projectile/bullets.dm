@@ -1,88 +1,129 @@
 /obj/item/projectile/bullet
 	name = "bullet"
 	icon_state = "bullet"
-	fire_sound = null
-	damage = 50
-	damage_type = DAMAGE_BRUTE
-	damage_flags = DAMAGE_FLAG_BULLET | DAMAGE_FLAG_SHARP
+	damage_types = list(BRUTE = 40)
+	nodamage = 0
+	check_armour = ARMOR_BULLET
 	embed = TRUE
-	penetration_modifier = 1.0
-	space_knockback = 1
+	sharp = TRUE // Also used for checking whether this penetrates
+	hitsound_wall = "ric_sound"
 	var/mob_passthrough_check = 0
-	var/is_pellet = FALSE
+	recoil = 5
 
-	muzzle_type = /obj/projectile/bullet
-	miss_sounds = list('sound/weapons/guns/miss1.ogg','sound/weapons/guns/miss2.ogg','sound/weapons/guns/miss3.ogg','sound/weapons/guns/miss4.ogg')
-	ricochet_sounds = list('sound/weapons/guns/ricochet1.ogg', 'sound/weapons/guns/ricochet2.ogg',
-							'sound/weapons/guns/ricochet3.ogg', 'sound/weapons/guns/ricochet4.ogg')
-	impact_sounds = list(BULLET_IMPACT_MEAT = SOUNDS_BULLET_MEAT, BULLET_IMPACT_METAL = SOUNDS_BULLET_METAL)
+	muzzle_type = /obj/effect/projectile/bullet/muzzle
 
-/obj/item/projectile/bullet/on_hit(atom/target, blocked = 0)
-	if (..(target, blocked))
+/obj/item/projectile/bullet/on_hit(atom/target)
+	if (..(target))
 		var/mob/living/L = target
-		shake_camera(L, 3, 2)
+		shake_camera(L, 1, 1, 0.5)
 
-/obj/item/projectile/bullet/attack_mob(mob/living/target_mob, distance, miss_modifier)
-	if(penetrating > 0 && damage > 20 && prob(damage))
+/obj/item/projectile/bullet/attack_mob(var/mob/living/target_mob, distance, miss_modifier)
+	if(damage_types[BRUTE] > 20 && prob(damage_types[BRUTE]*penetrating/2))
 		mob_passthrough_check = 1
 	else
-		mob_passthrough_check = 0
-	. = ..()
-
-	if(. == 1 && iscarbon(target_mob) && !is_pellet)
-		damage *= 0.7 //squishy mobs absorb KE
+		var/obj/item/grab/G = locate() in target_mob
+		if(G && G.state >= GRAB_NECK)
+			mob_passthrough_check = rand()
+		else
+			mob_passthrough_check = 0
+	return ..()
 
 /obj/item/projectile/bullet/can_embed()
 	//prevent embedding if the projectile is passing through the mob
 	if(mob_passthrough_check)
-		return 0
+		return FALSE
 	return ..()
 
 /obj/item/projectile/bullet/check_penetrate(atom/A)
-	if(QDELETED(A) || !A.density) return 1 //if whatever it was got destroyed when we hit it, then I guess we can just keep going
+	ASSERT(A)
 
-	if(ismob(A))
-		if(!mob_passthrough_check)
-			return 0
-		return 1
+	if(istype(A, /mob/living/exosuit))
+		return TRUE //exosuits have their own penetration handling
 
-	var/chance = damage
-	if(has_extension(A, /datum/extension/penetration))
-		var/datum/extension/penetration/P = get_extension(A, /datum/extension/penetration)
-		chance = P.PenetrationProbability(chance, damage, damage_type)
+	var/blocked_damage = 0
+	if(istype(A, /turf/wall)) // TODO: refactor this from functional into OOP
+		var/turf/wall/W = A
+		blocked_damage = round(W.max_health / 8)
+	else if(istype(A, /obj/item/shield))
+		var/obj/item/shield/S = A
+		blocked_damage = round(S.shield_integrity / 8)
+	else if(istype(A, /obj/machinery/door))
+		var/obj/machinery/door/D = A
+		blocked_damage = round(D.maxHealth / 8)
+		if(D.glass) blocked_damage /= 2
+	else if(istype(A, /obj/structure/girder))
+		if(armor_divisor < 2)
+			return FALSE
+		blocked_damage = 10
+		return TRUE
+	else if(istype(A, /obj/structure/table))
+		var/obj/structure/table/T = A
+		blocked_damage = round(T.maxHealth / 8)
+	else if(istype(A, /obj/structure/barricade))
+		var/obj/structure/barricade/B = A
+		blocked_damage = round(B.material.integrity / 8)
 
-	if(prob(chance))
-		if(A.opacity)
+/*
+	else if(istype(A, /obj/structure/barrier/ballistic))
+		// Okay, so to stop every single bullet from damaging, and then phazing right trough the barricade, we must come here and do this shit
+		// You'd think that checking 'penetration' variable would do the thing, yet it's the same for almost everything,
+		// from measly pistol to anti-materiel rounds. But 'armor_divisor', on the other hand, actually represents penetration potential
+		if(armor_divisor < 2)
+			return FALSE // Anything but anti-materiel, high-velocity, and few other projectiles with great penetration will bounce
+		blocked_damage = 20
+*/
+// Ballistic barriers are temporarily disabled // TODO: Fix later --KIROV
+
+	else if(istype(A, /obj/machinery) || istype(A, /obj/structure))
+		blocked_damage = 20
+
+	var/percentile_blocked = block_damage(blocked_damage, A)
+	if(percentile_blocked > 0.5)
+		percentile_blocked = CLAMP(percentile_blocked, 50, 90) / 100 // calculate leftover velocity, capped between 50% and 90%
+
+		step_delay = min(step_delay / percentile_blocked, step_delay / 2)
+
+		if(A.opacity || istype(A, /obj/item/shield))
 			//display a message so that people on the other side aren't so confused
 			A.visible_message(SPAN_WARNING("\The [src] pierces through \the [A]!"))
-		return 1
-
-	return 0
+			playsound(A.loc, 'sound/weapons/shield/shieldpen.ogg', 50, 1)
+		return TRUE
 
 //For projectiles that actually represent clouds of projectiles
 /obj/item/projectile/bullet/pellet
 	name = "shrapnel" //'shrapnel' sounds more dangerous (i.e. cooler) than 'pellet'
-	damage = 37.5
+	damage_types = list(BRUTE = 15)
 	//icon_state = "bullet" //TODO: would be nice to have it's own icon state
 	var/pellets = 4			//number of pellets
 	var/range_step = 2		//projectile will lose a fragment each time it travels this distance. Can be a non-integer.
 	var/base_spread = 90	//lower means the pellets spread more across body parts. If zero then this is considered a shrapnel explosion instead of a shrapnel cone
 	var/spread_step = 10	//higher means the pellets spread more across body parts with distance
-	is_pellet = TRUE
+	var/pellet_to_knockback_ratio = 0
+	wounding_mult = WOUNDING_SMALL
+	matter = list(MATERIAL_STEEL = 0.4)
+
+/obj/item/projectile/bullet/pellet/launch_from_gun(atom/target, mob/user, obj/item/gun/launcher, target_zone, x_offset=0, y_offset=0, angle_offset)
+	for(var/entry in matter) // this allows for the projectile in the casing having the correct matter
+		matter[entry] /= pellets // yet disallows for pellet shrapnel created on impact multiplying the matter count
+	. = ..()
 
 /obj/item/projectile/bullet/pellet/Bumped()
 	. = ..()
 	bumped = 0 //can hit all mobs in a tile. pellets is decremented inside attack_mob so this should be fine.
 
-/obj/item/projectile/bullet/pellet/proc/get_pellets(distance)
-	/// pellets lost due to distance
-	var/pellet_loss = round(max(distance - 1, 0)/range_step)
-	return max(pellets - pellet_loss, 1)
+/obj/item/projectile/bullet/pellet/proc/get_pellets(var/distance)
+	var/pellet_loss = round((distance - 1)/range_step) //pellets lost due to distance
+	var/remaining = pellets - pellet_loss
+	if (remaining < 0)
+		return 0
+	return ROUND_PROB(remaining)
 
-/obj/item/projectile/bullet/pellet/attack_mob(mob/living/target_mob, distance, miss_modifier)
-	if (pellets < 0) return 1
+/obj/item/projectile/bullet/pellet/attack_mob(var/mob/living/target_mob, var/distance, var/miss_modifier)
+
 
 	var/total_pellets = get_pellets(distance)
+	if (total_pellets <= 0)
+		return 1
 	var/spread = max(base_spread - (spread_step*distance), 0)
 
 	//shrapnel explosions miss prone mobs with a chance that increases with distance
@@ -96,14 +137,18 @@
 			continue
 
 		//pellet hits spread out across different zones, but 'aim at' the targeted zone with higher probability
-		//whether the pellet actually hits the def_zone or a different zone should still be determined by the parent using get_zone_with_miss_chance().
 		var/old_zone = def_zone
 		def_zone = ran_zone(def_zone, spread)
-		if (..())
-			hits++
+		if (..()) hits++
 		def_zone = old_zone //restore the original zone the projectile was aimed at
 
 	pellets -= hits //each hit reduces the number of pellets left
+	if(pellet_to_knockback_ratio)
+		var/knockback_calc = round(hits / pellet_to_knockback_ratio)
+		if(knockback_calc)
+			var/target_turf = get_turf_away_from_target_complex(target_mob, starting, knockback_calc)
+			throw_at(target_turf, knockback_calc, 2, firer)
+
 	if (hits >= total_pellets || pellets <= 0)
 		return 1
 	return 0
@@ -112,174 +157,22 @@
 	var/distance = get_dist(loc, starting)
 	return ..() * get_pellets(distance)
 
-/obj/item/projectile/bullet/pellet/Move()
+/obj/item/projectile/bullet/pellet/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
 	. = ..()
 
 	//If this is a shrapnel explosion, allow mobs that are prone to get hit, too
 	if(. && !base_spread && isturf(loc))
 		for(var/mob/living/M in loc)
-			if(M.lying || !M.CanPass(src, loc, 0.5, 0)) //Bump if lying or if we would normally Bump.
-				if(Bump(M, TRUE)) //Bump will make sure we don't hit a mob multiple times
+			if(M.lying || !M.CanPass(src, loc)) //Bump if lying or if we would normally Bump.
+				if(Bump(M)) //Bump will make sure we don't hit a mob multiple times
 					return
 
-/* short-casing projectiles, like the kind used in pistols or SMGs */
-
-/obj/item/projectile/bullet/pistol
-	damage = 45
-	distance_falloff = 3
-
-/obj/item/projectile/bullet/pistol/holdout
-	damage = 40
-	penetration_modifier = 1.2
-	distance_falloff = 4
-
-/obj/item/projectile/bullet/pistol/strong
-	damage = 50
-	penetration_modifier = 0.8
-	distance_falloff = 2.5
-	armor_penetration = 15
-
-/obj/item/projectile/bullet/pistol/rubber //"rubber" bullets
-	name = "rubber bullet"
-	damage_flags = 0
-	damage = 15
-	agony = 15
-	embed = FALSE
-
-/obj/item/projectile/bullet/pistol/rubber/holdout
-	agony = 10
-	damage = 10
-
-//4mm. Tiny, very low damage, does not embed, but has very high penetration. Only to be used for the experimental SMG.
-/obj/item/projectile/bullet/flechette
-	damage = 23
-	penetrating = 1
-	armor_penetration = 40
-	embed = FALSE
-	distance_falloff = 2
-
-/* shotgun projectiles */
-
-/obj/item/projectile/bullet/shotgun
-	name = "slug"
-	damage = 65
-	armor_penetration = 10
-
-/obj/item/projectile/bullet/shotgun/beanbag		//because beanbags are not bullets
-	name = "beanbag"
-	damage = 20
-	damage_flags = 0
-	agony = 30
-	embed = FALSE
-	armor_penetration = 0
-	distance_falloff = 3
-
-//Should do about 180 damage at 1 tile distance (adjacent), and 120 damage at 3 tiles distance.
-//Overall less damage than slugs in exchange for more damage at very close range and more embedding
-/obj/item/projectile/bullet/pellet/shotgun
-	name = "shrapnel"
-	icon_state = "pellet"
-	damage = 30
-	pellets = 6
-	range_step = 1
-	spread_step = 50
-
-/obj/item/projectile/bullet/pellet/shotgun/flechette
-	name = "flechette"
-	icon_state = "flechette"
-	damage = 30
-	armor_penetration = 25
-	pellets = 3
-	range_step = 3
-	base_spread = 99
-	spread_step = 2
-	penetration_modifier = 0.5
-	hitchance_mod = 5
-
-/* "Rifle" rounds */
-
-/obj/item/projectile/bullet/rifle
-	damage = 45
-	armor_penetration = 25
-	penetrating = 1
-	distance_falloff = 1
-
-/obj/item/projectile/bullet/rifle/military
-	damage = 40
-	armor_penetration = 35
-
-/obj/item/projectile/bullet/rifle/shell
-	fire_sound = 'sound/weapons/gunshot/sniper.ogg'
-	damage = 80
-	stun = 3
-	weaken = 3
-	penetrating = 3
-	armor_penetration = 70
-	penetration_modifier = 1.2
-	distance_falloff = 0.5
-
-/obj/item/projectile/bullet/rifle/shell/apds
-	damage = 70
-	penetrating = 5
-	armor_penetration = 80
-	penetration_modifier = 1.5
-
-/* Miscellaneous */
-/obj/item/projectile/bullet/gyro
-	name = "minirocket"
-	fire_sound = 'sound/effects/Explosion1.ogg'
-	var/explosion_radius = 2
-	var/explosion_max_power = EX_ACT_LIGHT
-
-/obj/item/projectile/bullet/gyro/on_hit(atom/target, blocked = 0)
-	if(isturf(target))
-		explosion(target, explosion_radius, explosion_max_power)
-	..()
-
-/obj/item/projectile/bullet/blank
-	invisibility = INVISIBILITY_ABSTRACT
-	damage = 1
-	embed = FALSE
-
-/* Practice */
-
-/obj/item/projectile/bullet/pistol/practice
-	damage = 5
-
-/obj/item/projectile/bullet/rifle/practice
-	damage = 5
-
-/obj/item/projectile/bullet/rifle/military/practice
-	damage = 5
-
-/obj/item/projectile/bullet/shotgun/practice
-	name = "practice"
-	damage = 5
-
-/obj/item/projectile/bullet/pistol/cap
-	name = "cap"
-	invisibility = INVISIBILITY_ABSTRACT
-	fire_sound = null
-	damage_type = DAMAGE_PAIN
-	damage_flags = 0
-	damage = 0
-	nodamage = TRUE
-	embed = FALSE
-
-/obj/item/projectile/bullet/pistol/cap/Process()
-	qdel(src)
-	return PROCESS_KILL
-
-/obj/item/projectile/bullet/rock //spess dust
-	name = "micrometeor"
-	icon_state = "rock"
-	damage = 40
-	armor_penetration = 25
-	life_span = 255
-	distance_falloff = 0
-
-/obj/item/projectile/bullet/rock/New()
-	icon_state = "rock[rand(1,3)]"
-	pixel_x = rand(-10,10)
-	pixel_y = rand(-10,10)
-	..()
+/obj/item/projectile/bullet/pellet/adjust_damages(var/list/newdamages)
+	if(!newdamages.len)
+		return
+	for(var/damage_type in newdamages)
+		var/bonus = pellets > 2 ? newdamages[damage_type] / pellets * 2 : newdamages[damage_type]
+		if(damage_type == IRRADIATE)
+			irradiate += bonus
+			continue
+		damage_types[damage_type] += bonus

@@ -1,68 +1,123 @@
+/// SCPR 2022
+// Code regarding /datum/money_accounts and /datum/transaction tends to be old and not properly sanitize checked all the time
+// I hopefully fixed all possible attack vectors ,but if you modify any code here , please pay more attention to anything that is a string
+// and is input by the player at any time.
+
+
 /datum/money_account
-	var/account_name = ""
 	var/owner_name = ""
+	var/account_name = "" //Some accounts have a name that is distinct from the name of the owner
 	var/account_number = 0
 	var/remote_access_pin = 0
 	var/money = 0
-	var/opening_balance = 0
 	var/list/transaction_log = list()
 	var/suspended = 0
+	var/employer // Linked department account's define. DEPARTMENT_COMMAND or some such
+	var/wage = 0 // How much money account should recieve on a payday
+	var/wage_original // Value passed from job datum on account creation
+	var/wage_manual = FALSE // If wage have been set manually. Prevents wage auto update on players joining/leaving deparment
+	var/debt = 0 // How much money employer owe us
+	var/department_id // Easy identification for department accounts
+	var/can_make_accounts // Individual guild members and their departments authorized to register new accounts
 	var/security_level = 0	//0 - auto-identify from worn ID, require only account number
 							//1 - require manual login / account number and pin
 							//2 - require card and manual login
-	var/account_type = ACCOUNT_TYPE_PERSONAL
 
-/datum/money_account/New(account_type)
-	account_type = account_type ? account_type : ACCOUNT_TYPE_PERSONAL
+//One-stop safety checks for accounts
+/datum/money_account/proc/is_valid()
+	if (suspended)
+		return FALSE
 
-// is_source inverts the amount.
-/datum/money_account/proc/add_transaction(datum/transaction/T, is_source = FALSE)
-	money = max(is_source ? money - T.amount : money + T.amount, 0)
-	transaction_log += T
+	return TRUE
 
-/datum/money_account/proc/get_balance()
-	return money
+//Try to get the name of the account
+/datum/money_account/proc/get_name()
+	if (account_name)
+		return account_name
+	return owner_name
 
-/datum/money_account/proc/get_profit()
-	return money - opening_balance
+//Attempts to return the associated data record for this account
+/datum/money_account/proc/get_record()
+	return find_general_record("pay_account", account_number)
 
-/datum/money_account/proc/log_msg(msg, machine_id)
-	var/datum/transaction/log/T = new(src, msg, machine_id)
-	return T.perform()
+/datum/transaction
+	var/target_name = ""
+	var/target_account = 0
+	var/purpose = ""
+	var/amount = 0
+	var/date = ""
+	var/time = ""
+	var/source_terminal = ""
 
-/datum/money_account/proc/deposit(amount, purpose, machine_id)
-	var/datum/transaction/singular/T = new(src, machine_id, amount, purpose)
-	return T.perform()
+// the sanitzation is done here because theres a whole lot of places that create a new datum with unchecked values.
+/datum/transaction/New(_amount = 0, _target_name, _purpose, _source_terminal, _date = null, _time = null)
+	amount = _amount
+	target_name = sanitizeSafe(_target_name, MAX_NAME_LEN, TRUE)
+	purpose = sanitizeSafe(_purpose, MAX_NAME_LEN,TRUE)
+	source_terminal = _source_terminal
 
-/datum/money_account/proc/withdraw(amount, purpose, machine_id)
-	var/datum/transaction/singular/T = new(src, machine_id, -amount, purpose)
-	return T.perform()
+	if(istype(_source_terminal, /atom))
+		var/atom/terminal_atom = _source_terminal
+		source_terminal = "[terminal_atom.name] at [get_area(terminal_atom)]"
 
-/datum/money_account/proc/transfer(to_account, amount, purpose)
-	var/datum/transaction/T = new(src, to_account, amount, purpose)
-	return T.perform()
+	if(_date)
+		date = _date
+	else
+		date = current_date_string
+	if(_time)
+		time = _time
+	else
+		time = stationtime2text()
 
+/datum/transaction/proc/apply_to(var/datum/money_account/account)
+	if(!istype(account) || !account.is_valid())
+		return FALSE
 
-/proc/create_account(account_name = "Default account name", owner_name, starting_funds = 0, account_type = ACCOUNT_TYPE_PERSONAL, obj/machinery/computer/account_database/source_db)
-	RETURN_TYPE(/datum/money_account)
+	if(isnum(amount))
+		if(amount < 0 && (account.money + amount) < 0)
+			return FALSE
+		account.money += amount
+
+	account.transaction_log.Add(src.Copy())
+	return TRUE
+
+/datum/transaction/proc/set_amount(var/amount, var/update_time = TRUE)
+	src.amount = amount
+	if(update_time)
+		src.time = stationtime2text()
+
+/datum/transaction/proc/Copy()
+	return new/datum/transaction(amount, target_name, purpose, source_terminal, date, time)
+
+/proc/create_account(new_owner_name = "Default user", starting_funds = 0, obj/machinery/account_database/source_db, department, wage, aster_guild_member)
 
 	//create a new account
 	var/datum/money_account/M = new()
-	M.account_name = account_name
-	M.owner_name = (owner_name ? owner_name : account_name)
-	M.account_type = account_type
-	M.remote_access_pin = rand(1111, 111111)
+	M.owner_name = sanitizeSafe(new_owner_name, MAX_NAME_LEN, TRUE)
+	M.remote_access_pin = rand(1111, 9999)
+	M.money = starting_funds
+	M.employer = department
+	M.wage_original = wage
+	M.wage = wage
+	M.can_make_accounts = aster_guild_member
 
 	//create an entry in the account transaction log for when it was created
-	//note that using the deposit proc on the account isn't really feasible because we need to change the transaction data before performing it
-	var/datum/transaction/singular/T = new(M, (source_db ? source_db.machine_id : "NTGalaxyNet Terminal #[rand(111,1111)]"), starting_funds, "Account creation")
+	var/datum/transaction/T = new()
+	T.target_name = sanitizeSafe(new_owner_name, MAX_NAME_LEN, TRUE)
+	T.purpose = "Account creation"
+	T.amount = starting_funds
 	if(!source_db)
 		//set a random date, time and location some time over the past few decades
-		T.date = "[num2text(rand(1, 31))] [pick(GLOB.month_names)], [GLOB.using_map.game_year-rand(8, 18)]"
+		T.date = "[num2text(rand(1,31))] [pick("January","February","March","April","May","June","July","August","September","October","November","December")], 25[rand(10,56)]"
 		T.time = "[rand(0,24)]:[rand(11,59)]"
+		T.source_terminal = "Asters Guild Banking Terminal #[rand(111,1111)]"
 
-		M.account_number = random_id("station_account_number", 111111, 999999)
+		M.account_number = rand(11111, 99999)
 	else
+		T.date = current_date_string
+		T.time = stationtime2text()
+		T.source_terminal = source_db.machine_id
+
 		M.account_number = next_account_number
 		next_account_number += rand(1,25)
 
@@ -71,41 +126,108 @@
 
 		var/obj/item/paper/R = new /obj/item/paper(P)
 		P.wrapped = R
-		R.SetName("Account information: [M.account_name]")
+		R.name = "Account information: [M.owner_name]"
 		R.info = "<b>Account details (confidential)</b><br><hr><br>"
 		R.info += "<i>Account holder:</i> [M.owner_name]<br>"
 		R.info += "<i>Account number:</i> [M.account_number]<br>"
 		R.info += "<i>Account pin:</i> [M.remote_access_pin]<br>"
-		R.info += "<i>Starting balance:</i> [GLOB.using_map.local_currency_name_short][M.money]<br>"
-		R.info += "<i>Date and time:</i> [stationtime2text()], [stationdate2text()]<br><br>"
+		R.info += "<i>Starting balance:</i> [M.money][CREDS]<br>"
+		R.info += "<i>Date and time:</i> [stationtime2text()], [current_date_string]<br><br>"
 		R.info += "<i>Creation terminal ID:</i> [source_db.machine_id]<br>"
-		R.info += "<i>Authorised officer overseeing creation:</i> [source_db.held_card.registered_name]<br>"
+		R.info += "<i>Authorised official overseeing creation:</i> [source_db.held_card.registered_name]<br>"
 
 		//stamp the paper
 		var/image/stampoverlay = image('icons/obj/bureaucracy.dmi')
-		stampoverlay.icon_state = "paper_stamp-boss"
+		stampoverlay.icon_state = "paper_stamp-cent"
 		if(!R.stamped)
 			R.stamped = new
 		R.stamped += /obj/item/stamp
-		R.AddOverlays(stampoverlay)
+		R.overlays += stampoverlay
 		R.stamps += "<HR><i>This paper has been stamped by the Accounts Database.</i>"
 
 	//add the account
-	T.perform()
-	M.opening_balance = M.money
+	M.transaction_log.Add(T)
 	all_money_accounts.Add(M)
+	personal_accounts.Add(M)
 
+	// Increase personnel budget of our department, if have one
+	if(department && wage)
+		var/datum/money_account/EA = department_accounts[department]
+		var/datum/department/D = GLOB.all_departments[department]
+		if(EA && D) // Don't bother if department have no employer
+			D.budget_personnel += wage
+			if(!EA.wage_manual) // Update department account's wage if it's not in manual mode
+				EA.wage = D.get_total_budget()
 	return M
 
-//this returns the first account datum that matches the supplied accnum/pin combination, it returns null if the combination did not match any account
-/proc/attempt_account_access(attempt_account_number, attempt_pin_number, security_level_passed = 0)
-	RETURN_TYPE(/datum/money_account)
+//Charges an account a certain amount of money which is functionally just removed from existence
+/proc/charge_to_account(attempt_account_number, target_name, purpose, terminal_id, amount)
 	var/datum/money_account/D = get_account(attempt_account_number)
-	if(D && D.security_level <= security_level_passed && (!D.security_level || D.remote_access_pin == attempt_pin_number) )
+	if (D)
+		//create a transaction log entry
+		var/datum/transaction/T = new(-amount, target_name, purpose, terminal_id)
+		return T.apply_to(D)
+
+	return FALSE
+
+//Creates money from nothing and deposits it in an account
+/proc/deposit_to_account(attempt_account_number, source_name, purpose, terminal_id, amount)
+	var/datum/money_account/D = get_account(attempt_account_number)
+	if (D)
+		//create a transaction log entry
+		var/datum/transaction/T = new(amount, source_name, purpose, terminal_id)
+		return T.apply_to(D)
+
+	return FALSE
+
+//Transfers funds from one account to another
+/proc/transfer_funds(source_account, target_account, purpose, terminal_id, amount)
+	var/datum/money_account/source = get_account(source_account)
+	var/datum/money_account/target = get_account(target_account)
+
+	if (!source || !target)
+		return FALSE
+	if (!source.is_valid() || !target.is_valid())
+		return FALSE
+
+	//We've got both accounts and confirmed they are valid
+
+	//The transaction to take the money
+	var/datum/transaction/T1 = new(amount*-1, target.get_name(), purpose, terminal_id)
+	if (T1.apply_to(source))
+
+		//The transaction to give the money
+		var/datum/transaction/T2 = new(amount, source.get_name(), purpose, terminal_id)
+		SEND_SIGNAL_OLD(source, COMSIG_TRANSATION, source, target, amount)
+		return T2.apply_to(target)
+
+	return FALSE
+
+//this returns the first account datum that matches the supplied accnum/pin combination, it returns null if the combination did not match any account
+/proc/attempt_account_access(account_number, attempt_pin_number, security_level_passed = 0, force_security = FALSE)
+	var/datum/money_account/D = get_account(account_number)
+
+	if(!D || D.security_level > security_level_passed)
+		return
+
+	if((!D.security_level && !force_security) || D.remote_access_pin == attempt_pin_number)
 		return D
 
+
 /proc/get_account(account_number)
-	RETURN_TYPE(/datum/money_account)
+	// For convinience's sake
+	if(istype(account_number, /datum/money_account))
+		return account_number
+
 	for(var/datum/money_account/D in all_money_accounts)
 		if(D.account_number == account_number)
 			return D
+
+
+// Accepts both account numbers and actual account datums
+/proc/get_account_credits(account_number)
+	var/datum/money_account/account = get_account(account_number)
+	if(!account || !account.is_valid())
+		return 0
+
+	return account.money

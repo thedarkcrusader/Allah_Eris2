@@ -1,34 +1,47 @@
 /obj/item/grenade/smokebomb
-	desc = "It is set to detonate in 2 seconds."
-	name = "smoke bomb"
-	icon = 'icons/obj/weapons/grenade.dmi'
-	icon_state = "flashbang"
+	name = "FS SG \"Reynolds\""
+	desc = "Smoke grenade, used to create a cloud of smoke providing cover and hiding movement."
+	icon_state = "smokegrenade"
+	item_state = "smokegrenade"
 	det_time = 20
-	item_state = "flashbang"
-	slot_flags = SLOT_BELT
-	var/datum/effect/smoke_spread/bad/smoke
-	var/smoke_times = 4
+	matter = list(MATERIAL_STEEL = 3, MATERIAL_SILVER = 1)
+	var/datum/effect/effect/system/smoke_spread/bad/smoke
+
+/obj/item/grenade/smokebomb/New()
+	..()
+	smoke = new
+	smoke.attach(src)
 
 /obj/item/grenade/smokebomb/Destroy()
-	QDEL_NULL(smoke)
-	STOP_PROCESSING(SSobj, src)
+	qdel(smoke)
+	smoke = null
 	return ..()
 
-/obj/item/grenade/smokebomb/detonate(mob/living/user)
-	playsound(src.loc, 'sound/effects/smoke.ogg', 50, 1, -3)
-	smoke = new /datum/effect/smoke_spread/bad
-	smoke.attach(src)
-	smoke.set_up(10, 0, get_turf(src))
-	START_PROCESSING(SSobj, src)
-	for(var/obj/blob/B in view(8,src))
-		var/damage = round(30/(get_dist(B,src)+1))
-		B.damage_health(damage, DAMAGE_BURN)
-		B.update_icon()
-	QDEL_IN(src, 8 SECONDS)
+/obj/item/grenade/smokebomb/proc/used_up()
+	icon_state = initial(icon_state) + "_off"
+	desc = "[initial(desc)] It has already been used."
 
-/obj/item/grenade/smokebomb/Process()
-	if(!QDELETED(smoke) && (smoke_times > 0))
-		smoke_times--
-		smoke.start()
-		return
-	return PROCESS_KILL
+/obj/item/grenade/smokebomb/prime()
+	playsound(loc, 'sound/effects/smoke.ogg', 50, 1, -3)
+	// If this is >9 byond shits itself and crashes
+	smoke.set_up(10, 0, get_turf(loc))
+	addtimer(CALLBACK(smoke, TYPE_PROC_REF(/datum/effect/effect/system/smoke_spread/bad, start)), 1 SECOND)
+	addtimer(CALLBACK(smoke, TYPE_PROC_REF(/datum/effect/effect/system/smoke_spread/bad, start)), 2 SECOND)
+	addtimer(CALLBACK(smoke, TYPE_PROC_REF(/datum/effect/effect/system/smoke_spread/bad, start)), 3 SECOND)
+	addtimer(CALLBACK(smoke, TYPE_PROC_REF(/datum/effect/effect/system/smoke_spread/bad, start)), 4 SECOND)
+	for(var/obj/effect/blob/B in view(8,src))
+		var/damage = round(30/(get_dist(B,src)+1))
+		B.health -= damage
+		B.update_icon()
+
+	addtimer(CALLBACK(src, PROC_REF(used_up)), 8 SECOND)
+	return
+
+
+
+/obj/item/grenade/smokebomb/nt
+	name = "NT SG \"Holy Fog\""
+	desc = "Smoke grenade, used to create a cloud of smoke providing cover and hiding movement."
+	icon_state = "smokegrenade_nt"
+	item_state = "smokegrenade_nt"
+	matter = list(MATERIAL_BIOMATTER = 10)

@@ -7,16 +7,9 @@
 //			/mob/leaver:    The mob that has logged out
 //			/client/client: The mob's client
 
-GLOBAL_TYPED_NEW(logged_out_event, /singleton/observ/logged_out)
+GLOBAL_DATUM_INIT(logged_out_event, /decl/observ/logged_out, new)
 
-/singleton/observ/logged_out
+/decl/observ/logged_out
 	name = "Logged Out"
 	expected_type = /mob
-
-/******************
-* Logout Handling *
-******************/
-
-/mob/Logout()
-	GLOB.logged_out_event.raise_event(src, my_client)
-	..()
+// moved to the apropriate mob/logout.dm

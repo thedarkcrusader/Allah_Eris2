@@ -1,104 +1,99 @@
-#define WASHER_STATE_CLOSED  1
-#define WASHER_STATE_FULL    2
-#define WASHER_STATE_RUNNING 4
-#define WASHER_STATE_BLOODY  8
+#define WASHSTATE_EMPTYOPENDOOR 1
+#define WASHSTATE_EMPTYCLOSEDDOOR 2
+#define WASHSTATE_FULLOPENDOOR 3
+#define WASHSTATE_FULLCLOSEDDOOR 4
+#define WASHSTATE_RUNNING 5
 
-// WASHER_STATE_RUNNING implies WASHER_STATE_CLOSED | WASHER_STATE_FULL
-// if you break this assumption, you must update the icon file
-// other states are independent.
+//Halved as the Machinery SS takes 2 seconds to fire
+#define WASH_BASETIME 15
+#define WASH_ADDTIME 1.5
 
 /obj/machinery/washing_machine
-	name = "washing machine"
+	name = "Washing Machine"
+	desc = "Always able to clean your muddy clothes."
 	icon = 'icons/obj/machines/washing_machine.dmi'
-	icon_state = "wm_00"
+	icon_state = "wm_1"
 	density = TRUE
 	anchored = TRUE
-	construct_state = /singleton/machine_construction/default/panel_closed
-	uncreated_component_parts = null
-	stat_immune = 0
-	var/state = 0
-	var/gibs_ready = 0
+	active_power_usage = 400
+	var/state = WASHSTATE_EMPTYOPENDOOR
+	//1 = empty, open door
+	//2 = empty, closed door
+	//3 = full, open door
+	//4 = full, closed door
+	//5 = running
 	var/obj/crayon
-	var/obj/item/reagent_containers/pill/detergent/detergent
-	obj_flags = OBJ_FLAG_ANCHORABLE
-	clicksound = "button"
-	clickvol = 40
 
-	// Power
-	idle_power_usage = 10
-	active_power_usage = 150
+	var/tick = 0
 
-	machine_name = "washing machine"
-	machine_desc = "Uses detergent and water to get your clothes minty fresh. Good for those pesky bloodstains! Also decontaminates clothing that has been exposed to toxic elements, as long as detergent is used in the washing process."
+	var/list/allowed_types = list(/obj/item/clothing,
+	/obj/item/storage/pouch,
+	/obj/item/stack/material/hairlesshide,
+	/obj/item/bedsheet,
+	/obj/item/storage/belt,
+	/obj/item/storage/backpack,
+	/obj/item/rig)
 
 /obj/machinery/washing_machine/Destroy()
-	QDEL_NULL(crayon)
-	QDEL_NULL(detergent)
+	qdel(crayon)
+	crayon = null
 	. = ..()
+
+
+//A washing machine cleans away most of the bad effects of old clothes
+//Armor penalties and name/desc changes are left
+/obj/machinery/washing_machine/proc/wash(obj/laundry)
+	laundry.clean_blood()
+	if(istype(laundry))
+		laundry.make_young()
+
+/obj/machinery/washing_machine/Process()
+	if(tick > 0 && (state == WASHSTATE_RUNNING))
+		if(--tick <= 0)
+			for(var/atom/A in contents)
+				wash(A)
+				if(istype(A, /obj/item))
+					var/obj/item/I = A
+
+					if(istype(crayon,/obj/item/pen/crayon) && (istype(I, /obj/item/clothing/gloves/color) || istype(I, /obj/item/clothing/head/soft) || istype(I, /obj/item/clothing/shoes/color) || istype(I, /obj/item/clothing/under/color)))
+						var/obj/item/clothing/C = I
+						var/obj/item/pen/crayon/CR = crayon
+						C.color = CR.colour
+						C.name = "[CR.colourName] dyed [C.initial_name]"
+
+			//Tanning!
+			for(var/obj/item/stack/material/hairlesshide/HH in contents)
+				var/obj/item/stack/material/wetleather/WL = new(src)
+				WL.amount = HH.amount
+				qdel(HH)
+
+			state = WASHSTATE_FULLCLOSEDDOOR
+			set_power_use(IDLE_POWER_USE)
+			update_icon()
+
+/obj/machinery/washing_machine/examine(mob/user, extra_description = "")
+	if(tick > 0 && (state == WASHSTATE_RUNNING))
+		extra_description += SPAN_NOTICE("It has [tick*(SSmachines.wait/10)] seconds remaining on this cycle.")
+	..(user, extra_description)
 
 /obj/machinery/washing_machine/verb/start()
 	set name = "Start Washing"
 	set category = "Object"
 	set src in oview(1)
 
-	if(!CanPhysicallyInteract(usr))
+	if(!isliving(usr)) //ew ew ew usr, but it's the only way to check.
 		return
 
-	if(!anchored)
-		to_chat(usr, "\The [src] must be secured to the floor.")
+	if(state != WASHSTATE_FULLCLOSEDDOOR)
+		to_chat(usr, "The washing machine cannot run in this state.")
 		return
 
-	if(state & WASHER_STATE_RUNNING)
-		to_chat(usr, "\The [src] is already running.")
-		return
-	if(!(state & WASHER_STATE_FULL))
-		to_chat(usr, "Load \the [src] first!")
-		return
-	if(!(state & WASHER_STATE_CLOSED))
-		to_chat(usr, "You must first close the machine.")
-		return
-
-	if(!is_powered())
-		to_chat(usr, SPAN_WARNING("\The [src] is unpowered."))
-		return
-
-	state |= WASHER_STATE_RUNNING
-	if(locate(/mob/living) in src)
-		state |= WASHER_STATE_BLOODY
-
-	update_use_power(POWER_USE_ACTIVE)
+	state = WASHSTATE_RUNNING
 	update_icon()
-	addtimer(new Callback(src, PROC_REF(wash)), 20 SECONDS)
-
-/obj/machinery/washing_machine/proc/wash()
-	for(var/atom/A in (contents - component_parts))
-		if(detergent)
-			A.clean_blood()
-		if(isitem(A))
-			var/obj/item/I = A
-			if(detergent)
-				I.decontaminate()
-			if(crayon && iscolorablegloves(I))
-				var/obj/item/clothing/gloves/C = I
-				C.color = crayon.color
-			if(istype(A, /obj/item/clothing))
-				var/obj/item/clothing/C = A
-				C.ironed_state = WRINKLES_WRINKLY
-				if(detergent)
-					C.change_smell(SMELL_CLEAN)
-					addtimer(new Callback(C, TYPE_PROC_REF(/obj/item/clothing, change_smell)), detergent.smell_clean_time, TIMER_UNIQUE | TIMER_OVERRIDE)
-	QDEL_NULL(detergent)
-
-	//Tanning!
-	for(var/obj/item/stack/hairlesshide/HH in contents)
-		var/obj/item/stack/wetleather/WL = new(src)
-		WL.amount = HH.amount
-		qdel(HH)
-
-	update_use_power(POWER_USE_IDLE)
-	if(locate(/mob/living) in src)
-		gibs_ready = 1
-	state &= ~WASHER_STATE_RUNNING
+	tick = WASH_BASETIME
+	for(var/atom/A in contents)
+		tick += WASH_ADDTIME
+	set_power_use(ACTIVE_POWER_USE)
 	update_icon()
 
 /obj/machinery/washing_machine/verb/climb_out()
@@ -106,95 +101,66 @@
 	set category = "Object"
 	set src in usr.loc
 
-	if(!CanPhysicallyInteract(usr))
-		return
-	if(state & WASHER_STATE_CLOSED)
-		to_chat(usr, SPAN_WARNING("\The [src] is closed."))
-		return
-	if(!do_after(usr, 2 SECONDS, src, DO_DEFAULT | DO_USER_UNIQUE_ACT | DO_PUBLIC_PROGRESS))
-		return
-	if(!(state & WASHER_STATE_CLOSED))
-		usr.dropInto(loc)
+	sleep(20)
+	if(state in list(WASHSTATE_EMPTYOPENDOOR, WASHSTATE_FULLOPENDOOR) )
+		usr.loc = src.loc
 
-/obj/machinery/washing_machine/on_update_icon()
-	icon_state = "wm_[state][panel_open]"
 
-/obj/machinery/washing_machine/clean_blood()
-	. = ..()
-	state &= ~WASHER_STATE_BLOODY
-	update_icon()
+/obj/machinery/washing_machine/update_icon()
+	icon_state = "wm_[state]"
 
-/obj/machinery/washing_machine/components_are_accessible(path)
-	return !(state & WASHER_STATE_RUNNING) && ..()
 
-/obj/machinery/washing_machine/use_tool(obj/item/W, mob/living/user, list/click_params)
-	if ((. = ..()))
-		return
-
-	if(!(state & WASHER_STATE_CLOSED))
-		if(!crayon && istype(W,/obj/item/pen/crayon))
-			if(!user.unEquip(W, src))
-				return
-			crayon = W
-			return TRUE
-		if(!detergent && istype(W,/obj/item/reagent_containers/pill/detergent))
-			if(!user.unEquip(W, src))
-				return
-			detergent = W
-			return TRUE
-
-	if(istype(W, /obj/item/holder)) // Mob holder
-		for(var/mob/living/doggy in W)
-			doggy.forceMove(src)
-		qdel(W)
-		state |= WASHER_STATE_FULL
-		update_icon()
-		return TRUE
-
-	if (state & WASHER_STATE_RUNNING)
-		to_chat(user, SPAN_WARNING("\The [src] is currently running."))
-		return TRUE
-
-	if (!(W.item_flags & ITEM_FLAG_WASHER_ALLOWED))
-		to_chat(user, SPAN_WARNING("\The [W] can't be washed in \the [src]!"))
-		return TRUE
-
-	if (length(contents) < 5)
-		if (!(state & WASHER_STATE_CLOSED))
-			if (!user.unEquip(W, src))
-				return
-			state |= WASHER_STATE_FULL
-			update_icon()
+/obj/machinery/washing_machine/attackby(obj/item/W as obj, mob/user as mob)
+	if(istype(W,/obj/item/pen/crayon))
+		if(state in list(WASHSTATE_EMPTYOPENDOOR, WASHSTATE_FULLOPENDOOR))
+			if(!crayon)
+				user.drop_item()
+				crayon = W
+				crayon.loc = src
+			else
+				..()
 		else
-			to_chat(user, SPAN_NOTICE("You can't put the item in right now."))
-	else
-		to_chat(user, SPAN_NOTICE("\The [src] is full."))
-	return TRUE
-
-
-/obj/machinery/washing_machine/physical_attack_hand(mob/user)
-	if(state & WASHER_STATE_RUNNING)
-		to_chat(user, SPAN_WARNING("\The [src] is busy."))
-		return TRUE
-	if(state & WASHER_STATE_CLOSED)
-		state &= ~WASHER_STATE_CLOSED
-		if(gibs_ready)
-			gibs_ready = 0
-			var/mob/M = locate(/mob/living) in src
-			if(M)
-				M.gib()
-		for(var/atom/movable/O in (contents - component_parts))
-			O.dropInto(loc)
-		state &= ~WASHER_STATE_FULL
+			..()
+	else if(is_type_in_list(W, allowed_types))
+		if(contents.len < 10)
+			if(state in list(WASHSTATE_EMPTYOPENDOOR, WASHSTATE_FULLOPENDOOR))
+				user.unEquip(W, src)
+				state = WASHSTATE_FULLOPENDOOR
+			else
+				to_chat(user, SPAN_NOTICE("You can't put the item in right now."))
+		else
+			to_chat(user, SPAN_NOTICE("The washing machine is full."))
 		update_icon()
-		crayon = null
-		detergent = null
-		return TRUE
-	state |= WASHER_STATE_CLOSED
+		return
 	update_icon()
-	return TRUE
+	..()
 
-#undef WASHER_STATE_CLOSED
-#undef WASHER_STATE_FULL
-#undef WASHER_STATE_RUNNING
-#undef WASHER_STATE_BLOODY
+
+/obj/machinery/washing_machine/attack_hand(mob/user as mob)
+	switch(state)
+		if(WASHSTATE_EMPTYOPENDOOR)
+			state = WASHSTATE_EMPTYCLOSEDDOOR
+		if(WASHSTATE_EMPTYCLOSEDDOOR)
+			state = WASHSTATE_EMPTYOPENDOOR
+			for(var/atom/movable/O in contents)
+				O.loc = src.loc
+		if(WASHSTATE_FULLOPENDOOR)
+			state = WASHSTATE_FULLCLOSEDDOOR
+		if(WASHSTATE_FULLCLOSEDDOOR)
+			for(var/atom/movable/O in contents)
+				O.loc = src.loc
+			crayon = null
+			state = WASHSTATE_EMPTYOPENDOOR
+		if(WASHSTATE_RUNNING)
+			to_chat(user, SPAN_WARNING("The [src] is busy."))
+
+	update_icon()
+
+#undef WASHSTATE_EMPTYOPENDOOR
+#undef WASHSTATE_EMPTYCLOSEDDOOR
+#undef WASHSTATE_FULLOPENDOOR
+#undef WASHSTATE_FULLCLOSEDDOOR
+#undef WASHSTATE_RUNNING
+
+#undef WASH_BASETIME
+#undef WASH_ADDTIME

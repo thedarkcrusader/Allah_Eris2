@@ -3,7 +3,7 @@
 /obj/machinery/atmospherics/Destroy()
 	for(var/mob/living/M in src) //ventcrawling is serious business
 		M.remove_ventcrawl()
-		M.dropInto(loc)
+		M.forceMove(get_turf(src))
 	if(pipe_image)
 		for(var/mob/living/M in GLOB.player_list)
 			if(M.client)
@@ -12,9 +12,9 @@
 		pipe_image = null
 	. = ..()
 
-/obj/machinery/atmospherics/ex_act(severity)
+/obj/machinery/atmospherics/explosion_act(target_power, explosion_handler/handler)
 	for(var/atom/movable/A in src) //ventcrawling is serious business
-		A.ex_act(severity)
+		A.explosion_act(target_power, handler)
 	. = ..()
 
 /obj/machinery/atmospherics/relaymove(mob/living/user, direction)
@@ -22,7 +22,7 @@
 		return
 	ventcrawl_to(user,findConnecting(direction),direction)
 
-/obj/machinery/atmospherics/proc/ventcrawl_to(mob/living/user, obj/machinery/atmospherics/target_move, direction)
+/obj/machinery/atmospherics/proc/ventcrawl_to(var/mob/living/user, var/obj/machinery/atmospherics/target_move, var/direction)
 	if(target_move)
 		if(is_type_in_list(target_move, ventcrawl_machinery) && target_move.can_crawl_through())
 			user.remove_ventcrawl()
@@ -42,7 +42,6 @@
 			user.remove_ventcrawl()
 			user.forceMove(src.loc)
 			user.visible_message("You hear something squeezing through the pipes.", "You climb out the ventilation system.")
-	user.SetMoveCooldown(user.movement_delay())
 
 /obj/machinery/atmospherics/proc/can_crawl_through()
 	return 1
@@ -53,35 +52,35 @@
 /obj/machinery/atmospherics/unary/vent_scrubber/can_crawl_through()
 	return !welded
 
-/obj/machinery/atmospherics/proc/findConnecting(direction)
+/obj/machinery/atmospherics/proc/findConnecting(var/direction)
 	for(var/obj/machinery/atmospherics/target in get_step(src,direction))
 		if(target.initialize_directions & get_dir(target,src))
 			if(isConnectable(target) && target.isConnectable(src))
 				return target
 
-/obj/machinery/atmospherics/proc/isConnectable(obj/machinery/atmospherics/target)
+/obj/machinery/atmospherics/proc/isConnectable(var/obj/machinery/atmospherics/target)
 	return (target == node1 || target == node2)
 
-/obj/machinery/atmospherics/pipe/manifold/isConnectable(obj/machinery/atmospherics/target)
+/obj/machinery/atmospherics/pipe/manifold/isConnectable(var/obj/machinery/atmospherics/target)
 	return (target == node3 || ..())
 
-/obj/machinery/atmospherics/trinary/isConnectable(obj/machinery/atmospherics/target)
+obj/machinery/atmospherics/trinary/isConnectable(var/obj/machinery/atmospherics/target)
 	return (target == node3 || ..())
 
-/obj/machinery/atmospherics/pipe/manifold4w/isConnectable(obj/machinery/atmospherics/target)
+/obj/machinery/atmospherics/pipe/manifold4w/isConnectable(var/obj/machinery/atmospherics/target)
 	return (target == node3 || target == node4 || ..())
 
-/obj/machinery/atmospherics/tvalve/isConnectable(obj/machinery/atmospherics/target)
+/obj/machinery/atmospherics/tvalve/isConnectable(var/obj/machinery/atmospherics/target)
 	return (target == node3 || ..())
 
-/obj/machinery/atmospherics/pipe/cap/isConnectable(obj/machinery/atmospherics/target)
+/obj/machinery/atmospherics/pipe/cap/isConnectable(var/obj/machinery/atmospherics/target)
 	return (target == node || ..())
 
-/obj/machinery/atmospherics/portables_connector/isConnectable(obj/machinery/atmospherics/target)
+/obj/machinery/atmospherics/portables_connector/isConnectable(var/obj/machinery/atmospherics/target)
 	return (target == node || ..())
 
-/obj/machinery/atmospherics/unary/isConnectable(obj/machinery/atmospherics/target)
-	return (target == node || ..())
+/obj/machinery/atmospherics/unary/isConnectable(var/obj/machinery/atmospherics/target)
+	return (target == node1 || ..())
 
 /obj/machinery/atmospherics/valve/isConnectable()
 	return (open && ..())

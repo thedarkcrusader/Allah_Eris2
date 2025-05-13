@@ -1,15 +1,13 @@
 /obj/machinery/compressor
 	name = "compressor"
 	desc = "The compressor stage of a gas turbine generator."
-	icon = 'icons/obj/atmospherics/pipes.dmi'
+	icon = 'icons/obj/pipes.dmi'
 	icon_state = "compressor"
 	anchored = TRUE
 	density = TRUE
-	machine_name = "turbine control console"
-	machine_desc = "Used to monitor, operate, and configure a connected gas turbine."
 	var/obj/machinery/power/turbine/turbine
 	var/datum/gas_mixture/gas_contained
-	var/turf/simulated/inturf
+	var/turf/inturf
 	var/starter = 0
 	var/rpm = 0
 	var/rpmtarget = 0
@@ -19,45 +17,44 @@
 /obj/machinery/power/turbine
 	name = "gas turbine generator"
 	desc = "A gas turbine used for backup power generation."
-	icon = 'icons/obj/atmospherics/pipes.dmi'
+	icon = 'icons/obj/pipes.dmi'
 	icon_state = "turbine"
 	anchored = TRUE
 	density = TRUE
 	var/obj/machinery/compressor/compressor
-	var/turf/simulated/outturf
+	var/turf/outturf
 	var/lastgen
 
 /obj/machinery/computer/turbine_computer
-	name = "gas turbine control computer"
-	desc = "A computer to remotely control a gas turbine."
-	icon = 'icons/obj/machines/computer.dmi'
+	name = "Gas turbine control computer"
+	desc = "A computer to remotely control a gas turbine"
+	icon = 'icons/obj/computer.dmi'
 	icon_keyboard = "tech_key"
 	icon_screen = "turbinecomp"
+	circuit = /obj/item/electronics/circuitboard/turbine_control
 	anchored = TRUE
 	density = TRUE
 	var/obj/machinery/compressor/compressor
 	var/list/obj/machinery/door/blast/doors
+	var/id = 0
 	var/door_status = 0
 
 // the inlet stage of the gas turbine electricity generator
 
-/obj/machinery/compressor/Initialize()
-	. = ..()
+/obj/machinery/compressor/New()
+	..()
+
 	gas_contained = new
 	inturf = get_step(src, dir)
-	turbine = locate() in get_step(src, get_dir(inturf, src))
-	if(!turbine)
-		set_broken(TRUE)
-	else
-		turbine.compressor = src
 
-/obj/machinery/compressor/Destroy()
-	if(turbine)
-		turbine.compressor = null
-		turbine.set_broken(TRUE)
-		turbine = null
-	QDEL_NULL(gas_contained)
-	return ..()
+	spawn(5)
+		turbine = locate() in get_step(src, get_dir(inturf, src))
+		if(!turbine)
+			stat |= BROKEN
+		else
+			turbine.stat &= !BROKEN
+			turbine.compressor = src
+
 
 #define COMPFRICTION 5e5
 #define COMPSTARTERLOAD 2800
@@ -65,8 +62,11 @@
 /obj/machinery/compressor/Process()
 	if(!starter)
 		return
-	ClearOverlays()
-	if(MACHINE_IS_BROKEN(src))
+	overlays.Cut()
+	if(stat & BROKEN)
+		return
+	if(!turbine)
+		stat |= BROKEN
 		return
 	rpm = 0.9* rpm + 0.1 * rpmtarget
 	var/datum/gas_mixture/environment = inturf.return_air()
@@ -78,8 +78,8 @@
 	rpm = max(0, rpm - (rpm*rpm)/COMPFRICTION)
 
 
-	if(starter && is_powered())
-		use_power_oneoff(2800)
+	if(starter && !(stat & NOPOWER))
+		use_power(2800)
 		if(rpm<1000)
 			rpmtarget = 1000
 	else
@@ -89,30 +89,29 @@
 
 
 	if(rpm>50000)
-		AddOverlays(image('icons/obj/atmospherics/pipes.dmi', "comp-o4", FLY_LAYER))
+		overlays += image('icons/obj/pipes.dmi', "comp-o4", FLY_LAYER)
 	else if(rpm>10000)
-		AddOverlays(image('icons/obj/atmospherics/pipes.dmi', "comp-o3", FLY_LAYER))
+		overlays += image('icons/obj/pipes.dmi', "comp-o3", FLY_LAYER)
 	else if(rpm>2000)
-		AddOverlays(image('icons/obj/atmospherics/pipes.dmi', "comp-o2", FLY_LAYER))
+		overlays += image('icons/obj/pipes.dmi', "comp-o2", FLY_LAYER)
 	else if(rpm>500)
-		AddOverlays(image('icons/obj/atmospherics/pipes.dmi', "comp-o1", FLY_LAYER))
+		overlays += image('icons/obj/pipes.dmi', "comp-o1", FLY_LAYER)
 	 //TODO: DEFERRED
 
-/obj/machinery/power/turbine/Initialize()
+/obj/machinery/power/turbine/New()
 	..()
+
 	outturf = get_step(src, dir)
-	return INITIALIZE_HINT_LATELOAD
 
-/obj/machinery/power/turbine/LateInitialize(mapload)
-	if(!compressor) // It should have found us and subscribed.
-		set_broken(TRUE)
+	spawn(5)
 
-/obj/machinery/power/turbine/Destroy()
-	if(compressor)
-		compressor.turbine = null
-		compressor.set_broken(TRUE)
-		compressor = null
-	return ..()
+		compressor = locate() in get_step(src, get_dir(outturf, src))
+		if(!compressor)
+			stat |= BROKEN
+		else
+			compressor.stat &= !BROKEN
+			compressor.turbine = src
+
 
 #define TURBPRES 9000000
 #define TURBGENQ 20000
@@ -121,8 +120,11 @@
 /obj/machinery/power/turbine/Process()
 	if(!compressor.starter)
 		return
-	ClearOverlays()
-	if(MACHINE_IS_BROKEN(src))
+	overlays.Cut()
+	if(stat & BROKEN)
+		return
+	if(!compressor)
+		stat |= BROKEN
 		return
 	lastgen = ((compressor.rpm / TURBGENQ)**TURBGENG) *TURBGENQ
 
@@ -139,7 +141,7 @@
 		outturf.assume_air(removed)
 
 	if(lastgen > 100)
-		AddOverlays(image('icons/obj/atmospherics/pipes.dmi', "turb-o", FLY_LAYER))
+		overlays += image('icons/obj/pipes.dmi', "turb-o", FLY_LAYER)
 
 
 	for(var/mob/M in viewers(1, src))
@@ -149,9 +151,9 @@
 
 /obj/machinery/power/turbine/interact(mob/user)
 
-	if ( (get_dist(src, user) > 1 ) || (inoperable()) && (!istype(user, /mob/living/silicon/ai)) )
+	if ( (get_dist(src, user) > 1 ) || (stat & (NOPOWER|BROKEN)) && (!isAI(user)) )
 		user.machine = null
-		close_browser(user, "window=turbine")
+		user << browse(null, "window=turbine")
 		return
 
 	user.machine = src
@@ -162,33 +164,46 @@
 
 	t += "Turbine: [round(compressor.rpm)] RPM<BR>"
 
-	t += "Starter: [ compressor.starter ? "<A href='byond://?src=\ref[src];str=1'>Off</A> <B>On</B>" : "<B>Off</B> <A href='byond://?src=\ref[src];str=1'>On</A>"]"
+	t += "Starter: [ compressor.starter ? "<A href='?src=\ref[src];str=1'>Off</A> <B>On</B>" : "<B>Off</B> <A href='?src=\ref[src];str=1'>On</A>"]"
 
-	t += "</PRE><HR><A href='byond://?src=\ref[src];close=1'>Close</A>"
+	t += "</PRE><HR><A href='?src=\ref[src];close=1'>Close</A>"
 
 	t += "</TT>"
-	show_browser(user, t, "window=turbine")
+	user << browse(t, "window=turbine")
 	onclose(user, "turbine")
 
 	return
 
-/obj/machinery/power/turbine/CanUseTopic(mob/user, href_list)
-	if(!user.IsAdvancedToolUser())
-		to_chat(user, FEEDBACK_YOU_LACK_DEXTERITY)
-		return min(..(), STATUS_UPDATE)
-	return ..()
+/obj/machinery/power/turbine/Topic(href, href_list)
+	..()
+	if(stat & BROKEN)
+		return
+	if(usr.stat || usr.restrained() )
+		return
+	if(!usr.IsAdvancedToolUser())
+		return
+	if(get_dist(src, usr) <= 1 || isAI(usr))
+		if( href_list["close"] )
+			usr << browse(null, "window=turbine")
+			usr.machine = null
+			return
 
-/obj/machinery/power/turbine/OnTopic(user, href_list)
-	if(href_list["close"])
-		close_browser(usr, "window=turbine")
-		return TOPIC_HANDLED
+		else if( href_list["str"] )
+			compressor.starter = !compressor.starter
 
-	if(href_list["str"])
-		compressor.starter = !compressor.starter
-		. = TOPIC_REFRESH
+		spawn(0)
+			for(var/mob/M in viewers(1, src))
+				if ((M.client && M.machine == src))
+					src.interact(M)
 
-	if(. == TOPIC_REFRESH)
-		interact(user)
+	else
+		usr << browse(null, "window=turbine")
+		usr.machine = null
+
+	return
+
+
+
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -196,56 +211,52 @@
 
 
 
-/obj/machinery/computer/turbine_computer/Initialize()
-	. = ..()
-	for(var/obj/machinery/compressor/C in SSmachines.machinery)
-		if(id_tag == C.comp_id)
-			compressor = C
-	doors = list()
-	for(var/obj/machinery/door/blast/P in SSmachines.machinery)
-		if(P.id_tag == id_tag)
-			doors += P
+/obj/machinery/computer/turbine_computer/New()
+	..()
+	spawn(5)
+		for(var/obj/machinery/compressor/C in GLOB.machines)
+			if(id == C.comp_id)
+				compressor = C
+		doors = new /list()
+		for(var/obj/machinery/door/blast/P in GLOB.all_doors)
+			if(P.id == id)
+				doors += P
 
-/obj/machinery/computer/turbine_computer/Destroy()
-	doors.Cut()
-	compressor = null
-	return ..()
 
-/obj/machinery/computer/turbine_computer/interface_interact(mob/user)
-	interact(user)
-	return TRUE
-
-/obj/machinery/computer/turbine_computer/interact(mob/user)
+/obj/machinery/computer/turbine_computer/attack_hand(var/mob/user as mob)
 	user.machine = src
 	var/dat
 	if(src.compressor)
 		dat += {"<BR><B>Gas turbine remote control system</B><HR>
-		\nTurbine status: [ src.compressor.starter ? "<A href='byond://?src=\ref[src];str=1'>Off</A> <B>On</B>" : "<B>Off</B> <A href='byond://?src=\ref[src];str=1'>On</A>"]
+		\nTurbine status: [ src.compressor.starter ? "<A href='?src=\ref[src];str=1'>Off</A> <B>On</B>" : "<B>Off</B> <A href='?src=\ref[src];str=1'>On</A>"]
 		\n<BR>
 		\nTurbine speed: [src.compressor.rpm]rpm<BR>
 		\nPower currently being generated: [src.compressor.turbine.lastgen]W<BR>
 		\nInternal gas temperature: [src.compressor.gas_contained.temperature]K<BR>
-		\nVent doors: [ src.door_status ? "<A href='byond://?src=\ref[src];doors=1'>Closed</A> <B>Open</B>" : "<B>Closed</B> <A href='byond://?src=\ref[src];doors=1'>Open</A>"]
-		\n</PRE><HR><A href='byond://?src=\ref[src];view=1'>View</A>
-		\n</PRE><HR><A href='byond://?src=\ref[src];close=1'>Close</A>
+		\nVent doors: [ src.door_status ? "<A href='?src=\ref[src];doors=1'>Closed</A> <B>Open</B>" : "<B>Closed</B> <A href='?src=\ref[src];doors=1'>Open</A>"]
+		\n</PRE><HR><A href='?src=\ref[src];view=1'>View</A>
+		\n</PRE><HR><A href='?src=\ref[src];close=1'>Close</A>
 		\n<BR>
 		\n"}
 	else
 		dat += SPAN_DANGER("No compatible attached compressor found.")
 
-	show_browser(user, dat, "window=computer;size=400x500")
+	user << browse(dat, "window=computer;size=400x500")
 	onclose(user, "computer")
 	return
 
 
 
-/obj/machinery/computer/turbine_computer/OnTopic(user, href_list)
+/obj/machinery/computer/turbine_computer/Topic(href, href_list)
+	if(..())
+		return 1
+
+	usr.machine = src
+
 	if( href_list["view"] )
 		usr.client.eye = src.compressor
-		. = TOPIC_HANDLED
 	else if( href_list["str"] )
 		src.compressor.starter = !src.compressor.starter
-		. = TOPIC_REFRESH
 	else if (href_list["doors"])
 		for(var/obj/machinery/door/blast/D in src.doors)
 			if (door_status == 0)
@@ -256,10 +267,13 @@
 				spawn( 0 )
 					D.close()
 					door_status = 0
-		. = TOPIC_REFRESH
 	else if( href_list["close"] )
-		close_browser(user, "window=computer")
-		return TOPIC_HANDLED
+		usr << browse(null, "window=computer")
+		usr.machine = null
+		return
 
-	if(. == TOPIC_REFRESH)
-		interact(user)
+	src.updateUsrDialog()
+
+/obj/machinery/computer/turbine_computer/Process()
+	src.updateDialog()
+	return

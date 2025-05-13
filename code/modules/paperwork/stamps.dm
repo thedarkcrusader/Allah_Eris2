@@ -2,31 +2,37 @@
 	name = "rubber stamp"
 	desc = "A rubber stamp for stamping important documents."
 	icon = 'icons/obj/bureaucracy.dmi'
-	icon_state = "stamp-deckchief"
+	icon_state = "stamp-qm"
 	item_state = "stamp"
 	throwforce = 0
-	force = 1
 	w_class = ITEM_SIZE_TINY
 	throw_speed = 7
 	throw_range = 15
-	matter = list(MATERIAL_STEEL = 60)
+	matter = list(MATERIAL_PLASTIC = 1)
 	attack_verb = list("stamped")
-	hitsound = 'sound/effects/stamp.ogg'
 
 /obj/item/stamp/captain
 	name = "captain's rubber stamp"
 	icon_state = "stamp-cap"
 
+/obj/item/stamp/hop
+	name = "first officer's rubber stamp"
+	icon_state = "stamp-hop"
+
+/obj/item/stamp/hos
+	name = "ironhammer commander's rubber stamp"
+	icon_state = "stamp-hos"
+
 /obj/item/stamp/ce
-	name = "chief engineer's rubber stamp"
+	name = "exultant's rubber stamp"
 	icon_state = "stamp-ce"
 
 /obj/item/stamp/rd
-	name = "chief science officer's rubber stamp"
+	name = "moebius expedition overseer's rubber stamp"
 	icon_state = "stamp-rd"
 
 /obj/item/stamp/cmo
-	name = "chief medical officer's rubber stamp"
+	name = "moebius biolab officer's rubber stamp"
 	icon_state = "stamp-cmo"
 
 /obj/item/stamp/denied
@@ -37,17 +43,17 @@
 	name = "clown's rubber stamp"
 	icon_state = "stamp-clown"
 
-/obj/item/stamp/boss
-	name = "boss' rubber stamp"
-	icon_state = "stamp-boss"
+/obj/item/stamp/qm
+	name = "guild merchant's stamp"
+	icon_state = "stamp-qm"
 
-/obj/item/stamp/boss/Initialize()
-	name = "[GLOB.using_map.boss_name]'s' rubber stamp"
-	. = ..()
+/obj/item/stamp/nt
+	name = "neotheology preacher's stamp"
+	icon_state = "stamp-nt"
 
-/obj/item/stamp/cargo
-	name = "cargo rubber stamp"
-	icon_state = "stamp-cargo"
+/obj/item/stamp/lus
+	name = "luscent official's stamp"
+	icon_state = "stamp-lus"
 
 // Syndicate stamp to forge documents.
 /obj/item/stamp/chameleon/attack_self(mob/user as mob)
@@ -69,5 +75,5 @@
 		var/obj/item/stamp/chosen_stamp = stamps[capitalize(input_stamp)]
 
 		if(chosen_stamp)
-			SetName(chosen_stamp.name)
+			name = chosen_stamp.name
 			icon_state = chosen_stamp.icon_state

@@ -1,189 +1,296 @@
-// Uses Lorentzian dynamics to avoid going too fast.
-#define SENSOR_COEFFICENT 1000
-/obj/overmap/visitable/ship
+/obj/effect/overmap/ship
 	name = "generic ship"
 	desc = "Space faring vessel."
-	icon_state = "ship"
-	requires_contact = TRUE
-	movable = TRUE
-	randomize_start_pos = FALSE
+	name_stages = list("generic ship", "unknown vessel", "unknown spatial phenomenon")
+	icon_stages = list("htu_cruiser", "ship", "poi")
+	var/vessel_mass = 100 				//tonnes, arbitrary number, affects acceleration provided by engines
+	var/default_delay = 6 SECONDS 		//time it takes to move to next tile on overmap
+	var/speed_mod = 10					//multiplier for how much ship's speed reduces above time
+	var/list/speed = list(0,0)			//speed in x,y direction
+	var/last_burn = 0					//worldtime when ship last acceleated
+	var/burn_delay = 10					//how often ship can do burns
+	var/list/last_movement = list(0,0)	//worldtime when ship last moved in x,y direction
+	var/fore_dir = NORTH				//what dir ship flies towards for purpose of moving stars effect procs
 
-	var/list/consoles
-	var/list/sensors
+	var/obj/machinery/computer/helm/nav_control
+	var/list/engines = list()  // contains /datum/ship_engine
+	var/list/scanners = list() // contains /obj/machinery/power/shipside/long_range_scanner
+	var/engines_state = 1 //global on/off toggle for all engines
+	var/thrust_limit = 1 //global thrust limit for all engines, 0..1
+	var/triggers_events = 1
 
-	var/vessel_mass = 10000             // tonnes, arbitrary number, affects acceleration provided by engines
-	var/vessel_size = SHIP_SIZE_LARGE	// arbitrary number, affects how likely are we to evade meteors
-	var/max_autopilot = 1 / (10 SECONDS) // The maximum speed any attached helm can try to autopilot at.
+	var/scan_range = PASSIVE_SCAN_RANGE
+	var/pulsing = FALSE
 
-	var/last_burn = 0                   // worldtime when ship last acceleated
-	var/burn_delay = 1 SECOND           // how often ship can do burns
-	var/fore_dir = NORTH                // what dir ship flies towards for purpose of moving stars effect procs
+	Crossed(var/obj/effect/overmap_event/movable/ME)
+		..()
+		if(ME)
+			if(istype(ME, /obj/effect/overmap_event/movable))
+				if(ME.OE)
+					if(istype(src, /obj/effect/overmap/ship))
+						ME.OE:enter(src)
 
-	/// How much it increases identification process each scan
-	var/base_sensor_visibility = 10
+	Uncrossed(var/obj/effect/overmap_event/movable/ME)
+		..()
+		if(ME)
+			if(istype(ME, /obj/effect/overmap_event/movable))
+				if(ME.OE)
+					if(istype(src, /obj/effect/overmap/ship))
+						ME.OE:leave(src)
 
-	var/list/navigation_viewers // list of weakrefs to people viewing the overmap via this ship
-
-	var/list/engines = list()
-	var/engines_state = 0 //global on/off toggle for all engines
-	var/thrust_limit = 1  //global thrust limit for all engines, 0..1
-	var/skill_needed = SKILL_TRAINED  //piloting skill needed to steer it without going in random dir
-	var/operator_skill
-
-/obj/overmap/visitable/ship/Initialize()
-	. = ..()
-	glide_size = world.icon_size
-	SSshuttle.ships += src
-	base_sensor_visibility = initial(base_sensor_visibility) + round(sqrt(vessel_mass/SENSOR_COEFFICENT),1)
-
-/obj/overmap/visitable/ship/Destroy()
-	SSshuttle.ships -= src
-	if(length(consoles))
-		for(var/obj/machinery/computer/ship/machine in consoles)
-			if(machine.linked == src)
-				machine.linked = null
-		consoles = null
-	if (length(sensors))
-		for (var/obj/machinery/shipsensors/machine in sensors)
-			if (machine.linked == src)
-				machine.linked = null
-		sensors = null
+/obj/effect/overmap/ship/New()
+	GLOB.ships += src
 	. = ..()
 
-/obj/overmap/visitable/ship/relaymove(mob/user, direction, accel_limit)
-	accelerate(direction, accel_limit)
-	update_operator_skill(user)
-
-/**
- * Updates `operator_skill` to match the current user's skill level, or to null if no user is provided.
- * Will skip observers to avoid allowing unintended external influences on flight.
- */
-/obj/overmap/visitable/ship/proc/update_operator_skill(mob/user)
-	if (isobserver(user))
-		return
-	operator_skill = user?.get_skill_value(SKILL_PILOT)
-
-/obj/overmap/visitable/ship/get_scan_data(mob/user)
+/obj/effect/overmap/ship/Destroy()
+	GLOB.ships -= src
 	. = ..()
-	var/list/extra_data = list("Mass: [vessel_mass] tons.")
-	if(is_moving())
-		extra_data += "Heading: [get_heading_angle()], speed [get_speed() * 1000]"
-	if(instant_contact)
-		extra_data += "<b>It is broadcasting a distress signal.</b>"
-	. += jointext(extra_data, "<br>")
 
+/obj/effect/overmap/ship/Initialize()
+	. = ..()
+	for(var/datum/ship_engine/E in ship_engines)
+		if (E.holder.z in map_z)
+			engines |= E
+			//testing("Engine at level [E.holder.z] linked to overmap object '[name]'.")
+	for(var/obj/machinery/computer/engines/E in GLOB.computer_list)
+		if (E.z in map_z)
+			E.linked = src
+			//testing("Engines console at level [E.z] linked to overmap object '[name]'.")
+
+	for(var/obj/machinery/power/shipside/long_range_scanner/LRS in ship_scanners)
+		if (LRS.z in map_z)
+			//testing("Scanner at level [LRS.z] linked to overmap object '[name]'.")
+			scanners |= LRS
+
+	for(var/obj/machinery/computer/helm/H in GLOB.computer_list)
+		if (H.z in map_z)
+			nav_control = H
+			H.linked = src
+			H.get_known_sectors()
+			//testing("Helm console at level [H.z] linked to overmap object '[name]'.")
+	for(var/obj/machinery/computer/navigation/N in GLOB.computer_list)
+		if (N.z in map_z)
+			N.linked = src
+			//testing("Navigation console at level [N.z] linked to overmap object '[name]'.")
+
+	START_PROCESSING(SSobj, src)
+
+/obj/effect/overmap/ship/proc/check_link()
+	// Depending on initialization order the Initialize() does not properly make the links
+
+	for(var/datum/ship_engine/E in ship_engines)
+		if (E.holder.z in map_z)
+			engines |= E
+			//testing("Engine at level [E.holder.z] linked to overmap object '[name]'.")
+	for(var/obj/machinery/computer/engines/E in GLOB.computer_list)
+		if (E.z in map_z)
+			E.linked = src
+			//testing("Engines console at level [E.z] linked to overmap object '[name]'.")
+
+	for(var/obj/machinery/power/shipside/long_range_scanner/LRS in ship_scanners)
+		if (LRS.z in map_z)
+			//testing("Scanner at level [LRS.z] linked to overmap object '[name]'.")
+			scanners |= LRS
+
+	for(var/obj/machinery/computer/helm/H in GLOB.computer_list)
+		if (H.z in map_z)
+			nav_control = H
+			H.linked = src
+			H.get_known_sectors()
+			//testing("Helm console at level [H.z] linked to overmap object '[name]'.")
+	for(var/obj/machinery/computer/navigation/N in GLOB.computer_list)
+		if (N.z in map_z)
+			N.linked = src
+			//testing("Navigation console at level [N.z] linked to overmap object '[name]'.")
+
+/obj/effect/overmap/ship/relaymove(mob/user, direction)
+	accelerate(direction)
+
+/obj/effect/overmap/ship/proc/is_still()
+	return !(speed[1] || speed[2])
 
 //Projected acceleration based on information from engines
-/obj/overmap/visitable/ship/proc/get_acceleration()
-	return round(get_total_thrust()/get_vessel_mass(), GLOB.overmap_move_resolution)
+/obj/effect/overmap/ship/proc/get_acceleration()
+	return round(get_total_thrust()/vessel_mass, 0.1)
 
 //Does actual burn and returns the resulting acceleration
-/obj/overmap/visitable/ship/proc/get_burn_acceleration()
-	return round(burn() / get_vessel_mass(), GLOB.overmap_move_resolution)
+/obj/effect/overmap/ship/proc/get_burn_acceleration()
+	return round(burn() / vessel_mass, 0.1)
 
-/obj/overmap/visitable/ship/proc/get_vessel_mass()
-	. = vessel_mass
-	for(var/obj/overmap/visitable/ship/ship in src)
-		. += ship.get_vessel_mass()
+/obj/effect/overmap/ship/proc/get_speed()
+	return round(sqrt(speed[1]*speed[1] + speed[2]*speed[2]), 0.1)
 
-/obj/overmap/visitable/ship/adjust_speed(n_x, n_y)
-	. = ..()
+/obj/effect/overmap/ship/proc/get_heading()
+	var/res = 0
+	if(speed[1])
+		if(speed[1] > 0)
+			res |= EAST
+		else
+			res |= WEST
+	if(speed[2])
+		if(speed[2] > 0)
+			res |= NORTH
+		else
+			res |= SOUTH
+	return res
+
+/obj/effect/overmap/ship/proc/adjust_speed(n_x, n_y)
+	speed[1] = round(CLAMP(speed[1] + n_x, -default_delay, default_delay),0.1)
+	speed[2] = round(CLAMP(speed[2] + n_y, -default_delay, default_delay),0.1)
 	for(var/zz in map_z)
-		if(!is_moving())
+		if(is_still())
 			toggle_move_stars(zz)
 		else
 			toggle_move_stars(zz, fore_dir)
+	update_icon()
 
-/obj/overmap/visitable/ship/proc/get_brake_path()
+/obj/effect/overmap/ship/proc/get_brake_path()
 	if(!get_acceleration())
 		return INFINITY
-	if(!is_moving())
-		return 0
-	if(!burn_delay)
-		return 0
 	var/num_burns = get_speed()/get_acceleration() + 2 //some padding in case acceleration drops form fuel usage
-	var/burns_per_grid = 1/ (burn_delay * get_speed())
+	var/burns_per_grid = (default_delay - speed_mod*get_speed())/burn_delay
+	if (burns_per_grid == 0)
+		error("ship attempted get_brake_path, burns_per_grid is 0")
+		return INFINITY
 	return round(num_burns/burns_per_grid)
 
-/obj/overmap/visitable/ship/proc/decelerate(accel_limit)
-	if ((!speed[1] && !speed[2]) || !can_burn())
-		return
-	last_burn = world.time
-	var/delta = accel_limit ? min(get_burn_acceleration(), accel_limit) : get_burn_acceleration()
-	var/mag = sqrt(speed[1] ** 2 + speed[2] ** 2)
-	if (delta >= mag)
-		adjust_speed(-speed[1], -speed[2])
-	else
-		adjust_speed(-(speed[1] * delta) / mag, -(speed[2] * delta) / mag)
+/obj/effect/overmap/ship/proc/decelerate()
+	if(!is_still() && can_burn())
+		if (speed[1])
+			adjust_speed(-SIGN(speed[1]) * min(get_burn_acceleration(),abs(speed[1])), 0)
+		if (speed[2])
+			adjust_speed(0, -SIGN(speed[2]) * min(get_burn_acceleration(),abs(speed[2])))
+		last_burn = world.time
 
-/obj/overmap/visitable/ship/proc/accelerate(direction, accel_limit)
-	if (!direction || !can_burn())
-		return
-	last_burn = world.time
-	var/delta = accel_limit ? min(get_burn_acceleration(), accel_limit) : get_burn_acceleration()
-	var/dx = (direction & EAST) ? 1 : ((direction & WEST) ? -1 : 0)
-	var/dy = (direction & NORTH) ? 1 : ((direction & SOUTH) ? -1 : 0)
-	if (dx && dy)
-		dx *= 0.5
-		dy *= 0.5
-	adjust_speed(delta * dx, delta * dy)
+/obj/effect/overmap/ship/proc/accelerate(direction)
+	if(can_burn())
+		last_burn = world.time
 
-/obj/overmap/visitable/ship/Process()
-	. = ..()
-	sensor_visibility = min(round(base_sensor_visibility + get_speed_sensor_increase(), 1), 100)
+		if(direction & EAST)
+			adjust_speed(get_burn_acceleration(), 0)
+		if(direction & WEST)
+			adjust_speed(-get_burn_acceleration(), 0)
+		if(direction & NORTH)
+			adjust_speed(0, get_burn_acceleration())
+		if(direction & SOUTH)
+			adjust_speed(0, -get_burn_acceleration())
 
-/obj/overmap/visitable/ship/on_update_icon()
-	..()
+/obj/effect/overmap/ship/Process()
+	if(!is_still())
+		var/list/deltas = list(0,0)
+		for(var/i=1, i<=2, i++)
+			if(speed[i] && world.time > last_movement[i] + default_delay - speed_mod*abs(speed[i]))
+				deltas[i] = speed[i] > 0 ? 1 : -1
+				last_movement[i] = world.time
+		var/turf/newloc = locate(x + deltas[1], y + deltas[2], z)
+		if(newloc)
+			Move(newloc)
+			handle_wraparound()
+		update_icon()
+	SEND_SIGNAL_OLD(src, COMSIG_SHIP_STILL, x, y, is_still())
 
-	for(var/obj/machinery/computer/ship/machine in consoles)
-		if(machine.z in map_z)
-			for(var/weakref/W in machine.viewers)
-				var/mob/M = W.resolve()
-				if(istype(M) && M.client)
-					M.client.pixel_x = pixel_x
-					M.client.pixel_y = pixel_y
+/obj/effect/overmap/ship/update_icon()
+	cut_overlays()
+	if(!is_still())
+		dir = get_heading()
+		overlays += image('icons/obj/overmap.dmi', "vector", "dir"=dir)
 
-/obj/overmap/visitable/ship/proc/burn()
+/obj/effect/overmap/ship/proc/burn()
+
 	for(var/datum/ship_engine/E in engines)
 		. += E.burn()
 
-/obj/overmap/visitable/ship/proc/get_total_thrust()
+/obj/effect/overmap/ship/proc/get_total_thrust()
+
 	for(var/datum/ship_engine/E in engines)
 		. += E.get_thrust()
 
-/obj/overmap/visitable/ship/proc/can_burn()
-	if(halted)
-		return 0
+/obj/effect/overmap/ship/proc/can_burn()
+
 	if (world.time < last_burn + burn_delay)
 		return 0
 	for(var/datum/ship_engine/E in engines)
 		. |= E.can_burn()
 
+
 //deciseconds to next step
-/obj/overmap/visitable/ship/proc/ETA()
+/obj/effect/overmap/ship/proc/ETA()
 	. = INFINITY
-	for(var/i = 1 to 2)
-		if(abs(speed[i]) >= min_speed)
-			. = min(., ((speed[i] > 0 ? 1 : -1) - position[i]) / speed[i])
-	. = max(ceil(.),0)
+	for(var/i=1, i<=2, i++)
+		if(speed[i])
+			. = min(last_movement[i] + default_delay - speed_mod*abs(speed[i]) - world.time, .)
+	. = max(.,0)
 
-/obj/overmap/visitable/ship/unhalt()
-	if(!SSshuttle.overmap_halted)
-		halted = FALSE
+/obj/effect/overmap/ship/proc/handle_wraparound()
+    var/nx = x
+    var/ny = y
+    var/low_edge = 1
+    var/high_edge = GLOB.maps_data.overmap_size
 
-/obj/overmap/visitable/ship/proc/get_helm_skill()//delete this mover operator skill to overmap obj
-	return operator_skill
+    if(x <= low_edge)
+        nx = high_edge
+    if(x >= high_edge)
+        nx = low_edge
 
-/obj/overmap/visitable/ship/populate_sector_objects()
+    if(y <= low_edge)
+        ny =high_edge
+    if(y >= high_edge)
+        ny = low_edge
+
+    var/turf/T = locate(nx,ny,z)
+    if(T)
+        forceMove(T)
+
+/obj/effect/overmap/ship/Bump(var/atom/A)
+	if(istype(A,/turf/map/edge))
+		handle_wraparound()
 	..()
-	for(var/obj/machinery/computer/ship/S in SSmachines.machinery)
-		S.attempt_hook_up(src)
-	for(var/datum/ship_engine/E in ship_engines)
-		if(check_ownership(E.holder))
-			engines |= E
 
-/obj/overmap/visitable/ship/proc/get_landed_info()
-	return "This ship cannot land."
+/obj/effect/overmap/ship/proc/pulse()
 
-/obj/overmap/visitable/ship/proc/get_speed_sensor_increase()
-	return min(get_speed() * 1000, 50) //Engines should never increase sensor visibility by more than 50.
+	if(pulsing)  // Should not happen but better to check
+		return
+
+	var/obj/machinery/power/shipside/long_range_scanner/enough_LRS = null
+	for(var/obj/machinery/power/shipside/long_range_scanner/LRS in scanners)  // Among all ship's scanners get one with enough energy
+		if(LRS.running && (LRS.current_energy > round(ENERGY_PER_SCAN * LRS.as_energy_multiplier)))
+			enough_LRS = LRS
+
+	if(!enough_LRS)
+		nav_control.visible_message(SPAN_DANGER("The [src] buzzes an insistent warning as it fails to find any sensors with enough power to pulse"))
+		playsound(nav_control.loc, 'sound/machines/buzz-two.ogg', 100, 1, 5)
+
+	if(enough_LRS.consume_energy_scan())
+		pulsing = TRUE
+		scan_range = ACTIVE_SCAN_RANGE
+		spawn(ACTIVE_SCAN_DURATION * enough_LRS.as_duration_multiplier)
+			pulsing = FALSE
+			scan_range = initial(scan_range) // get back to PASSIVE_SCAN_RANGE
+			// Reset icons far from the ship to unknown state otherwise they remain discovered
+			overmap_event_handler.scan_loc(src, loc, can_scan(), ACTIVE_SCAN_RANGE - initial(scan_range) + 3)
+
+/obj/effect/overmap/ship/proc/can_scan()
+
+	for(var/obj/machinery/power/shipside/long_range_scanner/LRS in scanners)
+		. |= (LRS.running)
+
+/obj/effect/overmap/ship/proc/can_pulse()
+
+	if(pulsing)  // If the ship is already pulsing it cannot pulse again
+		return FALSE
+
+	// Check if one of the ship's scanners has enough energy to pulse
+	for(var/obj/machinery/power/shipside/long_range_scanner/LRS in scanners)
+		. |= (LRS.running && (LRS.current_energy > round(ENERGY_PER_SCAN * LRS.as_energy_multiplier)))
+
+/obj/effect/overmap/ship/proc/can_scan_poi()
+
+	if(!is_still())  // Ship must be immobile
+		return FALSE
+
+	for(var/obj/machinery/power/shipside/long_range_scanner/LRS in scanners)
+		. |= (LRS.running)
+
+/obj/effect/overmap/ship/proc/scan_poi()
+	overmap_event_handler.scan_poi(src, loc) // Eris uses its sensors to scan a nearby point of interest
+	return

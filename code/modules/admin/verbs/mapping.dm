@@ -19,23 +19,22 @@
 //- Identify how hard it is to break into the area and where the weak points are
 //- Check if the area has too much empty space. If so, make it smaller and replace the rest with maintenance tunnels.
 
-var/global/camera_range_display_status = 0
-var/global/intercom_range_display_status = 0
+var/camera_range_display_status = 0
+var/intercom_range_display_status = 0
 
-/obj/debugging/camera_range
+/obj/effect/debugging/camera_range
 	icon = 'icons/480x480.dmi'
 	icon_state = "25percent"
 
-/obj/debugging/camera_range/Initialize()
-	. = ..()
-	pixel_x = -224
-	pixel_y = -224
+	New()
+		src.pixel_x = -224
+		src.pixel_y = -224
 
-/obj/debugging/marker
+/obj/effect/debugging/marker
 	icon = 'icons/turf/areas.dmi'
 	icon_state = "yellow"
 
-/obj/debugging/marker/Move()
+/obj/effect/debugging/marker/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
 	return 0
 
 /client/proc/do_not_use_these()
@@ -53,12 +52,13 @@ var/global/intercom_range_display_status = 0
 
 
 
-	for(var/obj/debugging/camera_range/C in world)
+	for(var/obj/effect/debugging/camera_range/C in world)
 		qdel(C)
 
 	if(camera_range_display_status)
 		for(var/obj/machinery/camera/C in cameranet.cameras)
-			new/obj/debugging/camera_range(C.loc)
+			new/obj/effect/debugging/camera_range(C.loc)
+
 
 
 
@@ -78,24 +78,25 @@ var/global/intercom_range_display_status = 0
 		for(var/obj/machinery/camera/C2 in CL)
 			if(C1 != C2)
 				if(C1.c_tag == C2.c_tag)
-					output += "<li>[SPAN_COLOR("red", "c_tag match for sec. cameras at \[[C1.x], [C1.y], [C1.z]\] ([C1.loc.loc]) and \[[C2.x], [C2.y], [C2.z]\] ([C2.loc.loc]) - c_tag is [C1.c_tag]")]</li>"
+					output += "<li><font color='red'>c_tag match for sec. cameras at \[[C1.x], [C1.y], [C1.z]\] ([C1.loc.loc]) and \[[C2.x], [C2.y], [C2.z]\] ([C2.loc.loc]) - c_tag is [C1.c_tag]</font></li>"
 				if(C1.loc == C2.loc && C1.dir == C2.dir && C1.pixel_x == C2.pixel_x && C1.pixel_y == C2.pixel_y)
-					output += "<li>[SPAN_COLOR("red", "FULLY overlapping sec. cameras at \[[C1.x], [C1.y], [C1.z]\] ([C1.loc.loc]) Networks: [C1.network] and [C2.network]")]</li>"
+					output += "<li><font color='red'>FULLY overlapping sec. cameras at \[[C1.x], [C1.y], [C1.z]\] ([C1.loc.loc]) Networks: [C1.network] and [C2.network]</font></li>"
 				if(C1.loc == C2.loc)
-					output += "<li>[SPAN_COLOR("red", "overlapping sec. cameras at \[[C1.x], [C1.y], [C1.z]\] ([C1.loc.loc]) Networks: [C1.network] and [C2.network]")]</li>"
+					output += "<li>overlapping sec. cameras at \[[C1.x], [C1.y], [C1.z]\] ([C1.loc.loc]) Networks: [C1.network] and [C2.network]</font></li>"
 		var/turf/T = get_step(C1,turn(C1.dir,180))
 		if(!T || !isturf(T) || !T.density )
 			if(!(locate(/obj/structure/grille,T)))
 				var/window_check = 0
 				for(var/obj/structure/window/W in T)
-					if (W.dir == turn(C1.dir,180) || (W.dir in list(NORTHEAST,SOUTHEAST,SOUTHWEST,NORTHWEST)) )
+					if (W.dir == turn(C1.dir,180) || (W.dir in list(NORTHEAST, SOUTHEAST, NORTHWEST, SOUTHWEST)))
 						window_check = 1
 						break
 				if(!window_check)
-					output += "<li>[SPAN_COLOR("red", "Camera not connected to wall at \[[C1.x], [C1.y], [C1.z]\] ([C1.loc.loc]) Network: [C1.network]")]</li>"
+					output += "<li><font color='red'>Camera not connected to wall at \[[C1.x], [C1.y], [C1.z]\] ([C1.loc.loc]) Network: [C1.network]</color></li>"
 
 	output += "</ul>"
-	show_browser(usr, output,"window=airreport;size=1000x500")
+	usr << browse(output,"window=airreport;size=1000x500")
+
 
 /client/proc/intercom_view()
 	set category = "Mapping"
@@ -106,78 +107,45 @@ var/global/intercom_range_display_status = 0
 	else
 		intercom_range_display_status = 1
 
-	for(var/obj/debugging/marker/M in world)
+	for(var/obj/effect/debugging/marker/M in world)
 		qdel(M)
 
 	if(intercom_range_display_status)
 		for(var/obj/item/device/radio/intercom/I in world)
-			for(var/turf/T in orange(7,I))
-				var/obj/debugging/marker/F = new/obj/debugging/marker(T)
-				if (!(F in view(7,I.loc)))
+			for(var/turf/T in RANGE_TURFS(7, I))
+				var/obj/effect/debugging/marker/F = new(T)
+				if (!(F in view(7, I.loc)))
 					qdel(F)
-
-var/global/list/debug_verbs = list (
-		/client/proc/do_not_use_these,
-		/client/proc/camera_view,
-		/client/proc/sec_camera_report,
-		/client/proc/intercom_view,
-		/client/proc/Cell,
-		/client/proc/atmosscan,
-		/client/proc/powerdebug,
-		/client/proc/count_objects_on_z_level,
-		/client/proc/count_objects_all,
-		/client/proc/cmd_assume_direct_control,
-		/client/proc/startSinglo,
-		/client/proc/cmd_admin_grantfullaccess,
-		/client/proc/cmd_admin_areatest,
-		/client/proc/cmd_admin_rejuvenate,
-		/datum/admins/proc/show_traitor_panel,
-		/client/proc/print_jobban_old,
-		/client/proc/print_jobban_old_filter,
-		/client/proc/forceEvent,
-		/client/proc/Zone_Info,
-		/client/proc/Test_ZAS_Connection,
-		/client/proc/rebootAirMaster,
-		/client/proc/hide_debug_verbs,
-		/client/proc/testZAScolors,
-		/client/proc/testZAScolors_remove,
-		/datum/admins/proc/setup_supermatter,
-		/client/proc/atmos_toggle_debug,
-		/client/proc/spawn_tanktransferbomb,
-		/client/proc/find_leaky_pipes,
-		/client/proc/analyze_openturf
-	)
 
 
 /client/proc/enable_debug_verbs()
 	set category = "Debug"
 	set name = "Debug verbs"
 
-	if(!check_rights(R_DEBUG)) return
+	if(check_rights(R_DEBUG))
+		add_verb(src, GLOB.admin_verbs_debug_extra)
 
-	verbs += debug_verbs
 
 /client/proc/hide_debug_verbs()
 	set category = "Debug"
 	set name = "Hide Debug verbs"
 
-	if(!check_rights(R_DEBUG)) return
+	remove_verb(src, GLOB.admin_verbs_debug_extra)
 
-	verbs -= debug_verbs
+/client
+	var/list/testZAScolors_turfs = list()
+	var/list/testZAScolors_zones = list()
+	var/usedZAScolors = 0
+	var/list/image/ZAScolors = list()
 
-
-/client/var/list/testZAScolors_turfs = list()
-/client/var/list/testZAScolors_zones = list()
-/client/var/usedZAScolors = 0
-/client/var/list/image/ZAScolors = list()
-
-/client/proc/recurse_zone(zone/Z, recurse_level =1)
+/client/proc/recurse_zone(var/zone/Z, var/recurse_level =1)
 	testZAScolors_zones += Z
 	if(recurse_level > 10)
 		return
+	var/icon/yellow = new('icons/misc/debug_group.dmi', "yellow")
 
 	for(var/turf/T in Z.contents)
-		images += get_zas_image(T, "yellow")
+		images += image(yellow, T, "zasdebug", LIGHTING_LAYER)
 		testZAScolors_turfs += T
 	for(var/connection_edge/zone/edge in Z.edges)
 		var/zone/connected = edge.get_connected_zone(Z)
@@ -193,33 +161,33 @@ var/global/list/debug_verbs = list (
 	if(!check_rights(R_DEBUG)) return
 	testZAScolors_remove()
 
-	var/turf/simulated/location = get_turf(usr)
+	var/turf/location = get_turf(usr)
 
-	if(!istype(location, /turf/simulated))
-		to_chat(src, SPAN_WARNING("This debug tool can only be used while on a simulated turf."))
+	if(!istype(location, /turf)) // We're in space, let's not cause runtimes.
+		to_chat(usr, "\red this debug tool cannot be used from space")
 		return
 
-	if(!location?.zone)
-		to_chat(src, SPAN_WARNING("The turf you are standing on does not have a zone."))
-		return
+	var/icon/red = new('icons/misc/debug_group.dmi', "red")		//created here so we don't have to make thousands of these.
+	var/icon/green = new('icons/misc/debug_group.dmi', "green")
+	var/icon/blue = new('icons/misc/debug_group.dmi', "blue")
 
 	if(!usedZAScolors)
-		to_chat(src, "ZAS Test Colors")
-		to_chat(src, "Green = Zone you are standing in")
-		to_chat(src, "Blue = Connected zone to the zone you are standing in")
-		to_chat(src, "Yellow = A zone that is connected but not one adjacent to your connected zone")
-		to_chat(src, "Red = Not connected")
+		to_chat(usr, "ZAS Test Colors")
+		to_chat(usr, "Green = Zone you are standing in")
+		to_chat(usr, "Blue = Connected zone to the zone you are standing in")
+		to_chat(usr, "Yellow = A zone that is connected but not one adjacent to your connected zone")
+		to_chat(usr, "Red = Not connected")
 		usedZAScolors = 1
 
 	testZAScolors_zones += location.zone
 	for(var/turf/T in location.zone.contents)
-		images += get_zas_image(T, "green")
+		images += image(green, T, "zasdebug", LIGHTING_LAYER)
 		testZAScolors_turfs += T
 	for(var/connection_edge/zone/edge in location.zone.edges)
 		var/zone/Z = edge.get_connected_zone(location.zone)
 		testZAScolors_zones += Z
 		for(var/turf/T in Z.contents)
-			images += get_zas_image(T, "blue")
+			images += image(blue, T, "zasdebug", LIGHTING_LAYER)
 			testZAScolors_turfs += T
 		for(var/connection_edge/zone/z_edge in Z.edges)
 			var/zone/connected = z_edge.get_connected_zone(Z)
@@ -227,12 +195,10 @@ var/global/list/debug_verbs = list (
 				continue
 			recurse_zone(connected,1)
 
-	for(var/turf/T in range(25,location))
-		if(!istype(T))
-			continue
+	for(var/turf/T in RANGE_TURFS(25, location))
 		if(T in testZAScolors_turfs)
 			continue
-		images += get_zas_image(T, "red")
+		images += image(red, T, "zasdebug", LIGHTING_LAYER)
 		testZAScolors_turfs += T
 
 /client/proc/testZAScolors_remove()
@@ -242,17 +208,10 @@ var/global/list/debug_verbs = list (
 	testZAScolors_turfs.Cut()
 	testZAScolors_zones.Cut()
 
-	for(var/image/i in images)
-		if(i.icon == 'icons/misc/debug_group.dmi')
-			images.Remove(i)
-
-/client/proc/rebootAirMaster()
-	set category = "ZAS"
-	set name = "Reboot ZAS"
-
-	if(alert("This will destroy and remake all zone geometry on the whole map.","Reboot ZAS","Reboot ZAS","Nevermind") == "Reboot ZAS")
-		SSair.reboot()
-
+	if(images.len)
+		for(var/image/i in images)
+			if(i.icon_state == "zasdebug")
+				images.Remove(i)
 
 /client/proc/count_objects_on_z_level()
 	set category = "Mapping"
@@ -286,15 +245,16 @@ var/global/list/debug_verbs = list (
 					atom_list += A
 	/*
 	var/atom/temp_atom
-	for(var/i = 0; i <= (length(atom_list)/10); i++)
+	for(var/i = 0; i <= (atom_list.len/10); i++)
 		var/line = ""
 		for(var/j = 1; j <= 10; j++)
-			if(i*10+j <= length(atom_list))
+			if(i*10+j <= atom_list.len)
 				temp_atom = atom_list[i*10+j]
 				line += " no.[i+10+j]@\[[temp_atom.x], [temp_atom.y], [temp_atom.z]\]; "
-		log_debug(line) */
+		world << line*/
 
-	log_debug("There are [count] objects of type [type_path] on z-level [num_level]")
+	to_chat(world, "There are [count] objects of type [type_path] on z-level [num_level]")
+
 
 /client/proc/count_objects_all()
 	set category = "Mapping"
@@ -312,28 +272,90 @@ var/global/list/debug_verbs = list (
 			count++
 	/*
 	var/atom/temp_atom
-	for(var/i = 0; i <= (length(atom_list)/10); i++)
+	for(var/i = 0; i <= (atom_list.len/10); i++)
 		var/line = ""
 		for(var/j = 1; j <= 10; j++)
-			if(i*10+j <= length(atom_list))
+			if(i*10+j <= atom_list.len)
 				temp_atom = atom_list[i*10+j]
 				line += " no.[i+10+j]@\[[temp_atom.x], [temp_atom.y], [temp_atom.z]\]; "
-		log_debug(line) */
+		world << line*/
 
-	log_debug("There are [count] objects of type [type_path] in the game world")
+	to_chat(world, "There are [count] objects of type [type_path] in the game world")
 
-/proc/get_zas_image(turf/T, icon_state)
-	RETURN_TYPE(/image)
-	return image_repository.atom_image(T, 'icons/misc/debug_group.dmi', icon_state, plane = DEFAULT_PLANE, layer = ABOVE_TILE_LAYER)
 
-//Special for Cakey
-/client/proc/find_leaky_pipes()
+
+var/global/prevent_airgroup_regroup = 0
+
+/client/proc/break_all_air_groups()
 	set category = "Mapping"
-	set name = "Find Leaky Pipes"
+	set name = "Break All Airgroups"
 
-	var/list/baddies = list("LEAKY PIPES")
-	for(var/obj/machinery/atmospherics/pipe/P in SSmachines.machinery)
-		if(P.leaking)
-			baddies += "[P] ([P.x],[P.y],[P.z] - <A HREF='byond://?_src_=holder;adminplayerobservecoodjump=1;X=[P.x];Y=[P.y];Z=[P.z]'>JMP</a>)"
+	/*prevent_airgroup_regroup = 1
+	for(var/datum/air_group/AG in SSair.air_groups)
+		AG.suspend_group_processing()
+	message_admins("[src.ckey] used 'Break All Airgroups'")*/
 
-	to_chat(usr,jointext(baddies, "<br>"))
+/client/proc/regroup_all_air_groups()
+	set category = "Mapping"
+	set name = "Regroup All Airgroups Attempt"
+
+	to_chat(usr, "\red Proc disabled.")
+
+	/*prevent_airgroup_regroup = 0
+	for(var/datum/air_group/AG in SSair.air_groups)
+		AG.check_regroup()
+	message_admins("[src.ckey] used 'Regroup All Airgroups Attempt'")*/
+
+/client/proc/kill_pipe_processing()
+	set category = "Mapping"
+	set name = "Kill pipe processing"
+
+	to_chat(usr, "\red Proc disabled.")
+
+	/*pipe_processing_killed = !pipe_processing_killed
+	if(pipe_processing_killed)
+		message_admins("[src.ckey] used 'kill pipe processing', stopping all pipe processing.")
+	else
+		message_admins("[src.ckey] used 'kill pipe processing', restoring all pipe processing.")*/
+
+/client/proc/kill_air_processing()
+	set category = "Mapping"
+	set name = "Kill air processing"
+
+	to_chat(usr, "\red Proc disabled.")
+
+	/*air_processing_killed = !air_processing_killed
+	if(air_processing_killed)
+		message_admins("[src.ckey] used 'kill air processing', stopping all air processing.")
+	else
+		message_admins("[src.ckey] used 'kill air processing', restoring all air processing.")*/
+
+//This proc is intended to detect lag problems relating to communication procs
+var/global/say_disabled = 0
+/client/proc/disable_communication()
+	set category = "Mapping"
+	set name = "Disable all communication verbs"
+
+	to_chat(usr, "\red Proc disabled.")
+
+	/*say_disabled = !say_disabled
+	if(say_disabled)
+		message_admins("[src.ckey] used 'Disable all communication verbs', killing all communication methods.")
+	else
+		message_admins("[src.ckey] used 'Disable all communication verbs', restoring all communication methods.")*/
+
+//This proc is intended to detect lag problems relating to movement
+var/global/movement_disabled = 0
+var/global/movement_disabled_exception //This is the client that calls the proc, so he can continue to run around to gauge any change to lag.
+/client/proc/disable_movement()
+	set category = "Mapping"
+	set name = "Disable all movement"
+
+	to_chat(usr, "\red Proc disabled.")
+
+	/*movement_disabled = !movement_disabled
+	if(movement_disabled)
+		message_admins("[src.ckey] used 'Disable all movement', killing all movement.")
+		movement_disabled_exception = usr.ckey
+	else
+		message_admins("[src.ckey] used 'Disable all movement', restoring all movement.")*/

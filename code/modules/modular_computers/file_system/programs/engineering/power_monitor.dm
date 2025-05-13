@@ -1,17 +1,16 @@
 /datum/computer_file/program/power_monitor
 	filename = "powermonitor"
 	filedesc = "Power Monitoring"
-	nanomodule_path = /datum/nano_module/power_monitor
+	nanomodule_path = /datum/nano_module/power_monitor/
 	program_icon_state = "power_monitor"
 	program_key_state = "power_key"
 	program_menu_icon = "battery-3"
 	extended_desc = "This program connects to sensors to provide information about electrical systems"
 	ui_header = "power_norm.gif"
 	required_access = access_engine
-	requires_ntnet = TRUE
+	requires_ntnet = 1
 	network_destination = "power monitoring system"
 	size = 9
-	category = PROG_ENG
 	var/has_alert = 0
 
 /datum/computer_file/program/power_monitor/process_tick()
@@ -54,7 +53,7 @@
 
 // If PC is not null header template is loaded. Use PC.get_header_data() to get relevant nanoui data from it. All data entries begin with "PC_...."
 // In future it may be expanded to other modular computer devices.
-/datum/nano_module/power_monitor/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1, datum/topic_state/state = GLOB.default_state)
+/datum/nano_module/power_monitor/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state = GLOB.default_state)
 	var/list/data = host.initial_data()
 
 	var/list/sensors = list()
@@ -77,7 +76,7 @@
 	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
 		ui = new(user, src, ui_key, "power_monitor.tmpl", "Power Monitoring Console", 800, 500, state = state)
-		if(host && host.update_layout()) // This is necessary to ensure the status bar remains updated along with rest of the UI.
+		if(host.update_layout()) // This is necessary to ensure the status bar remains updated along with rest of the UI.
 			ui.auto_update_layout = 1
 		ui.set_initial_data(data)
 		ui.open()
@@ -86,22 +85,25 @@
 // Refreshes list of active sensors kept on this computer.
 /datum/nano_module/power_monitor/proc/refresh_sensors()
 	grid_sensors = list()
-	var/connected_z_levels = GetConnectedZlevels(get_host_z())
-	for(var/obj/machinery/power/sensor/S in SSmachines.machinery)
+	var/turf/T = get_turf(nano_host())
+	if(!T) // Safety check
+		return
+	var/connected_z_levels = GetConnectedZlevels(T.z)
+	for(var/obj/machinery/power/sensor/S in GLOB.machines)
 		if((S.long_range) || (S.loc.z in connected_z_levels)) // Consoles have range on their Z-Level. Sensors with long_range var will work between Z levels.
 			if(S.name_tag == "#UNKN#") // Default name. Shouldn't happen!
 				warning("Powernet sensor with unset ID Tag! [S.x]X [S.y]Y [S.z]Z")
 			else
 				grid_sensors += S
-				GLOB.destroyed_event.register(S, src, PROC_REF(remove_sensor))
+				GLOB.destroyed_event.register(S, src, /datum/nano_module/power_monitor/proc/remove_sensor)
 
-/datum/nano_module/power_monitor/proc/remove_sensor(removed_sensor, update_ui = TRUE)
+/datum/nano_module/power_monitor/proc/remove_sensor(var/removed_sensor, var/update_ui = TRUE)
 	if(active_sensor == removed_sensor)
 		active_sensor = null
 		if(update_ui)
 			SSnano.update_uis(src)
 	grid_sensors -= removed_sensor
-	GLOB.destroyed_event.unregister(removed_sensor, src, PROC_REF(remove_sensor))
+	GLOB.destroyed_event.unregister(removed_sensor, src, /datum/nano_module/power_monitor/proc/remove_sensor)
 
 // Allows us to process UI clicks, which are relayed in form of hrefs.
 /datum/nano_module/power_monitor/Topic(href, href_list)

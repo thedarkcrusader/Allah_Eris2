@@ -1,7 +1,7 @@
 /obj/structure/closet/crate/secure/loot
 	name = "abandoned crate"
 	desc = "What could be inside?"
-	closet_appearance = /singleton/closet_appearance/crate/secure
+	icon_state = "securecrate"
 	var/list/code = list()
 	var/list/lastattempt = list()
 	var/attempts = 10
@@ -14,7 +14,7 @@
 
 	for(var/i in 1 to codelen)
 		code += pick(digits)
-		digits -= code[length(code)]
+		digits -= code[code.len]
 
 	generate_loot()
 
@@ -27,10 +27,10 @@
 			new/obj/item/reagent_containers/food/snacks/grown/ambrosiadeus(src)
 			new/obj/item/flame/lighter/zippo(src)
 		if(6 to 10)
-			new/obj/item/pickaxe/drill(src)
+			new/obj/item/tool/pickaxe/drill(src)
 			new/obj/item/device/taperecorder(src)
 			new/obj/item/clothing/suit/space(src)
-			new/obj/item/clothing/head/helmet/space/fishbowl(src)
+			new/obj/item/clothing/head/space(src)
 		if(11 to 15)
 			new/obj/item/reagent_containers/glass/beaker/bluespace(src)
 		if(16 to 20)
@@ -60,39 +60,28 @@
 		if(55 to 56)
 			var/newitem = pick(typesof(/obj/item/toy/prize) - /obj/item/toy/prize)
 			new newitem(src)
-		if(57 to 58)
-			new/obj/item/toy/balloon(src)
-		if(59 to 60)
+		if(57 to 60)
 			new/obj/item/rig(src)
 		if(61 to 62)
 			for(var/i = 0, i < 12, ++i)
-				new/obj/item/clothing/head/kitty(src)
+				new/obj/item/reagent_containers/food/snacks/pie(src)
 		if(63 to 64)
 			var/t = rand(4,7)
 			for(var/i = 0, i < t, ++i)
-				new_simple_coin(src)
-		if(65 to 66)
-			new/obj/item/clothing/suit/ianshirt(src)
-		if(67 to 68)
+				var/newcoin = pick(/obj/item/coin/silver, /obj/item/coin/silver, /obj/item/coin/silver, /obj/item/coin/iron, /obj/item/coin/iron, /obj/item/coin/iron, /obj/item/coin/gold, /obj/item/coin/diamond, /obj/item/coin/plasma, /obj/item/coin/uranium, /obj/item/coin/platinum)
+				new newcoin(src)
+		if(65 to 68)
 			var/t = rand(4,7)
 			for(var/i = 0, i < t, ++i)
 				var/newitem = pick(typesof(/obj/item/stock_parts) - /obj/item/stock_parts - /obj/item/stock_parts/subspace)
 				new newitem(src)
-		if(69 to 70)
-			new/obj/item/pickaxe/hand/silver(src)
-		if(71 to 72)
-			new/obj/item/pickaxe/drill(src)
+		if(69 to 72)
+			new/obj/item/tool/pickaxe/drill(src)
 		if(73 to 74)
-			new/obj/item/pickaxe/jackhammer(src)
-		if(75 to 76)
-			new/obj/item/pickaxe/hand/diamond(src)
-		if(77 to 78)
-			new/obj/item/pickaxe/diamonddrill(src)
-		if(79 to 80)
-			new/obj/item/pickaxe/hand/gold(src)
-		if(81 to 82)
-			new/obj/item/gun/energy/plasmacutter(src)
-		if(83 to 84)
+			new/obj/item/tool/pickaxe/jackhammer(src)
+		if(75 to 78)
+			new/obj/item/tool/pickaxe/diamonddrill(src)
+		if(79 to 84)
 			new/obj/item/toy/katana(src)
 		if(85 to 86)
 			new/obj/item/seeds/random(src)
@@ -100,41 +89,35 @@
 			new/obj/item/weed_extract(src)
 		if(88)
 			new/obj/item/xenos_claw(src)
-		if(89, 90)
-			new/obj/item/organ/internal/heart(src)
+		if(90)
+			new/obj/item/organ/internal/vital/heart(src)
 		if(91)
-			new/obj/item/device/soulstone(src)
+			new/obj/item/tool/sword/katana(src)
 		if(92)
-			new/obj/item/material/sword/katana(src)
-		if(93)
-			new/obj/item/storage/firstaid/combat(src) // Probably the least OP
-		if(94) // Why the hell not
+			new/obj/item/tool/sword/katana(src)
+		if(93) // Why the hell not
 			new/obj/item/storage/backpack/clown(src)
 			new/obj/item/clothing/under/rank/clown(src)
 			new/obj/item/clothing/shoes/clown_shoes(src)
 			new/obj/item/clothing/mask/gas/clown_hat(src)
 			new/obj/item/bikehorn(src)
+			//new/obj/item/stamp/clown(src) I'd add it, but only clowns can use it
 			new/obj/item/pen/crayon/rainbow(src)
-			new/obj/item/reagent_containers/spray/waterflower(src)
-		if(95)
+			new/obj/item/toy/waterflower(src)
+		if(94)
 			new/obj/item/clothing/under/mime(src)
-			new/obj/item/clothing/shoes/black(src)
-			new/obj/item/clothing/gloves/white(src)
+			new/obj/item/clothing/shoes/color/black(src)
+			new/obj/item/clothing/gloves/color/white(src)
 			new/obj/item/clothing/mask/gas/mime(src)
 			new/obj/item/clothing/head/beret(src)
-			new/obj/item/clothing/accessory/suspenders(src)
 			new/obj/item/pen/crayon/mime(src)
 			new/obj/item/reagent_containers/food/drinks/bottle/bottleofnothing(src)
-		if(96)
-			new/obj/item/vampiric(src)
-		if(97)
-			new/obj/item/archaeological_find(src)
-		if(98)
+		if(95 to 97)
 			new/obj/item/melee/energy/sword(src)
-		if(99)
+		if(98)
 			new/obj/item/storage/belt/champion(src)
 			new/obj/item/clothing/mask/luchador(src)
-		if(100)
+		if(99 to 100)
 			new/obj/item/clothing/head/bearpelt(src)
 
 /obj/structure/closet/crate/secure/loot/togglelock(mob/user as mob)
@@ -146,27 +129,26 @@
 	if(!Adjacent(user))
 		return
 
-	if(isnull(input) || length(input) != codelen)
+	if(input == null || length(input) != codelen)
 		to_chat(user, SPAN_NOTICE("You leave the crate alone."))
-	else if(check_input(input) && locked)
+	else if(check_input(input))
 		to_chat(user, SPAN_NOTICE("The crate unlocks!"))
 		playsound(user, 'sound/machines/lockreset.ogg', 50, 1)
-		..()
+		set_locked(0)
 	else
 		visible_message(SPAN_WARNING("A red light on \the [src]'s control panel flashes briefly."))
 		attempts--
 		if (attempts == 0)
 			to_chat(user, SPAN_DANGER("The crate's anti-tamper system activates!"))
-			var/turf/T = get_turf(src.loc)
-			explosion(T, 1, EX_ACT_LIGHT)
+			explosion(get_turf(src), 300, 50)
 			qdel(src)
 
-/obj/structure/closet/crate/secure/loot/emag_act(remaining_charges, mob/user)
+/obj/structure/closet/crate/secure/loot/emag_act(var/remaining_charges, var/mob/user)
 	if (locked)
 		to_chat(user, SPAN_NOTICE("The crate unlocks!"))
 		locked = 0
 
-/obj/structure/closet/crate/secure/loot/proc/check_input(input)
+/obj/structure/closet/crate/secure/loot/proc/check_input(var/input)
 	if(length(input) != codelen)
 		return 0
 
@@ -178,35 +160,25 @@
 		if(guesschar != code[i])
 			. = 0
 
+/obj/structure/closet/crate/secure/loot/attackby(obj/item/W as obj, mob/user as mob)
+	if(locked)
+		if (istype(W, /obj/item/tool/multitool)) // Greetings Urist McProfessor, how about a nice game of cows and bulls?
+			to_chat(user, SPAN_NOTICE("DECA-CODE LOCK ANALYSIS:"))
+			if (attempts == 1)
+				to_chat(user, SPAN_WARNING("* Anti-Tamper system will activate on the next failed access attempt."))
+			else
+				to_chat(user, SPAN_NOTICE("* Anti-Tamper system will activate after [src.attempts] failed access attempts."))
+			if(lastattempt.len)
+				var/bulls = 0
+				var/cows = 0
 
-/obj/structure/closet/crate/secure/loot/use_tool(obj/item/tool, mob/user, list/click_params)
-	// Multitool - Check last code attempt
-	if (isMultitool(tool))
-		if (!locked)
-			USE_FEEDBACK_FAILURE("\The [src] is not locked.")
-			return TRUE
-		user.visible_message(
-			SPAN_NOTICE("\The [user] scans \the [src] with \a [tool]."),
-			SPAN_NOTICE("You scan \the [src] with \the [tool].")
-		)
-		var/data = "<h2>DECA-CODE LOCK ANALYSIS:</h2>"
-		if (attempts == 1)
-			data += "<p style='color: red; font-weight: bold;'>* Anti-Tamper system will activate on the next failed access attempt.</p>"
-		else
-			data += "<p>* Anti-Tamper system will activate after <b>[src.attempts]</b> failed access attempts.</p>"
-		if(length(lastattempt))
-			var/bulls = 0
-			var/cows = 0
-
-			var/list/code_contents = code.Copy()
-			for(var/i in 1 to codelen)
-				if(lastattempt[i] == code[i])
-					++bulls
-				else if(lastattempt[i] in code_contents)
-					++cows
-				code_contents -= lastattempt[i]
-			data += "<p>Last code attempt had [bulls] correct digits at correct positions and [cows] correct digits at incorrect positions.</p>"
-		show_browser(user, data, "window=[name]")
-		return
-
-	return ..()
+				var/list/code_contents = code.Copy()
+				for(var/i in 1 to codelen)
+					if(lastattempt[i] == code[i])
+						++bulls
+					else if(lastattempt[i] in code_contents)
+						++cows
+					code_contents -= lastattempt[i]
+				to_chat(user, SPAN_NOTICE("Last code attempt had [bulls] correct digits at correct positions and [cows] correct digits at incorrect positions."))
+			return
+	..()

@@ -1,75 +1,98 @@
-/datum/antagonist/proc/create_global_objectives(override=0)
-	if(config.objectives_disabled != CONFIG_OBJECTIVE_ALL && !override)
-		return 0
-	if(global_objectives && length(global_objectives))
-		return 0
-	return 1
+/datum/antagonist/proc/create_objectives(survive = FALSE)
 
-/datum/antagonist/proc/create_objectives(datum/mind/player, override=0)
-	if(config.objectives_disabled != CONFIG_OBJECTIVE_ALL && !override)
-		return 0
-	if(create_global_objectives(override) || length(global_objectives))
-		player.objectives |= global_objectives
-	return 1
+	if(!possible_objectives || !possible_objectives.len)
+		return
+	pick_objectives(src, possible_objectives, objective_quantity)
 
-/datum/antagonist/proc/get_special_objective_text()
-	return ""
+	if(survive)
+		create_survive_objective()
 
-/mob/proc/add_objectives()
-	set name = "Get Objectives"
-	set desc = "Recieve optional objectives."
-	set category = "OOC"
 
-	src.verbs -= /mob/proc/add_objectives
+// used only for factions antagonists
+/datum/antagonist/proc/set_objectives(list/new_objectives)
 
-	if(!src.mind)
+	if(!owner || !owner.current)
 		return
 
-	var/all_antag_types = GLOB.all_antag_types_
-	for(var/tag in all_antag_types) //we do all of them in case an admin adds an antagonist via the PP. Those do not show up in gamemode.
-		var/datum/antagonist/antagonist = all_antag_types[tag]
-		if(antagonist && antagonist.is_antagonist(src.mind))
-			antagonist.create_objectives(src.mind,1)
+	if(objectives.len)
+		to_chat(owner.current, "<span class='danger'><font size=3>Your objectives were updated.</font></span>")
 
-	to_chat(src, "<b>[FONT_LARGE("These objectives are completely voluntary. You are not required to complete them.")]</b>")
-	show_objectives(src.mind)
+	objectives.Cut()
+	objectives.Add(new_objectives)
 
-/mob/living/proc/set_ambition()
-	set name = "Set Ambition"
-	set category = "IC"
-	set src = usr
+	show_objectives()
 
-	if(!mind)
+/datum/antagonist/proc/create_survive_objective()
+	if(ispath(survive_objective))
+		new survive_objective(src)
+
+//Returns a list of all minds and atoms which have been targeted by our objectives
+//This is used to disqualify them from being picked by farther objectives
+/datum/antagonist/proc/get_targets()
+	var/list/targets = list()
+	for (var/datum/objective/O in objectives)
+		targets.Add(O.get_target())
+	return targets
+
+
+
+//This function handles some of the logic for picking objectives for an antag or faction. It requires three inputs
+//Owner: The antag or faction that will own this objective
+//Possible objectives: The weighted list of objectives we choose from
+//Quantity: How many objectives we will select
+/proc/pick_objectives(owner, list/possible_objectives, quantity)
+	//Safety checks first
+	if(!possible_objectives || !possible_objectives.len)
 		return
-	if(!is_special_character(mind))
-		to_chat(src, SPAN_WARNING("While you may perhaps have goals, this verb's meant to only be visible \
-		to antagonists.  Please make a bug report!"))
+
+	if (!owner || (!istype(owner, /datum/faction) && !istype(owner, /datum/antagonist)))
 		return
 
-	var/datum/goal/ambition/goal = SSgoals.ambitions[mind]
-	var/unsanitized_new_goal = input(src, "Write a short sentence of what your character hopes to accomplish \
-	today as an antagonist.  Remember that this is purely optional.  It will be shown at the end of the \
-	round for everybody else.  To clear your ambitions, remove all the text in the field.  Pressing cancel \
-	will only discard your edits.", "Antagonist Goal", (goal ? html_decode(goal.description) : "")) as null|message
-	if(isnull(unsanitized_new_goal))
-		to_chat(src, SPAN_NOTICE("You cancel your edits to your ambitions. They remain unchanged."))
+	if (!isnum(quantity) || quantity <= 0)
 		return
-	var/new_goal = sanitize(unsanitized_new_goal)
-	if(!isnull(new_goal))
-		if(!goal)
-			goal = new /datum/goal/ambition(mind)
-		goal.description = new_goal
-		log_and_message_admins("has set their ambitions to now be: [new_goal].")
-		to_chat(src, SPAN_NOTICE("You've set your goal to be <b>'[goal.description]'</b>. You can check your goals with the <b>Show Goals</b> verb."))
-	else
-		if(goal)
-			qdel(goal)
-		log_and_message_admins("has cleared their ambitions.")
-		to_chat(src, SPAN_NOTICE("You leave your ambitions behind."))
 
-//some antagonist datums are not actually antagonists, so we might want to avoid
-//sending them the antagonist meet'n'greet messages.
-//E.G. ERT
-/datum/antagonist/proc/show_objectives_at_creation(datum/mind/player)
-	if(src.show_objectives_on_creation)
-		show_objectives(player)
+
+	for (var/i = 0; i < quantity; i++)
+		if (!possible_objectives.len)
+			return
+
+		var/chosen_obj = pickweight(possible_objectives)
+
+		//Lets check for uniqueness
+		var/datum/objective/O = chosen_obj
+		if (initial(O.unique))
+			//If this objective is unique, then we will search the list for an existing copy of it
+			var/matched = FALSE
+			for (var/datum/objective/P in owner:objectives) //We've already confirmed the type of owner, so : should be safe here
+				if (P.type == chosen_obj)
+					matched = TRUE
+					break
+
+			//We will remove it from the list regardless because we dont want to pick it again in future
+			possible_objectives.Remove(chosen_obj)
+
+			//If it already existed then we decrement i and continue to pick another objective
+			if (matched)
+				i--
+				continue
+
+
+
+		O = new chosen_obj(owner, ANTAG_SKIP_TARGET)
+
+
+		//We pass ANTAG_SKIP_TARGET so we can manually search for targets
+		if (!O.find_target())
+			//If it fails to find a target, then bad things happen
+			//First of all, we must delete this objective so we can get another
+			qdel(O) //This will automatically remove itself from objective lists
+
+			//Secondly, decrement i so we get another try
+			i--
+
+			//Thirdly, remove this objective from the possible list
+			possible_objectives.Remove(chosen_obj)
+
+
+
+

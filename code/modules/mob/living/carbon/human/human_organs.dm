@@ -1,27 +1,21 @@
 /mob/living/carbon/human/proc/update_eyes()
-	var/obj/item/organ/internal/eyes/eyes = internal_organs_by_name[species.vision_organ ? species.vision_organ : BP_EYES]
+	var/obj/item/organ/internal/eyes/eyes = random_organ_by_process(OP_EYES)
 	if(eyes)
 		eyes.update_colour()
 		regenerate_icons()
 
-/mob/living/carbon/human/proc/get_bodypart_name(zone)
-	var/obj/item/organ/external/E = get_organ(zone)
-	if(E) . = E.name
-
-/mob/living/carbon/human/proc/recheck_bad_external_organs()
-	var/damage_this_tick = getToxLoss()
-	for(var/obj/item/organ/external/O in organs)
-		damage_this_tick += O.burn_dam + O.brute_dam
-
-	if(damage_this_tick > last_dam)
-		. = TRUE
-	last_dam = damage_this_tick
+/mob/living/carbon/var/list/internal_organs = list()
+/mob/living/carbon/human/var/list/organs = list()
+/mob/living/carbon/human/var/list/organs_by_name = list() // map organ names to organs
+/mob/living/carbon/human/var/list/internal_organs_by_efficiency = list()
 
 // Takes care of organ related updates, such as broken and missing limbs
 /mob/living/carbon/human/proc/handle_organs()
-
-	var/force_process = recheck_bad_external_organs()
-
+	var/force_process = 0
+	var/damage_this_tick = getBruteLoss() + getFireLoss()
+	if(damage_this_tick > last_dam)
+		force_process = 1
+	last_dam = damage_this_tick
 	if(force_process)
 		bad_external_organs.Cut()
 		for(var/obj/item/organ/external/Ex in organs)
@@ -30,12 +24,21 @@
 	//processing internal organs is pretty cheap, do that first.
 	for(var/obj/item/organ/I in internal_organs)
 		I.Process()
+		if(I.damage > 0)
+			force_process = TRUE	// Let's us know that we have internal damage to process
 
 	handle_stance()
 	handle_grasp()
 
-	if(!force_process && !length(bad_external_organs))
+	if(!force_process && !bad_external_organs.len)
 		return
+
+	for(var/obj/item/organ/external/E in organs)
+		E.handle_bones()
+
+		// If there is a flag from an internal injury, queue it for processing
+		if(E.status & ORGAN_MUTATED|ORGAN_INFECTED|ORGAN_WOUNDED)
+			bad_external_organs |= E
 
 	for(var/obj/item/organ/external/E in bad_external_organs)
 		if(!E)
@@ -46,33 +49,17 @@
 		else
 			E.Process()
 
-			if (!lying && !buckled && world.time - l_move_time < 15)
-			//Moving around with fractured ribs won't do you any good
-				if (prob(10) && !stat && can_feel_pain() && chem_effects[CE_PAINKILLER] < 50 && E.is_broken() && length(E.internal_organs))
-					custom_pain("Pain jolts through your broken [E.encased ? E.encased : E.name], staggering you!", 50, affecting = E)
-					unequip_item(loc)
-					Stun(2)
-
-				//Moving makes open wounds get infected much faster
-				for(var/datum/wound/W in E.wounds)
-					if (W.infection_check())
-						W.germ_level += 1
-
-/mob/living/carbon/human/proc/Check_Proppable_Object()
-	for(var/turf/simulated/T in trange(1,src)) //we only care for non-space turfs
-		if(T.density)	//walls work
-			return 1
-
-	for(var/obj/O in orange(1, src))
-		if(O && O.density && O.anchored)
-			return 1
-
-	return 0
+			if(!lying && !buckled && world.time - l_move_time < 15)
+				//Moving around with fractured ribs won't do you any good
+				if(E.is_broken() && E.internal_organs && E.internal_organs.len && prob(15))
+					var/obj/item/organ/internal/I = pick(E.internal_organs)
+					custom_pain("You feel broken bones moving in your [E.name]!", 1)
+					I.take_damage(3, BRUTE, E.max_damage, 5.8, TRUE, TRUE)		// Internal damage is taken at 80% health
 
 /mob/living/carbon/human/proc/handle_stance()
 	// Don't need to process any of this if they aren't standing anyways
 	// unless their stance is damaged, and we want to check if they should stay down
-	if (!stance_damage && (lying || resting) && (life_tick % 4) != 0)
+	if (!stance_damage && (lying || resting) && (life_tick % 4) == 0)
 		return
 
 	stance_damage = 0
@@ -81,80 +68,41 @@
 	if (istype(buckled, /obj/structure/bed))
 		return
 
-	// Can't fall if nothing pulls you down
-	if(!has_gravity())
-		return
-
-	var/limb_pain
-	for(var/limb_tag in list(BP_L_LEG, BP_R_LEG, BP_L_FOOT, BP_R_FOOT))
+	// Calculate limb effect on stance
+	for(var/limb_tag in BP_LEGS)
 		var/obj/item/organ/external/E = organs_by_name[limb_tag]
-		if(!E || !E.is_usable())
-			stance_damage += 2 // let it fail even if just foot&leg
-		else if (E.is_malfunctioning())
-			//malfunctioning only happens intermittently so treat it as a missing limb when it procs
-			stance_damage += 2
-			if(prob(10))
-				visible_message("\The [src]'s [E.name] [pick("twitches", "shudders")] and sparks!")
-				var/datum/effect/spark_spread/spark_system = new ()
-				spark_system.set_up(5, 0, src)
-				spark_system.attach(src)
-				spark_system.start()
-				spawn(10)
-					qdel(spark_system)
-		else if (E.is_broken())
-			stance_damage += 1
-		else if (E.is_dislocated())
-			stance_damage += 0.5
 
-		if(E) limb_pain = E.can_feel_pain()
+		// A missing limb causes high stance damage
+		if(!E)
+			stance_damage += 4
+		else
+			stance_damage += E.get_tally()
 
 	// Canes and crutches help you stand (if the latter is ever added)
-	// One cane mitigates a broken leg+foot, or a missing foot.
+	// One cane fully mitigates a broken leg.
 	// Two canes are needed for a lost leg. If you are missing both legs, canes aren't gonna help you.
-	if (l_hand && istype(l_hand, /obj/item/cane))
-		stance_damage -= 2
-	if (r_hand && istype(r_hand, /obj/item/cane))
-		stance_damage -= 2
-
-	if(MOVING_DELIBERATELY(src)) //you don't suffer as much if you aren't trying to run
-		var/working_pair = 2
-		if(!organs_by_name[BP_L_LEG] || !organs_by_name[BP_L_FOOT]) //are we down a limb?
-			working_pair -= 1
-		else if((!organs_by_name[BP_L_LEG].is_usable()) || (!organs_by_name[BP_L_FOOT].is_usable())) //if not, is it usable?
-			working_pair -= 1
-		if(!organs_by_name[BP_R_LEG] || !organs_by_name[BP_R_FOOT])
-			working_pair -= 1
-		else if((!organs_by_name[BP_R_LEG].is_usable()) || (!organs_by_name[BP_R_FOOT].is_usable()))
-			working_pair -= 1
-		if(working_pair >= 1)
-			stance_damage -= 1
-			if(Check_Proppable_Object()) //it helps to lean on something if you've got another leg to stand on
-				stance_damage -= 1
-
-	var/list/objects_to_sit_on = list(
-			/obj/item/stool,
-			/obj/structure/bed,
-		)
-
-	for(var/type in objects_to_sit_on) //things that can't be climbed but can be propped-up-on
-		if(locate(type) in src.loc)
-			return
+	if(stance_damage > 0 && stance_damage < 8)
+		if (l_hand && istype(l_hand, /obj/item/tool/cane))
+			stance_damage -= 3
+		if (r_hand && istype(r_hand, /obj/item/tool/cane))
+			stance_damage -= 3
+		stance_damage = max(stance_damage, 0)
 
 	// standing is poor
-	if(stance_damage >= 4 || (stance_damage >= 2 && prob(2)) || (stance_damage >= 3 && prob(8)))
+	if(stance_damage >= 8 || (stance_damage >= 4 && prob(5)))
 		if(!(lying || resting))
-			if(limb_pain)
+			if(species && !(species.flags & NO_PAIN))
 				emote("scream")
-			custom_emote(VISIBLE_MESSAGE, "collapses!")
-		Weaken(3) //can't emote while weakened, apparently.
+			custom_emote(1, "collapses!")
+		Weaken(5) //can't emote while weakened, apparently.
 
 /mob/living/carbon/human/proc/handle_grasp()
-	if (HandsEmpty())
+	if(!l_hand && !r_hand)
 		return
 
 	// You should not be able to pick anything up, but stranger things have happened.
 	if(l_hand)
-		for(var/limb_tag in list(BP_L_HAND, BP_L_ARM))
+		for(var/limb_tag in list(BP_L_ARM))
 			var/obj/item/organ/external/E = get_organ(limb_tag)
 			if(!E)
 				visible_message(SPAN_DANGER("Lacking a functioning left hand, \the [src] drops \the [l_hand]."))
@@ -162,7 +110,7 @@
 				break
 
 	if(r_hand)
-		for(var/limb_tag in list(BP_R_HAND, BP_R_ARM))
+		for(var/limb_tag in list(BP_R_ARM))
 			var/obj/item/organ/external/E = get_organ(limb_tag)
 			if(!E)
 				visible_message(SPAN_DANGER("Lacking a functioning right hand, \the [src] drops \the [r_hand]."))
@@ -170,97 +118,127 @@
 				break
 
 	// Check again...
-	if (HandsEmpty())
+	if(!l_hand && !r_hand)
 		return
 
 	for (var/obj/item/organ/external/E in organs)
-		if(!E || !(E.limb_flags & ORGAN_FLAG_CAN_GRASP))
+		if(!E || !(E.functions & BODYPART_GRASP) || (E.status & ORGAN_SPLINTED))
 			continue
-		if(((E.is_broken() || E.is_dislocated()) && !E.splinted))
-			grasp_damage_disarm(E)
 
-/mob/living/carbon/human/proc/stance_damage_prone(obj/item/organ/external/affected)
+		if(E.mob_can_unequip(src))
+			if(E.is_broken() || E.limb_efficiency <= 50)
 
-	if(affected)
-		switch(affected.body_part)
-			if(FOOT_LEFT, FOOT_RIGHT)
-				if(!BP_IS_ROBOTIC(affected))
-					to_chat(src, SPAN_WARNING("You lose your footing as your [affected.name] spasms!"))
+				drop_from_inventory(E)
+
+				if(E.limb_efficiency <= 50)
+					emote("me", 1, "drops what they were holding in their [E.name], [pick("unable to grasp it", "unable to feel it", "too weak to hold it")]!")
 				else
-					to_chat(src, SPAN_WARNING("You lose your footing as your [affected.name] [pick("twitches", "shudders")]!"))
-			if(LEG_LEFT, LEG_RIGHT)
-				if(!BP_IS_ROBOTIC(affected))
-					to_chat(src, SPAN_WARNING("Your [affected.name] buckles from the shock!"))
-				else
-					to_chat(src, SPAN_WARNING("You lose your balance as [affected.name] [pick("malfunctions", "freezes","shudders")]!"))
-			else
-				return
-	Weaken(4)
+					emote("me", 1, "[(species.flags & NO_PAIN) ? "" : pick("screams in pain and ", "lets out a sharp cry and ", "cries out and ")]drops what they were holding in their [E.name]!")
 
-/mob/living/carbon/human/proc/grasp_damage_disarm(obj/item/organ/external/affected)
-	var/disarm_slot
-	switch(affected.body_part)
-		if(HAND_LEFT, ARM_LEFT)
-			disarm_slot = slot_l_hand
-		if(HAND_RIGHT, ARM_RIGHT)
-			disarm_slot = slot_r_hand
+			else if(E.is_malfunctioning())
+				drop_from_inventory(E)
+				emote("pain", 1, "drops what they were holding, their [E.name] malfunctioning!")
 
-	if(!disarm_slot)
-		return
+				var/datum/effect/effect/system/spark_spread/spark_system = new /datum/effect/effect/system/spark_spread()
+				spark_system.set_up(5, 0, src)
+				spark_system.attach(src)
+				spark_system.start()
+				QDEL_IN(spark_system, 1 SECOND)
 
-	var/obj/item/thing = get_equipped_item(disarm_slot)
-
-	if(!thing)
-		return
-
-	if(!unEquip(thing))
-		return
-
-	if(BP_IS_ROBOTIC(affected))
-		var/datum/pronouns/pronouns = choose_from_pronouns()
-		visible_message("<B>\The [src]</B> drops what they were holding, [pronouns.his] [affected.name] malfunctioning!")
-
-		var/datum/effect/spark_spread/spark_system = new /datum/effect/spark_spread()
-		spark_system.set_up(5, 0, src)
-		spark_system.attach(src)
-		spark_system.start()
-		spawn(10)
-			qdel(spark_system)
-
-	else
-		var/grasp_name = affected.name
-		if((affected.body_part in list(ARM_LEFT, ARM_RIGHT)) && length(affected.children))
-			var/obj/item/organ/external/hand = pick(affected.children)
-			grasp_name = hand.name
-
-		if(affected.can_feel_pain())
-			var/emote_scream = pick("screams in pain", "lets out a sharp cry", "cries out")
-			var/emote_scream_alt = pick("scream in pain", "let out a sharp cry", "cry out")
-			visible_message(
-				"<B>\The [src]</B> [emote_scream] and drops what they were holding in their [grasp_name]!",
-				null,
-				"You hear someone [emote_scream_alt]!"
-			)
-			custom_pain("The sharp pain in your [affected.name] forces you to drop [thing]!", 30)
-		else
-			visible_message("<B>\The [src]</B> drops what they were holding in their [grasp_name]!")
+//Handles chem traces
+/mob/living/carbon/human/proc/handle_trace_chems()
+	//New are added for reagents to random organs.
+	for(var/datum/reagent/A in reagents.reagent_list)
+		var/obj/item/organ/O = pick(organs)
+		O.trace_chemicals[A.name] = 100
 
 /mob/living/carbon/human/proc/sync_organ_dna()
 	var/list/all_bits = internal_organs|organs
 	for(var/obj/item/organ/O in all_bits)
-		O.set_dna(dna)
-
-/mob/living/proc/is_asystole()
-	return FALSE
+		O.set_dna(src)
 
 /mob/living/carbon/human/is_asystole()
-	if(isSynthetic())
-		var/obj/item/organ/internal/cell/C = internal_organs_by_name[BP_CELL]
-		if(istype(C))
-			if(!C.is_usable() || !C.percent())
-				return TRUE
-	else if(should_have_organ(BP_HEART))
-		var/obj/item/organ/internal/heart/heart = internal_organs_by_name[BP_HEART]
+	if(should_have_process(OP_HEART))
+		var/obj/item/organ/internal/vital/heart/heart = random_organ_by_process(OP_HEART)
 		if(!istype(heart) || !heart.is_working())
 			return TRUE
 	return FALSE
+
+/mob/living/carbon/human/proc/organ_list_by_process(organ_process)
+	RETURN_TYPE(/list)
+	. = list()
+	for(var/organ in internal_organs_by_efficiency[organ_process])
+		. += organ
+
+/mob/living/carbon/human/proc/random_organ_by_process(organ_process)
+	if(organ_list_by_process(organ_process).len)
+		return pick(organ_list_by_process(organ_process))
+	return	FALSE
+
+// basically has_limb()
+/mob/living/carbon/human/has_appendage(var/appendage_check)	//returns TRUE if found, type of organ modification if limb is robotic, FALSE if not found
+
+	if (appendage_check == BP_CHEST)
+		return TRUE
+
+	var/obj/item/organ/external/appendage
+	appendage = organs_by_name[appendage_check]
+
+	if(appendage && !appendage.is_stump())
+		if(BP_IS_ROBOTIC(appendage))
+			return appendage.nature
+		else return TRUE
+	return FALSE
+
+/mob/living/carbon/human/proc/restore_organ(organ_type, var/show_message = FALSE, var/heal = FALSE,)
+	var/obj/item/organ/E = organs_by_name[organ_type]
+	if(E && E.organ_tag != BP_HEAD && !E.vital && !E.is_usable())	//Skips heads and vital bits...
+		QDEL_NULL(E) //...because no one wants their head to explode to make way for a new one.
+
+	if(!E)
+		if(organ_type in BP_ALL_LIMBS)
+			var/datum/organ_description/organ_data = species.has_limbs[organ_type]
+			var/obj/item/organ/external/O = organ_data.create_organ(src)
+			var/datum/reagent/organic/blood/B = locate(/datum/reagent/organic/blood) in vessel.reagent_list
+			blood_splatter(src,B,1)
+			O.set_dna(src)
+			update_body()
+			if (show_message)
+				to_chat(src, SPAN_DANGER("With a shower of fresh blood, a new [O.name] forms."))
+				visible_message(SPAN_DANGER("With a shower of fresh blood, a length of biomass shoots from [src]'s [O.amputation_point], forming a new [O.name]!"))
+			return TRUE
+		else
+			var/list/organ_data = species.has_process[organ_type]
+			var/organ_path = organ_data["path"]
+			var/obj/item/organ/internal/O = new organ_path(src)
+			organ_data["descriptor"] = O.name
+			O.set_dna(src)
+			update_body()
+			if(is_carrion(src) && O.organ_tag == BP_BRAIN)
+				O.vital = 0
+			return TRUE
+	else
+		if(organ_type in BP_ALL_LIMBS)
+			var/obj/item/organ/external/O = E
+			if (heal && (O.damage > 0 || O.status & (ORGAN_BROKEN)))
+				O.status &= ~ORGAN_BROKEN
+				for(var/datum/wound/W in O.wounds)
+					if(W.internal)
+						O.wounds.Remove(W)
+						qdel(W)
+						O.update_wounds()
+				for(var/datum/wound/W in O.wounds)
+					if(W.wound_damage() == 0 && prob(50))
+						O.wounds -= W
+				return TRUE
+		else
+			if (heal && (E.damage > 0 || E.status & (ORGAN_BROKEN)))
+				E.status &= ~ORGAN_BROKEN
+				return TRUE
+	return FALSE
+/mob/living/carbon/human/get_limb_efficiency(bodypartdefine)
+	var/obj/item/organ/external/E = get_organ(bodypartdefine)
+	if(E)
+		return E.limb_efficiency
+	return 0
+

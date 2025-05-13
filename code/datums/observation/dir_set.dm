@@ -8,28 +8,37 @@
 //			/old_dir: The dir before the change.
 //			/new_dir: The dir after the change.
 
-GLOBAL_TYPED_NEW(dir_set_event, /singleton/observ/dir_set)
+GLOBAL_DATUM_INIT(dir_set_event, /decl/observ/dir_set, new)
 
-/singleton/observ/dir_set
+/decl/observ/dir_set
 	name = "Direction Set"
 	expected_type = /atom
 
-/singleton/observ/dir_set/register(atom/dir_changer, datum/listener, proc_call)
+/decl/observ/dir_set/register(atom/dir_changer, datum/listener, proc_call)
 	. = ..()
 
 	// Listen to the parent if possible.
-	if(. && ismovable(dir_changer.loc))	// We don't care about registering to turfs.
-		register(dir_changer.loc, dir_changer, TYPE_PROC_REF(/atom, recursive_dir_set))
+	if(. && istype(dir_changer.loc, /atom/movable))	// We don't care about registering to turfs.
+		register(dir_changer.loc, dir_changer, /atom/proc/recursive_dir_set)
 
 /*********************
 * Direction Handling *
 *********************/
 
+/atom/set_dir()
+	var/old_dir = dir
+	. = ..()
+	if(old_dir != dir)
+		GLOB.dir_set_event.raise_event(src, old_dir, dir)
+
 /atom/movable/Entered(atom/movable/am, atom/old_loc)
 	. = ..()
 	if(GLOB.dir_set_event.has_listeners(am))
-		GLOB.dir_set_event.register(src, am, TYPE_PROC_REF(/atom, recursive_dir_set))
+		GLOB.dir_set_event.register(src, am, /atom/proc/recursive_dir_set)
+	if(GLOB.moved_event.has_listeners(am))
+		GLOB.moved_event.register(src, am, /atom/movable/proc/recursive_move)
 
-/atom/movable/Exited(atom/movable/am, atom/new_loc)
+/atom/movable/Exited(atom/movable/am, atom/old_loc)
 	. = ..()
-	GLOB.dir_set_event.unregister(src, am, TYPE_PROC_REF(/atom, recursive_dir_set))
+	GLOB.dir_set_event.unregister(src, am, /atom/proc/recursive_dir_set)
+	GLOB.moved_event.unregister(src, am, /atom/movable/proc/recursive_move)

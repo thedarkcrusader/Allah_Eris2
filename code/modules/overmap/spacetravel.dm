@@ -1,37 +1,27 @@
-//list used to cache empty zlevels to avoid needless map bloat
-var/global/list/cached_space = list()
+//list used to cache empty zlevels to avoid nedless map bloat
+var/list/cached_space = list()
 
 //Space stragglers go here
 
-/obj/overmap/visitable/sector/temporary
+/obj/effect/overmap/sector/temporary
 	name = "Deep Space"
-	invisibility = INVISIBILITY_ABSTRACT
+	invisibility = 101
+	known = 0
 
-/obj/overmap/visitable/sector/temporary/Initialize(mapload, nx, ny, nz)
+/obj/effect/overmap/sector/temporary/New(var/nx, var/ny, var/nz)
+	loc = locate(nx, ny, GLOB.maps_data.overmap_z)
+	x = nx
+	y = ny
+	map_z += nz
+	map_sectors["[nz]"] = src
+	testing("Temporary sector at [x],[y] was created, corresponding zlevel is [nz].")
+
+/obj/effect/overmap/sector/temporary/Destroy()
+	map_sectors["[map_z]"] = null
+	testing("Temporary sector at [x],[y] was deleted.")
 	. = ..()
-	map_z = list(nz)
-	testing("Temporary sector at zlevel [nz] was created.")
-	register(nx, ny)
 
-/obj/overmap/visitable/sector/temporary/Destroy()
-	unregister()
-	testing("Temporary sector at [x],[y] was deleted. zlevel [map_z[1]] is no longer accessible.")
-	return ..()
-
-/obj/overmap/visitable/sector/temporary/proc/register(nx, ny)
-	forceMove(locate(nx, ny, GLOB.using_map.overmap_z))
-	map_sectors["[map_z[1]]"] = src
-	testing("Temporary sector at zlevel [map_z[1]] moved to coordinates [x],[y]")
-
-/obj/overmap/visitable/sector/temporary/proc/unregister()
-	// Note that any structures left in the zlevel will remain there, and may later turn up at completely different
-	// coordinates if this temporary sector is recycled. Perhaps everything remaining in the zlevel should be destroyed?
-	testing("Caching temporary sector for future use, corresponding zlevel is [map_z[1]], previous coordinates were [x],[y]")
-	map_sectors.Remove(src)
-	src.forceMove(null)
-	cached_space += src
-
-/obj/overmap/visitable/sector/temporary/proc/can_die(mob/observer)
+/obj/effect/overmap/sector/temporary/proc/can_die(var/mob/observer)
 	testing("Checking if sector at [map_z[1]] can die.")
 	for(var/mob/M in GLOB.player_list)
 		if(M != observer && (M.z in map_z))
@@ -39,22 +29,18 @@ var/global/list/cached_space = list()
 			return 0
 	return 1
 
-/proc/get_deepspace(x,y)
-	RETURN_TYPE(/obj/overmap/visitable/sector/temporary)
-	var/turf/map = locate(x,y,GLOB.using_map.overmap_z)
-	var/obj/overmap/visitable/sector/temporary/res
-	for(var/obj/overmap/visitable/sector/temporary/O in map)
-		res = O
-		break
+proc/get_deepspace(x,y)
+	var/obj/effect/overmap/sector/temporary/res = locate(x, y, GLOB.maps_data.overmap_z)
 	if(istype(res))
 		return res
-	else if(length(cached_space))
-		res = cached_space[length(cached_space)]
+	else if(cached_space.len)
+		res = cached_space[cached_space.len]
 		cached_space -= res
-		res.register(x, y)
+		res.x = x
+		res.y = y
 		return res
 	else
-		return new /obj/overmap/visitable/sector/temporary(null, x, y, ++world.maxz)
+		return new /obj/effect/overmap/sector/temporary(x, y, GLOB.maps_data.get_empty_zlevel())
 
 /atom/movable/proc/lost_in_space()
 	for(var/atom/movable/AM in contents)
@@ -65,14 +51,14 @@ var/global/list/cached_space = list()
 /mob/lost_in_space()
 	return isnull(client)
 
-/mob/living/carbon/human/lost_in_space()
-	return isnull(client) && (!last_ckey || stat == DEAD)
-
-/proc/overmap_spacetravel(turf/space/T, atom/movable/A)
+proc/overmap_spacetravel(var/turf/space/T, var/atom/movable/A)
 	if (!T || !A)
 		return
 
-	var/obj/overmap/visitable/M = map_sectors["[T.z]"]
+	if(istype(A, /mob/observer/eye/aiEye))
+		return
+
+	var/obj/effect/overmap/M = map_sectors["[T.z]"]
 	if (!M)
 		return
 
@@ -103,10 +89,10 @@ var/global/list/cached_space = list()
 
 	testing("[A] spacemoving from [M] ([M.x], [M.y]).")
 
-	var/turf/map = locate(M.x,M.y,GLOB.using_map.overmap_z)
-	var/obj/overmap/visitable/TM
-	for(var/obj/overmap/visitable/O in map)
-		if(O != M && HAS_FLAGS(O.sector_flags, OVERMAP_SECTOR_IN_SPACE) && prob(50))
+	var/turf/map = locate(M.x,M.y,GLOB.maps_data.overmap_z)
+	var/obj/effect/overmap/TM
+	for(var/obj/effect/overmap/O in map)
+		if(O != M && O.in_space && prob(50))
 			TM = O
 			break
 	if(!TM)
@@ -121,7 +107,12 @@ var/global/list/cached_space = list()
 			if(D.pulling)
 				D.pulling.forceMove(dest)
 
-	if(istype(M, /obj/overmap/visitable/sector/temporary))
-		var/obj/overmap/visitable/sector/temporary/source = M
-		if (source != TM && source.can_die())
-			source.unregister()
+	if(istype(M, /obj/effect/overmap/sector/temporary))
+		var/obj/effect/overmap/sector/temporary/source = M
+		if (source.can_die())
+			testing("Caching [M] for future use")
+			source.loc = null
+			cached_space += source
+
+/obj/effect/overmap/proc/get_skybox_representation()
+	return

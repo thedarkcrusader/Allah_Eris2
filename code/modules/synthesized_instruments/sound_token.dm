@@ -6,14 +6,14 @@
 	var/datum/sound_player/player
 
 //Slight duplication, but there's key differences
-/datum/sound_token/instrument/New(atom/source, sound_id, sound/sound, range = 4, prefer_mute = FALSE, use_env, datum/sound_player/player)
+/datum/sound_token/instrument/New(var/atom/source, var/sound_id, var/sound/sound, var/range = 4, var/prefer_mute = FALSE, var/use_env, var/datum/sound_player/player)
 	if(!istype(source))
 		CRASH("Invalid sound source: [log_info_line(source)]")
 	if(!istype(sound))
 		CRASH("Invalid sound: [log_info_line(sound)]")
 	if(sound.repeat && !sound_id)
 		CRASH("No sound id given")
-	if(!PrivIsValidEnvironment(sound.environment))
+	if(!is_environment(sound.environment))
 		CRASH("Invalid sound environment: [log_info_line(sound.environment)]")
 
 	src.prefer_mute = prefer_mute
@@ -24,7 +24,7 @@
 	src.use_env = use_env
 	src.player = player
 
-	var/channel = GLOB.sound_player.PrivGetChannel(src) //Attempt to find a channel
+	var/channel = GLOB.sound_player.get_channel(src) //Attempt to find a channel
 	if(!isnum(channel))
 		CRASH("All available sound channels are in active use.")
 	sound.channel = channel
@@ -32,21 +32,21 @@
 	listeners = list()
 	listener_status = list()
 
-	GLOB.destroyed_event.register(source, src, TYPE_PROC_REF(/datum, qdel_self))
+	GLOB.destroyed_event.register(source, src, /datum/proc/qdel_self)
 
 	player.subscribe(src)
 
 
-/datum/sound_token/instrument/PrivGetEnvironment(listener)
+/datum/sound_token/instrument/get_environment(var/listener)
 	//Allow override (in case your instrument has to sound funky or muted)
 	if(use_env)
 		return sound.environment
 	else
 		var/area/A = get_area(listener)
-		return A && PrivIsValidEnvironment(A.sound_env) ? A.sound_env : sound.environment
+		return A && is_environment(A.sound_env) ? A.sound_env : sound.environment
 
 
-/datum/sound_token/instrument/PrivAddListener(atom/listener)
+datum/sound_token/instrument/add_listener(var/atom/listener)
 	var/mob/m = listener
 	if(istype(m))
 		if(m.get_preference_value(/datum/client_preference/play_instruments) != GLOB.PREF_YES)
@@ -54,15 +54,15 @@
 	return ..()
 
 
-/datum/sound_token/instrument/PrivUpdateListener(listener)
+/datum/sound_token/instrument/update_listener(var/listener)
 	var/mob/m = listener
 	if(istype(m))
 		if(m.get_preference_value(/datum/client_preference/play_instruments) != GLOB.PREF_YES)
-			PrivRemoveListener(listener)
+			remove_listener(listener)
 			return
 	return ..()
 
-/datum/sound_token/instrument/Stop()
+/datum/sound_token/instrument/stop()
 	player.unsubscribe(src)
 	. = ..()
 

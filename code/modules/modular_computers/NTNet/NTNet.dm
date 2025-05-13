@@ -2,61 +2,51 @@ var/global/datum/ntnet/ntnet_global = new()
 
 
 // This is the NTNet datum. There can be only one NTNet datum in game at once. Modular computers read data from this.
-/datum/ntnet
+/datum/ntnet/
 	var/list/relays = list()
 	var/list/logs = list()
 	var/list/available_station_software = list()
-	var/list/available_software_by_category = list()
 	var/list/available_antag_software = list()
 	var/list/available_news = list()
 	var/list/chat_channels = list()
 	var/list/fileservers = list()
-	/// Holds all the email accounts that exists. Hopefully won't exceed 999
-	var/list/email_accounts = list()
-	/// A list containing one of each available report datums, used for the report editor program.
-	var/list/available_reports = list()
+	var/list/email_accounts = list()				// I guess we won't have more than 999 email accounts active at once in single round, so this will do until Servers are implemented someday.
+	var/list/available_reports = list()             // A list containing one of each available report datums, used for the report editor program.
 	var/list/banned_nids = list()
-	/// A list of nid - os datum pairs. An OS in this list is not necessarily connected to NTNet or visible on it.
-	var/list/registered_nids = list()
-	/// Amount of log entries the system tries to keep in memory. Keep below 999 to prevent byond from acting weirdly. High values make displaying logs much laggier.
+	// Amount of logs the system tries to keep in memory. Keep below 999 to prevent byond from acting weirdly.
+	// High values make displaying logs much laggier.
 	var/setting_maxlogcount = 100
 
-	/// Programs requiring NTNET_SOFTWAREDOWNLOAD won't work if this is set to FALSE and public-facing device they are connecting with is wireless.
-	var/setting_softwaredownload = TRUE
-	/// Programs requiring NTNET_PEERTOPEER won't work if this is set to FALSE and public-facing device they are connecting with is wireless.
-	var/setting_peertopeer = TRUE
-	/// Programs requiring NTNET_COMMUNICATION won't work if this is set to FALSE and public-facing device they are connecting with is wireless.
-	var/setting_communication = TRUE
-	/// Programs requiring NTNET_SYSTEMCONTROL won't work if this is set to FALSE and public-facing device they are connecting with is wireless.
-	var/setting_systemcontrol = TRUE
+	// These only affect wireless. LAN (consoles) are unaffected since it would be possible to create scenario where someone turns off NTNet, and is unable to turn it back on since it refuses connections
+	var/setting_softwaredownload = 1
+	var/setting_peertopeer = 1
+	var/setting_communication = 1
+	var/setting_systemcontrol = 1
+	var/setting_disabled = 0					// Setting to 1 will disable all wireless, independently on relays status.
 
-	/// Setting to TRUE will disable all wireless connections, independently off relays status.
-	var/setting_disabled = FALSE
+	var/intrusion_detection_enabled = 1 		// Whether the IDS warning system is enabled
+	var/intrusion_detection_alarm = 0			// Set when there is an IDS warning due to malicious (antag) software.
 
-	/// Whether the IDS warning system is enabled
-	var/intrusion_detection_enabled = TRUE
-	/// Set when there is an IDS warning due to malicious (antag) software.
-	var/intrusion_detection_alarm = FALSE
 
 // If new NTNet datum is spawned, it replaces the old one.
 /datum/ntnet/New()
 	if(ntnet_global && (ntnet_global != src))
 		ntnet_global = src // There can be only one.
-	for(var/obj/machinery/ntnet_relay/R in SSmachines.machinery)
-		relays += R
+	for(var/obj/machinery/ntnet_relay/R in GLOB.machines)
+		relays.Add(R)
+		R.NTNet = src
 	build_software_lists()
+	build_news_list()
 	build_emails_list()
 	build_reports_list()
 	add_log("NTNet logging system activated.")
 
-/datum/ntnet/proc/add_log_with_ids_check(log_string, obj/item/stock_parts/computer/network_card/source = null, intrusion = TRUE)
+/datum/ntnet/proc/add_log_with_ids_check(var/log_string, var/obj/item/computer_hardware/network_card/source = null)
 	if(intrusion_detection_enabled)
-		add_log("IDS NOTICE: " + log_string, source)
-		if (intrusion)
-			intrusion_detection_alarm = TRUE
+		add_log(log_string, source)
 
-/// Simplified logging: Adds a log. log_string is mandatory parameter, source is optional. Returns TRUE on success.
-/datum/ntnet/proc/add_log(log_string, obj/item/stock_parts/computer/network_card/source = null)
+// Simplified logging: Adds a log. log_string is mandatory parameter, source is optional.
+/datum/ntnet/proc/add_log(var/log_string, var/obj/item/computer_hardware/network_card/source = null)
 	var/log_text = "[stationtime2text()] - "
 	if(source)
 		log_text += "[source.get_network_tag()] - "
@@ -65,32 +55,21 @@ var/global/datum/ntnet/ntnet_global = new()
 	log_text += log_string
 	logs.Add(log_text)
 
-	if(length(logs) > setting_maxlogcount)
+	if(logs.len > setting_maxlogcount)
 		// We have too many logs, remove the oldest entries until we get into the limit
 		for(var/L in logs)
-			if(length(logs) > setting_maxlogcount)
+			if(logs.len > setting_maxlogcount)
 				logs.Remove(L)
 			else
 				break
 
-	// Log entries are backed up on portable drives in every relay, if present.
-	for(var/obj/machinery/ntnet_relay/R in ntnet_global.relays)
-		var/obj/item/stock_parts/computer/hard_drive/portable/P = R.get_component_of_type(/obj/item/stock_parts/computer/hard_drive/portable)
-		if(istype(P))
-			P.update_data_file("ntnet_log", "[log_text]\[br\]", /datum/computer_file/data/logfile)
-	return TRUE
+/datum/ntnet/proc/get_computer_by_nid(var/NID)
+	for(var/obj/item/modular_computer/comp in SSobj.processing)
+		if(comp && comp.network_card && comp.network_card.identification_id == NID)
+			return comp
 
-/datum/ntnet/proc/get_os_by_nid(NID)
-	return registered_nids["[NID]"]
-
-/datum/ntnet/proc/register(NID, datum/extension/interactive/ntos/os)
-	registered_nids["[NID]"] = os
-
-/datum/ntnet/proc/unregister(NID)
-	registered_nids -= "[NID]"
-
-/datum/ntnet/proc/check_banned(NID)
-	if(!relays || !length(relays))
+/datum/ntnet/proc/check_banned(var/NID)
+	if(!relays || !relays.len)
 		return FALSE
 
 	for(var/obj/machinery/ntnet_relay/R in relays)
@@ -99,36 +78,33 @@ var/global/datum/ntnet/ntnet_global = new()
 
 	return FALSE
 
-/// Checks whether NTNet operates.
-/datum/ntnet/proc/check_function()
-	if(!relays || !length(relays)) // No relays found. NTNet is down for wireless devices
-		return FALSE
+// Checks whether NTNet operates. If parameter is passed checks whether specific function is enabled.
+/datum/ntnet/proc/check_function(var/specific_action = 0)
+	if(!relays || !relays.len) // No relays found. NTNet is down
+		return 0
 
-	var/operating = FALSE
+	var/operating = 0
+
 	// Check all relays. If we have at least one working relay, network is up.
 	for(var/obj/machinery/ntnet_relay/R in relays)
 		if(R.operable())
-			operating = TRUE
+			operating = 1
 			break
 
 	if(setting_disabled)
-		return FALSE
+		return 0
+
+	if(specific_action == NTNET_SOFTWAREDOWNLOAD)
+		return (operating && setting_softwaredownload)
+	if(specific_action == NTNET_PEERTOPEER)
+		return (operating && setting_peertopeer)
+	if(specific_action == NTNET_COMMUNICATION)
+		return (operating && setting_communication)
+	if(specific_action == NTNET_SYSTEMCONTROL)
+		return (operating && setting_systemcontrol)
 	return operating
 
-/// Checks whether NTNet allows a specific action over wireless connections
-/datum/ntnet/proc/check_capability(specific_action)
-	switch(specific_action)
-		if(NTNET_SOFTWAREDOWNLOAD)
-			return setting_softwaredownload
-		if(NTNET_PEERTOPEER)
-			return setting_peertopeer
-		if(NTNET_COMMUNICATION)
-			return setting_communication
-		if(NTNET_SYSTEMCONTROL)
-			return setting_systemcontrol
-	return FALSE
-
-/// Builds lists that contain downloadable software.
+// Builds lists that contain downloadable software.
 /datum/ntnet/proc/build_software_lists()
 	available_station_software = list()
 	available_antag_software = list()
@@ -139,21 +115,24 @@ var/global/datum/ntnet/ntnet_global = new()
 			continue
 		// Check whether the program should be available for station/antag download, if yes, add it to lists.
 		if(prog.available_on_ntnet)
-			var/list/category_list = available_software_by_category[prog.category]
-			if(!category_list)
-				category_list = list()
-				available_software_by_category[prog.category] = category_list
-			ADD_SORTED(available_station_software, prog, GLOBAL_PROC_REF(cmp_program))
-			ADD_SORTED(category_list, prog, GLOBAL_PROC_REF(cmp_program))
+			available_station_software.Add(prog)
 		if(prog.available_on_syndinet)
-			ADD_SORTED(available_antag_software, prog, GLOBAL_PROC_REF(cmp_program))
+			available_antag_software.Add(prog)
 
-/// Generates service email list.
+// Builds lists that contain downloadable software.
+/datum/ntnet/proc/build_news_list()
+	available_news = list()
+	for(var/F in typesof(/datum/computer_file/data/news_article/))
+		var/datum/computer_file/data/news_article/news = new F(1)
+		if(news.stored_data)
+			available_news.Add(news)
+
+// Generates service email list. Currently only used by broadcaster service
 /datum/ntnet/proc/build_emails_list()
 	for(var/F in subtypesof(/datum/computer_file/data/email_account/service))
 		new F()
 
-/// Builds report list.
+// Builds report list.
 /datum/ntnet/proc/build_reports_list()
 	available_reports = list()
 	for(var/F in typesof(/datum/computer_file/report))
@@ -169,8 +148,8 @@ var/global/datum/ntnet/ntnet_global = new()
 		if(report.verify_access_edit(access))
 			. += report
 
-/// Attempts to find a downloadable file according to filename var
-/datum/ntnet/proc/find_ntnet_file_by_name(filename)
+// Attempts to find a downloadable file according to filename var
+/datum/ntnet/proc/find_ntnet_file_by_name(var/filename)
 	for(var/datum/computer_file/program/P in available_station_software)
 		if(filename == P.filename)
 			return P
@@ -178,33 +157,29 @@ var/global/datum/ntnet/ntnet_global = new()
 		if(filename == P.filename)
 			return P
 
-/// Resets the IDS alarm
+// Resets the IDS alarm
 /datum/ntnet/proc/resetIDS()
 	intrusion_detection_alarm = 0
-	add_log("-!- INTRUSION DETECTION ALARM RESET BY SYSTEM OPERATOR -!-")
 
-/// Toggle IDS on or off
 /datum/ntnet/proc/toggleIDS()
 	resetIDS()
 	intrusion_detection_enabled = !intrusion_detection_enabled
-	add_log("Configuration Updated. Intrusion Detection [intrusion_detection_enabled ? "enabled" : "disabled"].")
 
-/// Removes all logs
+// Removes all logs
 /datum/ntnet/proc/purge_logs()
 	logs = list()
 	add_log("-!- LOGS DELETED BY SYSTEM OPERATOR -!-")
 
-/// Updates maximal amount of stored logs. Use this instead of setting the number, it performs required checks. Returns TRUE if number is updated. FALSE otherwise.
-/datum/ntnet/proc/update_max_log_count(lognumber)
+// Updates maximal amount of stored logs. Use this instead of setting the number, it performs required checks.
+/datum/ntnet/proc/update_max_log_count(var/lognumber)
 	if(!lognumber)
-		return FALSE
+		return 0
 	// Trim the value if necessary
-	lognumber = clamp(lognumber, MIN_NTNET_LOGS, MAX_NTNET_LOGS)
+	lognumber = between(MIN_NTNET_LOGS, lognumber, MAX_NTNET_LOGS)
 	setting_maxlogcount = lognumber
-	add_log("Configuration Updated. Now keeping [setting_maxlogcount] log entries in system memory.")
-	return TRUE
+	add_log("Configuration Updated. Now keeping [setting_maxlogcount] logs in system memory.")
 
-/datum/ntnet/proc/toggle_function(function)
+/datum/ntnet/proc/toggle_function(var/function)
 	if(!function)
 		return
 	function = text2num(function)
@@ -220,61 +195,93 @@ var/global/datum/ntnet/ntnet_global = new()
 			add_log("Configuration Updated. Wireless network firewall now [setting_communication ? "allows" : "disallows"] instant messaging and similar communication services.")
 		if(NTNET_SYSTEMCONTROL)
 			setting_systemcontrol = !setting_systemcontrol
-			add_log("Configuration Updated. Wireless network firewall now [setting_systemcontrol ? "allows" : "disallows"] remote control of [station_name()]'s systems.")
+			add_log("Configuration Updated. Wireless network firewall now [setting_systemcontrol ? "allows" : "disallows"] remote control of [station_name]'s systems.")
 
-/// Returns email account matching login. Otherwise null
-/datum/ntnet/proc/find_email_by_name(login)
+/datum/ntnet/proc/find_email_by_login(var/login)
 	for(var/datum/computer_file/data/email_account/A in ntnet_global.email_accounts)
 		if(A.login == login)
 			return A
+	return 0
 
-/// Used when a mob or robot is renamed. Not intended to be used by any ingame computer systems
+/datum/ntnet/proc/sort_email_list()
+	// improved bubble sort
+	if(ntnet_global.email_accounts.len > 1)
+		for(var/i = 1, i <= ntnet_global.email_accounts.len, i++)
+			var/flag = FALSE
+			for(var/j = 1, j <= ntnet_global.email_accounts.len - 1, j++)
+				var/datum/computer_file/data/email_account/EA = ntnet_global.email_accounts[j]
+				var/datum/computer_file/data/email_account/EA_NEXT = ntnet_global.email_accounts[j+1]
+				if(sorttext(EA.ownerName, EA_NEXT.ownerName) == -1)
+					flag = TRUE
+					ntnet_global.email_accounts.Swap(j,j+1)
+			if(!flag)
+				break
+
+// Assigning emails to mobs
+
 /datum/ntnet/proc/rename_email(mob/user, old_login, desired_name, domain)
-	var/datum/computer_file/data/email_account/account = find_email_by_name(old_login)
+	var/datum/computer_file/data/email_account/account = find_email_by_login(old_login)
 	var/new_login = sanitize_for_email(desired_name)
 	new_login += "@[domain]"
 	if(new_login == old_login)
 		return	//If we aren't going to be changing the login, we quit silently.
-	if(find_email_by_name(new_login))
+	if(find_email_by_login(new_login))
 		to_chat(user, "Your email could not be updated: the new username is invalid.")
 		return
+	account.ownerName = user.real_name
 	account.login = new_login
 	to_chat(user, "Your email account address has been changed to <b>[new_login]</b>. This information has also been placed into your notes.")
 	add_log("Email address changed for [user]: [old_login] changed to [new_login]")
 	if(user.mind)
 		user.mind.initial_email_login["login"] = new_login
-		user.StoreMemory("Your email account address has been changed to [new_login].", /singleton/memory_options/system)
+		user.mind.store_memory("Your email account address has been changed to [new_login].")
+
 	if(issilicon(user))
 		var/mob/living/silicon/S = user
 		var/datum/nano_module/email_client/my_client = S.get_subsystem_from_path(/datum/nano_module/email_client)
 		if(my_client)
 			my_client.stored_login = new_login
+			my_client.stored_password = account.password
+			my_client.log_in()
+	sort_email_list()
 
-/// Used for initial email generation. Not intended to be used by any ingame computer systems
-/datum/ntnet/proc/create_email(mob/user, desired_name, domain, assignment, desired_password)
+//Used for initial email generation.
+/datum/ntnet/proc/create_email(mob/user, desired_name, domain)
 	desired_name = sanitize_for_email(desired_name)
 	var/login = "[desired_name]@[domain]"
 	// It is VERY unlikely that we'll have two players, in the same round, with the same name and branch, but still, this is here.
 	// If such conflict is encountered, a random number will be appended to the email address. If this fails too, no email account will be created.
-	if(find_email_by_name(login))
-		login = "[desired_name][random_id(/datum/computer_file/data/email_account, 100, 999)]@[domain]"
+	if(find_email_by_login(login))
+		login = "[desired_name][random_id(/datum/computer_file/data/email_account/, 100, 999)]@[domain]"
 	// If even fallback login generation failed, just don't give them an email. The chance of this happening is astronomically low.
-	if(find_email_by_name(login))
+	if(find_email_by_login(login))
 		to_chat(user, "You were not assigned an email address.")
-		user.StoreMemory("You were not assigned an email address.", /singleton/memory_options/system)
+		user.mind.store_memory("You were not assigned an email address.")
 	else
-		var/datum/computer_file/data/email_account/EA = new/datum/computer_file/data/email_account(login, user.real_name, assignment)
-		EA.password = desired_password ? desired_password : GenerateKey()
+		var/datum/computer_file/data/email_account/EA = new/datum/computer_file/data/email_account()
+		EA.password = GenerateKey()
+		EA.login = login
+		EA.ownerName = user.real_name
+		to_chat(user, "Your email account address is <b>[EA.login]</b> and the password is <b>[EA.password]</b>. This information has also been placed into your notes.")
 		if(user.mind)
 			user.mind.initial_email_login["login"] = EA.login
 			user.mind.initial_email_login["password"] = EA.password
-			user.StoreMemory("Your email account address is [EA.login] and the password is [EA.password].", /singleton/memory_options/system)
-		if(issilicon(user))
+			user.mind.store_memory("Your email account address is [EA.login] and the password is [EA.password].")
+		if(ishuman(user))
+			for(var/obj/item/modular_computer/C in user.GetAllContents())
+				var/datum/computer_file/program/email_client/P = C.getProgramByType(/datum/computer_file/program/email_client)
+				if(P)
+					P.stored_login = EA.login
+					P.stored_password = EA.password
+					P.update_email()
+		else if(issilicon(user))
 			var/mob/living/silicon/S = user
 			var/datum/nano_module/email_client/my_client = S.get_subsystem_from_path(/datum/nano_module/email_client)
 			if(my_client)
 				my_client.stored_login = EA.login
 				my_client.stored_password = EA.password
+				my_client.log_in()
+	sort_email_list()
 
 /mob/proc/create_or_rename_email(newname, domain)
 	if(!mind)

@@ -1,15 +1,7 @@
-//used for pref.alternate_option
 #define JOB_LEVEL_NEVER  4
 #define JOB_LEVEL_LOW    3
 #define JOB_LEVEL_MEDIUM 2
 #define JOB_LEVEL_HIGH   1
-
-/datum/preferences_slot
-	var/job_high = null
-	/// List of all things selected for medium weight
-	var/list/job_medium
-	/// List of all the things selected for low weight
-	var/list/job_low
 
 /datum/preferences
 	//Since there can only be 1 high job.
@@ -17,9 +9,6 @@
 	var/list/job_medium        //List of all things selected for medium weight
 	var/list/job_low           //List of all the things selected for low weight
 	var/list/player_alt_titles // the default name of a job like "Medical Doctor"
-	var/list/branches
-	var/list/ranks
-	var/list/hiding_maps = list()
 
 	//Keeps track of preferrence for not getting any wanted jobs
 	var/alternate_option = 2
@@ -27,52 +16,46 @@
 /datum/category_item/player_setup_item/occupation
 	name = "Occupation"
 	sort_order = 1
-	var/datum/browser/panel
+	//var/datum/browser/panel
+	var/job_desc = "Press \[?\] button near job name to show description.<br><br><br><br><br><br>"			//text containing job description
+	var/desc_set = FALSE
+	var/job_icon_dir = SOUTH
+	var/job_info_selected_rank
 
-/datum/category_item/player_setup_item/occupation/load_character(datum/pref_record_reader/R)
-	pref.alternate_option = R.read("alternate_option")
-	pref.job_high = R.read("job_high")
-	pref.job_medium = R.read("job_medium")
-	pref.job_low = R.read("job_low")
-	pref.player_alt_titles = R.read("player_alt_titles")
-	pref.skills_saved = R.read("skills_saved")
-	pref.branches = R.read("branches")
-	pref.ranks = R.read("ranks")
-	pref.hiding_maps = R.read("hiding_maps")
-	load_skills()
+/datum/category_item/player_setup_item/occupation/load_character(var/savefile/S)
+	from_file(S["alternate_option"], 	pref.alternate_option)
+	from_file(S["job_high"],			pref.job_high)
+	from_file(S["job_medium"],			pref.job_medium)
+	from_file(S["job_low"],				pref.job_low)
+	from_file(S["player_alt_titles"],	pref.player_alt_titles)
 
-/datum/category_item/player_setup_item/occupation/save_character(datum/pref_record_writer/W)
-	save_skills()
-	W.write("alternate_option", pref.alternate_option)
-	W.write("job_high", pref.job_high)
-	W.write("job_medium", pref.job_medium)
-	W.write("job_low", pref.job_low)
-	W.write("player_alt_titles", pref.player_alt_titles)
-	W.write("skills_saved", pref.skills_saved)
-	W.write("branches", pref.branches)
-	W.write("ranks", pref.ranks)
-	W.write("hiding_maps", pref.hiding_maps)
+	//from_file(S["skills_saved"],		pref.skills_saved)
 
-/datum/category_item/player_setup_item/occupation/load_slot(datum/pref_record_reader/R, datum/preferences_slot/slot)
-	slot.job_high = R.read("job_high")
-	slot.job_medium = R.read("job_medium")
-	slot.job_low = R.read("job_low")
+	//load_skills()
+
+/datum/category_item/player_setup_item/occupation/save_character(var/savefile/S)
+	//save_skills()
+
+	to_file(S["alternate_option"],		pref.alternate_option)
+	to_file(S["job_high"],				pref.job_high)
+	to_file(S["job_medium"],			pref.job_medium)
+	to_file(S["job_low"],				pref.job_low)
+	to_file(S["player_alt_titles"],		pref.player_alt_titles)
+
+	//to_file(S["skills_saved"],			pref.skills_saved)
 
 /datum/category_item/player_setup_item/occupation/sanitize_character()
-	if(!istype(pref.job_medium))		pref.job_medium = list()
-	if(!istype(pref.job_low))			pref.job_low = list()
-	if(!istype(pref.skills_saved))		pref.skills_saved = list()
-	if(!islist(pref.branches))			pref.branches = list()
-	if(!islist(pref.ranks))				pref.ranks = list()
-	if(!islist(pref.hiding_maps))		pref.hiding_maps = list()
+	if(!istype(pref.job_medium)) 		pref.job_medium = list()
+	if(!istype(pref.job_low))    		pref.job_low = list()
+	//if(!istype(pref.skills_saved))		pref.skills_saved = list()
 
 	pref.alternate_option	= sanitize_integer(pref.alternate_option, 0, 2, initial(pref.alternate_option))
 	pref.job_high	        = sanitize(pref.job_high, null)
-	if(pref.job_medium && length(pref.job_medium))
-		for(var/i in 1 to length(pref.job_medium))
+	if(pref.job_medium && pref.job_medium.len)
+		for(var/i in 1 to pref.job_medium.len)
 			pref.job_medium[i]  = sanitize(pref.job_medium[i])
-	if(pref.job_low && length(pref.job_low))
-		for(var/i in 1 to length(pref.job_low))
+	if(pref.job_low && pref.job_low.len)
+		for(var/i in 1 to pref.job_low.len)
 			pref.job_low[i]  = sanitize(pref.job_low[i])
 	if(!pref.player_alt_titles) pref.player_alt_titles = new()
 
@@ -80,236 +63,134 @@
 	// so we prune here to make sure we don't spawn as a PFC captain
 	prune_occupation_prefs()
 
-	pref.skills_allocated = pref.sanitize_skills(pref.skills_allocated)		//this proc also automatically computes and updates points_by_job
+	//pref.skills_allocated = pref.sanitize_skills(pref.skills_allocated)		//this proc also automatically computes and updates points_by_job
 
-	for(var/job_type in SSjobs.types_to_datums)
-		var/datum/job/job = SSjobs.types_to_datums[job_type]
+	var/jobs_by_type = decls_repository.get_decls(GLOB.maps_data.allowed_jobs)
+	for(var/job_type in jobs_by_type)
+		var/datum/job/job = jobs_by_type[job_type]
 		var/alt_title = pref.player_alt_titles[job.title]
 		if(alt_title && !(alt_title in job.alt_titles))
 			pref.player_alt_titles -= job.title
 
 /datum/category_item/player_setup_item/occupation/content(mob/user, limit = 16, list/splitJobs, splitLimit = 1)
-
-	if(!SSmapping || !SSjobs.job_lists_by_map_name)
+	if(!SSjob)
 		return
 
-	var/singleton/species/S = preference_species()
+
 	. = list()
 	. += "<style>.Points,a.Points{background: #cc5555;}</style>"
-	. += "<style>a.Points:hover{background: #55cc55;}</style>"
+	//. += "<style>a.Points:hover{background: #55cc55;}</style>"
+
 	. += "<tt><center>"
-	. += FONT_LARGE("<b>Select and configure your occupation preferences. Unavailable occupations are crossed out.</b>")
-	. += "<br>"
 
-	// Display everything.
-	for(var/job_map in SSjobs.job_lists_by_map_name)
+	//Attempts to set job description based on a high ranked or selected job
+	if (!desc_set)
+		create_job_description(user)
+	. += "[job_desc]"
+	. += "<b>Choose occupation chances.<br>Unavailable occupations are crossed out.</b>"
+	. += "<table width='100%' cellpadding='1' cellspacing='0'><tr><td width='20%'>" // Table within a table for alignment, also allows you to easily add more columns.
+	. += "<table width='100%' cellpadding='1' cellspacing='0'>"
 
-		var/list/map_data = SSjobs.job_lists_by_map_name[job_map]
-		if(isnull(pref.hiding_maps[job_map]))
-			pref.hiding_maps[job_map] = map_data["default_to_hidden"]
+	var/index = -1
+	if(splitLimit)
+		limit = round((SSjob.occupations.len+1)/2)
 
-		. += "<hr><table width = '100%' style='font-size: 16px'><tr>"
-		. += "<td width = '50%' align = 'right'><b>[capitalize(job_map)]</b></td>"
-		. += "<td width = '50%' align = 'left''><a href='byond://?src=\ref[src];toggle_map=[job_map]'>[pref.hiding_maps[job_map] ? "Show" : "Hide"]</a></td>"
-		. += "</tr></table>"
+	//The job before the current job. I only use this to get the previous jobs color when I'm filling in blank rows.
+	var/datum/job/lastJob
+	for(var/datum/job/job in SSjob.occupations)
+		//var/unspent = pref.points_by_job[job]
+		var/current_level = JOB_LEVEL_NEVER
+		if(pref.job_high == job.title)
+			current_level = JOB_LEVEL_HIGH
+		else if(job.title in pref.job_medium)
+			current_level = JOB_LEVEL_MEDIUM
+		else if(job.title in pref.job_low)
+			current_level = JOB_LEVEL_LOW
 
-		if(!pref.hiding_maps[job_map])
+		index += 1
+		if((index >= limit) || (job.title in splitJobs))
+			if((index < limit) && (lastJob != null))
+				//If the cells were broken up by a job in the splitJob list then it will fill in the rest of the cells with
+				//the last job's selection color. Creating a rather nice effect.
+				for(var/i = 0, i < (limit - index), i += 1)
+					. += "<tr bgcolor='[lastJob.selection_color]'><td width='40%' align='right'><a>&nbsp</a></td><td><a>&nbsp</a></td></tr>"
+			. += "</table></td><td width='20%'><table width='100%' cellpadding='1' cellspacing='0'>"
+			index = 0
 
-			. += "<hr/>"
-			. += "<table width='100%' cellpadding='1' cellspacing='0'><tr><td width='20%'>" // Table within a table for alignment, also allows you to easily add more columns.
-			. += "<table width='100%' cellpadding='1' cellspacing='0'>"
 
-			//The job before the current job. I only use this to get the previous jobs color when I'm filling in blank rows.
-			var/datum/job/lastJob
-			var/list/map_job_list = map_data["jobs"]
-			var/index = -1
-			if(splitLimit) limit = round((LAZYLEN(map_job_list)+1)/2)
+		. += "<tr bgcolor='[job.selection_color]'><td width='40%' align='right'>"
+		var/rank = job.title
+		lastJob = job
+		. += "<a href='?src=\ref[src];job_info=[rank]'>\[?\]</a>"
+		var/bad_message = ""
+		if(job.total_positions == 0 && job.spawn_positions == 0)
+			bad_message = "<b> \[UNAVAILABLE]</b>"
+		else if(jobban_isbanned(user, rank))
+			bad_message = "<b> \[BANNED]</b>"
+		else if(IsGuestKey(user.client.ckey) && SSjob.job_to_playtime_requirement[job.title])
+			bad_message = "<b> \[ACCOUNT REQUIRED </b>"
+		else if(!SSjob.ckey_to_job_to_can_play[user.client.ckey][job.title])
+			bad_message = "\[PLAYTIME REQUIRED : [SSjob.job_to_playtime_requirement[job.title]] Minutes as [job.department]]"
+		/*else if(!job.player_old_enough(user.client))
+			var/available_in_days = job.available_in_days(user.client)
+			bad_message = "\[IN [(available_in_days)] DAYS]"*/
+		else if(job.minimum_character_age && user.client && (user.client.prefs.age < job.minimum_character_age))
+			bad_message = "\[MINIMUM CHARACTER AGE: [job.minimum_character_age]]"
+		else if(user.client && job.is_setup_restricted(user.client.prefs.setup_options))
+			bad_message = "\[SETUP RESTRICTED]"
 
-			for(var/datum/job/job in map_job_list)
+		if((ASSISTANT_TITLE in pref.job_low) && (rank != ASSISTANT_TITLE))
+			. += "<a href='?src=\ref[src];set_skills=[rank]'><font color=grey>[rank]</font></a></td><td></td></tr>"
+			continue
+		if(bad_message)
+			. += "<a href='?src=\ref[src];set_skills=[rank]'><del>[rank]</del></a></td><td><font color=black>[bad_message]</font></td></tr>"
+			continue
 
-				var/datum/mil_rank/player_rank
-				var/datum/mil_branch/player_branch
-				var/branch_string = ""
-				var/rank_branch_string = ""
-				var/branch_rank = job.allowed_branches ? job.get_branch_rank(S) : GLOB.mil_branches.spawn_branches(S)
-				if(GLOB.using_map && (GLOB.using_map.flags & MAP_HAS_BRANCH) && LAZYLEN(branch_rank))
-					player_branch = GLOB.mil_branches.get_branch(pref.branches[job.title])
-					if(player_branch)
-						if(LAZYLEN(branch_rank) > 1)
-							branch_string += "<td width='10%' align='left'><a href='byond://?src=\ref[src];char_branch=1;checking_job=\ref[job]'>[player_branch.name_short || player_branch.name]</a></td>"
-						else
-							branch_string += "<td width='10%' align='left'>[player_branch.name_short || player_branch.name]</td>"
-				if(!branch_string)
-					branch_string = "<td>-</td>"
-				if(player_branch)
-					var/ranks = branch_rank[player_branch.name] || GLOB.mil_branches.spawn_ranks(player_branch.name, S)
-					if(LAZYLEN(ranks))
-						player_rank = GLOB.mil_branches.get_rank(player_branch.name, pref.ranks[job.title])
-						if(player_rank)
-							if(LAZYLEN(ranks) > 1)
-								rank_branch_string += "<td width='10%' align='left'><a href='byond://?src=\ref[src];char_rank=1;checking_job=\ref[job]'>[player_rank.name_short || player_rank.name]</a></td>"
-							else
-								rank_branch_string += "<td width='10%' align='left'>[player_rank.name_short || player_rank.name]</td>"
-				if(!rank_branch_string)
-					rank_branch_string = "<td>-</td>"
-				rank_branch_string = "[branch_string][rank_branch_string]"
+		//. += (unspent && (current_level != JOB_LEVEL_NEVER) ? "<a class='Points' href='?src=\ref[src];set_skills=[rank]'>" : "<a href='?src=\ref[src];set_skills=[rank]'>")
+		. += (current_level != JOB_LEVEL_NEVER ? "<a class='Points' href='?src=\ref[src];set_skills=[rank]'>" : "<a href='?src=\ref[src];set_skills=[rank]'>")
+		if((rank in command_positions) || (rank == "AI"))//Bold head jobs
+			. += "<b>[rank]</b>"
+		else
+			. += "[rank]"
 
-				var/title = job.title
-				var/title_link = length(job.alt_titles) ? "<a href='byond://?src=\ref[src];select_alt_title=\ref[job]'>[pref.GetPlayerAltTitle(job)]</a>" : job.title
-				if((title in SSjobs.titles_by_department(COM)) || (title == "AI"))//Bold head jobs
-					title_link = "<b>[title_link]</b>"
+		. += "</a></td><td width='40%'>"
 
-				var/help_link = "</td><td width = '10%' align = 'center'><a href='byond://?src=\ref[src];job_info=[title]'>?</a></td>"
-				lastJob = job
+		if(rank == ASSISTANT_TITLE)//Assistant is special
+			. += "<a href='?src=\ref[src];set_job=[rank];set_level=[JOB_LEVEL_LOW]'>"
+			. += "[(rank in pref.job_low) ? "<font color=#55cc55>" : ""]\[Yes\][(rank in pref.job_low) ? "</font>" : ""]"
+			//. += "\[Yes\]"
+			. += "</a>"
+			. += "<a href='?src=\ref[src];set_job=[rank];set_level=[JOB_LEVEL_NEVER]'>"
+			. += "[!(rank in pref.job_low) ? "<font color=black>" : ""]\[No\][!(rank in pref.job_low) ? "</font>" : ""]"
+			. += "</a>"
+		else
+			. += " <a href='?src=\ref[src];set_job=[rank];set_level=[JOB_LEVEL_HIGH]'>[current_level == JOB_LEVEL_HIGH ? "<font color=55cc55>" : ""]\[High][current_level == JOB_LEVEL_HIGH ? "</font>" : ""]</a>"
+			. += " <a href='?src=\ref[src];set_job=[rank];set_level=[JOB_LEVEL_MEDIUM]'>[current_level == JOB_LEVEL_MEDIUM ? "<font color=eecc22>" : ""]\[Medium][current_level == JOB_LEVEL_MEDIUM ? "</font>" : ""]</a>"
+			. += " <a href='?src=\ref[src];set_job=[rank];set_level=[JOB_LEVEL_LOW]'>[current_level == JOB_LEVEL_LOW ? "<font color=cc5555>" : ""]\[Low][current_level == JOB_LEVEL_LOW ? "</font>" : ""]</a>"
+			. += " <a href='?src=\ref[src];set_job=[rank];set_level=[JOB_LEVEL_NEVER]'>[current_level == JOB_LEVEL_NEVER ? "<font color=black>" : ""]\[NEVER][current_level == JOB_LEVEL_NEVER ? "</font>" : ""]</a>"
 
-				var/bodytype = S.get_bodytype()
-				var/bad_message = ""
-				if(job.total_positions == 0 && job.spawn_positions == 0)
-					bad_message = "<b>\[UNAVAILABLE]</b>"
-				else if(jobban_isbanned(user, title))
-					bad_message = "<b>\[BANNED]</b>"
-				else if (!job.is_species_whitelist_allowed(user.client))
-					bad_message = "\[WHITELIST RESTRICTED ([job.use_species_whitelist])]"
-				else if(!job.player_old_enough(user.client))
-					var/available_in_days = job.available_in_days(user.client)
-					bad_message = "\[IN [(available_in_days)] DAYS]"
-				else if(LAZYACCESS(job.minimum_character_age, bodytype) && user.client && (user.client.prefs.age < job.minimum_character_age[bodytype]))
-					bad_message = "\[MIN CHAR AGE: [job.minimum_character_age[bodytype]]]"
-				else if(!job.is_species_allowed(S))
-					bad_message = "<b>\[SPECIES RESTRICTED]</b>"
-				else if(!S.check_background(job, user.client.prefs))
-					bad_message = "<b>\[BACKGROUND RESTRICTED]</b>"
+		if(job.alt_titles)
+			. += "</td></tr><tr bgcolor='[lastJob.selection_color]'><td width='40%' align='center'>&nbsp</td><td><a href='?src=\ref[src];select_alt_title=\ref[job]'>\[[pref.GetPlayerAltTitle(job)]\]</a></td></tr>"
+		. += "</td></tr>"
+	. += "</td'></tr></table>"
+	. += "</center></table><center>"
 
-				var/current_level = JOB_LEVEL_NEVER
-				if(pref.job_high == job.title)
-					current_level = JOB_LEVEL_HIGH
-				else if(job.title in pref.job_medium)
-					current_level = JOB_LEVEL_MEDIUM
-				else if(job.title in pref.job_low)
-					current_level = JOB_LEVEL_LOW
-
-				var/skill_link
-				if(pref.points_by_job[job] && (!job.available_by_default || current_level != JOB_LEVEL_NEVER))
-					skill_link = "<a class = 'Points' href='byond://?src=\ref[src];set_skills=[title]'>Set Skills</a>"
-				else
-					skill_link = "<a href='byond://?src=\ref[src];set_skills=[title]'>View Skills</a>"
-				skill_link = "<td>[skill_link]</td>"
-
-				// Begin assembling the actual HTML.
-				index += 1
-				if((index >= limit) || (job.title in splitJobs))
-					if((index < limit) && (lastJob != null))
-						//If the cells were broken up by a job in the splitJob list then it will fill in the rest of the cells with
-						//the last job's selection color. Creating a rather nice effect.
-						for(var/i = 0, i < (limit - index), i += 1)
-							. += "<tr bgcolor='[lastJob.selection_color]'><td width='40%' align='right'><a>&nbsp</a></td><td><a>&nbsp</a></td></tr>"
-					. += "</table></td><td width='20%'><table width='100%' cellpadding='1' cellspacing='0'>"
-					index = 0
-
-				. += "<tr bgcolor='[job.selection_color]'>"
-				if(rank_branch_string && rank_branch_string != "")
-					. += "[rank_branch_string]"
-				. += "<td width='30%' align='left'>"
-
-				if(bad_message)
-					. += "<del>[title_link]</del>[help_link][skill_link]<td>[bad_message]</td></tr>"
-					continue
-				else if((GLOB.using_map.default_assistant_title in pref.job_low) && (title != GLOB.using_map.default_assistant_title))
-					. += "[SPAN_COLOR("grey", title_link)][help_link][skill_link]<td></td></tr>"
-					continue
-				else
-					. += "[title_link][help_link][skill_link]"
-
-				. += "<td>"
-				if(title == GLOB.using_map.default_assistant_title)//Assistant is special
-					var/yes_link = "Yes"
-					var/no_link = "No"
-					if(title in pref.job_low)
-						yes_link = SPAN_COLOR("#55cc55", yes_link)
-						no_link = SPAN_COLOR("black", no_link)
-					else
-						yes_link = SPAN_COLOR("black", yes_link)
-						no_link = SPAN_COLOR("#55cc55", no_link)
-					. += "<a href='byond://?src=\ref[src];set_job=[title];set_level=[JOB_LEVEL_LOW]'>[yes_link]</a><a href='byond://?src=\ref[src];set_job=[title];set_level=[JOB_LEVEL_NEVER]'>[no_link]</a>"
-				else if(!job.available_by_default)
-					. += SPAN_COLOR("#cccccc", "Not available at roundstart.")
-				else
-					var/level_link
-					switch(current_level)
-						if(JOB_LEVEL_LOW)
-							level_link = SPAN_COLOR("#cc5555", "Low")
-						if(JOB_LEVEL_MEDIUM)
-							level_link = SPAN_COLOR("#eecc22", "Medium")
-						if(JOB_LEVEL_HIGH)
-							level_link = SPAN_COLOR("#55cc55", "High")
-						else
-							level_link = SPAN_COLOR("black", "Never")
-					. += "<a href='byond://?src=\ref[src];set_job=[title];inc_level=-1'>[level_link]</a>"
-				. += "</td></tr>"
-			. += "</td></tr></table>"
-			. += "</center></table><center>"
-	. += "<hr/>"
 	switch(pref.alternate_option)
 		if(GET_RANDOM_JOB)
-			. += "<u><a href='byond://?src=\ref[src];job_alternative=1'>Get random job if preferences unavailable</a></u>"
+			. += "<u><a href='?src=\ref[src];job_alternative=1'>Get random job if preferences unavailable</a></u>"
 		if(BE_ASSISTANT)
-			. += "<u><a href='byond://?src=\ref[src];job_alternative=1'>Be assistant if preference unavailable</a></u>"
+			. += "<u><a href='?src=\ref[src];job_alternative=1'>Be assistant if preference unavailable</a></u>"
 		if(RETURN_TO_LOBBY)
-			. += "<u><a href='byond://?src=\ref[src];job_alternative=1'>Return to lobby if preference unavailable</a></u>"
-	. += "<a href='byond://?src=\ref[src];reset_jobs=1'>\[Reset\]</a></center>"
-	. += "<hr/>"
+			. += "<u><a href='?src=\ref[src];job_alternative=1'>Return to lobby if preference unavailable</a></u>"
+
+	. += "<a href='?src=\ref[src];reset_jobs=1'>\[Reset\]</a></center>"
 	. += "</tt><br>"
+	//. += "Jobs that <span class='Points'>look like this</span> have unspent skill points remaining."
 	. = jointext(.,null)
-
-/datum/category_item/player_setup_item/proc/validate_branch_and_rank()
-
-	if(LAZYLEN(pref.branches))
-		for(var/job_name in pref.branches)
-			if(!(job_name in SSjobs.titles_to_datums))
-				pref.branches -= job_name
-
-	if(LAZYLEN(pref.ranks))
-		var/list/removing_ranks
-		for(var/job_name in pref.ranks)
-			var/datum/job/job = SSjobs.get_by_title(job_name, TRUE)
-			if(!job) LAZYADD(removing_ranks, job_name)
-		if(LAZYLEN(removing_ranks))
-			pref.ranks -= removing_ranks
-
-	var/singleton/species/S = preference_species()
-	for(var/job_name in SSjobs.titles_to_datums)
-
-		var/datum/job/job = SSjobs.get_by_title(job_name)
-
-		var/datum/mil_branch/player_branch = pref.branches[job.title] ? GLOB.mil_branches.get_branch(pref.branches[job.title]) : null
-		var/branch_rank = job.allowed_branches ? job.get_branch_rank(S) : GLOB.mil_branches.spawn_branches(S)
-		if(!player_branch || !(player_branch.name in branch_rank))
-			player_branch = LAZYLEN(branch_rank) ? GLOB.mil_branches.get_branch(branch_rank[1]) : null
-
-		if(player_branch)
-			var/datum/mil_rank/player_rank = pref.ranks[job.title] ? GLOB.mil_branches.get_rank(player_branch.name, pref.ranks[job.title]) : null
-			var/ranks = branch_rank[player_branch.name] || GLOB.mil_branches.spawn_ranks(player_branch.name, S)
-			if(!player_rank || !(player_rank.name in ranks))
-				player_rank = LAZYLEN(ranks) ? GLOB.mil_branches.get_rank(player_branch.name, ranks[1]) : null
-
-			// Now make the assignments
-			pref.branches[job.title] = player_branch.name
-			if(player_rank)
-				pref.ranks[job.title] = player_rank.name
-			else
-				pref.ranks -= job.title
-		else
-			pref.branches -= job.title
-			pref.ranks -= job.title
 
 /datum/category_item/player_setup_item/occupation/OnTopic(href, href_list, user)
 	if(href_list["reset_jobs"])
 		ResetJobs()
-		return TOPIC_REFRESH
-
-	else if(href_list["toggle_map"])
-		var/mapname = href_list["toggle_map"]
-		pref.hiding_maps[mapname] = !pref.hiding_maps[mapname]
 		return TOPIC_REFRESH
 
 	else if(href_list["job_alternative"])
@@ -326,127 +207,171 @@
 			var/choice = input("Choose an title for [job.title].", "Choose Title", pref.GetPlayerAltTitle(job)) as anything in choices|null
 			if(choice && CanUseTopic(user))
 				SetPlayerAltTitle(job, choice)
-				return ((pref.preview_job || pref.preview_gear) ? TOPIC_REFRESH_UPDATE_PREVIEW : TOPIC_REFRESH)
+				return (pref.equip_preview_mob ? TOPIC_REFRESH_UPDATE_PREVIEW : TOPIC_REFRESH)
 
-	else if(href_list["set_job"])
-		var/set_job = href_list["set_job"]
-		var/set_to
-		if(href_list["set_level"])
-			set_to = text2num(href_list["set_level"])
-		if(href_list["inc_level"])
-			set_to = GetCurrentJobLevel(set_job) + text2num(href_list["inc_level"])
-			if(set_to < JOB_LEVEL_HIGH)
-				set_to = JOB_LEVEL_NEVER
-			else if(set_to > JOB_LEVEL_NEVER)
-				set_to = JOB_LEVEL_HIGH
-		if(SetJob(user, set_job, set_to))
-			return ((pref.preview_job || pref.preview_gear) ? TOPIC_REFRESH_UPDATE_PREVIEW : TOPIC_REFRESH)
-
-	else if(href_list["char_branch"])
-		var/datum/job/job = locate(href_list["checking_job"])
-		if(istype(job))
-			var/singleton/species/S = preference_species()
-			var/list/options = job.allowed_branches ? job.get_branch_rank(S) : GLOB.mil_branches.spawn_branches(S)
-			var/choice = input(user, "Choose your branch of service.", CHARACTER_PREFERENCE_INPUT_TITLE) as null|anything in options
-			if(choice && CanUseTopic(user) && GLOB.mil_branches.is_spawn_branch(choice, S))
-				pref.branches[job.title] = choice
-				pref.ranks -= job.title
-				pref.skills_allocated = pref.sanitize_skills(pref.skills_allocated)		// Check our skillset is still valid
-				validate_branch_and_rank()
-				return ((pref.preview_job || pref.preview_gear) ? TOPIC_REFRESH_UPDATE_PREVIEW : TOPIC_REFRESH)
-			return TOPIC_REFRESH
-
-	else if(href_list["char_rank"])
-		var/datum/job/job = locate(href_list["checking_job"])
-		if(istype(job))
-			var/datum/mil_branch/branch = GLOB.mil_branches.get_branch(pref.branches[job.title])
-			var/singleton/species/S = preference_species()
-			var/list/branch_rank = job.allowed_branches ? job.get_branch_rank(S) : GLOB.mil_branches.spawn_branches(S)
-			var/list/options = branch_rank[branch.name] || GLOB.mil_branches.spawn_ranks(branch.name, S)
-			var/choice = input(user, "Choose your rank.", CHARACTER_PREFERENCE_INPUT_TITLE) as null|anything in options
-			if(choice && CanUseTopic(user) && GLOB.mil_branches.is_spawn_rank(branch.name, choice, preference_species()))
-				pref.ranks[job.title] = choice
-				pref.skills_allocated = pref.sanitize_skills(pref.skills_allocated)		// Check our skillset is still valid
-				validate_branch_and_rank()
-				return ((pref.preview_job || pref.preview_gear) ? TOPIC_REFRESH_UPDATE_PREVIEW : TOPIC_REFRESH)
-			return TOPIC_REFRESH
+	else if(href_list["set_job"] && href_list["set_level"])
+		if(SetJob(user, href_list["set_job"], text2num(href_list["set_level"])))
+			create_job_description(user)
+			return (pref.equip_preview_mob ? TOPIC_REFRESH_UPDATE_PREVIEW : TOPIC_REFRESH)
+/*
 	else if(href_list["set_skills"])
 		var/rank = href_list["set_skills"]
-		var/datum/job/job = SSjobs.get_by_title(rank, TRUE)
+		var/datum/job/job = SSjob.GetJob(rank)
 		if(job)
 			open_skill_setup(user, job)
-
+*/
 	//From the skills popup
-
+	/*
 	else if(href_list["hit_skill_button"])
-		var/singleton/hierarchy/skill/S = locate(href_list["hit_skill_button"])
+		var/decl/hierarchy/skill/S = locate(href_list["hit_skill_button"])
 		var/datum/job/J = locate(href_list["at_job"])
-		if(!istype(S) || !istype(J))
+		if(!istype(J))
 			return
 		var/value = text2num(href_list["newvalue"])
 		update_skill_value(J, S, value)
+		pref.ShowChoices(user) //Manual refresh to allow us to focus the panel, not the main window.
 		panel.set_content(generate_skill_content(J))
 		panel.open()
-		return TOPIC_REFRESH
+		winset(user, panel.window_id, "focus=1") //Focuses the panel.
 
 	else if(href_list["skillinfo"])
-		var/singleton/hierarchy/skill/S = locate(href_list["skillinfo"])
+		var/decl/hierarchy/skill/S = locate(href_list["skillinfo"])
 		if(!istype(S))
 			return
 		var/HTML = list()
 		HTML += "<h2>[S.name]</h2>"
 		HTML += "[S.desc]<br>"
 		var/i
-		for(i=1, i <= length(S.levels), i++)
+		for(i=SKILL_MIN, i <= SKILL_MAX, i++)
 			var/level_name = S.levels[i]
 			HTML +=	"<br><b>[level_name]</b>: [S.levels[level_name]]<br>"
 		show_browser(user, jointext(HTML, null), "window=\ref[user]skillinfo")
-
+	*/
 	else if(href_list["job_info"])
+		job_info_selected_rank = href_list["job_info"]
+		create_job_description(user)
+		return TOPIC_REFRESH
 
-		var/rank = href_list["job_info"]
-		var/datum/job/job = SSjobs.get_by_title(rank)
-
-		var/dat = list()
-
-		dat += "<p style='background-color: [job.selection_color]'><br><br><p>"
-		if(job.alt_titles)
-			dat += "<i><b>Alternative titles:</b> [english_list(job.alt_titles)].</i>"
-		send_rsc(user, job.get_job_icon(), "job[ckey(rank)].png")
-		dat += "<img src=job[ckey(rank)].png width=96 height=96 style='float:left;'>"
-		if(job.department)
-			dat += "<b>Department:</b> [job.department]."
-			if(job.head_position)
-				dat += "You are in charge of this department."
-
-		dat += "You answer to <b>[job.supervisors]</b> normally."
-
-		if(job.allowed_branches)
-			dat += "You can be of following ranks:"
-			for(var/T in job.allowed_branches)
-				var/datum/mil_branch/B = GLOB.mil_branches.get_branch_by_type(T)
-				dat += "<li>[B.name]: [job.get_ranks(B.name)]"
-		dat += "<hr style='clear:left;'>"
-		if(config.wiki_url)
-			dat += "<a href='byond://?src=\ref[src];job_wiki=[rank]'>Open wiki page in browser</a>"
-
-		var/description = job.get_description_blurb()
-		if(description)
-			dat += html_encode(description)
-		var/datum/browser/popup = new(user, "Job Info", "[capitalize(rank)]", 430, 520, src)
-		popup.set_content(jointext(dat,"<br>"))
-		popup.open()
+	else if(href_list["rotate"])
+		if(href_list["rotate"] == "right")
+			job_icon_dir = turn(job_icon_dir,-90)
+		else
+			job_icon_dir = turn(job_icon_dir,90)
+		create_job_description(user)
+		return TOPIC_REFRESH
 
 	else if(href_list["job_wiki"])
-		if (!config.wiki_url)
-			return
 		var/rank = href_list["job_wiki"]
-		var/datum/job/job = SSjobs.get_by_title(rank)
-		if (!job)
-			return
-		send_link(user, join_url(config.wiki_url, "roles", ckey(rank)))
+		open_link(user,"[config.wikiurl][rank]_Eris[config.language]")
 
 	return ..()
+
+
+
+/datum/category_item/player_setup_item/occupation/proc/create_job_description(var/mob/user)
+	var/datum/job/job
+	//Which job will we show info for?
+
+	//First of all, we check if the user has opted to query any specific job by clicking the ? button
+	if(job_info_selected_rank)
+		job = SSjob.GetJob(job_info_selected_rank)
+	else if(ASSISTANT_TITLE in pref.job_low)
+		job = SSjob.GetJob(ASSISTANT_TITLE)
+	else
+		//If not, then we'll attempt to get the job they have set as high priority, if any
+		job = SSjob.GetJob(pref.job_high)
+
+	if (!job)
+		return
+
+	desc_set = TRUE
+
+	job_desc = "<div class = 'roleDescription' style = 'height:270px;'>"
+
+
+
+
+	job_desc += "<table style='float:left;  table-layout: fixed;' cellpadding='0' cellspacing='0'>"
+
+	//At the top of the table, there's a coloured stripe
+	job_desc += "<tr><td colspan='2'><p style='margin-top: 0px;margin-bottom: 0px; background-color: [job.selection_color];'><br></td></tr>"
+
+
+
+	job_desc += "<tr><td style='width: 220px;overflow: hidden;display: inline-block; white-space: nowrap;'>"
+	//The mannequin and its buttons are in their own little mini table, within a fixed width 200px cell
+	var/mob/living/carbon/human/dummy/mannequin/mannequin = job.get_job_mannequin()
+	var/icon/job_icon = getFlatIcon(mannequin, job_icon_dir)
+	job_icon.Scale(job_icon.Width() * 2.5, job_icon.Height() * 2.5)
+	send_rsc(user, job_icon, "job_icon_[job_icon_dir].png")
+	job_desc += "<table style='float:left; height = 270px; table-layout: fixed; vertical-align:top' cellpadding='0' cellspacing='0'><tr><td><img src=job_icon_[job_icon_dir].png width=220 height=220 style='float:left;'></td></tr>"
+	job_desc += "<tr><td><center><a href='?src=\ref[src];rotate=right'>&lt;&lt;</a> <a href='?src=\ref[src];rotate=left'>&gt;&gt;</a></center></td></tr></table>"
+
+	job_desc += "</td>"
+
+
+	//Actual body of description starts here.
+	//Width 100% needed otherwise a huge gap is left between this and the previous cell
+	job_desc += "<td style = 'width: 100%;'>"
+
+	//Capped at 240px height. I couldn't figure out how to set this height on the table row or cell.
+	//It only works when set directly on this div
+	job_desc += "<div style = 'overflow: auto;height: 240px;'>"
+
+	//Header job title
+	job_desc += "<h1 style='text-align: center; padding-top: 5px;padding-bottom: 0px;'>[job.title]</h1>"
+	job_desc += "<hr>"
+
+	//Here we have a right-floating textbox that shows user's stats
+	job_desc +="<div style='border: 1px solid grey; float: right; margin-right: 20px; padding: 8px; line-height: 120%;'> <h1 style='padding: 0px;'>Stats:</h1>"
+	if(job.title == ASSISTANT_TITLE)
+		job_desc += "<ul>"
+		for (var/a in ALL_STATS)
+			job_desc += "<li>[a]: ???</li>"
+		job_desc += "</ul>"
+	else if (job.stat_modifiers.len)
+		job_desc += "<ul>"
+		for (var/a in job.stat_modifiers)
+			job_desc += "<li>[a]: [job.stat_modifiers[a]]</li>"
+		job_desc += "</ul>"
+	else
+		job_desc += "None"
+	job_desc += "<h1 style='padding: 0px;'>Perks:</h1>"
+	if (job.perks.len)
+		job_desc += "<ul>"
+		for (var/a in job.perks)
+			var/datum/perk/P = a
+			job_desc += "<li>[initial(P.name)]</li>"
+		job_desc += "</ul>"
+	else
+		job_desc += "None"
+	job_desc +="</div>"
+
+	if(job.alt_titles)
+		job_desc += "<i><b>Alternative titles:</b> [english_list(job.alt_titles)].</i>"
+	if(job.department)
+		job_desc += "<b>Department:</b> [job.department]. <br>"
+		if(job.head_position)
+			job_desc += "You are in charge of this department."
+	job_desc += "<br>"
+	job_desc += "You answer to <b>[job.supervisors]</b> normally."
+	job_desc += "<br>"
+	job_desc += "The Ideal character age for this role is <b>[job.ideal_character_age] years</b>."
+
+
+
+
+	if(config.wikiurl)
+		job_desc += "<a href='?src=\ref[src];job_info_selected_rank_wiki=[job_info_selected_rank]'>Open wiki page in browser</a>"
+	var/description = job.get_description_blurb()
+	/*if(job.required_education)
+	description = "[description ? "[description]\n\n" : ""]"*/
+
+	if(description)
+		job_desc += description
+	job_desc += "</div>"
+	job_desc += "</td></tr></table></div>"
+
 
 /datum/category_item/player_setup_item/occupation/proc/SetPlayerAltTitle(datum/job/job, new_title)
 	// remove existing entry
@@ -456,13 +381,11 @@
 		pref.player_alt_titles[job.title] = new_title
 
 /datum/category_item/player_setup_item/occupation/proc/SetJob(mob/user, role, level)
-
-	level = clamp(level, JOB_LEVEL_HIGH, JOB_LEVEL_NEVER)
-	var/datum/job/job = SSjobs.get_by_title(role, TRUE)
+	var/datum/job/job = SSjob.GetJob(role)
 	if(!job)
 		return 0
 
-	if(role == GLOB.using_map.default_assistant_title)
+	if(role == ASSISTANT_TITLE)
 		if(level == JOB_LEVEL_NEVER)
 			pref.job_low -= job.title
 		else
@@ -473,20 +396,16 @@
 
 	return 1
 
-/datum/category_item/player_setup_item/occupation/proc/GetCurrentJobLevel(job_title)
-	if(pref.job_high == job_title)
-		. = JOB_LEVEL_HIGH
-	else if(job_title in pref.job_medium)
-		. = JOB_LEVEL_MEDIUM
-	else if(job_title in pref.job_low)
-		. = JOB_LEVEL_LOW
-	else
-		. = JOB_LEVEL_NEVER
-
-/datum/category_item/player_setup_item/occupation/proc/SetJobDepartment(datum/job/job, level)
+/datum/category_item/player_setup_item/occupation/proc/SetJobDepartment(var/datum/job/job, var/level)
 	if(!job || !level)	return 0
 
-	var/current_level = GetCurrentJobLevel(job.title)
+	var/current_level = JOB_LEVEL_NEVER
+	if(pref.job_high == job.title)
+		current_level = JOB_LEVEL_HIGH
+	else if(job.title in pref.job_medium)
+		current_level = JOB_LEVEL_MEDIUM
+	else if(job.title in pref.job_low)
+		current_level = JOB_LEVEL_LOW
 
 	switch(current_level)
 		if(JOB_LEVEL_HIGH)
@@ -506,16 +425,9 @@
 		if(JOB_LEVEL_LOW)
 			pref.job_low |= job.title
 
-	for(var/datum/preferences_slot/slot in pref.slot_priority_list)
-		if(slot.slot != pref.default_slot)
-			continue
-		slot.job_high = pref.job_high
-		slot.job_medium = pref.job_medium
-		slot.job_low = pref.job_low
-
 	return 1
 
-/datum/preferences/proc/CorrectLevel(datum/job/job, level)
+/datum/preferences/proc/CorrectLevel(var/datum/job/job, var/level)
 	if(!job || !level)	return 0
 	switch(level)
 		if(1)
@@ -526,18 +438,6 @@
 			return !!(job.title in job_low)
 	return 0
 
-/datum/preferences_slot/proc/CorrectLevel(datum/job/job, level)
-	if(!job || !level)
-		return FALSE
-	switch(level)
-		if(1)
-			return job_high == job.title
-		if(2)
-			return !!(job.title in job_medium)
-		if(3)
-			return !!(job.title in job_low)
-	return FALSE
-
 /**
  *  Prune a player's job preferences based on current branch, rank and species
  *
@@ -545,9 +445,9 @@
  */
 /datum/category_item/player_setup_item/proc/prune_job_prefs()
 	var/allowed_titles = list()
-
-	for(var/job_type in SSjobs.types_to_datums)
-		var/datum/job/job = SSjobs.types_to_datums[job_type]
+	var/jobs_by_type = decls_repository.get_decls(GLOB.maps_data.allowed_jobs)
+	for(var/job_type in jobs_by_type)
+		var/datum/job/job = jobs_by_type[job_type]
 		allowed_titles += job.title
 
 		if(job.title == pref.job_high)
@@ -574,17 +474,25 @@
 			pref.job_low -= job_title
 
 /datum/category_item/player_setup_item/proc/prune_occupation_prefs()
+	/*
+	var/datum/species/S = preference_species()
+	if((GLOB.using_map.flags & MAP_HAS_BRANCH)\
+	   && (!pref.char_branch || !mil_branches.is_spawn_branch(pref.char_branch, S)))
+		pref.char_branch = "None"
+
+	if((GLOB.using_map.flags & MAP_HAS_RANK)\
+	   && (!pref.char_rank || !mil_branches.is_spawn_rank(pref.char_branch, pref.char_rank, S)))
+		pref.char_rank = "None"
+	*/
+
 	prune_job_prefs()
-	validate_branch_and_rank()
 
 /datum/category_item/player_setup_item/occupation/proc/ResetJobs()
 	pref.job_high = null
 	pref.job_medium = list()
 	pref.job_low = list()
+
 	pref.player_alt_titles.Cut()
-	pref.branches = list()
-	pref.ranks = list()
-	validate_branch_and_rank()
 
 /datum/preferences/proc/GetPlayerAltTitle(datum/job/job)
 	return (job.title in player_alt_titles) ? player_alt_titles[job.title] : job.title

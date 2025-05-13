@@ -1,72 +1,225 @@
-///Maximum distance (on the overmap) a teleporter can target with a less than 100% chance of getting an Interlude.
-GLOBAL_VAR_AS(maximum_safe_teleport_distance, 15)
-///Minimum distance (on the overmap) a teleporter can send people to without risking a stop in the Interlude.
-GLOBAL_VAR_AS(minimum_safe_teleport_distance, 5)
+//wrapper
+/proc/do_teleport(ateleatom, adestination, aprecision = 0, afteleport = 1, aeffectin, aeffectout, asoundin, asoundout, no_checks = FALSE)
+	new /datum/teleport/instant/science(arglist(args))
+	return
 
-/singleton/teleport
-	var/static/list/teleport_blacklist = list(/obj/item/disk/nuclear, /obj/item/storage/backpack/holding, /obj/sparks) //Items that cannot be teleported, or be in the contents of someone who is teleporting.
-
-/singleton/teleport/proc/teleport(atom/target, atom/destination, precision = 0)
-	if(!can_teleport(target,destination))
-		target.visible_message(SPAN_WARNING("\The [target] bounces off the teleporter!"))
-		return
-
-	teleport_target(target, destination, precision)
-
-/singleton/teleport/proc/teleport_target(atom/movable/target, atom/destination, precision)
-	var/list/possible_turfs = circlerangeturfs(destination, precision)
-	destination = DEFAULTPICK(possible_turfs, null)
-	if (!destination)
-		return
-
-	target.forceMove(destination)
-	if(isliving(target))
-		var/mob/living/L = target
-		if(L.buckled)
-			var/atom/movable/buckled = L.buckled
-			buckled.forceMove(destination)
+/datum/teleport
+	var/atom/movable/teleatom //atom to teleport
+	var/atom/destination //destination to teleport to
+	var/precision = 0 //teleport precision
+	var/datum/effect/effect/system/effectin //effect to show right before teleportation
+	var/datum/effect/effect/system/effectout //effect to show right after teleportation
+	var/soundin //soundfile to play before teleportation
+	var/soundout //soundfile to play after teleportation
+	var/force_teleport = 1 //if false, teleport will use Move() proc (dense objects will prevent teleportation)
+	var/no_checks = FALSE //Bypasses all teleportation checks, used for admin portals and pulsar portals
 
 
-/singleton/teleport/proc/can_teleport(atom/movable/target, atom/destination)
-	if(!destination || !target || !target.loc || destination.z > max_default_z_level())
+/datum/teleport/New(ateleatom, adestination, aprecision = 0, afteleport = 1, aeffectin, aeffectout, asoundin, asoundout, no_checks = FALSE)
+	..()
+	if(!initTeleport(arglist(args)))
 		return 0
-
-	if(is_type_in_list(target, teleport_blacklist))
-		return 0
-
-	for(var/type in teleport_blacklist)
-		if(length(target.search_contents_for(type)))
-			return 0
 	return 1
 
-/singleton/teleport/sparks
-	var/datum/effect/spark_spread/spark = new
+/datum/teleport/proc/initTeleport(ateleatom, adestination, aprecision, afteleport, aeffectin, aeffectout, asoundin, asoundout, no_checks)
+	if(!setTeleatom(ateleatom))
+		return 0
+	if(!setDestination(adestination))
+		return 0
+	if(!setPrecision(aprecision))
+		return 0
+	setEffects(aeffectin, aeffectout)
+	setForceTeleport(afteleport)
+	setSounds(asoundin, asoundout)
+	setChecks(no_checks)
+	return 1
 
-/singleton/teleport/sparks/proc/do_spark(atom/target)
-	if(!target.simulated)
-		return
-	var/turf/T = get_turf(target)
-	spark.set_up(5,1,target)
-	spark.attach(T)
-	spark.start()
+//must succeed
+/datum/teleport/proc/setPrecision(aprecision)
+	if(isnum(aprecision))
+		precision = aprecision
+		return 1
+	return 0
 
-/singleton/teleport/sparks/teleport_target(atom/target, atom/destination, precision)
-	do_spark(target)
+//must succeed
+/datum/teleport/proc/setDestination(atom/adestination)
+	if(istype(adestination))
+		destination = adestination
+		return 1
+	return 0
+
+//must succeed in most cases
+/datum/teleport/proc/setTeleatom(atom/movable/ateleatom)
+	if(istype(ateleatom))
+		teleatom = ateleatom
+		return 1
+	return 0
+
+//custom effects must be properly set up first for instant-type teleports
+//optional
+/datum/teleport/proc/setEffects(datum/effect/effect/system/aeffectin=null, datum/effect/effect/system/aeffectout=null)
+	effectin = istype(aeffectin) ? aeffectin : null
+	effectout = istype(aeffectout) ? aeffectout : null
+	return 1
+
+//optional
+/datum/teleport/proc/setForceTeleport(afteleport)
+		force_teleport = afteleport
+		return 1
+
+//optional
+/datum/teleport/proc/setSounds(asoundin=null, asoundout=null)
+		soundin = isfile(asoundin) ? asoundin : null
+		soundout = isfile(asoundout) ? asoundout : null
+		return 1
+
+//optional
+/datum/teleport/proc/setChecks(_no_checks = FALSE)
+	no_checks = _no_checks
+
+//placeholder
+/datum/teleport/proc/teleportChecks()
+		return 1
+
+/datum/teleport/proc/playSpecials(atom/location, datum/effect/effect/system/effect, sound)
+	if(location)
+		if(effect)
+			spawn(-1)
+				src = null
+				effect.attach(location)
+				effect.start()
+		if(sound)
+			spawn(-1)
+				src = null
+				playsound(location, sound, 60, 1)
+	return
+
+//do the monkey dance
+/datum/teleport/proc/doTeleport()
+
+	var/turf/destturf
+	var/turf/curturf = get_turf(teleatom)
+	var/area/destarea = get_area(destination)
+	if(precision)
+		var/list/posturfs = circlerangeturfs(destination, precision)
+		destturf = safepick(posturfs)
+	else
+		destturf = get_turf(destination)
+
+	if(!destturf || !curturf)
+		return 0
+
+	playSpecials(curturf, effectin, soundin)
+
+	var/obj/structure/bed/chair/C = null
+	if(isliving(teleatom))
+		var/mob/living/L = teleatom
+		if(L.buckled)
+			C = L.buckled
+	if(force_teleport)
+		teleatom.forceMove(destturf)
+		playSpecials(destturf, effectout, soundout)
+	else
+		if(teleatom.Move(destturf))
+			playSpecials(destturf, effectout, soundout)
+	if(C)
+		C.forceMove(destturf)
+
+	destarea.Entered(teleatom)
+
+	return 1
+
+/datum/teleport/proc/teleport()
+	if(no_checks || teleportChecks())
+		return doTeleport()
+	return 0
+
+/datum/teleport/instant //teleports when datum is created
+
+/datum/teleport/instant/New(ateleatom, adestination, aprecision = 0, afteleport = 1, aeffectin, aeffectout, asoundin, asoundout, no_checks = FALSE)
+	if(..())
+		teleport()
+	return
+
+
+/datum/teleport/instant/science/setEffects(datum/effect/effect/system/aeffectin, datum/effect/effect/system/aeffectout)
+	if(!aeffectin || !aeffectout)
+		var/datum/effect/effect/system/spark_spread/aeffect = new
+		aeffect.set_up(5, 1, teleatom)
+		effectin = effectin || aeffect
+		effectout = effectout || aeffect
+		return 1
+	else
+		return ..()
+
+/datum/teleport/instant/science/setPrecision(aprecision)
 	..()
-	do_spark(target)
+	if(istype(teleatom, /obj/item/storage/backpack/holding) || istype(teleatom, /obj/item/storage/pouch/holding/) || \
+	   istype(teleatom, /obj/item/storage/belt/holding) || istype(teleatom, /obj/item/storage/bag/trash/holding) || \
+	   istype(teleatom, /obj/item/storage/bag/ore/holding))
+		precision = rand(1, 100)
 
-/proc/do_teleport(atom/movable/target, atom/destination, precision = 0, type = /singleton/teleport/sparks)
-	var/singleton/teleport/tele = GET_SINGLETON(type)
-	tele.teleport(target, destination, precision)
+	var/ofholding = 0	
+	var/list/bagholding = teleatom.search_contents_for(/obj/item/storage/backpack/holding)
+	if(bagholding.len)
+		ofholding += bagholding.len
+	var/list/pouchholding = teleatom.search_contents_for(/obj/item/storage/pouch/holding)
+	if(pouchholding.len)
+		ofholding += pouchholding.len
+	var/list/beltholding = teleatom.search_contents_for(/obj/item/storage/belt/holding)
+	if(beltholding.len)
+		ofholding += beltholding.len
+	var/list/trashholding = teleatom.search_contents_for(/obj/item/storage/bag/trash/holding)
+	if(trashholding.len)
+		ofholding += trashholding.len
+	var/list/satchelholding = teleatom.search_contents_for(/obj/item/storage/bag/ore/holding)
+	if(satchelholding.len)
+		ofholding += satchelholding.len
+
+	if(ofholding)
+		GLOB.bluespace_entropy += ofholding
+		precision = max(rand(1, 100)*ofholding, 100)
+		if(isliving(teleatom))
+			var/mob/living/MM = teleatom
+			if(bagholding.len)
+				to_chat(MM, SPAN_DANGER("The bluespace interface of your bag of holding interferes with the teleport!"))
+			if(pouchholding.len)
+				to_chat(MM, SPAN_DANGER("The bluespace interface of your pouch of holding interferes with the teleport!"))
+			if(beltholding.len)
+				to_chat(MM, SPAN_DANGER("The bluespace interface of your belt of holding interferes with the teleport!"))
+			if(trashholding.len)
+				to_chat(MM, SPAN_DANGER("The bluespace interface of your trashbag of holding interferes with the teleport!"))
+			if(satchelholding.len)
+				to_chat(MM, SPAN_DANGER("The bluespace interface of your satchel of holding interferes with the teleport!"))
+	return 1
+/datum/teleport/instant/science/teleportChecks()
+	if(istype(teleatom, /obj/effect/sparks))
+		return 0
+	if(istype(teleatom, /obj/item/disk/nuclear)) // Don't let nuke disks get teleported --NeoFite
+		teleatom.visible_message(SPAN_DANGER("\The [teleatom] bounces off of the portal!"))
+		return 0
+
+	if(!isemptylist(teleatom.search_contents_for(/obj/item/disk/nuclear)))
+		if(isliving(teleatom))
+			var/mob/living/MM = teleatom
+			MM.visible_message(
+				SPAN_DANGER("\The [MM] bounces off of the portal!"),
+				SPAN_WARNING("Something you are carrying seems to be unable to pass through the portal. Better drop it if you want to go through.")
+			)
+		else
+			teleatom.visible_message(SPAN_DANGER("\The [teleatom] bounces off of the portal!"))
+		return 0
+
+	if(isAdminLevel(destination.z))
+		if(istype(teleatom, /mob/living/exosuit))
+			var/mob/living/exosuit/MM = teleatom
+			MM.occupant_message(SPAN_DANGER("\The [MM.pilots.Join(" and ")] would not survive the jump to a location so far away!"))
+			return 0
+		if(!isemptylist(teleatom.search_contents_for(/obj/item/storage/backpack/holding)))
+			teleatom.visible_message(SPAN_DANGER("\The [teleatom] bounces off of the portal!"))
+			return 0
 
 
-/// Teleport an object randomly within a set of connected zlevels
-/proc/do_unstable_teleport_safe(atom/movable/target, list/zlevels = GLOB.using_map.station_levels)
-	var/turf/T = pick_area_turf_in_connected_z_levels(
-		list(GLOBAL_PROC_REF(is_not_space_area)),
-		list(
-			GLOBAL_PROC_REF(not_turf_contains_dense_objects),
-			GLOBAL_PROC_REF(IsTurfAtmosSafe)
-		),
-		zlevels[1])
-	do_teleport(target, T)
+	if(destination.z > max_default_z_level()) //Away mission z-levels
+		return 0
+	return 1

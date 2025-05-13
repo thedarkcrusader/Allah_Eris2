@@ -1,67 +1,101 @@
-//Syndicate rig
-/obj/item/clothing/head/helmet/space/void/merc
-	name = "blood-red voidsuit helmet"
-	desc = "An advanced helmet designed for work in special operations. Property of Gorlex Marauders."
-	icon_state = "rig0-syndie"
-	item_state = "syndie_helm"
+/obj/item/clothing/head/space/void/SCAF
+	name = "SCAF helmet"
+	desc = "A thick airtight helmet designed for planetside warfare retrofitted with seals to act like normal space suit helmet."
+	icon_state = "scaf"
+	item_state = "scaf"
 	armor = list(
-		melee = ARMOR_MELEE_RESISTANT,
-		bullet = ARMOR_BALLISTIC_RESISTANT,
-		laser = ARMOR_LASER_HANDGUNS,
-		energy = ARMOR_ENERGY_MINOR,
-		bomb = ARMOR_BOMB_PADDED,
-		bio = ARMOR_BIO_SHIELDED,
-		rad = ARMOR_RAD_SMALL
-		)
-	siemens_coefficient = 0.3
-	species_restricted = list(SPECIES_HUMAN,SPECIES_SKRELL,SPECIES_UNATHI,SPECIES_IPC, SPECIES_VOX)
-	sprite_sheets = list(
-		SPECIES_SKRELL = 'icons/mob/species/skrell/onmob_head_skrell.dmi',
-		SPECIES_UNATHI = 'icons/mob/species/unathi/onmob_head_unathi.dmi',
-		SPECIES_VOX = 'icons/mob/species/vox/onmob_head_vox.dmi'
-		)
-	sprite_sheets_obj = list(
-		SPECIES_UNATHI = 'icons/obj/clothing/species/unathi/obj_head_unathi.dmi',
-		SPECIES_SKRELL = 'icons/obj/clothing/species/skrell/obj_head_skrell.dmi',
-		SPECIES_VOX = 'icons/obj/clothing/species/vox/obj_head_vox.dmi'
-		)
-	camera = /obj/machinery/camera/network/mercenary
-	light_overlay = "explorer_light"
+		melee = 15,
+		bullet = 16,
+		energy = 14,
+		bomb = 150,
+		bio = 100,
+		rad = 30
+	)
+	siemens_coefficient = 0.35
+	max_heat_protection_temperature = 15000 //Halfway between Space Suit 5000 and Firesuit 30000
+	species_restricted = list(SPECIES_HUMAN)
+	camera_networks = list(NETWORK_MERCENARY)
+	light_overlay = "helmet_light_green"
+
+/obj/item/clothing/suit/space/void/SCAF
+	name = "SCAF suit"
+	desc = "A bulky antique suit of refurbished infantry armour, retrofitted with seals and coatings to make it EVA capable but also reducing mobility."
+	icon_state = "scaf"
+	item_state = "scaf"
+	flags_inv = HIDEGLOVES|HIDEJUMPSUIT|HIDETAIL
+	armor = list(
+		melee = 15,
+		bullet = 16,
+		energy = 14,
+		bomb = 150,
+		bio = 100,
+		rad = 30
+	)
+	siemens_coefficient = 0.35
+	max_heat_protection_temperature = 15000 //Halfway between Space Suit 5000 and Firesuit 30000
+	breach_threshold = 10
+	resilience = 0.07
+	species_restricted = list(SPECIES_HUMAN)
+	supporting_limbs = list()
+	helmet = /obj/item/clothing/head/space/void/SCAF
+	spawn_blacklisted = TRUE
+	slowdown = MEDIUM_SLOWDOWN * 1.5
+
+
+//Voidsuit for contractors
+/obj/item/clothing/head/space/void/merc
+	name = "blood-red voidsuit helmet"
+	desc = "An advanced helmet designed for work in special operations. This version is additionally reinforced against melee attacks."
+	icon_state = "syndiehelm"
+	item_state = "syndiehelm"
+	armor = list(
+		melee = 13,
+		bullet = 13,
+		energy = 13,
+		bomb = 75,
+		bio = 100,
+		rad = 75
+	)
+	siemens_coefficient = 0.35
+	species_restricted = list(SPECIES_HUMAN)
+	camera_networks = list(NETWORK_MERCENARY)
+	light_overlay = "helmet_light_ihs"
+
+/obj/item/clothing/head/space/void/merc/update_icon()
+	..()
+	if(on)
+		icon_state = "syndiehelm_on"
+	else
+		icon_state = initial(icon_state)
+	return
 
 /obj/item/clothing/suit/space/void/merc
-	icon_state = "rig-syndie"
+	icon_state = "syndievoidsuit"
 	name = "blood-red voidsuit"
-	desc = "An advanced suit that protects against injuries during special operations. Property of Gorlex Marauders."
-	item_state_slots = list(
-		slot_l_hand_str = "syndie_voidsuit",
-		slot_r_hand_str = "syndie_voidsuit",
-	)
-	w_class = ITEM_SIZE_LARGE //normally voidsuits are bulky but the merc voidsuit is 'advanced' or something
+	desc = "An advanced suit that protects against injuries during special operations. Surprisingly flexible. This version is additionally reinforced against melee attacks."
+	item_state = "syndie_voidsuit"
 	armor = list(
-		melee = ARMOR_MELEE_RESISTANT,
-		bullet = ARMOR_BALLISTIC_RESISTANT,
-		laser = ARMOR_LASER_HANDGUNS,
-		energy = ARMOR_ENERGY_MINOR,
-		bomb = ARMOR_BOMB_PADDED,
-		bio = ARMOR_BIO_SHIELDED,
-		rad = ARMOR_RAD_SMALL
-		)
-	allowed = list(/obj/item/device/flashlight,/obj/item/tank,/obj/item/device/suit_cooling_unit,/obj/item/gun,/obj/item/ammo_magazine,/obj/item/ammo_casing,/obj/item/melee/baton,/obj/item/melee/energy/sword,/obj/item/handcuffs)
-	siemens_coefficient = 0.3
-	species_restricted = list(SPECIES_HUMAN,SPECIES_SKRELL,SPECIES_UNATHI,SPECIES_IPC, SPECIES_VOX)
-	sprite_sheets = list(
-		SPECIES_UNATHI = 'icons/mob/species/unathi/onmob_suit_unathi.dmi',
-		SPECIES_VOX = 'icons/mob/species/vox/onmob_suit_vox.dmi'
-		)
-	sprite_sheets_obj = list(
-		SPECIES_UNATHI = 'icons/obj/clothing/species/unathi/obj_suit_unathi.dmi',
-		SPECIES_SKRELL = 'icons/obj/clothing/species/skrell/obj_suit_skrell.dmi',
-		SPECIES_VOX = 'icons/obj/clothing/species/vox/obj_suit_vox.dmi'
-		)
+		melee = 13,
+		bullet = 13,
+		energy = 13,
+		bomb = 75,
+		bio = 100,
+		rad = 75
+	)
+	siemens_coefficient = 0.35
+	breach_threshold = 8
+	resilience = 0.08
+	species_restricted = list(SPECIES_HUMAN)
+	helmet = /obj/item/clothing/head/space/void/merc
 
-
-/obj/item/clothing/suit/space/void/merc/prepared
-	helmet = /obj/item/clothing/head/helmet/space/void/merc
+/obj/item/clothing/suit/space/void/merc/equipped
+	spawn_blacklisted = TRUE
 	boots = /obj/item/clothing/shoes/magboots
 	tank = /obj/item/tank/oxygen
-	item_flags = ITEM_FLAG_THICKMATERIAL | ITEM_FLAG_INVALID_FOR_CHAMELEON
+	accompanying_object = null
+	spawn_blacklisted = TRUE
+
+/obj/item/clothing/suit/space/void/merc/boxed
+	spawn_blacklisted = TRUE
+	tank = /obj/item/tank/emergency_oxygen/double
+	spawn_blacklisted = TRUE

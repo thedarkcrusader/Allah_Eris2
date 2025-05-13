@@ -1,202 +1,204 @@
+// Glass shards
 /obj/item/material/shard
 	name = "shard"
-	icon = 'icons/obj/materials/shards.dmi'
-	icon_state = ""
-	randpixel = 8
+	icon = 'icons/obj/shards.dmi'
+	desc = "Made of nothing. How does this even exist?" // set based on material, if this desc is visible it's a bug (shards default to being made of glass)
+	icon_state = "large"
 	sharp = TRUE
 	edge = TRUE
-	w_class = ITEM_SIZE_SMALL
-	max_force = 8
-	force_multiplier = 0.12 // 6 with hardness 30 (glass)
-	thrown_force_multiplier = 0.4 // 4 with weight 15 (glass)
+	w_class = ITEM_SIZE_TINY
+	force_divisor = 0.2 // 6 with hardness 30 (glass)
+	thrown_force_divisor = 0.4 // 4 with weight 15 (glass)
 	item_state = "shard-glass"
 	attack_verb = list("stabbed", "slashed", "sliced", "cut")
 	default_material = MATERIAL_GLASS
-	unbreakable = TRUE
-	drops_debris = FALSE
-	item_flags = ITEM_FLAG_CAN_HIDE_IN_SHOES
+	unbreakable = 1 //It's already broken.
+	drops_debris = 0
+	spawn_tags = SPAWN_TAG_MATERIAL_BUILDING_JUNK
+	rarity_value = 6
+	var/amount = 0
 
-	/// The sound to play when a valid mob enters the shard's turf
-	var/step_sound = 'sound/effects/glass_step.ogg'
-
-	/// Percent chance to embed in a wound if one was created
-	var/embed_chance = 12
-
-	/// If >0, the amount to weaken by when successfully hurting a mob
-	var/weaken_amount = 3
-
-	/// Whether the shard can hurt through footwear that has not set ITEM_FLAG_THICKMATERIAL
-	var/pierce_thin_footwear = FALSE
-
-	/// Whether to update the shard with the name and appearance of its material.
-	var/applies_material_details = TRUE
-
-
-/obj/item/material/shard/set_material(new_material)
-	..(new_material)
-	if (!istype(material))
-		return
-	if (!applies_material_details)
-		return
-	if (!material.shard_type)
+/obj/item/material/shard/New(newloc, material_key, _amount)
+	if(_amount)
+		amount = max(round(_amount, 0.01), 0.01) //We won't ever need to physically represent less than 1% of a material unit
+	.=..()
+	//Material will be set during the parent callstack
+	if(!material)
 		qdel(src)
 		return
-	SetName("[material.display_name] [material.shard_type]")
-	desc = "A small piece of [material.display_name]. It looks sharp, you wouldn't want to step on it barefoot. Could probably be used as ... a throwing weapon?"
-	switch (material.shard_type)
-		if (SHARD_SPLINTER, SHARD_SHRAPNEL)
-			gender = PLURAL
-		else
-			gender = NEUTER
-	icon_state = "[material.shard_icon][pick("large", "medium", "small")]"
+
+
+	//Shards must be made of some matter
+	if (!amount)
+		amount = round(RAND_DECIMAL(0.1, 1), 0.1)
+
+	//Overwrite whatever was populated before. A shard contains <1 unit of a single material
+	matter = list(material.name = amount)
 	update_icon()
 
+/obj/item/material/shard/set_material(var/new_material, var/update)
+	..(new_material)
+	if(!istype(material))
+		return
 
-/obj/item/material/shard/on_update_icon()
-	if (material && applies_material_colour)
+	pixel_x = rand(-8, 8)
+	pixel_y = rand(-8, 8)
+
+	update_icon()
+
+	if(material.shard_type)
+		name = "[material.display_name] [material.shard_type]"
+		desc = "A small piece of [material.display_name]. It looks sharp, you wouldn't want to step on it barefoot. Could probably be used as ... a throwing weapon?"
+		switch(material.shard_type)
+			if(SHARD_SPLINTER, SHARD_SHRAPNEL)
+				gender = PLURAL
+			else
+				gender = NEUTER
+	else
+		qdel(src)
+
+/obj/item/material/shard/update_icon()
+	if(material)
 		color = material.icon_colour
 		// 1-(1-x)^2, so that glass shards with 0.3 opacity end up somewhat visible at 0.51 opacity
-		var/inverse_opacity = 1 - material.opacity
-		alpha = 255 * (1 - inverse_opacity * inverse_opacity)
+		alpha = 255 * (1 - (1 - material.opacity)*(1 - material.opacity))
 	else
 		color = "#ffffff"
 		alpha = 255
 
 
-/obj/item/material/shard/use_tool(obj/item/item, mob/living/user, list/click_params)
-	if(isWelder(item) && material.shard_can_repair)
-		var/obj/item/weldingtool/welder = item
-		if (!welder.can_use(1, user))
-			return TRUE
-		welder.remove_fuel(1, user)
-		material.place_sheet(get_turf(src))
-		qdel(src)
-		return TRUE
+	if (amount > 0.7)
+		icon_state = "[material.shard_icon]["large"]"
+	else if (amount < 0.4)
+		icon_state = "[material.shard_icon]["medium"]"
+	else
+		icon_state = "[material.shard_icon]["small"]"
+	//variable rotation based on randomness
+	var/rot = rand(0, 360)
+	var/matrix/M = matrix()
+	M.Turn(rot)
+
+	//Variable icon size based on material quantity
+	//Shards will scale from 0.6 to 1.25 scale, in the range of 0..1 amount
+	if (amount < 1)
+		M.Scale(((1.25 - 0.8)*amount)+0.8)
+
+	transform = M
+
+/obj/item/material/shard/attackby(obj/item/I, mob/user)
+	if(I.tool_qualities)
+		merge_shards(I, user)
+		return
 	return ..()
 
+//Allows you to weld together similar shards in a tile to create useful sheets
+/obj/item/material/shard/proc/merge_shards(obj/item/I, mob/user)
+	if (!istype(loc, /turf))
+		to_chat(user, SPAN_WARNING("You need to lay the shards down on a surface to do this!"))
+		return
 
-/obj/item/material/shard/Crossed(atom/movable/movable)
-	if (!isliving(movable))
+	var/list/shards = list()
+	var/total = amount
+
+	//Loop through all the other shards in the tile and cache them
+	for (var/obj/item/material/shard/S in loc)
+		if (S.material.name == material.name && S != src)
+			shards.Add(S)
+			total += S.amount
+
+	//If there's less than one unit of material in total, we can't do anything
+	if (total < 1)
+		to_chat(user, SPAN_WARNING("There's not enough [material.name] in [shards.len < 2 ? "this piece" : "these [shards.len] pieces"] to make anything useful. Gather more."))
 		return
-	var/mob/living/carbon/human/human = movable
-	if (human.buckled)
-		return
-	playsound(src, step_sound, 50, TRUE)
-	if (human.ignore_hazard_flags & HAZARD_FLAG_SHARD)
-		return
-	if (!istype(human))
-		to_chat(human, SPAN_WARNING("\A [src] cuts you!"))
-		human.take_overall_damage(force * 0.75, 0)
-		return
-	if (human.species.siemens_coefficient < 0.5)
-		return
-	if (human.species.species_flags & (SPECIES_FLAG_NO_EMBED|SPECIES_FLAG_NO_MINOR_CUT))
-		return
-	var/list/check
-	if (!human.lying)
-		if (human.shoes)
-			if (human.shoes.item_flags & ITEM_FLAG_THICKMATERIAL)
-				return
-			if (!pierce_thin_footwear)
-				return
-		if (human.wear_suit?.body_parts_covered & FEET)
-			if (human.wear_suit.item_flags & ITEM_FLAG_THICKMATERIAL)
-				return
-		check = list(BP_L_FOOT, BP_R_FOOT)
-	else
-		check = BP_ALL_LIMBS
-	for (var/tag in shuffle(check, TRUE))
-		var/obj/item/organ/external/external = human.get_organ(tag)
-		if (!external)
-			continue
-		if (human.lying)
-			var/obj/item/clothing/clothing = human.get_clothing_coverage(tag)
-			if (clothing?.item_flags & ITEM_FLAG_THICKMATERIAL)
-				return
-		var/damage_text = "slices"
-		if (BP_IS_ROBOTIC(external) || BP_IS_CRYSTAL(external))
-			external.take_external_damage(force * 0.5, 0)
-			damage_text = "gouges"
+
+
+	//Alright, we've got enough to make at least one sheet!
+	var/obj/item/stack/output = null //This stack will contain the sheets
+	to_chat(user, SPAN_NOTICE("You start welding the [name]s into useful material sheets..."))
+
+	//Do a tool operation for each shard
+	for (var/obj/item/material/shard/S in shards)
+		var/quality
+		switch(S.material.name)
+			if(MATERIAL_STEEL, MATERIAL_PLASTEEL)
+				quality = QUALITY_HAMMERING
+			if(MATERIAL_GLASS, MATERIAL_RGLASS, MATERIAL_PLASMAGLASS, MATERIAL_RPLASMAGLASS)
+				quality = QUALITY_WELDING
+			if(MATERIAL_PLASTIC)
+				quality = QUALITY_ADHESIVE
+			else
+				quality = QUALITY_WELDING
+
+		if(I.use_tool(user, src, WORKTIME_NORMAL, quality, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
+			//We meld each shard with ourselves
+			amount += S.amount
+			qdel(S)
+
+			//And when our amount gets high enough, we split it off into a sheet
+			if (amount > 1)
+				//We create a new sheet stack if one doesn't exist yet
+				//We also check the location and create a new stack if the old one is gone. Like if someone picked it up
+				if (!output || output.loc != loc)
+					output = material.place_sheet(loc)
+					output.amount = 0
+				output.amount++
+				amount -= 1
+			update_icon()
 		else
-			var/damage_flags = DAMAGE_FLAG_SHARP
-			if (prob(embed_chance) && length(external.implants) < 2)
-				damage_flags |= DAMAGE_FLAG_EDGE
-				damage_text = "pierces into"
-			var/wound = external.take_external_damage(force * 0.75, 0, damage_flags)
-			if (damage_flags & DAMAGE_FLAG_EDGE)
-				external.embed(src, TRUE, null, wound)
-			if (weaken_amount && external.can_feel_pain())
-				human.Weaken(weaken_amount)
-		to_chat(human, SPAN_DANGER("\A [src] [damage_text] your [external.name]!"))
-		human.updatehealth()
-		return
+			//If we fail any of the operations, we abort it all
+			to_chat(user, SPAN_WARNING("You failed to merge [name]s! You might try using a better tool."))
+			break
 
 
-/obj/item/material/shard/phoron
-	default_material = MATERIAL_PHORON
+/obj/item/material/shard/Crossed(AM as mob|obj)
+	..()
+	if(isliving(AM))
+		var/mob/M = AM
 
+		if(M.buckled) //wheelchairs, office chairs, rollerbeds
+			return
 
+		playsound(src.loc, 'sound/effects/glass_step.ogg', 50, 1) // not sure how to handle metal shards with sounds
+		if(ishuman(M))
+			var/mob/living/carbon/human/H = M
+
+			if(H.species.siemens_coefficient<0.5) //Thick skin.
+				return
+
+			if(H.shoes)
+				return
+
+			to_chat(M, SPAN_DANGER("You step on \the [src]!"))
+
+			var/list/check = list(BP_L_LEG, BP_R_LEG)
+			while(check.len)
+				var/picked = pick(check)
+				var/obj/item/organ/external/affecting = H.get_organ(picked)
+				if(affecting)
+					if(BP_IS_ROBOTIC(affecting))
+						return
+					if(affecting.take_damage(5, BRUTE))
+						H.UpdateDamageIcon()
+					H.updatehealth()
+					if(!(H.species.flags & NO_PAIN))
+						H.Weaken(3)
+					return
+				check -= picked
+			return
+
+// Preset types - left here for the code that uses them
 /obj/item/material/shard/shrapnel
-	name = "shrapnel"
-	w_class = ITEM_SIZE_TINY
-	item_flags = FLAGS_OFF
-	max_force = 4
-	force_multiplier = 0.1
-	thrown_force_multiplier = 0.25
-	embed_chance = 20
-	step_sound = 'sound/obj/item/material/shard/shrapnel.ogg'
+	name = "shrapnel" //Needed for crafting
+	rarity_value = 2.5
 
+/obj/item/material/shard/shrapnel/New(loc)
 
-/obj/item/material/shard/shrapnel/steel
-	default_material = MATERIAL_STEEL
+	..(loc, MATERIAL_STEEL)
 
+/obj/item/material/shard/shrapnel/scrap
+	name = "scrap metal"
+	amount = 1
+	rarity_value = 5
 
-/obj/item/material/shard/shrapnel/titanium
-	default_material = MATERIAL_TITANIUM
-
-
-/obj/item/material/shard/shrapnel/aluminium
-	default_material = MATERIAL_ALUMINIUM
-
-
-/obj/item/material/shard/shrapnel/copper
-	default_material = MATERIAL_COPPER
-
-
-/obj/item/material/shard/caltrop
-	name = "caltrop"
-	desc = "A savage area denial weapon designed to puncture tire and boot alike."
-	icon_state = "caltrop"
-	default_material = MATERIAL_STEEL
-	item_flags = FLAGS_OFF
-	max_force = 12
-	thrown_force_multiplier = 0.3
-	step_sound = 'sound/obj/item/material/shard/caltrop.ogg'
-	embed_chance = 50
-	pierce_thin_footwear = TRUE
-	applies_material_details = FALSE
-
-
-/obj/item/material/shard/caltrop/set_material(new_material)
-	..(new_material)
-	name = "[material.display_name] [initial(name)]"
-	update_icon()
-
-
-/obj/item/material/shard/caltrop/tack
-	name = "thumbtack"
-	desc = "A savage area denial weapon designed to puncture digit and heel alike."
-	icon_state = "tack0"
-	w_class = ITEM_SIZE_TINY
-	default_material = MATERIAL_ALUMINIUM
-	max_force = 2
-	step_sound = 'sound/obj/item/material/shard/tack.ogg'
-	embed_chance = 100
-	pierce_thin_footwear = FALSE
-	applies_material_colour = FALSE
-	weaken_amount = FALSE
-
-
-/obj/item/material/shard/caltrop/tack/set_material(new_material)
-	..(new_material)
-	icon_state = "tack[rand(0, 4)]"
+/obj/item/material/shard/plasma/New(loc)
+	..(loc, MATERIAL_PLASMAGLASS)

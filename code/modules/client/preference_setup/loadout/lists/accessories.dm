@@ -1,13 +1,12 @@
+/*
 /datum/gear/accessory
 	sort_category = "Accessories"
 	category = /datum/gear/accessory
-	slot = slot_tie
-
+	slot = slot_accessory_buffer
 
 /datum/gear/accessory/tie
 	display_name = "tie selection"
 	path = /obj/item/clothing/accessory
-
 
 /datum/gear/accessory/tie/New()
 	..()
@@ -23,12 +22,10 @@
 	ties["brown tie"] = /obj/item/clothing/accessory/brown
 	gear_tweaks += new/datum/gear_tweak/path(ties)
 
-
 /datum/gear/accessory/tie_color
 	display_name = "colored tie"
 	path = /obj/item/clothing/accessory
 	flags = GEAR_HAS_COLOR_SELECTION
-
 
 /datum/gear/accessory/tie_color/New()
 	..()
@@ -36,198 +33,106 @@
 	ties["tie"] = /obj/item/clothing/accessory
 	ties["striped tie"] = /obj/item/clothing/accessory/long
 	gear_tweaks += new/datum/gear_tweak/path(ties)
-
-
-/datum/gear/accessory/locket
-	display_name = "locket"
-	path = /obj/item/clothing/accessory/locket
-
-
-/datum/gear/accessory/necklace
-	display_name = "necklace, colour select"
-	path = /obj/item/clothing/accessory/necklace
-	flags = GEAR_HAS_COLOR_SELECTION
-
-
-/datum/gear/accessory/bowtie
-	display_name = "bowtie, horrible"
-	path = /obj/item/clothing/accessory/bowtie/ugly
-
-
-/datum/gear/accessory/bowtie/color
-	display_name = "bowtie, colour select"
-	path = /obj/item/clothing/accessory/bowtie/color
-	flags = GEAR_HAS_COLOR_SELECTION
-
-
-/datum/gear/accessory/ntaward
-	display_name = "corporate award selection"
-	description = "A medal or ribbon awarded to corporate personnel for significant accomplishments."
-	path = /obj/item/storage/medalbox
-	cost = 6
-	flags = GEAR_HAS_NO_CUSTOMIZATION | GEAR_HAS_EXTENDED_DESCRIPTION
-
-
-/datum/gear/accessory/ntaward/New()
-	..()
-	var/ntawards = list()
-	ntawards["sciences medal"] = /obj/item/storage/medalbox/corp_science
-	ntawards["distinguished service"] = /obj/item/storage/medalbox/corp_service
-	ntawards["command medal"] = /obj/item/storage/medalbox/corp_command
-	gear_tweaks += new/datum/gear_tweak/path(ntawards)
-
-
-/datum/gear/accessory/armband_security
-	display_name = "security armband"
+*/
+/datum/gear/accessory
+	display_name = "armband, red"
 	path = /obj/item/clothing/accessory/armband
-	flags = GEAR_HAS_NO_CUSTOMIZATION
+	slot = slot_accessory_buffer
+	sort_category = "Accessories"
 
-
-/datum/gear/accessory/armband_cargo
-	display_name = "cargo armband"
+/datum/gear/accessory/guild
+	display_name = "armband, Aster's Guild"
 	path = /obj/item/clothing/accessory/armband/cargo
-	flags = GEAR_HAS_NO_CUSTOMIZATION
+	allowed_roles = list(JOBS_CARGO)
 
-
-/datum/gear/accessory/armband_medical
-	display_name = "medical armband"
-	path = /obj/item/clothing/accessory/armband/med
-	flags = GEAR_HAS_NO_CUSTOMIZATION
-
-
-/datum/gear/accessory/armband_emt
-	display_name = "EMT armband"
-	path = /obj/item/clothing/accessory/armband/medgreen
-	allowed_roles = list(
-		/datum/job/doctor
-	)
-	flags = GEAR_HAS_NO_CUSTOMIZATION
-
-
-/datum/gear/accessory/armband_engineering
-	display_name = "engineering armband"
+/datum/gear/accessory/engineering
+	display_name = "armband, Technomancer League"
 	path = /obj/item/clothing/accessory/armband/engine
-	flags = GEAR_HAS_NO_CUSTOMIZATION
+	allowed_roles = list(JOBS_ENGINEERING)
 
-
-/datum/gear/accessory/armband_hydro
-	display_name = "hydroponics armband"
+/datum/gear/accessory/hydroponics
+	display_name = "armband, hydroponics"
 	path = /obj/item/clothing/accessory/armband/hydro
-	allowed_roles = list(
-		/datum/job/rd,
-		/datum/job/scientist,
-		/datum/job/assistant
-	)
-	flags = GEAR_HAS_NO_CUSTOMIZATION
 
+/datum/gear/accessory/medical
+	display_name = "armband, white"
+	path = /obj/item/clothing/accessory/armband/med
 
-/datum/gear/accessory/armband_nt
-	display_name = "corporate armband"
-	path = /obj/item/clothing/accessory/armband/whitered
+/datum/gear/accessory/moebius
+	display_name = "Moebius armband selection"
+	path = /obj/item/clothing/accessory/armband/science
+	allowed_roles = list(JOBS_SCIENCE, JOBS_MEDICAL)
 
+/datum/gear/accessory/moebius/New()
+    ..()
+    var/moebius_armband = list(
+        "Moebius armband, research purple"	 	=	 /obj/item/clothing/accessory/armband/science,
+		"Moebius armband, corporate colors" 	=	 /obj/item/clothing/accessory/armband/moebius,
+        "Moebius armband, biomedical blue" 		=	 /obj/item/clothing/accessory/armband/medgreen
+    )
+    gear_tweaks += new /datum/gear_tweak/path(moebius_armband)
 
-/datum/gear/accessory/ftu_pin
-	display_name = "Free Trade Union pin"
-	path = /obj/item/clothing/accessory/ftu_pin
-	flags = GEAR_HAS_NO_CUSTOMIZATION
+/datum/gear/accessory/holster
+	display_name = "holster, selection"
+	path = /obj/item/storage/pouch/holster
 
-
-/datum/gear/accessory/chaplain
-	display_name = "chaplain insignia"
-	path = /obj/item/clothing/accessory/chaplain
-	allowed_roles = list(
-		/datum/job/chaplain
-	)
-	flags = GEAR_HAS_NO_CUSTOMIZATION
-
-
-/datum/gear/accessory/chaplain/New()
+/datum/gear/accessory/holster/New()
 	..()
-	var/options = list()
-	options["Christianity"] = /obj/item/clothing/accessory/chaplain/christianity
-	options["Judaism"] = /obj/item/clothing/accessory/chaplain/judaism
-	options["Islam"] = /obj/item/clothing/accessory/chaplain/islam
-	options["Buddhism"] = /obj/item/clothing/accessory/chaplain/buddhism
-	options["Hinduism"] = /obj/item/clothing/accessory/chaplain/hinduism
-	options["Sikhism"] = /obj/item/clothing/accessory/chaplain/sikhism
-	options["Baha'i Faith"] = /obj/item/clothing/accessory/chaplain/bahaifaith
-	options["Jainism"] = /obj/item/clothing/accessory/chaplain/jainism
-	options["Taoism"] = /obj/item/clothing/accessory/chaplain/taoism
-	gear_tweaks += new/datum/gear_tweak/path (options)
+	var/holsters = list(
+		"Compact"				=	/obj/item/storage/pouch/holster,
+		"Baton"					=	/obj/item/storage/pouch/holster/baton,
+		"Belt"					=	/obj/item/storage/pouch/holster/belt,
+		"Throwing knife pouch"	=	/obj/item/storage/pouch/holster/belt/knife,
+		"Sheath"				=	/obj/item/storage/pouch/holster/belt/sheath
+	)
+	gear_tweaks += new/datum/gear_tweak/path(holsters)
 
+/datum/gear/accessory/concealed_carry_holster
+	display_name = "uniform holster, selection"
+	path = /obj/item/clothing/accessory/holster
+	cost = 3
 
-/datum/gear/accessory/bracelet
-	display_name = "bracelet, color select"
-	path = /obj/item/clothing/accessory/bracelet
-	cost = 1
+/datum/gear/accessory/concealed_carry_holster/New()
+	..()
+	var/accs = list(
+		"Concealed carry"		=	/obj/item/clothing/accessory/holster,
+		"Scabbard"				=	/obj/item/clothing/accessory/holster/scabbard,
+		"Throwing knife rig"	=	/obj/item/clothing/accessory/holster/knife,
+		"Ring sheath" 			= 	/obj/item/clothing/accessory/holster/scabbard/ring
+	)
+	gear_tweaks += new/datum/gear_tweak/path(accs)
+
+/datum/gear/accessory/tie/blue
+	display_name = "tie, blue"
+	path = /obj/item/clothing/accessory/blue
+
+/datum/gear/accessory/tie/red
+	display_name = "tie, red"
+	path = /obj/item/clothing/accessory/red
+
+/datum/gear/accessory/tie/horrible
+	display_name = "tie, socially disgraceful"
+	path = /obj/item/clothing/accessory/horrible
+
+/datum/gear/accessory/wallet
+	display_name = "wallet, colour select"
+	path = /obj/item/storage/wallet
 	flags = GEAR_HAS_COLOR_SELECTION
 
-
-/datum/gear/accessory/wristwatch
-	display_name = "wrist watch selection"
-	path = /obj/item/clothing/accessory/wristwatch
-	cost = 1
+/datum/gear/accessory/scarf
+	display_name = "scarf selection"
+	path = /obj/item/clothing/mask/scarf
+	slot = slot_wear_mask
 	flags = GEAR_HAS_TYPE_SELECTION
 
+/datum/gear/accessory/bandana
+	display_name = "bandana selection"
+	path = /obj/item/clothing/mask/bandana
+	slot = slot_wear_mask
+	flags = GEAR_HAS_TYPE_SELECTION
 
-/datum/gear/accessory/pronouns
-	display_name = "pronoun badge, customisable"
-	description = "A badge used to indicate the preferred pronouns of the wearer."
-	path = /obj/item/clothing/accessory/pronouns
-
-
-/datum/gear/accessory/pride_pins
-	display_name = "pride pin selection, primary"
-	description = "A selection of pins used to signal membership or support of an identity or sexuality."
-	path = /obj/item/clothing/accessory/pride_pin
-	flags = GEAR_HAS_NO_CUSTOMIZATION
-
-
-/datum/gear/accessory/pride_pins/New()
-	..()
-	var/list/options = list()
-	options["transgender pride pin"] = /obj/item/clothing/accessory/pride_pin/transgender
-	options["lesbian pride pin"] = /obj/item/clothing/accessory/pride_pin/lesbian
-	options["bisexual pride pin"] = /obj/item/clothing/accessory/pride_pin/bisexual
-	options["gay pride pin"] = /obj/item/clothing/accessory/pride_pin/gay
-	options["pansexual pride pin"] = /obj/item/clothing/accessory/pride_pin/pansexual
-	options["nonbinary pride pin"] = /obj/item/clothing/accessory/pride_pin/nonbinary
-	options["asexual pride pin"] = /obj/item/clothing/accessory/pride_pin/asexual
-	options["intersex pride pin"] = /obj/item/clothing/accessory/pride_pin/intersex
-	options["aromantic pride pin"] = /obj/item/clothing/accessory/pride_pin/aromantic
-	gear_tweaks += new /datum/gear_tweak/path (options)
-
-
-/datum/gear/accessory/pride_pins_secondary
-	display_name = "pride pin selection, secondary"
-	description = "A selection of pins used to signal membership or support of an identity or sexuality."
-	path = /obj/item/clothing/accessory/pride_pin
-
-
-/datum/gear/accessory/pride_pins_secondary/New()
-	..()
-	var/list/options = list()
-	options["transgender pride pin"] = /obj/item/clothing/accessory/pride_pin/transgender
-	options["lesbian pride pin"] = /obj/item/clothing/accessory/pride_pin/lesbian
-	options["bisexual pride pin"] = /obj/item/clothing/accessory/pride_pin/bisexual
-	options["gay pride pin"] = /obj/item/clothing/accessory/pride_pin/gay
-	options["pansexual pride pin"] = /obj/item/clothing/accessory/pride_pin/pansexual
-	options["nonbinary pride pin"] = /obj/item/clothing/accessory/pride_pin/nonbinary
-	options["asexual pride pin"] = /obj/item/clothing/accessory/pride_pin/asexual
-	options["intersex pride pin"] = /obj/item/clothing/accessory/pride_pin/intersex
-	options["aromantic pride pin"] = /obj/item/clothing/accessory/pride_pin/aromantic
-	gear_tweaks += new /datum/gear_tweak/path (options)
-
-
-/datum/gear/accessory/neckerchief
-	display_name = "neckerchief, colour select"
-	description = "A piece of cloth tied around the neck. A favorite of Sailors and Partisans everywhere."
-	path = /obj/item/clothing/accessory/neckerchief
-	flags = GEAR_HAS_COLOR_SELECTION
-
-
-/datum/gear/accessory/stole
-	display_name = "stole, colour select"
-	description = "A long, colourful liturgical vestment used by Christian clergy."
-	path = /obj/item/clothing/accessory/stole
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/accessory/cloak
+	display_name = "poncho selection"
+	path = /obj/item/clothing/accessory/cloak
+	slot = slot_accessory_buffer
+	flags = GEAR_HAS_TYPE_SELECTION

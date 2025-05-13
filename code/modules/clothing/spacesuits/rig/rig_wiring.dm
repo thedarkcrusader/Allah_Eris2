@@ -1,21 +1,15 @@
-#define RIG_SECURITY 1
-#define RIG_AI_OVERRIDE 2
-#define RIG_SYSTEM_CONTROL 4
-#define RIG_INTERFACE_LOCK 8
-#define RIG_INTERFACE_SHOCK 16
-
 /datum/wires/rig
-	random = 1
 	holder_type = /obj/item/rig
 	wire_count = 5
 	descriptions = list(
-		new /datum/wire_description(RIG_SECURITY, "This wire is connected to the ID scanning panel.", "ID"),
-		new /datum/wire_description(RIG_AI_OVERRIDE, "This wire connects to automated control systems.", "AI"),
-		new /datum/wire_description(RIG_SYSTEM_CONTROL, "This wire seems to be carrying a heavy current.", "Power"),
-		new /datum/wire_description(RIG_INTERFACE_LOCK, "This wire connects to the interface panel.", "Interface", SKILL_EXPERIENCED),
-		new /datum/wire_description(RIG_INTERFACE_SHOCK, "This wire seems to be carrying a heavy current.", "Power")
+			new /datum/wire_description(RIG_SECURITY, "Security"),
+			new /datum/wire_description(RIG_AI_OVERRIDE, "AI override"),
+			new /datum/wire_description(RIG_SYSTEM_CONTROL, "System control"),
+			new /datum/wire_description(RIG_INTERFACE_LOCK, "Interface lock"),
+			new /datum/wire_description(RIG_INTERFACE_SHOCK, "Interface shock")
 	)
 
+//The defines for the wires are moved to rig.dm, as they are used there
 /*
  * Rig security can be snipped to disable ID access checks on rig.
  * Rig AI override can be pulsed to toggle whether or not the AI can take control of the suit.
@@ -30,9 +24,17 @@
 		if(RIG_SECURITY)
 			if(mended)
 				rig.req_access = initial(rig.req_access)
+				rig.req_one_access = initial(rig.req_one_access)
 		if(RIG_INTERFACE_SHOCK)
 			rig.electrified = mended ? 0 : -1
 			rig.shock(usr,100)
+		if(RIG_SYSTEM_CONTROL)
+			if(mended)
+				rig.malfunctioning = 0
+				rig.malfunction_delay = 0
+			else
+				rig.malfunctioning = 10
+				rig.malfunction_delay = 30
 
 /datum/wires/rig/UpdatePulsed(index)
 
@@ -45,8 +47,6 @@
 			rig.ai_override_enabled = !rig.ai_override_enabled
 			rig.visible_message("A small red light on [rig] [rig.ai_override_enabled?"goes dead":"flickers on"].")
 		if(RIG_SYSTEM_CONTROL)
-			if (rig.offline)
-				rig.visible_message("\The [rig] sparks, damaging its delicate control systems.")
 			rig.malfunctioning += 10
 			if(rig.malfunction_delay <= 0)
 				rig.malfunction_delay = 20
@@ -59,8 +59,12 @@
 				rig.electrified = 30
 			rig.shock(usr,100)
 
-/datum/wires/rig/CanUse(mob/living/L)
+/datum/wires/rig/CanUse(var/mob/living/L)
 	var/obj/item/rig/rig = holder
-	if(rig.p_open)
-		return 1
-	return 0
+	return rig.open
+
+#undef RIG_SECURITY
+#undef RIG_AI_OVERRIDE
+#undef RIG_SYSTEM_CONTROL
+#undef RIG_INTERFACE_LOCK
+#undef RIG_INTERFACE_SHOCK

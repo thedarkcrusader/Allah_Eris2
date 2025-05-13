@@ -1,15 +1,11 @@
 //This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:32
 
-var/global/jobban_runonce			// Updates legacy bans with new info
-var/global/jobban_keylist[0]		//to store the keys & ranks
+var/jobban_runonce			// Updates legacy bans with new info
+var/jobban_keylist[0]		//to store the keys & ranks
 
 /proc/jobban_fullban(mob/M, rank, reason)
-	if(!M)
-		return
-	var/last_ckey = LAST_CKEY(M)
-	if(!last_ckey)
-		return
-	jobban_keylist.Add(text("[last_ckey] - [rank] ## [reason]"))
+	if (!M || !M.key) return
+	jobban_keylist.Add(text("[M.ckey] - [rank] ## [reason]"))
 	jobban_savebanfile()
 
 /proc/jobban_client_fullban(ckey, rank)
@@ -20,24 +16,40 @@ var/global/jobban_keylist[0]		//to store the keys & ranks
 //returns a reason if M is banned from rank, returns 0 otherwise
 /proc/jobban_isbanned(mob/M, rank)
 	if(M && rank)
-		if (SSjobs.guest_jobbans(rank))
+		/*
+		if(_jobban_isbanned(M, rank)) return "Reason Unspecified"	//for old jobban
+		*/
+
+		if (guest_jobbans(rank))
 			if(config.guest_jobban && IsGuestKey(M.key))
 				return "Guest Job-ban"
-			if(!GLOB.skip_allow_lists && config.usewhitelist && !check_whitelist(M))
+			if(config.usewhitelist && !check_whitelist(M))
 				return "Whitelisted Job"
-		return ckey_is_jobbanned(M.ckey, rank)
+
+		for (var/s in jobban_keylist)
+			if( findtext(s,"[M.ckey] - [rank]") == 1 )
+				var/startpos = findtext(s, "## ")+3
+				if(startpos && startpos<length(s))
+					var/text = copytext(s, startpos, 0)
+					if(text)
+						return text
+				return "Reason Unspecified"
 	return 0
 
-/proc/ckey_is_jobbanned(check_key, rank)
+/*
+DEBUG
+/mob/verb/list_all_jobbans()
+	set name = "list all jobbans"
+
 	for(var/s in jobban_keylist)
-		if(findtext(s,"[check_key] - [rank]") == 1 )
-			var/startpos = findtext(s, "## ")+3
-			if(startpos && startpos<length(s))
-				var/text = copytext(s, startpos, 0)
-				if(text)
-					return text
-			return "Reason Unspecified"
-	return 0
+		world << s
+
+/mob/verb/reload_jobbans()
+	set name = "reload jobbans"
+
+	jobban_loadbanfile()
+*/
+
 
 /hook/startup/proc/loadJobBans()
 	jobban_loadbanfile()
@@ -46,9 +58,9 @@ var/global/jobban_keylist[0]		//to store the keys & ranks
 /proc/jobban_loadbanfile()
 	if(config.ban_legacy_system)
 		var/savefile/S=new("data/job_full.ban")
-		from_save(S["keys[0]"],  jobban_keylist)
+		S["keys[0]"] >> jobban_keylist
 		log_admin("Loading jobban_rank")
-		from_save(S["runonce"], jobban_runonce)
+		S["runonce"] >> jobban_runonce
 
 		if (!length(jobban_keylist))
 			jobban_keylist=list()
@@ -62,35 +74,45 @@ var/global/jobban_keylist[0]		//to store the keys & ranks
 			return
 
 		//Job permabans
-		var/DBQuery/query = dbcon.NewQuery("SELECT ckey, job FROM erro_ban WHERE bantype = 'JOB_PERMABAN' AND isnull(unbanned)")
+		var/DBQuery/perma_query = dbcon.NewQuery("SELECT target_id, job FROM bans WHERE type = 'JOB_PERMABAN' AND isnull(unbanned)")
+		perma_query.Execute()
+
+		while(perma_query.NextRow())
+			var/id = perma_query.item[1]
+			var/job = perma_query.item[2]
+			var/DBQuery/get_ckey = dbcon.NewQuery("SELECT ckey from players WHERE id = '[id]'")
+			get_ckey.Execute()
+			if(get_ckey.NextRow())
+				var/ckey = get_ckey.item[1]
+				jobban_keylist.Add("[ckey] - [job]")
+
+
+
+		//Job tempbans
+		var/DBQuery/query = dbcon.NewQuery("SELECT target_id, job FROM bans WHERE type = 'JOB_TEMPBAN' AND isnull(unbanned) AND expiration_time > Now()")
 		query.Execute()
 
 		while(query.NextRow())
-			var/ckey = query.item[1]
+			var/id = query.item[1]
 			var/job = query.item[2]
+			var/DBQuery/get_ckey = dbcon.NewQuery("SELECT ckey from players WHERE id = '[id]'")
+			get_ckey.Execute()
+			if(get_ckey.NextRow())
+				var/ckey = get_ckey.item[1]
+				jobban_keylist.Add("[ckey] - [job]")
 
-			jobban_keylist.Add("[ckey] - [job]")
 
-		//Job tempbans
-		var/DBQuery/query1 = dbcon.NewQuery("SELECT ckey, job FROM erro_ban WHERE bantype = 'JOB_TEMPBAN' AND isnull(unbanned) AND expiration_time > Now()")
-		query1.Execute()
-
-		while(query1.NextRow())
-			var/ckey = query1.item[1]
-			var/job = query1.item[2]
-
-			jobban_keylist.Add("[ckey] - [job]")
 
 /proc/jobban_savebanfile()
 	var/savefile/S=new("data/job_full.ban")
-	to_save(S["keys[0]"], jobban_keylist)
+	S["keys[0]"] << jobban_keylist
 
 /proc/jobban_unban(mob/M, rank)
 	jobban_remove("[M.ckey] - [rank]")
 	jobban_savebanfile()
 
 
-/proc/ban_unban_log_save(formatted_log)
+/proc/ban_unban_log_save(var/formatted_log)
 	text2file(formatted_log,"data/ban_unban_log.txt")
 
 

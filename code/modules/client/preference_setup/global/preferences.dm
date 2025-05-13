@@ -1,41 +1,43 @@
-GLOBAL_CONST(PREF_YES, "Yes")
-GLOBAL_CONST(PREF_NO, "No")
-GLOBAL_CONST(PREF_ALL_SPEECH, "All Speech")
-GLOBAL_CONST(PREF_NEARBY, "Nearby")
-GLOBAL_CONST(PREF_ALL_EMOTES, "All Emotes")
-GLOBAL_CONST(PREF_ALL_CHATTER, "All Chatter")
-GLOBAL_CONST(PREF_SHORT, "Short")
-GLOBAL_CONST(PREF_LONG, "Long")
-GLOBAL_CONST(PREF_SHOW, "Show")
-GLOBAL_CONST(PREF_HIDE, "Hide")
-GLOBAL_CONST(PREF_PRIMARY, "Primary")
-GLOBAL_CONST(PREF_ALL, "All")
-GLOBAL_CONST(PREF_OFF, "Off")
-GLOBAL_CONST(PREF_BASIC, "Basic")
-GLOBAL_CONST(PREF_FULL, "Full")
-GLOBAL_CONST(PREF_MIDDLE_CLICK, "middle click")
-GLOBAL_CONST(PREF_ALT_CLICK, "alt click")
-GLOBAL_CONST(PREF_CTRL_CLICK, "ctrl click")
-GLOBAL_CONST(PREF_CTRL_SHIFT_CLICK, "ctrl shift click")
-GLOBAL_CONST(PREF_HEAR, "Hear")
-GLOBAL_CONST(PREF_SILENT, "Silent")
-GLOBAL_CONST(PREF_SHORTHAND, "Shorthand")
-GLOBAL_CONST(PREF_NEVER, "Never")
-GLOBAL_CONST(PREF_NON_ANTAG, "Non-Antag Only")
-GLOBAL_CONST(PREF_ALWAYS, "Always")
-GLOBAL_CONST(PREF_SMALL, "Small")
-GLOBAL_CONST(PREF_MEDIUM, "Medium")
-GLOBAL_CONST(PREF_LARGE, "Large")
-GLOBAL_CONST(PREF_LOW, "Low")
-GLOBAL_CONST(PREF_MED, "Medium")
-GLOBAL_CONST(PREF_HIGH, "High")
+GLOBAL_VAR_CONST(PREF_YES, "Yes")
+GLOBAL_VAR_CONST(PREF_NO, "No")
+GLOBAL_VAR_CONST(PREF_ALL_SPEECH, "All Speech")
+GLOBAL_VAR_CONST(PREF_NEARBY, "Nearby")
+GLOBAL_VAR_CONST(PREF_ALL_EMOTES, "All Emotes")
+GLOBAL_VAR_CONST(PREF_ALL_CHATTER, "All Chatter")
+GLOBAL_VAR_CONST(PREF_SHORT, "Short")
+GLOBAL_VAR_CONST(PREF_LONG, "Long")
+GLOBAL_VAR_CONST(PREF_SHOW, "Show")
+GLOBAL_VAR_CONST(PREF_HIDE, "Hide")
+GLOBAL_VAR_CONST(PREF_FANCY, "Fancy")
+GLOBAL_VAR_CONST(PREF_PLAIN, "Plain")
+GLOBAL_VAR_CONST(PREF_PRIMARY, "Primary")
+GLOBAL_VAR_CONST(PREF_ALL, "All")
+GLOBAL_VAR_CONST(PREF_OFF, "Off")
+GLOBAL_VAR_CONST(PREF_BASIC, "Basic")
+GLOBAL_VAR_CONST(PREF_FULL, "Full")
+GLOBAL_VAR_CONST(PREF_MIDDLE_CLICK, "middle click")
+GLOBAL_VAR_CONST(PREF_ALT_CLICK, "alt click")
+GLOBAL_VAR_CONST(PREF_CTRL_CLICK, "ctrl click")
+GLOBAL_VAR_CONST(PREF_CTRL_SHIFT_CLICK, "ctrl shift click")
+GLOBAL_VAR_CONST(PREF_HEAR, "Hear")
+GLOBAL_VAR_CONST(PREF_SILENT, "Silent")
+GLOBAL_VAR_CONST(PREF_SHORTHAND, "Shorthand")
 
-var/global/list/_client_preferences
-var/global/list/_client_preferences_by_key
-var/global/list/_client_preferences_by_type
+GLOBAL_VAR_CONST(PREF_0,	"0")
+GLOBAL_VAR_CONST(PREF_25,	"25")
+GLOBAL_VAR_CONST(PREF_50,	"50")
+GLOBAL_VAR_CONST(PREF_75,	"75")
+GLOBAL_VAR_CONST(PREF_100,	"100")
+GLOBAL_VAR_CONST(PREF_125,	"125")
+GLOBAL_VAR_CONST(PREF_150,	"150")
+GLOBAL_VAR_CONST(PREF_175,	"175")
+GLOBAL_VAR_CONST(PREF_200,	"200")
+
+var/list/_client_preferences
+var/list/_client_preferences_by_key
+var/list/_client_preferences_by_type
 
 /proc/get_client_preferences()
-	RETURN_TYPE(/list)
 	if(!_client_preferences)
 		_client_preferences = list()
 		for(var/ct in subtypesof(/datum/client_preference))
@@ -44,16 +46,14 @@ var/global/list/_client_preferences_by_type
 				_client_preferences += new client_type()
 	return _client_preferences
 
-/proc/get_client_preference(datum/client_preference/preference)
-	RETURN_TYPE(/datum/client_preference)
+/proc/get_client_preference(var/datum/client_preference/preference)
 	if(istype(preference))
 		return preference
 	if(ispath(preference))
 		return get_client_preference_by_type(preference)
 	return get_client_preference_by_key(preference)
 
-/proc/get_client_preference_by_key(preference)
-	RETURN_TYPE(/datum/client_preference)
+/proc/get_client_preference_by_key(var/preference)
 	if(!_client_preferences_by_key)
 		_client_preferences_by_key = list()
 		for(var/ct in get_client_preferences())
@@ -61,8 +61,7 @@ var/global/list/_client_preferences_by_type
 			_client_preferences_by_key[client_pref.key] = client_pref
 	return _client_preferences_by_key[preference]
 
-/proc/get_client_preference_by_type(preference)
-	RETURN_TYPE(/datum/client_preference)
+/proc/get_client_preference_by_type(var/preference)
 	if(!_client_preferences_by_type)
 		_client_preferences_by_type = list()
 		for(var/ct in get_client_preferences())
@@ -82,10 +81,10 @@ var/global/list/_client_preferences_by_type
 	if(!default_value)
 		default_value = options[1]
 
-/datum/client_preference/proc/may_set(client/given_client)
+/datum/client_preference/proc/may_set(var/mob/preference_mob)
 	return TRUE
 
-/datum/client_preference/proc/changed(mob/preference_mob, new_value)
+/datum/client_preference/proc/changed(var/mob/preference_mob, var/new_value)
 	return
 
 /*********************
@@ -93,102 +92,103 @@ var/global/list/_client_preferences_by_type
 *********************/
 
 /datum/client_preference/play_admin_midis
-	description = "Play admin midis"
+	description ="Play admin midis"
 	key = "SOUND_MIDI"
 
 /datum/client_preference/play_lobby_music
-	description = "Play lobby music"
+	description ="Play lobby music"
 	key = "SOUND_LOBBY"
 
-/datum/client_preference/play_lobby_music/changed(mob/preference_mob, new_value)
+/datum/client_preference/play_lobby_music/changed(var/mob/preference_mob, var/new_value)
 	if(new_value == GLOB.PREF_YES)
 		if(isnewplayer(preference_mob))
-			sound_to(preference_mob, GLOB.using_map.lobby_track.get_sound())
-			to_chat(preference_mob, GLOB.using_map.lobby_track.get_info())
+			GLOB.lobbyScreen.play_music(preference_mob.client)
 	else
-		sound_to(preference_mob, sound(null, repeat = 0, wait = 0, volume = 85, channel = GLOB.lobby_sound_channel))
+		GLOB.lobbyScreen.stop_music(preference_mob.client)
 
 /datum/client_preference/play_ambiance
-	description = "Play ambience"
+	description ="Play ambience"
 	key = "SOUND_AMBIENCE"
 
-/datum/client_preference/play_ambiance/changed(mob/preference_mob, new_value)
-	if(new_value == GLOB.PREF_NO)
-		sound_to(preference_mob, sound(null, channel = GLOB.ambience_channel_vents))
-		sound_to(preference_mob, sound(null, channel = GLOB.ambience_channel_forced))
-		sound_to(preference_mob, sound(null, channel = GLOB.ambience_channel_common))
-		sound_to(preference_mob, sound(null, channel = GLOB.ambience_channel_common))
+/datum/client_preference/play_instruments
+	description ="Play instruments"
+	key = "SOUND_INSTRUMENTS"
 
-/datum/client_preference/play_announcement_sfx
-	description = "Play announcement sound effects"
-	key = "SOUND_ANNOUNCEMENT"
-	options = list(GLOB.PREF_YES, GLOB.PREF_NO)
+/datum/client_preference/play_jukebox
+	description ="Play jukebox music"
+	key = "SOUND_JUKEBOX"
+
+/datum/client_preference/play_jukebox/changed(var/mob/preference_mob, var/new_value)
+	if(new_value == GLOB.PREF_NO)
+		preference_mob.stop_all_music()
+	else
+		preference_mob.update_music()
+
+/datum/client_preference/play_local_tts
+	description ="Play local text-to-speech"
+	key = "TTS_VOLUME_LOCAL"
+	options = list(GLOB.PREF_0, GLOB.PREF_25, GLOB.PREF_50, GLOB.PREF_75, GLOB.PREF_100, GLOB.PREF_125, GLOB.PREF_150, GLOB.PREF_175, GLOB.PREF_200)
+	default_value = GLOB.PREF_100
+
+/datum/client_preference/play_radio_tts
+	description ="Play radio text-to-speech"
+	key = "TTS_VOLUME_RADIO"
+	options = list(GLOB.PREF_0, GLOB.PREF_25, GLOB.PREF_50, GLOB.PREF_75, GLOB.PREF_100, GLOB.PREF_125, GLOB.PREF_150, GLOB.PREF_175, GLOB.PREF_200)
+	default_value = GLOB.PREF_75
+
+/datum/client_preference/play_ambiance/changed(var/mob/preference_mob, var/new_value)
+	if(new_value == GLOB.PREF_NO)
+		sound_to(preference_mob, sound(null, repeat = 0, wait = 0, volume = 0, channel = GLOB.ambience_sound_channel))
+
 /datum/client_preference/ghost_ears
-	description = "Ghost ears"
+	description ="Ghost ears"
 	key = "CHAT_GHOSTEARS"
 	options = list(GLOB.PREF_ALL_SPEECH, GLOB.PREF_NEARBY)
 
 /datum/client_preference/ghost_sight
-	description = "Ghost sight"
+	description ="Ghost sight"
 	key = "CHAT_GHOSTSIGHT"
 	options = list(GLOB.PREF_ALL_EMOTES, GLOB.PREF_NEARBY)
 
 /datum/client_preference/ghost_radio
-	description = "Ghost radio"
+	description ="Ghost radio"
 	key = "CHAT_GHOSTRADIO"
 	options = list(GLOB.PREF_ALL_CHATTER, GLOB.PREF_NEARBY)
 
-/datum/client_preference/preview_scale
-	description = "Options Preview Scale"
-	key = "PREVIEW_SCALE"
-	options = list(GLOB.PREF_MEDIUM, GLOB.PREF_LARGE, GLOB.PREF_SMALL)
-
-/datum/client_preference/preview_scale/changed(mob/mob, val)
-	var/datum/preferences/prefs = mob.client?.prefs
-	if (!prefs)
-		return
-	prefs.update_preview_icon(TRUE)
-	if (!prefs.popup)
-		return
-	prefs.update_setup_window(usr)
-
 /datum/client_preference/language_display
-	description = "Show Language Names"
+	description = "Display Language Names"
 	key = "LANGUAGE_DISPLAY"
-	options = list(GLOB.PREF_SHORTHAND, GLOB.PREF_FULL, GLOB.PREF_OFF)
-
-/datum/client_preference/ghost_language_hide
-	description = "Hide Language Names As Ghost"
-	key = "LANGUAGE_DISPLAY_GHOST"
-
+	options = list(GLOB.PREF_FULL, GLOB.PREF_SHORTHAND, GLOB.PREF_OFF)
+/*
 /datum/client_preference/ghost_follow_link_length
-	description = "Ghost Follow Links"
+	description ="Ghost Follow Links"
 	key = "CHAT_GHOSTFOLLOWLINKLENGTH"
-	options = list(GLOB.PREF_SHORT, GLOB.PREF_LONG, GLOB.PREF_OFF)
-
+	options = list(GLOB.PREF_SHORT, GLOB.PREF_LONG)
+*/
 /datum/client_preference/chat_tags
-	description = "Chat tags"
+	description ="Chat tags"
 	key = "CHAT_SHOWICONS"
 	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
 
 /datum/client_preference/show_typing_indicator
-	description = "Typing indicator"
+	description ="Typing indicator"
 	key = "SHOW_TYPING"
 	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
 
-/datum/client_preference/show_typing_indicator/changed(mob/preference_mob, new_value)
-	SStyping.UpdatePreference(preference_mob.client, new_value == GLOB.PREF_SHOW)
+/datum/client_preference/show_typing_indicator/changed(var/mob/preference_mob, var/new_value)
+	if(new_value == GLOB.PREF_HIDE)
+		QDEL_NULL(preference_mob.typing_indicator)
 
 /datum/client_preference/show_ooc
-	description = "OOC chat"
+	description ="OOC chat"
 	key = "CHAT_OOC"
 	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
-
+/*
 /datum/client_preference/show_aooc
-	description = "AOOC chat"
+	description ="AOOC chat"
 	key = "CHAT_AOOC"
 	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
-
+*/
 /datum/client_preference/show_looc
 	description ="LOOC chat"
 	key = "CHAT_LOOC"
@@ -204,118 +204,67 @@ var/global/list/_client_preferences_by_type
 	key = "SHOW_PROGRESS"
 	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
 
+/datum/client_preference/floating_messages
+	description ="Floating chat messages"
+	key = "FLOATING_CHAT"
+	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
+
+/datum/client_preference/browser_style
+	description = "Fake NanoUI Browser Style"
+	key = "BROWSER_STYLED"
+	options = list(GLOB.PREF_FANCY, GLOB.PREF_PLAIN)
+
+/*
 /datum/client_preference/autohiss
 	description = "Autohiss"
 	key = "AUTOHISS"
 	options = list(GLOB.PREF_OFF, GLOB.PREF_BASIC, GLOB.PREF_FULL)
-
+*/
 /datum/client_preference/hardsuit_activation
 	description = "Hardsuit Module Activation Key"
 	key = "HARDSUIT_ACTIVATION"
 	options = list(GLOB.PREF_MIDDLE_CLICK, GLOB.PREF_CTRL_CLICK, GLOB.PREF_ALT_CLICK, GLOB.PREF_CTRL_SHIFT_CLICK)
-
-/datum/client_preference/holster_on_intent
-	description = "Draw gun based on intent"
-	key = "HOLSTER_ON_INTENT"
-
-/datum/client_preference/safety_toggle_on_intent
-	description = "Ignore safety on harm intent"
-	key = "SAFETY_ON_INTENT"
-
+/*
 /datum/client_preference/show_credits
 	description = "Show End Titles"
 	key = "SHOW_CREDITS"
-
-/datum/client_preference/show_ckey_credits
-	description = "Show Ckey in End Credits/Special Role List"
-	key = "SHOW_CKEY_CREDITS"
-	options = list(GLOB.PREF_HIDE, GLOB.PREF_SHOW)
-
-/datum/client_preference/show_ckey_deadchat
-	description = "Show Ckey in Deadchat"
-	key = "SHOW_CKEY_DEADCHAT"
-	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
-
-/datum/client_preference/show_ready
-	description = "Show Ready Status in Lobby"
-	key = "SHOW_READY"
-	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
-
-/datum/client_preference/announce_ghost_join
-	description = "Announce When Joining as Observer"
-	key = "ANNOUNCE_GHOST"
-	options = list(GLOB.PREF_YES, GLOB.PREF_NO)
-
+*/
+/*
 /datum/client_preference/play_instruments
-	description = "Play instruments"
+	description ="Play instruments"
 	key = "SOUND_INSTRUMENTS"
+*/
 
-/datum/client_preference/give_personal_goals
-	description = "Give Personal Goals"
-	key = "PERSONAL_GOALS"
-	options = list(GLOB.PREF_NEVER, GLOB.PREF_NON_ANTAG, GLOB.PREF_ALWAYS)
+/datum/client_preference/ambient_occlusion
+	description = "Ambient occlusion"
+	key = "AMBIENT_OCCLUSION"
 
-/datum/client_preference/show_department_goals
-	description = "Show Departmental Goals"
-	key = "DEPT_GOALS"
-	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
+/datum/client_preference/gun_cursor
+	description = "Enable gun crosshair"
+	key = "GUN_CURSOR"
 
-/datum/client_preference/examine_messages
-	description = "Examining messages"
-	key = "EXAMINE_MESSAGES"
-	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
+/datum/client_preference/tgui_fancy
+	description ="Enable/Disable tgui fancy mode"
+	key = "tgui_fancy"
 
-/datum/client_preference/graphics_quality
-	description = "Graphics quality (where relevant it will reduce effects)"
-	key = "GRAPHICS_QUALITY"
-	options = list(GLOB.PREF_LOW, GLOB.PREF_MED, GLOB.PREF_HIGH)
-	default_value = GLOB.PREF_HIGH
+/datum/client_preference/tgui_fancy/changed(mob/preference_mob, new_value)
+	for (var/datum/tgui/tgui as anything in preference_mob?.tgui_open_uis)
+		// Force it to reload either way
+		tgui.update_static_data(preference_mob)
 
-/datum/client_preference/graphics_quality/changed(mob/preference_mob, new_value)
-	if (preference_mob?.client)
-		for (var/atom/movable/renderer/renderer as anything in preference_mob.renderer_plane_map)
-			renderer.GraphicsUpdate()
+/datum/client_preference/tgui_lock
+	description ="TGUI Lock"
+	key = "tgui_lock"
 
-/datum/client_preference/goonchat
-	description = "Use Goon Chat"
-	key = "USE_GOONCHAT"
+/datum/client_preference/tgui_lock/changed(mob/preference_mob, new_value)
+	for (var/datum/tgui/tgui as anything in preference_mob?.tgui_open_uis)
+		// Force it to reload either way
+		tgui.update_static_data(preference_mob)
 
-/datum/client_preference/goonchat/changed(mob/preference_mob, new_value)
-	if(preference_mob && preference_mob.client)
-		var/client/C = preference_mob.client
-		if(new_value == GLOB.PREF_YES)
-			C.chatOutput.loaded = FALSE
-			C.chatOutput.start()
-		else
-			C.force_white_theme()
-			winset(C, "output", "is-visible=true;is-disabled=false")
-			winset(C, "browseroutput", "is-visible=false")
-
-/datum/client_preference/notify_ghost_trap
-	description = "Notify when ghost-trap roles are available."
-	key = "GHOST_TRAP"
-	options = list(GLOB.PREF_YES, GLOB.PREF_NO)
-	default_value = GLOB.PREF_YES
-
-
-/datum/client_preference/surgery_skip_radial
-	description = "Skip the radial menu for single-option surgeries."
-	key = "SURGERY_SKIP_RADIAL"
-	options = list(GLOB.PREF_YES, GLOB.PREF_NO)
+/datum/client_preference/equip_open_inventory
+	description = "Quick-equip stores items into open inventories"
+	key = "EQUIP_OPEN_INVENTORY"
 	default_value = GLOB.PREF_NO
-
-
-/datum/client_preference/toggle_run
-	description = "Shift toggles run (vs hold to run)"
-	key = "TOGGLE_RUN"
-	options = list(GLOB.PREF_YES, GLOB.PREF_NO)
-	default_value = GLOB.PREF_NO
-
-/datum/client_preference/floating_messages
-	description = "Floating chat messages"
-	key = "FLOATING_CHAT"
-	options = list(GLOB.PREF_HIDE, GLOB.PREF_SHOW)
-	default_value =  GLOB.PREF_SHOW
 
 /********************
 * General Staff Preferences *
@@ -324,16 +273,11 @@ var/global/list/_client_preferences_by_type
 /datum/client_preference/staff
 	var/flags
 
-/datum/client_preference/staff/may_set(client/given_client)
-	if(ismob(given_client))
-		var/mob/M = given_client
-		given_client = M.client
-	if(!given_client)
-		return FALSE
+/datum/client_preference/staff/may_set(var/mob/preference_mob)
 	if(flags)
-		return check_rights(flags, 0, given_client)
+		return check_rights(flags, 0, preference_mob)
 	else
-		return given_client && given_client.holder
+		return preference_mob && preference_mob.client && preference_mob.client.holder
 
 /datum/client_preference/staff/show_chat_prayers
 	description = "Chat Prayers"
@@ -346,7 +290,7 @@ var/global/list/_client_preferences_by_type
 	options = list(GLOB.PREF_HEAR, GLOB.PREF_SILENT)
 
 /datum/client_preference/staff/show_rlooc
-	description = "Remote LOOC chat"
+	description ="Remote LOOC chat"
 	key = "CHAT_RLOOC"
 	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
 
@@ -371,11 +315,3 @@ var/global/list/_client_preferences_by_type
 	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
 	default_value = GLOB.PREF_HIDE
 	flags = R_ADMIN|R_DEBUG
-
-
-/datum/client_preference/staff/show_runtime_logs
-	description = "Runtime Log Messages"
-	key = "CHAT_RUNTIMELOGS"
-	options = list(GLOB.PREF_SHOW, GLOB.PREF_HIDE)
-	default_value = GLOB.PREF_HIDE
-	flags = R_ADMIN | R_DEBUG

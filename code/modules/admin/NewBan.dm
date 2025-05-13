@@ -1,8 +1,8 @@
-var/global/CMinutes = null
-var/global/savefile/Banlist
+var/CMinutes
+var/savefile/Banlist
 
 
-/proc/CheckBan(ckey, id, address)
+/proc/CheckBan(var/ckey, var/id, var/address)
 	if(!Banlist)		// if Banlist cannot be located for some reason
 		LoadBans()		// try to load the bans
 		if(!Banlist)	// uh oh, can't find bans!
@@ -96,7 +96,10 @@ var/global/savefile/Banlist
 	return 1
 
 
-/proc/AddBan(ckey, computerid, reason, bannedby, temp, minutes, address)
+/proc/AddBan(ckey, computerid, reason, bannedby, temp, minutes, address, delayed_ban)
+
+	if(delayed_ban) //ban will be loaded at the next roundstart from DB
+		return
 
 	var/bantimestamp
 
@@ -105,23 +108,21 @@ var/global/savefile/Banlist
 		bantimestamp = CMinutes + minutes
 
 	Banlist.cd = "/base"
-	if (Banlist.dir.Find("[ckey][computerid]"))
-		to_chat(usr, SPAN_WARNING("Ban already exists."))
-		return 0
-	else if (!ckey)
-		to_chat(usr, SPAN_WARNING("Ckey does not exist."))
+	if ( Banlist.dir.Find("[ckey][computerid]") )
+		to_chat(usr, text("\red Ban already exists."))
 		return 0
 	else
 		Banlist.dir.Add("[ckey][computerid]")
 		Banlist.cd = "/base/[ckey][computerid]"
-		to_save(Banlist["key"], ckey)
-		to_save(Banlist["id"], computerid)
-		to_save(Banlist["ip"], address)
-		to_save(Banlist["reason"], reason)
-		to_save(Banlist["bannedby"], bannedby)
-		to_save(Banlist["temp"], temp)
+		Banlist["key"] << ckey
+		Banlist["id"] << computerid
+		Banlist["ip"] << address
+		Banlist["reason"] << reason
+		Banlist["bannedby"] << bannedby
+		Banlist["temp"] << temp
 		if (temp)
-			to_save(Banlist["minutes"], bantimestamp)
+			Banlist["minutes"] << bantimestamp
+		notes_add(ckey, "Banned - [reason]")
 	return 1
 
 /proc/RemoveBan(foldername)
@@ -129,8 +130,8 @@ var/global/savefile/Banlist
 	var/id
 
 	Banlist.cd = "/base/[foldername]"
-	from_save(Banlist["key"], key)
-	from_save(Banlist["id"], id)
+	Banlist["key"] >> key
+	Banlist["id"] >> id
 	Banlist.cd = "/base"
 
 	if (!Banlist.dir.Remove(foldername)) return 0
@@ -142,6 +143,7 @@ var/global/savefile/Banlist
 		ban_unban_log_save("[key_name_admin(usr)] unbanned [key]")
 		log_admin("[key_name_admin(usr)] unbanned [key]")
 		message_admins("[key_name_admin(usr)] unbanned: [key]")
+
 		usr.client.holder.DB_ban_unban( ckey(key), BANTYPE_ANY_FULLBAN)
 	for (var/A in Banlist.dir)
 		Banlist.cd = "/base/[A]"
@@ -170,6 +172,7 @@ var/global/savefile/Banlist
 /datum/admins/proc/unbanpanel()
 	var/count = 0
 	var/dat
+	//var/dat = "<HR><B>Unban Player:</B> \blue(U) = Unban , (E) = Edit Ban\green (Total<HR><table border=1 rules=all frame=void cellspacing=0 cellpadding=3 >"
 	Banlist.cd = "/base"
 	for (var/A in Banlist.dir)
 		count++
@@ -186,11 +189,14 @@ var/global/savefile/Banlist
 			if(!expiry)		expiry = "Removal Pending"
 		else				expiry = "Permaban"
 
-		dat += text("<tr><td><A href='byond://?src=[ref];unbanf=[key][id]'>(U)</A><A href='byond://?src=[ref];unbane=[key][id]'>(E)</A> Key: <B>[key]</B></td><td>ComputerID: <B>[id]</B></td><td>IP: <B>[ip]</B></td><td> [expiry]</td><td>(By: [by])</td><td>(Reason: [reason])</td></tr>")
+		dat += text("<tr><td><A href='?src=[ref];unbanf=[key][id]'>(U)</A><A href='?src=[ref];unbane=[key][id]'>(E)</A> Key: <B>[key]</B></td><td>ComputerID: <B>[id]</B></td><td>IP: <B>[ip]</B></td><td> [expiry]</td><td>(By: [by])</td><td>(Reason: [reason])</td></tr>")
 
 	dat += "</table>"
-	dat = "<HR><B>Bans:</B> [SPAN_COLOR("blue", "(U) = Unban , (E) = Edit Ban")] - [SPAN_COLOR("green", "([count] Bans)")]<HR><table border=1 rules=all frame=void cellspacing=0 cellpadding=3 >[dat]"
-	show_browser(usr, dat, "window=unbanp;size=875x400")
+	dat = "<HR><B>Bans:</B> <FONT COLOR=blue>(U) = Unban , (E) = Edit Ban</FONT> - <FONT COLOR=green>([count] Bans)</FONT><HR><table border=1 rules=all frame=void cellspacing=0 cellpadding=3 >[dat]"
+	
+	var/datum/browser/panel = new(usr, "unbanp", "Unban Panel", 875, 400)
+	panel.set_content(dat)
+	panel.open()
 
 //////////////////////////////////// DEBUG ////////////////////////////////////
 
@@ -208,17 +214,17 @@ var/global/savefile/Banlist
 			Banlist.cd = "/base"
 			Banlist.dir.Add("trash[i]trashid[i]")
 			Banlist.cd = "/base/trash[i]trashid[i]"
-			to_save(Banlist["key"], "trash[i]")
+			Banlist["key"] << "trash[i]"
 		else
 			Banlist.cd = "/base"
 			Banlist.dir.Add("[last]trashid[i]")
 			Banlist.cd = "/base/[last]trashid[i]"
-			to_save(Banlist["key"], last)
-		to_save(Banlist["id"], "trashid[i]")
-		to_save(Banlist["reason"], "Trashban[i].")
-		to_save(Banlist["temp"], a)
-		to_save(Banlist["minutes"], CMinutes + rand(1,2000))
-		to_save(Banlist["bannedby"], "trashmin")
+			Banlist["key"] << last
+		Banlist["id"] << "trashid[i]"
+		Banlist["reason"] << "Trashban[i]."
+		Banlist["temp"] << a
+		Banlist["minutes"] << CMinutes + rand(1,2000)
+		Banlist["bannedby"] << "trashmin"
 		last = "trash[i]"
 
 	Banlist.cd = "/base"
@@ -227,3 +233,4 @@ var/global/savefile/Banlist
 	Banlist.cd = "/base"
 	for (var/A in Banlist.dir)
 		RemoveBan(A)
+

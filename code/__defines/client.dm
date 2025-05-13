@@ -1,3 +1,0 @@
-#define CLIENT_MIN_FPS 15
-#define CLIENT_MAX_FPS 120
-#define CLIENT_DEFAULT_FPS 40

@@ -1,5 +1,18 @@
 var/global/list/obj/machinery/message_server/message_servers = list()
 
+/datum/data_pda_msg
+	var/recipient = "Unspecified" //name of the person
+	var/sender = "Unspecified" //name of the sender
+	var/message = "Blank" //transferred message
+
+/datum/data_pda_msg/New(var/param_rec = "",var/param_sender = "",var/param_message = "")
+
+	if(param_rec)
+		recipient = param_rec
+	if(param_sender)
+		sender = param_sender
+	if(param_message)
+		message = param_message
 
 /datum/data_rc_msg
 	var/rec_dpt = "Unspecified" //name of the person
@@ -9,8 +22,7 @@ var/global/list/obj/machinery/message_server/message_servers = list()
 	var/id_auth = "Unauthenticated"
 	var/priority = "Normal"
 
-
-/datum/data_rc_msg/New(param_rec = "",param_sender = "",param_message = "",param_stamp = "",param_id_auth = "",param_priority)
+/datum/data_rc_msg/New(var/param_rec = "",var/param_sender = "",var/param_message = "",var/param_stamp = "",var/param_id_auth = "",var/param_priority)
 	if(param_rec)
 		rec_dpt = param_rec
 	if(param_sender)
@@ -32,145 +44,165 @@ var/global/list/obj/machinery/message_server/message_servers = list()
 			else
 				priority = "Undetermined"
 
-
 /obj/machinery/message_server
-	icon = 'icons/obj/machines/research/server.dmi'
+	icon = 'icons/obj/machines/research.dmi'
 	icon_state = "server"
-	name = "messaging server"
+	name = "Messaging Server"
 	density = TRUE
 	anchored = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 10
 	active_power_usage = 100
 
 	var/list/datum/data_rc_msg/rc_msgs = list()
 	var/active = 1
-	var/power_failure = 0 // Reboot timer after power outage
 	var/decryptkey = "password"
 
-	//Spam filtering stuff
-	var/list/spamfilter = list("You have won", "your prize", "male enhancement", "shitcurity", \
-			"are happy to inform you", "account number", "enter your PIN")
-			//Messages having theese tokens will be rejected by server. Case sensitive
-	var/spamfilter_limit = 10
 
+/obj/machinery/message_server/New()
+	message_servers += src
+	decryptkey = GenerateKey()
+	send_rc_message("System Administrator", "system", "This is an automated message. The messaging system is functioning correctly.")
+	..()
+	return
 
 /obj/machinery/message_server/Destroy()
 	message_servers -= src
+
 	return ..()
 
-
-/obj/machinery/message_server/Initialize()
-	. = ..()
-	message_servers += src
-	decryptkey = GenerateKey()
-	update_icon()
-
+/obj/machinery/message_server/proc/GenerateKey()
+	//Feel free to move to Helpers.
+	var/newKey
+	newKey += pick("the", "if", "of", "as", "in", "a", "you", "from", "to", "an", "too", "little", "snow", "dead", "drunk", "rosebud", "duck", "al", "le")
+	newKey += pick("diamond", "beer", "mushroom", "assistant", "clown", "captain", "twinkie", "security", "nuke", "small", "big", "escape", "yellow", "gloves", "monkey", "engine", "nuclear", "ai")
+	newKey += pick("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+	return newKey
 
 /obj/machinery/message_server/Process()
-	if (inoperable())
-		if (active)
-			active = FALSE
-			power_failure = 10
-	else if (power_failure > 0)
-		--power_failure
-		if (!power_failure)
-			active = TRUE
+	//if(decryptkey == "password")
+	//	decryptkey = generateKey()
+	if(active && (stat & (BROKEN|NOPOWER)))
+		active = 0
+		return
 	update_icon()
+	return
 
 
-/obj/machinery/r_n_d/server/operable()
-	return !inoperable(MACHINE_STAT_EMPED)
-
-
-/obj/machinery/message_server/on_update_icon()
-	ClearOverlays()
-	if (operable())
-		AddOverlays(list(
-			"server_on",
-			"server_lights_on",
-			emissive_appearance(icon, "server_lights_on")
-		))
-	else
-		AddOverlays(list(
-			"server_lights_off",
-			emissive_appearance(icon, "server_lights_off")
-		))
-	if (panel_open)
-		AddOverlays("server_panel")
-
-
-/obj/machinery/message_server/interface_interact(mob/user)
-	if(!CanInteract(user, DefaultTopicState()))
-		return FALSE
-	to_chat(user, "You toggle PDA message passing from [active ? "On" : "Off"] to [active ? "Off" : "On"]")
-	active = !active
-	power_failure = 0
-	update_icon()
-	return TRUE
-
-
-/obj/machinery/message_server/use_tool(obj/item/tool, mob/living/user, list/click_params)
-	if (!istype(tool, /obj/item/stock_parts/circuitboard/message_monitor))
-		return ..()
-	if (spamfilter_limit >= initial(spamfilter_limit) * 2)
-		to_chat(user, SPAN_WARNING("\The [src] already has as many boards as it can hold."))
-		return TRUE
-	spamfilter_limit += round(initial(spamfilter_limit) / 2)
-	user.visible_message(
-		SPAN_ITALIC("\The [user] installs \a [tool] into \a [src]."),
-		SPAN_ITALIC("You install \the [tool] into \the [src], improving its spam filtering capabilities."),
-		range = 5
-	)
-	qdel(tool)
-	return TRUE
-
-
-/obj/machinery/message_server/proc/send_to_department(department, message, tone)
-	var/reached = 0
-	for(var/mob/living/carbon/human/H in GLOB.human_mobs)
-		var/obj/item/modular_computer/device = locate() in H
-		if(!device || !(get_z(device) in GLOB.using_map.station_levels))
-			continue
-		var/rank = H.get_authentification_rank()
-		var/datum/job/J = SSjobs.get_by_title(rank)
-		if (!J)
-			continue
-		if(!istype(J))
-			log_debug(append_admin_tools("MESSAGE SERVER: Mob has an invalid job, skipping. Mob: '[H]'. Rank: '[rank]'. Job: '[J]'."))
-			continue
-		if(J.department_flag & department)
-			to_chat(H, SPAN_NOTICE("Your [device.name] alerts you to the fact that somebody is requesting your presence at your department."))
-			reached++
-	return reached
-
-
-/obj/machinery/message_server/proc/send_rc_message(recipient = "",sender = "",message = "",stamp = "", id_auth = "", priority = 1)
+/obj/machinery/message_server/proc/send_rc_message(var/recipient = "",var/sender = "",var/message = "",var/stamp = "", var/id_auth = "", var/priority = 1)
 	rc_msgs += new/datum/data_rc_msg(recipient,sender,message,stamp,id_auth)
 	var/authmsg = "[message]<br>"
 	if (id_auth)
 		authmsg += "[id_auth]<br>"
 	if (stamp)
 		authmsg += "[stamp]<br>"
-	. = FALSE
-	var/list/good_z = GetConnectedZlevels(z)
 	for (var/obj/machinery/requests_console/Console in allConsoles)
-		if(!(Console.z in good_z))
-			continue
 		if (ckey(Console.department) == ckey(recipient))
 			if(Console.inoperable())
-				Console.message_log += "<B>Message lost due to console failure.</B><BR>Please contact [station_name()] system administrator or AI for technical assistance.<BR>"
+				Console.message_log += "<B>Message lost due to console failure.</B><BR>Please contact [station_name] system adminsitrator or AI for technical assistance.<BR>"
 				continue
-			. = TRUE
 			if(Console.newmessagepriority < priority)
 				Console.newmessagepriority = priority
 				Console.icon_state = "req_comp[priority]"
-			if(priority > 1)
-				playsound(Console.loc, 'sound/machines/chime.ogg', 80, 1)
-				Console.audible_message("[icon2html(Console, viewers(get_turf(Console)))][SPAN_WARNING("\The [Console] announces: 'High priority message received from [sender]!'")]", hearing_distance = 8)
-				Console.message_log += "[SPAN_COLOR("red", "High Priority message from <A href='byond://?src=\ref[Console];write=[sender]'>[sender]</A>")]<BR>[authmsg]"
-			else
-				if(!Console.silent)
-					playsound(Console.loc, 'sound/machines/twobeep.ogg', 50, 1)
-					Console.audible_message("[icon2html(Console, viewers(get_turf(Console)))][SPAN_NOTICE("\The [Console] announces: 'Message received from [sender].'")]", hearing_distance = 5)
-				Console.message_log += "<B>Message from <A href='byond://?src=\ref[Console];write=[sender]'>[sender]</A></B><BR>[authmsg]"
-			Console.set_light(2, 0.5)
+			switch(priority)
+				if(2)
+					if(!Console.silent)
+						playsound(Console.loc, 'sound/machines/twobeep.ogg', 50, 1)
+						Console.audible_message(text("\icon[Console] *The Requests Console beeps: 'PRIORITY Alert in [sender]'"),,5)
+					Console.message_log += "<B><FONT color='red'>High Priority message from <A href='?src=\ref[Console];write=[sender]'>[sender]</A></FONT></B><BR>[authmsg]"
+				else
+					if(!Console.silent)
+						playsound(Console.loc, 'sound/machines/twobeep.ogg', 50, 1)
+						Console.audible_message(text("\icon[Console] *The Requests Console beeps: 'Message from [sender]'"),,4)
+					Console.message_log += "<B>Message from <A href='?src=\ref[Console];write=[sender]'>[sender]</A></B><BR>[authmsg]"
+			Console.set_light(2)
+
+
+/obj/machinery/message_server/attack_hand(user as mob)
+//	user << "\blue There seem to be some parts missing from this server. They should arrive on the station in a few days, give or take a few CentCom delays."
+	to_chat(user, "You toggle PDA message passing from [active ? "On" : "Off"] to [active ? "Off" : "On"]")
+	active = !active
+	update_icon()
+
+	return
+
+
+/obj/machinery/message_server/update_icon()
+	if((stat & (BROKEN|NOPOWER)))
+		icon_state = "server-nopower"
+	else if (!active)
+		icon_state = "server-off"
+	else
+		icon_state = "server-on"
+
+	return
+
+
+
+
+var/obj/machinery/blackbox_recorder/blackbox
+
+/obj/machinery/blackbox_recorder
+	name = "blackbox recorder"
+	icon = 'icons/obj/machines/telecomms.dmi'
+	icon_state = "blackbox"
+	density = TRUE
+	anchored = TRUE
+	use_power = IDLE_POWER_USE
+	idle_power_usage = 10
+	active_power_usage = 100
+	var/list/messages = list()		//Stores messages of non-standard frequencies
+
+
+	var/list/msg_common = list()
+	var/list/msg_science = list()
+	var/list/msg_command = list()
+	var/list/msg_medical = list()
+	var/list/msg_engineering = list()
+	var/list/msg_security = list()
+	var/list/msg_deathsquad = list()
+	var/list/msg_syndicate = list()
+	var/list/msg_pirate = list()
+	var/list/msg_cargo = list()
+	var/list/msg_service = list()
+	var/list/msg_nt = list()
+
+
+
+	//Only one can exist in the world!
+/obj/machinery/blackbox_recorder/Initialize(mapload, d)
+	. = ..()
+	if(blackbox && istype(blackbox,/obj/machinery/blackbox_recorder))
+		return INITIALIZE_HINT_QDEL
+	blackbox = src
+
+/obj/machinery/blackbox_recorder/Destroy()
+	var/turf/T = locate(1,1,2)
+	if(T)
+		blackbox = null
+		var/obj/machinery/blackbox_recorder/BR = new/obj/machinery/blackbox_recorder(T)
+		BR.msg_common = msg_common
+		BR.msg_science = msg_science
+		BR.msg_command = msg_command
+		BR.msg_medical = msg_medical
+		BR.msg_engineering = msg_engineering
+		BR.msg_security = msg_security
+		BR.msg_deathsquad = msg_deathsquad
+		BR.msg_syndicate = msg_syndicate
+		BR.msg_pirate = msg_pirate
+		BR.msg_cargo = msg_cargo
+		BR.msg_service = msg_service
+		BR.msg_nt = msg_nt
+
+		BR.messages = messages
+
+		if(blackbox != BR)
+			blackbox = BR
+	. = ..()
+
+// Sanitize inputs to avoid SQL injection attacks
+proc/sql_sanitize_text(var/text)
+	text = replacetext(text, "'", "''")
+	text = replacetext(text, ";", "")
+	text = replacetext(text, "&", "")
+	return text

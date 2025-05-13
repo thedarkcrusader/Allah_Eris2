@@ -1,12 +1,12 @@
 /mob/living/silicon/robot/proc/photosync()
-	var/obj/item/device/camera/siliconcam/master_cam = connected_ai && connected_ai.silicon_camera
+	var/obj/item/device/camera/siliconcam/master_cam = connected_ai ? connected_ai.aiCamera : null
 	if (!master_cam)
 		return
 
 	var/synced = FALSE
 	// Sync borg images to the master AI.
 	// We don't care about syncing the other way around
-	for(var/obj/item/photo/borg_photo in silicon_camera.aipictures)
+	for(var/obj/item/photo/borg_photo in aiCamera.aipictures)
 		var/copied = FALSE
 		for(var/obj/item/photo/ai_photo in master_cam.aipictures)
 			if(borg_photo.id == ai_photo.id)

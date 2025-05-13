@@ -1,186 +1,118 @@
-#define MAX_TICKS_TO_MAKE_UP 3 //how many missed ticks will we attempt to make up for this run.
+// This ideally would be part of a physics system that handles everything step by step instead of separated , but
+// im too lazy to actually code it in a meaningfull amount of time.
+// This is better than sleepy throwing anyway.
 
+
+#define I_TARGET 1 /// Index for target
+#define I_SPEED 2 /// Index for speed
+#define I_RANGE 3 /// Index for range
+#define I_MOVED 4 /// Index for amount of turfs we alreathrowing_queue[thing][I_DY] moved by
+#define I_DIST_X 5
+#define I_DIST_Y 6
+#define I_DX 7
+#define I_DY 8
+#define I_ERROR 9
+#define I_TURF_CLICKED 10
+#define I_THROWFLAGS 11
 
 SUBSYSTEM_DEF(throwing)
-	name = "Throwing"
-	wait = 1
-	priority = SS_PRIORITY_THROWING
-	flags = SS_NO_INIT | SS_KEEP_TIMING
+	name = "throwing"
+	wait = 1 // very small
+	priority = FIRE_PRIORITY_THROWING
+	var/list/throwing_queue = list()
+	var/list/current_throwing_queue = list()
 
-	/// An atom => thrownthing map of current throws
-	var/static/list/processing = list()
-
-	/// The current run of throws being processed
-	var/static/list/queue = list()
-
-
-/datum/controller/subsystem/throwing/UpdateStat(time)
-	if (PreventUpdateStat(time))
-		return ..()
-	..("Queue [length(processing)]")
-
-
-/datum/controller/subsystem/throwing/fire(resumed, no_mc_tick)
-	if (!resumed)
-		if (!length(processing))
-			return
-		queue = processing.Copy()
-	var/cut_until = 1
-	for (var/atom/movable/movable as anything in queue)
-		++cut_until
-		var/datum/thrownthing/thrown = queue[movable]
-		if (QDELETED(movable) || QDELETED(thrown))
-			processing -= movable
+/datum/controller/subsystem/throwing/fire(resumed = FALSE)
+	if(!resumed)
+		current_throwing_queue = throwing_queue.Copy()
+	for(var/atom/movable/thing as anything in current_throwing_queue)
+		//if(MC_TICK_CHECK)
+		//	return
+		if(QDELETED(thing))
+			throwing_queue -= thing
 			continue
-		thrown.tick()
-		if (no_mc_tick)
-			CHECK_TICK
-		else if (MC_TICK_CHECK)
-			queue.Cut(1, cut_until)
-			return
-	queue.Cut()
-
-
-/datum/thrownthing
-	var/atom/movable/thrownthing
-	var/atom/target
-	var/turf/target_turf
-	var/target_zone
-	var/init_dir
-	var/maxrange
-	var/speed
-	var/mob/thrower
-	var/start_time
-	var/dist_travelled = 0
-	var/dist_x
-	var/dist_y
-	var/dx
-	var/dy
-	var/diagonal_error
-	var/pure_diagonal
-	var/datum/callback/callback
-	var/paused = FALSE
-	var/delayed_time = 0
-	var/last_move = 0
-
-
-/datum/thrownthing/New(atom/movable/_thrownthing, atom/_target, _range, _speed, mob/_thrower, datum/callback/_callback)
-	thrownthing = _thrownthing
-	target = _target
-	target_turf = get_turf(target)
-	init_dir = get_dir(thrownthing, target)
-	maxrange = _range
-	speed = _speed
-	thrower = _thrower
-	callback = _callback
-	if (!QDELETED(thrower))
-		target_zone = thrower.zone_sel ? thrower.zone_sel.selecting : null
-	dist_x = abs(target.x - thrownthing.x)
-	dist_y = abs(target.y - thrownthing.y)
-	dx = (target.x > thrownthing.x) ? EAST : WEST
-	dy = (target.y > thrownthing.y) ? NORTH : SOUTH//same up to here
-	if (dist_x == dist_y)
-		pure_diagonal = TRUE
-	else if (dist_x <= dist_y)
-		var/olddist_x = dist_x
-		var/olddx = dx
-		dist_x = dist_y
-		dist_y = olddist_x
-		dx = dy
-		dy = olddx
-	diagonal_error = dist_x / 2 - dist_y
-	start_time = world.time
-
-
-/datum/thrownthing/Destroy()
-	SSthrowing.processing -= thrownthing
-	thrownthing.throwing = null
-	thrownthing = null
-	target = null
-	thrower = null
-	callback = null
-	return ..()
-
-
-/datum/thrownthing/proc/tick()
-	var/atom/movable/AM = thrownthing
-	if (!isturf(AM.loc) || !AM.throwing)
-		finalize()
-		return
-	if (paused)
-		delayed_time += world.time - last_move
-		return
-	if (dist_travelled && hitcheck(get_turf(thrownthing)))
-		finalize()
-		return
-	var/atom/step
-	last_move = world.time
-	var/scaled_wait = world.tick_lag * SSthrowing.wait
-	var/target_travel = (delayed_time + (world.time + world.tick_lag) - start_time) * speed
-	var/prior_travel = dist_travelled ? dist_travelled : -1
-	var/max_travel = speed * MAX_TICKS_TO_MAKE_UP
-	var/tilestomove = ceil(min(target_travel - prior_travel, max_travel) * scaled_wait)
-	while (tilestomove-- > 0)
-		if (dist_travelled >= maxrange || AM.loc == target_turf)
-			finalize()
-			return
-		if (dist_travelled <= max(dist_x, dist_y)) //if we haven't reached the target yet we home in on it, otherwise we use the initial direction
-			step = get_step(AM, get_dir(AM, target_turf))
-		else
-			step = get_step(AM, init_dir)
-		if (!pure_diagonal) // not a purely diagonal trajectory and we don't want all diagonal moves to be done first
-			if (diagonal_error >= 0 && max(dist_x,dist_y) - dist_travelled != 1) //we do a step forward unless we're right before the target
-				step = get_step(AM, dx)
-			diagonal_error += (diagonal_error < 0) ? dist_x/2 : -dist_y
-		if (!step) // going off the edge of the map makes get_step return null, don't let things go off the edge
-			finalize()
-			return
-		if (hitcheck(step))
-			finalize()
-			return
-		AM.Move(step, get_dir(AM, step))
-		if (!AM.throwing) // we hit something during our move
-			return
-		dist_travelled++
-
-
-/datum/thrownthing/proc/finalize(hit = FALSE, t_target = null)
-	set waitfor = FALSE
-	if(QDELETED(thrownthing))
-		return
-	thrownthing.throwing = null
-	if (!hit)
-		for (var/atom/A as anything in get_turf(thrownthing))
-			if (A == target)
-				hit = TRUE
-				thrownthing.throw_impact(A, src)
+		if(!istype(thing.loc, /turf))
+			thing.throwing = FALSE
+			thing.thrower = null
+			thing.throw_source = null
+			thing.pass_flags -= throwing_queue[thing][I_THROWFLAGS]
+			throwing_queue -= thing
+			current_throwing_queue -= thing
+			continue
+		var/tiles_to_move = throwing_queue[thing][I_SPEED]
+		var/area/cur_area = get_area(thing.loc)
+		if(cur_area && cur_area.has_gravity)
+			if(tiles_to_move + throwing_queue[thing][I_MOVED] > throwing_queue[thing][I_RANGE])
+				tiles_to_move = min(throwing_queue[thing][I_RANGE] - throwing_queue[thing][I_MOVED], tiles_to_move)
+		if(tiles_to_move < 1)
+			thing.throwing = FALSE
+			thing.thrower = null
+			thing.throw_source = null
+			thing.pass_flags -= throwing_queue[thing][I_THROWFLAGS]
+			var/turf/new_loc = get_turf(thing)
+			if(new_loc)
+				if(isobj(thing))
+					thing.throw_impact(new_loc,throwing_queue[thing][I_SPEED])
+				new_loc.Entered(thing)
+			throwing_queue -= thing
+			current_throwing_queue -= thing
+			continue
+		var/turf/to_move
+		while(tiles_to_move > 0)
+			if(QDELETED(thing))
+				throwing_queue -= thing
 				break
-		if (!hit)
-			thrownthing.throw_impact(get_turf(thrownthing), src)
-			thrownthing.space_drift(init_dir)
-
-	if(t_target && !QDELETED(thrownthing))
-		thrownthing.throw_impact(t_target, src)
-	if (callback)
-		invoke(callback)
-	if (!QDELETED(thrownthing))
-		thrownthing.fall()
-	qdel(src)
+			if(!istype(thing.loc, /turf))
+				thing.throwing = FALSE
+			if(!thing.throwing)
+				thing.thrower = null
+				thing.throw_source = null
+				thing.pass_flags -= throwing_queue[thing][I_THROWFLAGS]
+				throwing_queue -= thing
+				current_throwing_queue -= thing
+				break
 
 
-/datum/thrownthing/proc/hit_atom(atom/A)
-	finalize(hit = TRUE, t_target = A)
 
+			if(throwing_queue[thing][I_DIST_X] > throwing_queue[thing][I_DIST_Y])
+				if(throwing_queue[thing][I_ERROR] < 0)
+					to_move = get_step(thing, throwing_queue[thing][I_DY])
+					throwing_queue[thing][I_ERROR] += throwing_queue[thing][I_DIST_X]
+				else
+					to_move = get_step(thing, throwing_queue[thing][I_DX])
+					throwing_queue[thing][I_ERROR] -= throwing_queue[thing][I_DIST_Y]
+			else
+				if(throwing_queue[thing][I_ERROR] < 0)
+					to_move = get_step(thing, throwing_queue[thing][I_DX])
+					throwing_queue[thing][I_ERROR] += throwing_queue[thing][I_DIST_Y]
+				else
+					to_move = get_step(thing, throwing_queue[thing][I_DY])
+					throwing_queue[thing][I_ERROR] -= throwing_queue[thing][I_DIST_X]
+			cur_area = get_area(thing.loc)
+			if(cur_area && cur_area.has_gravity)
+				if(thing.loc == throwing_queue[thing][I_TURF_CLICKED])
+					to_move = FALSE
+			if(!to_move || (to_move && !thing.Move(to_move)))
+				thing.throwing = FALSE
+				thing.thrower = null
+				thing.throw_source = null
+				var/turf/new_loc = get_turf(thing)
+				thing.pass_flags -= throwing_queue[thing][I_THROWFLAGS]
+				if(new_loc)
+					if(isobj(thing))
+						thing.throw_impact(new_loc,throwing_queue[thing][I_SPEED])
+					new_loc.Entered(thing)
+				throwing_queue -= thing
+				current_throwing_queue -= thing
+				break
+			// The proc below is very poorly written and i couldn't be bothered to rewrite all of its underlying
+			// code. Its why i use thing.throwing to actually check wheter we should keep going or not.
+			// reached a map corner or something we can't move towards
+			thing.hit_check(throwing_queue[thing][I_SPEED])
+			tiles_to_move--
+			throwing_queue[thing][I_MOVED]++
+			to_move = null
+			current_throwing_queue -= thing
+			if(MC_TICK_CHECK)
+				return
 
-/datum/thrownthing/proc/hitcheck(turf/T)
-	var/atom/movable/hit_thing
-	for (var/atom/movable/AM as anything in T)
-		if (AM == thrownthing || (AM == thrower && !ismob(thrownthing)))
-			continue
-		if (!AM.density || AM.throwpass)//check if ATOM_FLAG_CHECKS_BORDER as an atom_flag is needed
-			continue
-		if (!hit_thing || AM.layer > hit_thing.layer)
-			hit_thing = AM
-	if (hit_thing)
-		finalize(hit = TRUE, t_target = hit_thing)
-		return TRUE

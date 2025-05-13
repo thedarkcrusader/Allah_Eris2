@@ -1,144 +1,162 @@
+#define BAD_INIT_QDEL_BEFORE 1
+#define BAD_INIT_DIDNT_INIT 2
+#define BAD_INIT_SLEPT 4
+#define BAD_INIT_NO_HINT 8
+
 SUBSYSTEM_DEF(atoms)
 	name = "Atoms"
-	init_order = SS_INIT_ATOMS
-	flags = SS_NO_FIRE | SS_NEEDS_SHUTDOWN
+	init_order = INIT_ORDER_ATOMS
+	flags = SS_NO_FIRE
 
-	var/const/BAD_INIT_QDEL_BEFORE = FLAG_01
-	var/const/BAD_INIT_DIDNT_INIT = FLAG_02
-	var/const/BAD_INIT_SLEPT = FLAG_03
-	var/const/BAD_INIT_NO_HINT = FLAG_04
+	var/old_initialized
 
-	var/static/atom_init_stage = INITIALIZATION_INSSATOMS
-	var/static/old_init_stage
-	var/static/list/bad_inits = list()
-	var/static/list/init_queue = list()
-	var/static/list/late_init_queue = list()
+	var/list/late_loaders = list()
 
+	var/list/BadInitializeCalls = list()
 
-/datum/controller/subsystem/atoms/UpdateStat(time)
-	if (PreventUpdateStat(time))
-		return ..()
-	..("Bad Inits: [length(bad_inits)]")
+	///initAtom() adds the atom its creating to this list iff InitializeAtoms() has been given a list to populate as an argument
+	var/list/created_atoms
 
+	initialized = INITIALIZATION_INSSATOMS
 
-/datum/controller/subsystem/atoms/Shutdown()
-	var/initlog = InitLog()
-	if (initlog)
-		text2file(initlog, "[GLOB.log_directory]/initialize.log")
-
-
-/datum/controller/subsystem/atoms/Initialize(start_uptime)
-	atom_init_stage = INITIALIZATION_INNEW_MAPLOAD
+/datum/controller/subsystem/atoms/Initialize(timeofday)
+	initialized = INITIALIZATION_INNEW_MAPLOAD
 	InitializeAtoms()
+	initialized = INITIALIZATION_INNEW_REGULAR
+	return ..()
 
-
-/datum/controller/subsystem/atoms/Recover()
-	LIST_RESIZE(init_queue, 0)
-	LIST_RESIZE(late_init_queue, 0)
-	if (atom_init_stage == INITIALIZATION_INNEW_MAPLOAD)
-		InitializeAtoms()
-
-
-/datum/controller/subsystem/atoms/proc/InitializeAtoms()
-	if (atom_init_stage <= INITIALIZATION_INSSATOMS_LATE)
+/datum/controller/subsystem/atoms/proc/InitializeAtoms(list/atoms, list/atoms_to_return = null)
+	if(initialized == INITIALIZATION_INSSATOMS)
 		return
-	atom_init_stage = INITIALIZATION_INNEW_MAPLOAD
+
+	var/previous_state = null
+	if(initialized != INITIALIZATION_INNEW_MAPLOAD)
+		previous_state = initialized
+		initialized = INITIALIZATION_INNEW_MAPLOAD
+
+	if (atoms_to_return)
+		LAZYINITLIST(created_atoms)
+
+	var/count
 	var/list/mapload_arg = list(TRUE)
-	var/atom/atom
-	var/list/params
-	var/count = 0
-	var/time = uptime()
-	if (!initialized)
-		for (atom in world)
-			if (!atom || atom.atom_flags & ATOM_FLAG_INITIALIZED)
-				continue
-			InitAtom(atom, mapload_arg)
-			if (++count % 1000)
-				continue
-			CHECK_TICK
-	var/init_queue_length = length(init_queue)
-	if (init_queue_length)
-		for (var/i = 1 to init_queue_length)
-			atom = init_queue[i]
-			if (!atom || atom.atom_flags & ATOM_FLAG_INITIALIZED)
-				continue
-			params = init_queue[atom]
-			if (params)
-				InitAtom(atom, mapload_arg + params)
-			else
-				InitAtom(atom, mapload_arg)
-			if (++count % 500)
-				continue
-			CHECK_TICK
-		init_queue.Cut(1, init_queue_length + 1)
-	time = max((uptime() - time) * 0.1, 0.1)
-	report_progress("Initialized [count] atom\s in [time]s ([floor(count/time)]/s)")
-	atom_init_stage = INITIALIZATION_INNEW_REGULAR
-	var/late_queue_length = length(late_init_queue)
-	if (late_queue_length)
+
+	if(atoms)
+		count = atoms.len
+		for(var/I in 1 to count)
+			var/atom/A = atoms[I]
+			if(!A.initialized)
+				CHECK_TICK
+				InitAtom(A, TRUE, mapload_arg)
+	else
 		count = 0
-		time = uptime()
-		for (var/i = 1 to late_queue_length)
-			atom = late_init_queue[i]
-			if (!atom)
-				continue
-			atom.LateInitialize(arglist(late_init_queue[atom]))
-			if (++count % 250)
-				continue
-			CHECK_TICK
-		late_init_queue.Cut(1, late_queue_length + 1)
-		time = max((uptime() - time) * 0.1, 0.1)
-		report_progress("LateInitialized [count] atom\s in [time]s ([floor(count/time)]/s)")
+		for(var/atom/A in world)
+			if(!A.initialized)
+				InitAtom(A, FALSE, mapload_arg)
+				++count
+				CHECK_TICK
 
+	testing("Initialized [count] atoms")
+	pass(count)
 
-/datum/controller/subsystem/atoms/proc/InitAtom(atom/atom, list/arguments)
-	var/atom_type = atom.type
-	if (QDELING(atom))
-		bad_inits[atom_type] |= BAD_INIT_QDEL_BEFORE
+	if(previous_state != initialized)
+		initialized = previous_state
+
+	if(late_loaders.len)
+		for(var/I in 1 to late_loaders.len)
+			var/atom/A = late_loaders[I]
+			//I hate that we need this
+			if(QDELETED(A))
+				continue
+			A.LateInitialize()
+		testing("Late initialized [late_loaders.len] atoms")
+		late_loaders.Cut()
+
+	if (created_atoms)
+		atoms_to_return += created_atoms
+		created_atoms = null
+
+/// Init this specific atom
+/datum/controller/subsystem/atoms/proc/InitAtom(atom/A, from_template = FALSE, list/arguments)
+	var/the_type = A.type
+	if(QDELING(A))
+		BadInitializeCalls[the_type] |= BAD_INIT_QDEL_BEFORE
 		return TRUE
-	var/start_tick = world.time
-	var/hint = atom.Initialize(arglist(arguments))
-	if (start_tick != world.time)
-		bad_inits[atom_type] |= BAD_INIT_SLEPT
-	var/deleted = FALSE
-	switch (hint)
-		if (INITIALIZE_HINT_NORMAL) //noop
-		if (INITIALIZE_HINT_LATELOAD)
-			if (arguments[1])	//mapload
-				late_init_queue[atom] = arguments
-			else
-				atom.LateInitialize(arglist(arguments))
-		if (INITIALIZE_HINT_QDEL)
-			qdel(atom)
-			deleted = TRUE
-		else
-			bad_inits[atom_type] |= BAD_INIT_NO_HINT
-	if (!atom)
-		deleted = TRUE
-	else if (!(atom.atom_flags & ATOM_FLAG_INITIALIZED))
-		bad_inits[atom_type] |= BAD_INIT_DIDNT_INIT
-	return deleted || QDELING(atom)
 
+	var/start_tick = world.time
+
+	var/result = A.Initialize(arglist(arguments))
+
+	if(start_tick != world.time)
+		BadInitializeCalls[the_type] |= BAD_INIT_SLEPT
+
+	var/qdeleted = FALSE
+
+	if(result != INITIALIZE_HINT_NORMAL)
+		switch(result)
+			if(INITIALIZE_HINT_LATELOAD)
+				if(arguments[1]) //mapload
+					late_loaders += A
+				else
+					A.LateInitialize()
+			if(INITIALIZE_HINT_QDEL)
+				qdel(A)
+				qdeleted = TRUE
+			if(INITIALIZE_HINT_QDEL_FORCE)
+				qdel(A, force = TRUE)
+				qdeleted = TRUE
+			else
+				BadInitializeCalls[the_type] |= BAD_INIT_NO_HINT
+
+	if(!A) //possible harddel
+		qdeleted = TRUE
+	else if(!A.initialized)
+		BadInitializeCalls[the_type] |= BAD_INIT_DIDNT_INIT
+	else
+		//SEND_SIGNAL_OLD(A,COMSIG_ATOM_AFTER_SUCCESSFUL_INITIALIZE)
+		if(created_atoms && from_template && ispath(the_type, /atom/movable))//we only want to populate the list with movables
+			created_atoms += A.GetAllContents()
+
+	return qdeleted || QDELING(A)
 
 /datum/controller/subsystem/atoms/proc/map_loader_begin()
-	old_init_stage = atom_init_stage
-	atom_init_stage = INITIALIZATION_INSSATOMS_LATE
-
+	old_initialized = initialized
+	initialized = INITIALIZATION_INSSATOMS
 
 /datum/controller/subsystem/atoms/proc/map_loader_stop()
-	atom_init_stage = old_init_stage
+	initialized = old_initialized
 
+/datum/controller/subsystem/atoms/Recover()
+	initialized = SSatoms.initialized
+	if(initialized == INITIALIZATION_INNEW_MAPLOAD)
+		InitializeAtoms()
+	old_initialized = SSatoms.old_initialized
+	BadInitializeCalls = SSatoms.BadInitializeCalls
 
 /datum/controller/subsystem/atoms/proc/InitLog()
 	. = ""
-	for (var/path in bad_inits)
+	for(var/path in BadInitializeCalls)
 		. += "Path : [path] \n"
-		var/fails = bad_inits[path]
-		if (fails & BAD_INIT_DIDNT_INIT)
+		var/fails = BadInitializeCalls[path]
+		if(fails & BAD_INIT_DIDNT_INIT)
 			. += "- Didn't call atom/Initialize()\n"
-		if (fails & BAD_INIT_NO_HINT)
+		if(fails & BAD_INIT_NO_HINT)
 			. += "- Didn't return an Initialize hint\n"
-		if (fails & BAD_INIT_QDEL_BEFORE)
+		if(fails & BAD_INIT_QDEL_BEFORE)
 			. += "- Qdel'd in New()\n"
-		if (fails & BAD_INIT_SLEPT)
+		if(fails & BAD_INIT_SLEPT)
 			. += "- Slept during Initialize()\n"
+
+/datum/controller/subsystem/atoms/Shutdown()
+	var/initlog = InitLog()
+	if(initlog)
+		text2file(initlog, "data/logs/initialize.log")
+
+/client/proc/cmd_display_init_log()
+	set category = "Debug"
+	set name = "Display Initialize() Log"
+	set desc = "Displays a list of things that didn't handle Initialize() properly."
+
+	if(!LAZYLEN(SSatoms.BadInitializeCalls))
+		to_chat(usr, SPAN_NOTICE("BadInit list is empty."))
+	else
+		usr << browse(replacetext(SSatoms.InitLog(), "\n", "<br>"), "window=initlog")

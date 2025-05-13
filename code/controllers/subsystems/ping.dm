@@ -1,28 +1,33 @@
 SUBSYSTEM_DEF(ping)
 	name = "Ping"
-	flags = SS_NO_INIT | SS_BACKGROUND
-	wait = 15 SECONDS
-	var/static/list/datum/chatOutput/chats = list()
-	var/static/saved_index = 1
+	priority = SS_PRIORITY_PING
+	wait = 3 SECONDS
+	flags = SS_NO_INIT
+	runlevels = RUNLEVEL_LOBBY | RUNLEVEL_SETUP | RUNLEVEL_GAME | RUNLEVEL_POSTGAME
 
+	var/list/currentrun = list()
 
-/datum/controller/subsystem/ping/UpdateStat(time)
-	if (PreventUpdateStat(time))
-		return ..()
-	..("Chats: [length(chats)]")
+/datum/controller/subsystem/ping/stat_entry(msg)
+	msg += "P:[LAZYLEN(clients)]"
+	return ..()
 
+/datum/controller/subsystem/ping/fire(resumed = 0)
+	if (!resumed)
+		src.currentrun = clients.Copy()
 
-/datum/controller/subsystem/ping/fire(resumed, no_mc_tick)
-	var/datum/chatOutput/chat
-	for (var/index = saved_index to length(chats))
-		chat = chats[index]
-		if (QDELETED(chat))
+	//cache for sanic speed (lists are references anyways)
+	var/list/currentrun = src.currentrun
+
+	while (currentrun.len)
+		var/client/C = currentrun[currentrun.len]
+		currentrun.len--
+
+		if (!C || !C.chatOutput || !C.chatOutput.loaded)
+			if (MC_TICK_CHECK)
+				return
 			continue
-		if (chat.loaded && !chat.broken)
-			chat.updatePing()
-		if (no_mc_tick)
-			CHECK_TICK
-		else if (MC_TICK_CHECK)
-			saved_index = index
+
+		// softPang isn't handled anywhere but it'll always reset the opts.lastPang.
+		C.chatOutput.ehjax_send(data = C.is_afk(29) ? "softPang" : "pang")
+		if (MC_TICK_CHECK)
 			return
-	saved_index = 1

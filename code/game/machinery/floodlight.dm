@@ -1,83 +1,154 @@
 //these are probably broken
 
 /obj/machinery/floodlight
-	name = "emergency floodlight"
+	name = "Emergency Floodlight"
 	icon = 'icons/obj/machines/floodlight.dmi'
 	icon_state = "flood00"
 	density = TRUE
-	obj_flags = OBJ_FLAG_ROTATABLE
-	construct_state = /singleton/machine_construction/default/panel_closed
-	uncreated_component_parts = null
+	var/on = FALSE
+	var/obj/item/cell/large/cell
+	var/use = 200 // 200W light
+	var/unlocked = FALSE
+	var/open = FALSE
+	var/brightness_on = 8		//can't remember what the maxed out value is
+	light_power = 2
 
-	active_power_usage = 200
-	power_channel = LIGHT
-	use_power = POWER_USE_OFF
-
-	machine_name = "emergency floodlight"
-	machine_desc = "A portable, battery-powered LED flood lamp used to illuminate large areas."
-
-	//better laser, increased brightness & power consumption
-	var/l_power = 2.5 //brightness of light when on, can be negative
-	var/l_range = 8 //outer range of light when on, can be negative
-
-/obj/machinery/floodlight/on_update_icon()
-	icon_state = "flood[panel_open ? "o" : ""][panel_open && get_cell() ? "b" : ""]0[use_power == POWER_USE_ACTIVE]"
-
-/obj/machinery/floodlight/power_change()
+/obj/machinery/floodlight/Initialize()
 	. = ..()
-	if(!. || !use_power) return
+	cell = new /obj/item/cell/large(src)
 
-	if(!is_powered())
+/obj/machinery/floodlight/get_cell()
+	return cell
+
+/obj/machinery/floodlight/handle_atom_del(atom/A)
+	..()
+	if(A == cell)
+		cell = null
+		update_icon()
+
+/obj/machinery/floodlight/update_icon()
+	overlays.Cut()
+	icon_state = "flood[open ? "o" : ""][open && cell ? "b" : ""]0[on]"
+
+/obj/machinery/floodlight/Process()
+	if(!on)
+		return
+
+	if(!cell || (!cell.check_charge(use * CELLRATE)))
 		turn_off(1)
 		return
 
 	// If the cell is almost empty rarely "flicker" the light. Aesthetic only.
-	if(prob(30))
-		set_light(l_range, l_power / 2, angle = LIGHT_VERY_WIDE)
+	if((cell.percent() < 10) && prob(5))
+		set_light(brightness_on/2, brightness_on/4)
 		spawn(20)
-			if(use_power)
-				set_light(l_range, l_power, angle = LIGHT_VERY_WIDE)
+			if(on)
+				set_light(brightness_on, brightness_on/2)
+
+	cell.use(use*CELLRATE)
+
 
 // Returns 0 on failure and 1 on success
 /obj/machinery/floodlight/proc/turn_on(loud = 0)
-	if(!is_powered())
-		return 0
+	if(!cell)
+		return FALSE
+	if(!cell.check_charge(use * CELLRATE))
+		return FALSE
 
-	set_light(l_range, l_power / 2, angle = LIGHT_VERY_WIDE)
-	update_use_power(POWER_USE_ACTIVE)
-	use_power_oneoff(active_power_usage)//so we drain cell if they keep trying to use it
+	on = TRUE
+	set_light(brightness_on, brightness_on / 2)
 	update_icon()
 	if(loud)
 		visible_message("\The [src] turns on.")
-		playsound(src.loc, 'sound/effects/flashlight.ogg', 50, 0)
-	return 1
+	return TRUE
 
 /obj/machinery/floodlight/proc/turn_off(loud = 0)
+	on = FALSE
 	set_light(0, 0)
-	update_use_power(POWER_USE_OFF)
 	update_icon()
 	if(loud)
 		visible_message("\The [src] shuts down.")
-		playsound(src.loc, 'sound/effects/flashlight.ogg', 50, 0)
 
-/obj/machinery/floodlight/interface_interact(mob/user)
-	if(!CanInteract(user, DefaultTopicState()))
-		return FALSE
-	if(use_power)
+/obj/machinery/floodlight/attack_ai(mob/user as mob)
+	if(isrobot(user) && Adjacent(user))
+		return attack_hand(user)
+
+	if(on)
 		turn_off(1)
 	else
 		if(!turn_on(1))
 			to_chat(user, "You try to turn on \the [src] but it does not work.")
-			playsound(src.loc, 'sound/effects/flashlight.ogg', 50, 0)
+
+
+/obj/machinery/floodlight/attack_hand(mob/user)
+	if(open && cell)
+		cell.forceMove(get_turf(src))
+		if(ishuman(user))
+			if(!user.get_active_hand())
+				user.put_in_hands(cell)
+
+		cell.add_fingerprint(user)
+		cell.update_icon()
+
+		cell = null
+		on = FALSE
+		set_light(0)
+		to_chat(user, "You remove the power cell")
+		update_icon()
+		return
+
+	if(on)
+		turn_off(1)
+	else
+		if(!turn_on(1))
+			to_chat(user, "You try to turn on \the [src] but it does not work.")
 
 	update_icon()
-	return TRUE
 
-/obj/machinery/floodlight/RefreshParts()//if they're insane enough to modify a floodlight, let them
-	..()
-	var/light_mod = clamp(total_component_rating_of_type(/obj/item/stock_parts/capacitor), 0, 10)
-	l_power = light_mod? light_mod*0.01 + initial(l_power) : initial(l_power)/2 //gives us between 0.8-0.9 with capacitor, or 0.4 without one
-	l_range = light_mod*1.5 + initial(l_range)
-	change_power_consumption(initial(active_power_usage) * light_mod , POWER_USE_ACTIVE)
-	if(use_power)
-		set_light(l_range, l_power, angle = LIGHT_VERY_WIDE)
+
+/obj/machinery/floodlight/attackby(obj/item/I, mob/user)
+
+	var/list/usable_qualities = list(QUALITY_SCREW_DRIVING)
+	if(unlocked)
+		usable_qualities.Add(QUALITY_PRYING)
+
+	var/tool_type = I.get_tool_type(user, usable_qualities, src)
+	switch(tool_type)
+
+		if(QUALITY_PRYING)
+			if(unlocked)
+				if(I.use_tool(user, src, WORKTIME_NORMAL, tool_type, FAILCHANCE_HARD, required_stat = STAT_MEC))
+					if(open)
+						open = FALSE
+						overlays = null
+						to_chat(user, SPAN_NOTICE("You crowbar the battery panel in place."))
+					else
+						if(unlocked)
+							open = TRUE
+							to_chat(user, SPAN_NOTICE("You remove the battery panel."))
+					update_icon()
+				return
+			return
+
+		if(QUALITY_SCREW_DRIVING)
+			var/used_sound = unlocked ? 'sound/machines/Custom_screwdriveropen.ogg' :  'sound/machines/Custom_screwdriverclose.ogg'
+			if(I.use_tool(user, src, WORKTIME_NEAR_INSTANT, tool_type, FAILCHANCE_VERY_EASY, instant_finish_tier = 30, forced_sound = used_sound))
+				unlocked = !unlocked
+				to_chat(user, SPAN_NOTICE("You [unlocked ? "screw" : "unscrew"] the battery panel of \the [src] with [I]."))
+				update_icon()
+				return
+			return
+
+		if(ABORT_CHECK)
+			return
+
+	if (istype(I, /obj/item/cell/large))
+		if(open)
+			if(cell)
+				to_chat(user, SPAN_WARNING("There is a power cell already installed."))
+			else
+				user.drop_item()
+				I.forceMove(src)
+				cell = I
+				to_chat(user, SPAN_NOTICE("You insert the power cell."))
+		update_icon()

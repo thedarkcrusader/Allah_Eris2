@@ -21,11 +21,12 @@ window.onerror = function(msg, url, line, col, error) {
 
 //Globals
 window.status = 'Output';
-var $messages, $subTheme, $subOptions, $subFont, $selectedSub, $contextMenu, $filterMessages, $last_message;
+var $messages, $subOptions, $subAudio, $selectedSub, $contextMenu;
+var last_messages = [];
 var opts = {
 	//General
 	'messageCount': 0, //A count...of messages...
-	'messageLimit': (window.navigator.msSaveBlob ? 2053 : 20000), //A limit...for the messages...
+	'messageLimit': 2053, //A limit...for the messages...
 	'scrollSnapTolerance': 10, //If within x pixels of bottom
 	'clickTolerance': 10, //Keep focus if outside x pixels of mousedown position on mouseup
 	'imageRetryDelay': 50, //how long between attempts to reload images (in ms)
@@ -34,7 +35,8 @@ var opts = {
 	'wasd': false, //Is the user in wasd mode?
 	'priorChatHeight': 0, //Thing for height-resizing detection
 	'restarting': false, //Is the round restarting?
-	'iconsize': 12,
+	'darkmode':false, //Are we using darkmode? If not WHY ARE YOU LIVING IN 2009???
+	'fullscreen':false, //Is fullscreen mode enabled?
 
 	//Options menu
 	'selectedSubLoop': null, //Contains the interval loop for closing the selected sub menu
@@ -61,20 +63,23 @@ var opts = {
 	'clientDataLimit': 5,
 	'clientData': [],
 
-	'font': 'Arial',
-	'messageCombining': true
+	//Admin music volume update
+	'volumeUpdateDelay': 5000, //Time from when the volume updates to data being sent to the server
+	'volumeUpdating': false, //True if volume update function set to fire
+	'updatedVolume': 0, //The volume level that is sent to the server
+	'musicStartAt': 0, //The position the music starts playing
+	'musicEndAt': 0, //The position the music... stops playing... if null, doesn't apply (so the music runs through)
+
+	'defaultMusicVolume': 25,
+
+	'messageCombining': true,
+	'messageCombiningCount': 20,
 
 };
 var replaceRegexes = {};
 
 function clamp(val, min, max) {
 	return Math.max(min, Math.min(val, max))
-}
-
-function outerHTML(el) {
-    var wrap = document.createElement('div');
-    wrap.appendChild(el.cloneNode(true));
-    return wrap.innerHTML;
 }
 
 //Polyfill for fucking date now because of course IE8 and below don't support it
@@ -175,57 +180,62 @@ function replaceRegex() {
 	$(this).removeAttr('replaceRegex');
 }
 
-//Actually turns the highlight term match into appropriate html
-function addHighlightMarkup(match) {
+// Get a highlight markup span
+function createHighlightMarkup() {
 	var extra = '';
 	if (opts.highlightColor) {
-		extra += ' style="background-color: '+opts.highlightColor+'"';
+		extra += ' style="background-color: ' + opts.highlightColor + '"';
 	}
-	return '<span class="highlight"'+extra+'>'+match+'</span>';
+	return '<span class="highlight"' + extra + '></span>';
 }
 
-//Highlights words based on user settings
+// Get all child text nodes that match a regex pattern
+function getTextNodes(elem, pattern) {
+	var result = $([]);
+	$(elem).contents().each(function(idx, child) {
+		if (child.nodeType === 3 && /\S/.test(child.nodeValue) && pattern.test(child.nodeValue)) {
+			result = result.add(child);
+		}
+		else {
+			result = result.add(getTextNodes(child, pattern));
+		}
+	});
+	return result;
+}
+
+// Highlight all text terms matching the registered regex patterns
 function highlightTerms(el) {
-	if (el.children.length > 0) {
-		for(var h = 0; h < el.children.length; h++){
-			highlightTerms(el.children[h]);
-		}
-	}
+	var pattern = new RegExp("(" + opts.highlightTerms.join('|') + ")", 'gi');
+	var nodes = getTextNodes(el, pattern);
 
-	var hasTextNode = false;
-	for (var node = 0; node < el.childNodes.length; node++)
-	{
-		if (el.childNodes[node].nodeType === 3)
-		{
-			hasTextNode = true;
-			break;
-		}
-	}
-
-	if (hasTextNode) { //If element actually has text
-		var newText = '';
-		for (var c = 0; c < el.childNodes.length; c++) { //Each child element
-			if (el.childNodes[c].nodeType === 3) { //Is it text only?
-				var words = el.childNodes[c].data.split(' ');
-				for (var w = 0; w < words.length; w++) { //Each word in the text
-					var newWord = null;
-					for (var i = 0; i < opts.highlightTerms.length; i++) { //Each highlight term
-						if (opts.highlightTerms[i] && words[w].toLowerCase().indexOf(opts.highlightTerms[i].toLowerCase()) > -1) { //If a match is found
-							newWord = words[w].replace("<", "&lt;").replace(new RegExp(opts.highlightTerms[i], 'gi'), addHighlightMarkup);
-							break;
-						}
-						if (window.console)
-							console.log(newWord)
-					}
-					newText += newWord || words[w].replace("<", "&lt;");
-					newText += w >= words.length ? '' : ' ';
-				}
-			} else { //Every other type of element
-				newText += outerHTML(el.childNodes[c]);
+	nodes.each(function (idx, node) {
+		var content = $(node).text();
+		var parent = $(node).parent();
+		var pre = $(node.previousSibling);
+		$(node).remove();
+		content.split(pattern).forEach(function (chunk) {
+			// Get our highlighted span/text node
+			var toInsert = null;
+			if (pattern.test(chunk)) {
+				var tmpElem = $(createHighlightMarkup());
+				tmpElem.text(chunk);
+				toInsert = tmpElem;
 			}
-		}
-		el.innerHTML = newText;
-	}
+			else {
+				toInsert = document.createTextNode(chunk);
+			}
+
+			// Insert back into our element
+			if (pre.length == 0) {
+				var result = parent.prepend(toInsert);
+				pre = $(result[0].firstChild);
+			}
+			else {
+				pre.after(toInsert);
+				pre = $(pre[0].nextSibling);
+			}
+		});
+	});
 }
 
 function iconError(E) {
@@ -242,10 +252,6 @@ function iconError(E) {
 		that.src = src+'#'+attempts;
 		$(that).data('reload_attempts', ++attempts);
 	}, opts.imageRetryDelay);
-}
-
-function updateIconsSize(html) {
-	$(html).find(".icon").not('.text_tag').css({'height': opts.iconsize, 'width': opts.iconsize});
 }
 
 //Send a message to the client
@@ -362,27 +368,35 @@ function output(message, flag) {
 
 	var handled = false;
 	if (opts.messageCombining) {
-		var lastmessages = $messages.children('div.entry:last-child').last();
-		if (lastmessages.length && $last_message && $last_message == trimmed_message) {
-			var badge = lastmessages.children('.r').last();
-			if (badge.length) {
-				badge = badge.detach();
-				badge.text(parseInt(badge.text()) + 1);
-			} else {
-				badge = $('<span/>', {'class': 'r', 'text': 2});
-			}
-			lastmessages.html(message.replace(/<br\s*\/?>\s*$/g,'&ensp;'));
-			lastmessages.find('[replaceRegex]').each(replaceRegex);
-			lastmessages.append(badge);
-			badge.animate({
-				"font-size": "0.9em"
-			}, 100, function() {
+		var index = $.inArray(trimmed_message, last_messages);
+		if(index != -1) {
+			var back_index = last_messages.length - index;
+			var lastmessage = $messages.children('div.entry:nth-last-child(' + back_index + ')').last();
+			if (lastmessage.length) {
+				var badge = lastmessage.children('.r').last();
+				if (badge.length) {
+					badge = badge.detach();
+					badge.text(parseInt(badge.text()) + 1);
+				} else {
+					badge = $('<span/>', {'class': 'r', 'text': 2});
+				}
+				lastmessage.html(message);
+				lastmessage.find('[replaceRegex]').each(replaceRegex);
+				lastmessage.append(badge);
 				badge.animate({
-					"font-size": "0.7em"
-				}, 100);
-			});
-			opts.messageCount--;
-			handled = true;
+					"font-size": "0.9em"
+				}, 100, function() {
+					badge.animate({
+						"font-size": "0.7em"
+					}, 100);
+				});
+				opts.messageCount--;
+				if(back_index > 1) {
+					$messages[0].appendChild(lastmessage[0]);
+					last_messages.push(last_messages.splice(index, 1)[0]);
+				}
+				handled = true;
+			}
 		}
 	}
 
@@ -397,11 +411,10 @@ function output(message, flag) {
 
 		$(entry).find('[replaceRegex]').each(replaceRegex);
 
-		$last_message = trimmed_message;
+		if(last_messages.push(trimmed_message) >= opts.messageCombiningCount) {
+			last_messages.shift();
+		}
 		$messages[0].appendChild(entry);
-
-		updateIconsSize(entry);
-
 		$(entry).find("img.icon").error(iconError);
 
 		var to_linkify = $(entry).find(".linkify");
@@ -420,7 +433,7 @@ function output(message, flag) {
 		//Actually do the snap
 		//Stuff we can do after the message shows can go here, in the interests of responsiveness
 		if (opts.highlightTerms && opts.highlightTerms.length > 0) {
-			highlightTerms(entry);
+			highlightTerms($(entry));
 		}
 	}
 
@@ -468,17 +481,28 @@ function toHex(n) {
 	return "0123456789ABCDEF".charAt((n-n%16)/16) + "0123456789ABCDEF".charAt(n%16);
 }
 
-function setTheme(theme) {
-	if (theme === 'white') {
+function swap() { //Swap to darkmode
+	if (opts.darkmode){
 		document.getElementById("sheetofstyles").href = "browserOutput_white.css";
+		opts.darkmode = false;
 		runByond('?_src_=chat&proc=swaptolightmode');
-	} else if (theme === 'dark') {
+	} else {
 		document.getElementById("sheetofstyles").href = "browserOutput.css";
+		opts.darkmode = true;
 		runByond('?_src_=chat&proc=swaptodarkmode');
 	}
+	setCookie('darkmode', (opts.darkmode ? 'true' : 'false'), 365);
+}
 
-	setCookie('theme', theme, 365);
-	internalOutput('<span class="internal boldnshit">Set theme: '+theme+'</span>', 'internal');
+function fullscreen_check() {
+	if (opts.fullscreen){
+		opts.fullscreen = false;
+		runByond('?_src_=chat&proc=disable_fullscreen');
+	} else {
+		opts.fullscreen = true;
+		runByond('?_src_=chat&proc=enable_fullscreen');
+	}
+	setCookie('fullscreen', (opts.fullscreen ? 'true' : 'false'), 365);
 }
 
 function handleClientData(ckey, ip, compid) {
@@ -493,8 +517,8 @@ function handleClientData(ckey, ip, compid) {
 				return; //Record already exists
 			}
 		}
-		//Lets make sure we obey our limit (can connect from server with higher limit)
-		while (opts.clientData.length >= opts.clientDataLimit) {
+
+		if (opts.clientData.length >= opts.clientDataLimit) {
 			opts.clientData.shift();
 		}
 	} else {
@@ -532,6 +556,8 @@ function ehjaxCallback(data) {
 	} else if (data == 'roundrestart') {
 		opts.restarting = true;
 		internalOutput('<div class="connectionClosed internal restarting">The connection has been closed because the server is restarting. Please wait while you automatically reconnect.</div>', 'internal');
+	} else if (data == 'stopMusic') {
+		$('#adminMusic').prop('src', '');
 	} else {
 		//Oh we're actually being sent data instead of an instruction
 		var dataJ;
@@ -554,6 +580,36 @@ function ehjaxCallback(data) {
 				return;
 			} else {
 				handleClientData(data.clientData.ckey, data.clientData.ip, data.clientData.compid);
+			}
+			sendVolumeUpdate();
+		} else if (data.adminMusic) {
+			if (typeof data.adminMusic === 'string') {
+				var adminMusic = byondDecode(data.adminMusic);
+				var bindLoadedData = false;
+				adminMusic = adminMusic.match(/https?:\/\/\S+/) || '';
+				if (data.musicRate) {
+					var newRate = Number(data.musicRate);
+					if(newRate) {
+						$('#adminMusic').prop('defaultPlaybackRate', newRate);
+					}
+				} else {
+					$('#adminMusic').prop('defaultPlaybackRate', 1.0);
+				}
+				if (data.musicSeek) {
+					opts.musicStartAt = Number(data.musicSeek) || 0;
+					bindLoadedData = true;
+				} else {
+					opts.musicStartAt = 0;
+				}
+				if (data.musicHalt) {
+					opts.musicEndAt = Number(data.musicHalt) || null;
+					bindLoadedData = true;
+				}
+				if (bindLoadedData) {
+					$('#adminMusic').one('loadeddata', adminMusicLoadedData);
+				}
+				$('#adminMusic').prop('src', adminMusic);
+				$('#adminMusic').trigger("play");
 			}
 		} else if (data.syncRegex) {
 			for (var i in data.syncRegex) {
@@ -586,6 +642,34 @@ function createPopup(contents, width) {
 
 function toggleWasd(state) {
 	opts.wasd = (state == 'on' ? true : false);
+}
+
+function sendVolumeUpdate() {
+	opts.volumeUpdating = false;
+	if(opts.updatedVolume) {
+		runByond('?_src_=chat&proc=setMusicVolume&param[volume]='+opts.updatedVolume);
+	}
+}
+
+function adminMusicEndCheck(event) {
+	if (opts.musicEndAt) {
+		if ($('#adminMusic').prop('currentTime') >= opts.musicEndAt) {
+			$('#adminMusic').off(event);
+			$('#adminMusic').trigger('pause');
+			$('#adminMusic').prop('src', '');
+		}
+	} else {
+		$('#adminMusic').off(event);
+	}
+}
+
+function adminMusicLoadedData(event) {
+	if (opts.musicStartAt && ($('#adminMusic').prop('duration') === Infinity || (opts.musicStartAt <= $('#adminMusic').prop('duration'))) ) {
+		$('#adminMusic').prop('currentTime', opts.musicStartAt);
+	}
+	if (opts.musicEndAt) {
+		$('#adminMusic').on('timeupdate', adminMusicEndCheck);
+	}
 }
 
 function subSlideUp() {
@@ -628,32 +712,6 @@ function handleToggleClick($sub, $toggle) {
 	}
 }
 
-function saveBlob(blob, fileName) {
-	if (window.navigator.msSaveBlob) {
-		window.navigator.msSaveBlob(blob, fileName);
-		return;
-	}
-	return window.showSaveFilePicker({
-		types: [{
-			description: 'HTML',
-			accept: {'text/html': ['.html']},
-		}],
-		suggestedName: fileName
-	})
-	.then(function(fileHandle) {
-		return fileHandle.createWritable();
-	})
-	.then(function(writable) {
-		return writable.write(blob)
-			.then(function() {
-				return writable;
-			});
-	})
-	.then(function(writable) {
-		return writable.close();
-	});
-}
-
 /*****************************************
 *
 * DOM READY
@@ -667,9 +725,8 @@ if (typeof $ === 'undefined') {
 
 $(function() {
 	$messages = $('#messages');
-	$subTheme = $('#subTheme');
 	$subOptions = $('#subOptions');
-	$subFont = $('#subFont');
+	$subAudio = $('#subAudio');
 	$selectedSub = $subOptions;
 
 	//Hey look it's a controller loop!
@@ -693,32 +750,30 @@ $(function() {
 	*
 	******************************************/
 	var savedConfig = {
-		fontsize: getCookie('fontsize'),
-		iconsize: getCookie('iconsize'),
-		lineheight: getCookie('lineheight'),
+		'sfontSize': getCookie('fontsize'),
+		'slineHeight': getCookie('lineheight'),
 		'spingDisabled': getCookie('pingdisabled'),
 		'shighlightTerms': getCookie('highlightterms'),
 		'shighlightColor': getCookie('highlightcolor'),
-		'sfont': getCookie('font'),
+		'smusicVolume': getCookie('musicVolume'),
 		'smessagecombining': getCookie('messagecombining'),
-		'stheme': getCookie('theme')
+		'sdarkmode': getCookie('darkmode'),
+		'sfullscreen': getCookie('fullscreen'),
 	};
 
-	if (savedConfig.fontsize) {
-		$messages.css('font-size', savedConfig.fontsize);
-		internalOutput('<span class="internal boldnshit">Loaded font size setting of: '+savedConfig.fontsize+'</span>', 'internal');
+	if (savedConfig.sfontSize) {
+		$messages.css('font-size', savedConfig.sfontSize);
+		internalOutput('<span class="internal boldnshit">Loaded font size setting of: '+savedConfig.sfontSize+'</span>', 'internal');
 	}
-	if (savedConfig.iconsize) {
-		opts.iconsize = savedConfig.iconsize;
-		updateIconsSize($messages);
-		internalOutput('<span class="internal boldnshit">Loaded icon size setting of: '+savedConfig.iconsize+'</span>', 'internal');
+	if (savedConfig.slineHeight) {
+		$("body").css('line-height', savedConfig.slineHeight);
+		internalOutput('<span class="internal boldnshit">Loaded line height setting of: '+savedConfig.slineHeight+'</span>', 'internal');
 	}
-	if (savedConfig.lineheight) {
-		$("body").css('line-height', savedConfig.lineheight);
-		internalOutput('<span class="internal boldnshit">Loaded line height setting of: '+savedConfig.lineheight+'</span>', 'internal');
+	if(savedConfig.sdarkmode == 'true'){
+		swap();
 	}
-	if(savedConfig.stheme){
-		setTheme(savedConfig.stheme);
+	if(savedConfig.sfullscreen == 'true'){
+		fullscreen_check();
 	}
 	if (savedConfig.spingDisabled) {
 		if (savedConfig.spingDisabled == 'true') {
@@ -728,15 +783,11 @@ $(function() {
 		internalOutput('<span class="internal boldnshit">Loaded ping display of: '+(opts.pingDisabled ? 'hidden' : 'visible')+'</span>', 'internal');
 	}
 	if (savedConfig.shighlightTerms) {
-		var savedTerms = $.parseJSON(savedConfig.shighlightTerms);
-		var actualTerms = '';
-		for (var i = 0; i < savedTerms.length; i++) {
-			if (savedTerms[i]) {
-				actualTerms += savedTerms[i] + ', ';
-			}
-		}
+		var savedTerms = $.parseJSON(savedConfig.shighlightTerms).filter(function (entry) {
+			return entry !== null && /\S/.test(entry);
+		});
+		var actualTerms = savedTerms.length != 0 ? savedTerms.join(', ') : null;
 		if (actualTerms) {
-			actualTerms = actualTerms.substring(0, actualTerms.length - 2);
 			internalOutput('<span class="internal boldnshit">Loaded highlight strings of: ' + actualTerms+'</span>', 'internal');
 			opts.highlightTerms = savedTerms;
 		}
@@ -745,9 +796,16 @@ $(function() {
 		opts.highlightColor = savedConfig.shighlightColor;
 		internalOutput('<span class="internal boldnshit">Loaded highlight color of: '+savedConfig.shighlightColor+'</span>', 'internal');
 	}
-	if (savedConfig.sfont) {
-		$('body').css({'font-family': savedConfig.sfont});
-		internalOutput('<span class="internal boldnshit">Loaded font: '+savedConfig.sfont+'</span>', 'internal');
+	if (savedConfig.smusicVolume) {
+		var newVolume = clamp(savedConfig.smusicVolume, 0, 100);
+		$('#adminMusic').prop('volume', newVolume / 100);
+		$('#musicVolume').val(newVolume);
+		opts.updatedVolume = newVolume;
+		sendVolumeUpdate();
+		internalOutput('<span class="internal boldnshit">Loaded music volume of: '+savedConfig.smusicVolume+'</span>', 'internal');
+	}
+	else{
+		$('#adminMusic').prop('volume', opts.defaultMusicVolume / 100);
 	}
 
 	if (savedConfig.smessagecombining) {
@@ -923,13 +981,14 @@ $(function() {
 	$('#toggleOptions').click(function(e) {
 		handleToggleClick($subOptions, $(this));
 	});
-
-	$('#toggleTheme').click(function(e) {
-		handleToggleClick($subTheme, $(this));
+	$('#darkmodetoggle').click(function(e) {
+		swap();
 	});
-
-	$('#toggleFont').click(function(e) {
-		handleToggleClick($subFont, $(this));
+	$('#fullscreentoggle').click(function(e) {
+		fullscreen_check();
+	});
+	$('#toggleAudio').click(function(e) {
+		handleToggleClick($subAudio, $(this));
 	});
 
 	$('.sub, .toggle').mouseenter(function() {
@@ -940,58 +999,42 @@ $(function() {
 		opts.suppressSubClose = false;
 	});
 
-	$('#setWhiteTheme').click(function() {
-		setTheme('white');
-		savedConfig.stheme = 'white';
-	})
-
-	$('#setDarkTheme').click(function() {
-		setTheme('dark');
-		savedConfig.stheme = 'dark';
-	})
-
 	$('#decreaseFont').click(function(e) {
-		savedConfig.fontsize = Math.max(parseInt(savedConfig.fontsize || 13) - 1, 1) + 'px';
-		$messages.css({'font-size': savedConfig.fontsize});
-		setCookie('fontsize', savedConfig.fontsize, 365);
-		internalOutput('<span class="internal boldnshit">Font size set to '+savedConfig.fontsize+'</span>', 'internal');
+		var fontSize = parseInt($messages.css('font-size'));
+		fontSize = fontSize - 1 + 'px';
+		$messages.css({'font-size': fontSize});
+		setCookie('fontsize', fontSize, 365);
+		internalOutput('<span class="internal boldnshit">Font size set to '+fontSize+'</span>', 'internal');
 	});
 
 	$('#increaseFont').click(function(e) {
-		savedConfig.fontsize = (parseInt(savedConfig.fontsize || 13) + 1) + 'px';
-		$messages.css({'font-size': savedConfig.fontsize});
-		setCookie('fontsize', savedConfig.fontsize, 365);
-		internalOutput('<span class="internal boldnshit">Font size set to '+savedConfig.fontsize+'</span>', 'internal');
+		var fontSize = parseInt($messages.css('font-size'));
+		fontSize = fontSize + 1 + 'px';
+		$messages.css({'font-size': fontSize});
+		setCookie('fontsize', fontSize, 365);
+		internalOutput('<span class="internal boldnshit">Font size set to '+fontSize+'</span>', 'internal');
 	});
 
-	$('#decreaseIcon').click(function(e) {
-		savedConfig.iconsize = Math.max((parseInt(savedConfig.iconsize) || 12) - 1, 1);
-		updateIconsSize($messages);
-		setCookie('iconsize', savedConfig.iconsize, 365);
-		opts.iconsize = savedConfig.iconsize;
-		internalOutput('<span class="internal boldnshit">Icon size set to '+savedConfig.iconsize+'</span>', 'internal');
-	})
-
-	$('#increaseIcon').click(function(e) {
-		savedConfig.iconsize = (parseInt(savedConfig.iconsize || 12) + 1);
-		updateIconsSize($messages);
-		setCookie('iconsize', savedConfig.iconsize, 365);
-		opts.iconsize = savedConfig.iconsize;
-		internalOutput('<span class="internal boldnshit">Icon size set to '+savedConfig.iconsize+'</span>', 'internal');
-	})
-
 	$('#decreaseLineHeight').click(function(e) {
-		savedConfig.lineheight = Math.max(parseFloat(savedConfig.lineheight || 1.2) - 0.1, 0.1).toFixed(1);
-		$("body").css({'line-height': savedConfig.lineheight});
-		setCookie('lineheight', savedConfig.lineheight, 365);
-		internalOutput('<span class="internal boldnshit">Line height set to '+savedConfig.lineheight+'</span>', 'internal');
+		var Heightline = parseFloat($("body").css('line-height'));
+		var Sizefont = parseFloat($("body").css('font-size'));
+		var lineheightvar = Heightline / Sizefont
+		lineheightvar -= 0.1;
+		lineheightvar = lineheightvar.toFixed(1)
+		$("body").css({'line-height': lineheightvar});
+		setCookie('lineheight', lineheightvar, 365);
+		internalOutput('<span class="internal boldnshit">Line height set to '+lineheightvar+'</span>', 'internal');
 	});
 
 	$('#increaseLineHeight').click(function(e) {
-		savedConfig.lineheight = (parseFloat(savedConfig.lineheight || 1.2) + 0.1).toFixed(1);
-		$("body").css({'line-height': savedConfig.lineheight});
-		setCookie('lineheight', savedConfig.lineheight, 365);
-		internalOutput('<span class="internal boldnshit">Line height set to '+savedConfig.lineheight+'</span>', 'internal');
+		var Heightline = parseFloat($("body").css('line-height'));
+		var Sizefont = parseFloat($("body").css('font-size'));
+		var lineheightvar = Heightline / Sizefont
+		lineheightvar += 0.1;
+		lineheightvar = lineheightvar.toFixed(1)
+		$("body").css({'line-height': lineheightvar});
+		setCookie('lineheight', lineheightvar, 365);
+		internalOutput('<span class="internal boldnshit">Line height set to '+lineheightvar+'</span>', 'internal');
 	});
 
 	$('#togglePing').click(function(e) {
@@ -1009,7 +1052,7 @@ $(function() {
 		// Requires IE 10+ to issue download commands. Just opening a popup
 		// window will cause Ctrl+S to save a blank page, ignoring innerHTML.
 		if (!window.Blob) {
-			output('<span class="big red">This function is only supported on IE 10 and up. Upgrade if possible.</span>', 'internal');
+			output('<span class="big red">This function is only supported on IE 10+. Upgrade if possible.</span>', 'internal');
 			return;
 		}
 
@@ -1025,7 +1068,7 @@ $(function() {
 				fname += ' ' + (hours < 10 ? '0' : '') + hours + (mins < 10 ? '0' : '') + mins + (secs < 10 ? '0' : '') + secs;
 				fname += '.html';
 
-				saveBlob(blob, fname);
+				window.navigator.msSaveBlob(blob, fname);
 			}
 		});
 	});
@@ -1059,20 +1102,12 @@ $(function() {
 	$('body').on('submit', '#highlightTermForm', function(e) {
 		e.preventDefault();
 
-		var count = 0;
-		while (count < opts.highlightLimit) {
+		opts.highlightTerms = [];
+		for (var count = 0; count < opts.highlightLimit; count++) {
 			var term = $('#highlightTermInput'+count).val();
-			if (term) {
-				term = term.trim();
-				if (term === '') {
-					opts.highlightTerms[count] = null;
-				} else {
-					opts.highlightTerms[count] = term.toLowerCase();
-				}
-			} else {
-				opts.highlightTerms[count] = null;
+			if (term !== null && /\S/.test(term)) {
+				opts.highlightTerms.push(term.trim().toLowerCase());
 			}
-			count++;
 		}
 
 		var color = $('#highlightColor').val();
@@ -1094,18 +1129,24 @@ $(function() {
 		opts.messageCount = 0;
 	});
 
-	$('#fontInputSpan').hover(function() {
-		$('#fontInput').removeClass('hidden');
+	$('#musicVolumeSpan').hover(function() {
+		$('#musicVolumeText').addClass('hidden');
+		$('#musicVolume').removeClass('hidden');
 	}, function() {
-		$('#fontInput').addClass('hidden');
+		$('#musicVolume').addClass('hidden');
+		$('#musicVolumeText').removeClass('hidden');
 	});
 
-	$('#fontInput').change(function() {
-		var newFont = $('#fontInput').val() || 'Verdana, sans-serif';
-		$('body').css({'font-family': newFont});
-		setCookie('font', newFont, 365);
-		opts.font = newFont;
-		internalOutput('<span class="internal boldnshit">Font set to: '+newFont+'</span>', 'internal');
+	$('#musicVolume').change(function() {
+		var newVolume = $('#musicVolume').val();
+		newVolume = clamp(newVolume, 0, 100);
+		$('#adminMusic').prop('volume', newVolume / 100);
+		setCookie('musicVolume', newVolume, 365);
+		opts.updatedVolume = newVolume;
+		if(!opts.volumeUpdating) {
+			setTimeout(sendVolumeUpdate, opts.volumeUpdateDelay);
+			opts.volumeUpdating = true;
+		}
 	});
 
 	$('#toggleCombine').click(function(e) {
@@ -1114,9 +1155,6 @@ $(function() {
 	});
 
 	$('img.icon').error(iconError);
-
-
-
 
 	/*****************************************
 	*

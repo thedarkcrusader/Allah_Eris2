@@ -1,61 +1,54 @@
-/obj/item/stock_parts/circuitboard/reagent_temp
-	name = "circuit board (thermal regulator)"
-	build_path = /obj/machinery/reagent_temperature
+/obj/item/electronics/circuitboard/chemmaster
+	name = T_BOARD("ChemMaster 3000")
+	build_path = /obj/machinery/chem_master
 	board_type = "machine"
-	origin_tech = list(TECH_POWER = 2, TECH_ENGINEERING = 1)
+	origin_tech = list(TECH_DATA = 2, TECH_BIO = 2)
+	req_components = list(
+		/obj/item/stack/cable_coil = 2,
+		/obj/item/stock_parts/scanning_module = 1,
+		/obj/item/reagent_containers/glass/beaker = 2
+	)
+
+/obj/item/electronics/circuitboard/chem_heater
+	name = T_BOARD("Chemical Heater")
+	build_path = /obj/machinery/chem_heater
+	board_type = "machine"
+	origin_tech = list(TECH_DATA = 2, TECH_BIO = 2)
 	req_components = list(
 		/obj/item/stock_parts/micro_laser = 1,
-		/obj/item/stock_parts/capacitor = 1
-	)
-	additional_spawn_components = list(
-		/obj/item/stock_parts/console_screen = 1,
-		/obj/item/stock_parts/keyboard = 1,
-		/obj/item/stock_parts/power/apc/buildable = 1
+		/obj/item/stock_parts/console_screen = 1
 	)
 
-/obj/item/stock_parts/circuitboard/sublimator
-	name = "circuit board (reagent sublimator)"
-	build_path = /obj/machinery/portable_atmospherics/reagent_sublimator
+/obj/item/electronics/circuitboard/chemical_dispenser
+	name = T_BOARD("Chemical Dispenser")
+	build_path = /obj/machinery/chemical_dispenser
 	board_type = "machine"
-	origin_tech = list(TECH_POWER = 2, TECH_ENGINEERING = 1)
-	req_components = list(
-		/obj/item/stock_parts/micro_laser = 1,
-		/obj/item/stock_parts/capacitor = 1,
-		/obj/item/stock_parts/matter_bin = 1
-	)
-	additional_spawn_components = list(
-		/obj/item/stock_parts/power/apc/buildable = 1
-	)
-
-/obj/item/stock_parts/circuitboard/sublimator/sauna
-	name = "circuit board (sauna sublimator)"
-	build_path = /obj/machinery/portable_atmospherics/reagent_sublimator/sauna
-
-
-/obj/item/stock_parts/circuitboard/reagentgrinder
-	name = "circuit board (reagent grinder)"
-	build_path = /obj/machinery/reagentgrinder
-	board_type = "machine"
-	origin_tech = list(TECH_BIO = 1, TECH_MATERIAL = 2, TECH_ENGINEERING = 2)
+	origin_tech = list(TECH_DATA = 2, TECH_BIO = 2)
 	req_components = list(
 		/obj/item/stock_parts/matter_bin = 2,
-		/obj/item/stock_parts/manipulator = 2,
-		/obj/item/stock_parts/capacitor = 2
-	)
-	additional_spawn_components = list(
-		/obj/item/stock_parts/power/apc/buildable = 1
+		/obj/item/stock_parts/capacitor = 1,
+		/obj/item/stock_parts/manipulator = 1,
+		/obj/item/stock_parts/console_screen = 1,
+		/obj/item/cell/medium = 1
 	)
 
-/obj/item/stock_parts/circuitboard/juicer
-	name = "circuit board (blender)"
-	build_path = /obj/machinery/reagentgrinder/juicer
+/obj/item/electronics/circuitboard/chemical_dispenser/industrial
+	name = T_BOARD("Industrial Chemical Dispenser")
+	build_path = /obj/machinery/chemical_dispenser/industrial
+
+/obj/item/electronics/circuitboard/chemical_dispenser/soda
+	name = T_BOARD("Soda Chemical Dispenser")
+	build_path = /obj/machinery/chemical_dispenser/soda
+
+/obj/item/electronics/circuitboard/chemical_dispenser/beer
+	name = T_BOARD("Booze Chemical Dispenser")
+	build_path = /obj/machinery/chemical_dispenser/beer
+
+/obj/item/electronics/circuitboard/electrolyzer
+	name = T_BOARD("Electrolyzer")
+	build_path = /obj/machinery/electrolyzer
 	board_type = "machine"
-	origin_tech = list(TECH_BIO = 1, TECH_MATERIAL = 1, TECH_ENGINEERING = 1)
+	origin_tech = list(TECH_BIO = 3)
 	req_components = list(
-		/obj/item/stock_parts/matter_bin = 1,
-		/obj/item/stock_parts/manipulator = 1,
-		/obj/item/stock_parts/capacitor = 1
-	)
-	additional_spawn_components = list(
-		/obj/item/stock_parts/power/apc/buildable = 1
+		/obj/item/stock_parts/capacitor = 1,
 	)

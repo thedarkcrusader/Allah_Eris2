@@ -1,11 +1,11 @@
 /obj/item/device/hailer
 	name = "hailer"
-	desc = "Used to project your voice, saving your breath to run up and down sets of stairs instead."
-	icon = 'icons/obj/tools/hailer.dmi'
+	desc = "Used by obese officers to save their breath for running."
 	icon_state = "voice0"
 	item_state = "flashbang"	//looks exactly like a flash (and nothing like a flashbang)
 	w_class = ITEM_SIZE_TINY
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
+	matter = list(MATERIAL_PLASTIC = 2, MATERIAL_GLASS = 1, MATERIAL_STEEL = 2)
+	flags = CONDUCT
 
 	var/use_message = "Halt! Security!"
 	var/spamcheck = 0
@@ -24,7 +24,7 @@
 	if(!new_message || new_message == "")
 		use_message = "Halt! Security!"
 	else
-		use_message = capitalize(copytext(sanitize(new_message), 1, MAX_LNAME_LEN))
+		use_message = capitalize(copytext(sanitize(new_message), 1, MAX_MESSAGE_LEN))
 
 	to_chat(usr, "You configure the hailer to shout \"[use_message]\".")
 
@@ -34,19 +34,21 @@
 
 	if(isnull(insults))
 		playsound(get_turf(src), 'sound/voice/halt.ogg', 100, 1, vary = 0)
-		user.audible_message(
-			SPAN_WARNING("[user]'s [name] rasps, \"[use_message]\""),
-			null,
-			SPAN_WARNING("\The [user] holds up \the [name].")
-		)
+		user.audible_message("<span class='warning'>[user]'s [name] rasps, \"[use_message]\"</span>", SPAN_WARNING("\The [user] holds up \the [name]."))
 	else
-		to_chat(user, SPAN_DANGER("*BZZZZZZZZT*"))
+		if(insults > 0)
+			playsound(get_turf(src), 'sound/voice/binsult.ogg', 100, 1, vary = 0)
+			// Yes, it used to show the transcription of the sound clip. That was a) inaccurate b) immature as shit.
+			user.audible_message(SPAN_WARNING("[user]'s [name] gurgles something indecipherable and deeply offensive."), SPAN_WARNING("\The [user] holds up \the [name]."))
+			insults--
+		else
+			to_chat(user, SPAN_DANGER("*BZZZZZZZZT*"))
 
 	spamcheck = 1
 	spawn(20)
 		spamcheck = 0
 
-/obj/item/device/hailer/emag_act(remaining_charges, mob/user)
+/obj/item/device/hailer/emag_act(var/remaining_charges, var/mob/user)
 	if(isnull(insults))
 		to_chat(user, SPAN_DANGER("You overload \the [src]'s voice synthesizer."))
 		insults = rand(1, 3)//to prevent dickflooding

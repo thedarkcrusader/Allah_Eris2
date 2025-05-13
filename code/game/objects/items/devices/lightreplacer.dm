@@ -32,115 +32,65 @@
 //
 // The explosion cannot insta-kill anyone with 30% or more health.
 
+#define LIGHT_OK 0
+#define LIGHT_EMPTY 1
+#define LIGHT_BROKEN 2
+#define LIGHT_BURNED 3
+
 
 /obj/item/device/lightreplacer
+
 	name = "light replacer"
-	desc = "A lightweight automated device, capable of interfacing with and rapidly replacing standard light installations."
-	icon = 'icons/obj/janitor_tools.dmi'
+	desc = "A device to automatically replace lights. Refill with working lightbulbs or sheets of glass."
+
+	icon = 'icons/obj/janitor.dmi'
 	icon_state = "lightreplacer0"
 	item_state = "electronic"
 
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
+	flags = CONDUCT
 	slot_flags = SLOT_BELT
 	origin_tech = list(TECH_MAGNET = 3, TECH_MATERIAL = 2)
+	matter = list(MATERIAL_STEEL = 1, MATERIAL_PLASTIC = 1, MATERIAL_GLASS = 1)
 
 	var/max_uses = 32
 	var/uses = 32
-	var/emagged = FALSE
+	var/emagged = 0
+	var/failmsg = ""
 	var/charge = 0
-	/// The lighting tone to use for placed light bulbs. One of `LIGHT_COLOR_*` or `LIGHT_REPLACE_*`, or a valid hex color code. Default `LIGHT_REPLACE_RANDOM`.
-	var/lighting_tone = LIGHT_REPLACE_RANDOM
 
-/obj/item/device/lightreplacer/examine(mob/user, distance)
-	. = ..()
-	if(distance <= 2)
-		to_chat(user, "It has [uses] light\s remaining.")
-		switch (lighting_tone)
-			if (LIGHT_REPLACE_AREA)
-				to_chat(user, "It is configured to match the room's blueprints for bulb color and tone.")
-			if (LIGHT_REPLACE_EXISTING)
-				to_chat(user, "It is configured to match the replaced bulb's color and tone.")
-			if (LIGHT_REPLACE_RANDOM)
-				to_chat(user, "It is configured to print bulbs in random tones.")
-			else
-				to_chat(user, "It is configured to print bulbs in this color: <span style='color: [lighting_tone];'>■</span>")
+/obj/item/device/lightreplacer/New()
+	failmsg = "The [name]'s refill light blinks red."
+	..()
 
+/obj/item/device/lightreplacer/examine(mob/user, extra_description = "")
+	if(..(user, 2))
+		to_chat(user, "It has [uses] lights remaining.")
 
-/obj/item/device/lightreplacer/use_before(atom/target, mob/living/user, click_parameters)
-	// Replace light bulbs
-	if (istype(target, /obj/machinery/light))
-		var/obj/machinery/light/fixture = target
-		ReplaceLight(fixture, user)
-		return TRUE
+/obj/item/device/lightreplacer/attackby(obj/item/W, mob/user)
+	if(istype(W, /obj/item/stack/material) && W.get_material_name() == MATERIAL_GLASS)
+		var/obj/item/stack/G = W
+		if(uses >= max_uses)
+			to_chat(user, SPAN_WARNING("[src.name] is full."))
+			return
+		else if(G.use(1))
+			AddUses(16) //Autolathe converts 1 sheet into 16 lights.
+			to_chat(user, SPAN_NOTICE("You insert a piece of glass into \the [src.name]. You have [uses] light\s remaining."))
+			return
+		else
+			to_chat(user, SPAN_WARNING("You need one sheet of glass to replace lights."))
 
-	return ..()
-
-
-/obj/item/device/lightreplacer/use_tool(obj/item/tool, mob/user, list/click_params)
-	// Light bulb - Add light
-	if (istype(tool, /obj/item/light))
-		if (uses >= max_uses)
-			USE_FEEDBACK_FAILURE("\The [src] is full.")
-			return TRUE
-		var/obj/item/light/light = tool
-		if (light.status != LIGHT_OK)
-			USE_FEEDBACK_FAILURE("\The [tool] is broken.")
-			return TRUE
-		if (!user.unEquip(tool, src))
-			FEEDBACK_UNEQUIP_FAILURE(user, tool)
-			return TRUE
-		AddUses(1)
-		user.visible_message(
-			SPAN_NOTICE("\The [user] adds \a [tool] to \a [src]."),
-			SPAN_NOTICE("You add \the [tool] to \the [src]. It now has [uses] light\s remaining.")
-		)
-		qdel(tool)
-		return TRUE
-
-	// Container - Add lights
-	if (istype(tool, /obj/item/storage))
-		if (uses >= max_uses)
-			USE_FEEDBACK_FAILURE("\The [src] is full.")
-			return TRUE
-		var/obj/item/storage/storage = tool
-		var/amt_inserted = 0
-		for (var/obj/item/light/light in storage.contents)
-			if (uses < max_uses && light.status == LIGHT_OK)
+	if(istype(W, /obj/item/light))
+		var/obj/item/light/L = W
+		if(L.status == 0) // LIGHT OKAY
+			if(uses < max_uses)
 				AddUses(1)
-				amt_inserted++
-				storage.remove_from_storage(light, src, TRUE)
-				qdel(light)
-		if (!amt_inserted)
-			USE_FEEDBACK_FAILURE("\The [tool] has no lights to add to \the [src].")
-			return TRUE
-		storage.finish_bulk_removal()
-		user.visible_message(
-			SPAN_NOTICE("\The [user] transfers some lights from \a [tool] to \a [src]."),
-			SPAN_NOTICE("You insert [amt_inserted] light\s from \the [tool] to \the [src]. It now has [uses] light\s remaining.")
-		)
-		return TRUE
-
-	// Material Stack - Add lights
-	if (istype(tool, /obj/item/stack/material))
-		if (tool.get_material_name() != MATERIAL_GLASS)
-			USE_FEEDBACK_FAILURE("\The [src] can only be loaded with glass.")
-			return TRUE
-		if (uses >= max_uses)
-			USE_FEEDBACK_FAILURE("\The [src] is full.")
-			return TRUE
-		var/obj/item/stack/material/material_stack = tool
-		if (!material_stack.use(1))
-			USE_FEEDBACK_STACK_NOT_ENOUGH(material_stack, 1, "to refill \the [src].")
-			return TRUE
-		AddUses(16)
-		user.visible_message(
-			SPAN_NOTICE("\The [user] loads \a [src] with [material_stack.get_vague_name(FALSE)]."),
-			SPAN_NOTICE("You load \the [src] with [material_stack.get_exact_name(1)]. It now has [uses] light\s remaining.")
-		)
-		return TRUE
-
-	return ..()
-
+				to_chat(user, "You insert \the [L.name] into \the [src.name]. You have [uses] light\s remaining.")
+				user.drop_item()
+				qdel(L)
+				return
+		else
+			to_chat(user, "You need a working light.")
+			return
 
 /obj/item/device/lightreplacer/attack_self(mob/user)
 	/* // This would probably be a bit OP. If you want it though, uncomment the code.
@@ -153,93 +103,72 @@
 	*/
 	to_chat(usr, "It has [uses] lights remaining.")
 
-/obj/item/device/lightreplacer/on_update_icon()
+/obj/item/device/lightreplacer/update_icon()
 	icon_state = "lightreplacer[emagged]"
 
 
-/obj/item/device/lightreplacer/attack_self(mob/user)
-	var/selection = input(user, "Select a color, tone, or matching option:", "Light Replace Color", LIGHT_REPLACE_OPTIONS[1]) in LIGHT_REPLACE_OPTIONS
-	if (!selection)
-		return
-	switch (selection)
-		if ("Random (Default)")
-			lighting_tone = LIGHT_REPLACE_RANDOM
-			to_chat(user, SPAN_NOTICE("You configure \the [src] to print bulbs in random tones."))
-		if ("Match Blueprint")
-			lighting_tone = LIGHT_REPLACE_AREA
-			to_chat(user, SPAN_NOTICE("You configure \the [src] to match the room's blueprints for bulb color and tone."))
-		if ("Match Existing")
-			lighting_tone = LIGHT_REPLACE_EXISTING
-			to_chat(user, SPAN_NOTICE("You configure \the [src] to match the replaced bulb's color and tone."))
-		if ("Warm")
-			lighting_tone = LIGHT_COLOUR_WARM
-			to_chat(user, SPAN_NOTICE("You configure \the [src] to print bulbs in warm tones."))
-		if ("Cool")
-			lighting_tone = LIGHT_COLOUR_COOL
-			to_chat(user, SPAN_NOTICE("You configure \the [src] to print bulbs in cool tones."))
-		if ("White")
-			lighting_tone = LIGHT_COLOUR_WHITE
-			to_chat(user, SPAN_NOTICE("You configure \the [src] to print bulbs in white tones."))
-		if ("Custom")
-			var/new_lighting_tone = input(user, "Select a color:", "Light Replace Color") as color
-			if (!new_lighting_tone)
-				return
-			lighting_tone = new_lighting_tone
-			to_chat(user, SPAN_NOTICE("You configure \the [src] to print bulbs in the color: <span style='color: [lighting_tone];'>■</span>"))
-
-
-/obj/item/device/lightreplacer/proc/Use(mob/user)
+/obj/item/device/lightreplacer/proc/Use(var/mob/user)
 
 	playsound(src.loc, 'sound/machines/click.ogg', 50, 1)
 	AddUses(-1)
 	return 1
 
 // Negative numbers will subtract
-/obj/item/device/lightreplacer/proc/AddUses(amount = 1)
+/obj/item/device/lightreplacer/proc/AddUses(var/amount = 1)
 	uses = min(max(uses + amount, 0), max_uses)
 
-/obj/item/device/lightreplacer/proc/Charge(mob/user, amount = 1)
+/obj/item/device/lightreplacer/proc/Charge(var/mob/user, var/amount = 1)
 	charge += amount
-	if(charge > 6)
+	if(charge > 3)
 		AddUses(1)
 		charge = 0
 
-/obj/item/device/lightreplacer/proc/ReplaceLight(obj/machinery/light/target, mob/living/U)
+/obj/item/device/lightreplacer/proc/ReplaceLight(var/obj/machinery/light/target, var/mob/living/U)
 
-	if(target.get_status() == LIGHT_OK)
-		to_chat(U, "There is a working [target.get_fitting_name()] already inserted.")
-	else if(!CanUse(U))
-		to_chat(U, "\The [src]'s refill light blinks red.")
-	else if(Use(U))
-		to_chat(U, SPAN_NOTICE("You replace the [target.get_fitting_name()] with the [src]."))
+	if(target.status != LIGHT_OK)
+		if(CanUse(U))
+			if(!Use(U)) return
+			to_chat(U, SPAN_NOTICE("You replace the [target.fitting] with the [src]."))
 
-		var/bulb_color = null
-		if (lighting_tone == LIGHT_REPLACE_AREA)
-			bulb_color = target.get_color_from_area()
-		else if (lighting_tone == LIGHT_REPLACE_EXISTING)
-			bulb_color = target.lightbulb?.get_color()
-		else if (lighting_tone == LIGHT_REPLACE_RANDOM)
-			bulb_color = pick(LIGHT_STANDARD_COLORS)
+			if(target.status != LIGHT_EMPTY)
+
+				var/obj/item/light/L1 = new target.light_type(target.loc)
+				L1.status = target.status
+				L1.rigged = target.rigged
+				L1.brightness_range = target.brightness_range
+				L1.brightness_power = target.brightness_power
+				L1.brightness_color = target.brightness_color
+				L1.switchcount = target.switchcount
+				target.switchcount = 0
+				L1.update()
+
+				target.status = LIGHT_EMPTY
+				target.update()
+
+			var/obj/item/light/L2 = new target.light_type()
+
+			target.status = L2.status
+			target.switchcount = L2.switchcount
+			target.rigged = emagged
+			target.brightness_range = L2.brightness_range
+			target.brightness_power = L2.brightness_power
+			target.brightness_color = L2.brightness_color
+			target.on = target.has_power()
+			target.update()
+			qdel(L2)
+
+			if(target.on && target.rigged)
+				target.explode()
+			return
+
 		else
-			bulb_color = lighting_tone
-		if (!bulb_color)
-			bulb_color = pick(LIGHT_STANDARD_COLORS)
+			to_chat(U, failmsg)
+			return
+	else
+		to_chat(U, "There is a working [target.fitting] already inserted.")
+		return
 
-		if(target.lightbulb)
-			var/obj/item/bulb = target.lightbulb
-			target.remove_bulb()
-			if (isrobot(U))
-				qdel(bulb)
-
-		var/obj/item/light/L = new target.light_type(target, bulb_color)
-		if (emagged)
-			log_and_message_admins("used an emagged light replacer.", U)
-			L.create_reagents(5)
-			L.reagents.add_reagent(/datum/reagent/toxin/phoron, 5)
-		target.insert_bulb(L)
-
-
-/obj/item/device/lightreplacer/emag_act(remaining_charges, mob/user)
+/obj/item/device/lightreplacer/emag_act(var/remaining_charges, var/mob/user)
 	emagged = !emagged
 	playsound(src.loc, "sparks", 100, 1)
 	update_icon()
@@ -247,10 +176,15 @@
 
 //Can you use it?
 
-/obj/item/device/lightreplacer/proc/CanUse(mob/living/user)
+/obj/item/device/lightreplacer/proc/CanUse(var/mob/living/user)
 	src.add_fingerprint(user)
 	//Not sure what else to check for. Maybe if clumsy?
 	if(uses > 0)
 		return 1
 	else
 		return 0
+
+#undef LIGHT_OK
+#undef LIGHT_EMPTY
+#undef LIGHT_BROKEN
+#undef LIGHT_BURNED

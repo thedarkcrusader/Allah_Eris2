@@ -1,186 +1,223 @@
 /datum/gear/head
-	sort_category = "Hats and Headwear"
+	display_name = "bandana, pirate-red"
+	path = /obj/item/clothing/head/bandana
 	slot = slot_head
-	category = /datum/gear/head
+	sort_category = "Hats and Headwear"
+
+/datum/gear/head/bandana_green
+	display_name = "bandana, green"
+	path = /obj/item/clothing/head/bandana/green
+
+/datum/gear/head/bandana_orange
+	display_name = "bandana, orange"
+	path = /obj/item/clothing/head/bandana/orange
 
 /datum/gear/head/beret
-	display_name = "beret, colour select"
-	path = /obj/item/clothing/head/beret/plaincolor
-	flags = GEAR_HAS_COLOR_SELECTION
-	description = "A simple, solid color beret. This one has no emblems or insignia on it."
+	display_name = "beret, red"
+	path = /obj/item/clothing/head/beret
 
-/datum/gear/head/bandana
-	display_name = "bandana selection"
-	path = /obj/item/clothing
+/datum/gear/head/beret/purp
+	display_name = "beret, purple"
+	path = /obj/item/clothing/head/beret/purple
 
-/datum/gear/head/bandana/New()
+/datum/gear/head/beret/moebius
+	display_name = "beret, Moebius"
+	path = /obj/item/clothing/head/beret/moebius
+	allowed_roles = list(JOBS_SCIENCE, JOBS_MEDICAL)
+
+/datum/gear/head/beret/oberth
+	display_name = "beret, Oberth" //Uberth
+	path = /obj/item/clothing/head/beret/german
+
+/datum/gear/head/beret/ntsec
+	display_name = "beret, old security"
+	path = /obj/item/clothing/head/beret/oldsec
+
+/datum/gear/head/beret/syndicate
+	display_name = "berets, Syndicate"
+	path = /obj/item/clothing/head/beret/syndicate
+
+/datum/gear/head/beret/syndicate/New()
 	..()
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(subtypesof(/obj/item/clothing/mask/bandana) + /obj/item/clothing/head/bandana)
+	var/syndicate = list(
+		"black" 		=	 /obj/item/clothing/head/beret/syndicate,
+		"brown"			=	 /obj/item/clothing/head/beret/syndicate/brown
+	)
+	gear_tweaks += new /datum/gear_tweak/path(syndicate)
 
-/datum/gear/head/custom_bandana
-	display_name = "bandana, colour select"
-	path = /obj/item/clothing/mask/bandana
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/head/beret/bsec
+	display_name = "beret, Operative"
+	path = /obj/item/clothing/head/beret/sec/navy/officer
+	allowed_roles = list(JOBS_SECURITY)
 
-/datum/gear/head/beanie
-	display_name = "beanie, colour select"
-	path = /obj/item/clothing/head/beanie
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/head/beret/bsec_warden
+	display_name = "beret, Sergeant"
+	path = /obj/item/clothing/head/beret/sec/navy/warden
+	allowed_roles = list("Ironhammer Commander","Gunnery Sergeant")
 
-/datum/gear/head/bow
-	display_name = "hair bow, colour select"
-	path = /obj/item/clothing/head/hairflower/bow
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/head/beret/bsec_hos
+	display_name = "beret, Lieutenant"
+	path = /obj/item/clothing/head/beret/sec/navy/hos
+	allowed_roles = list("Ironhammer Commander")
 
-/datum/gear/head/flat_cap
-	display_name = "flat cap, colour select"
+/datum/gear/head/beret/eng
+	display_name = "beret, yellow Technomancer"
+	path = /obj/item/clothing/head/beret/engineering
+	allowed_roles = list(JOBS_ENGINEERING)
+
+/datum/gear/head/beret/eng/old
+	display_name = "beret, orange Technomancer"
+	path = /obj/item/clothing/head/beret/engineering/old
+	allowed_roles = list(JOBS_ENGINEERING)
+
+/datum/gear/head/cap/flat
+	display_name = "cap, brown-flat"
 	path = /obj/item/clothing/head/flatcap
-	flags = GEAR_HAS_COLOR_SELECTION
 
-/datum/gear/head/mariner
-	display_name = "mariner's cap, colour select"
-	path = /obj/item/clothing/head/mariner
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/head/cap/corp
+	display_name = "cap, corporate security"
+	path = /obj/item/clothing/head/soft/sec/corp
 
-/datum/gear/head/cap
-	display_name = "cap selection"
-	path = /obj/item/clothing/head
+/datum/gear/head/cap/sec
+	display_name = "cap, old security"
+	path = /obj/item/clothing/head/soft/sec
+	allowed_roles = list(ASSISTANT_TITLE)
 
-/datum/gear/head/cap/New()
+/datum/gear/head/cap/synd
+	display_name = "cap, old syndicate"
+	path = /obj/item/clothing/head/soft/synd
+
+/datum/gear/head/cap/rainbow
+	display_name = "cap, rainbow"
+	path = /obj/item/clothing/head/soft/rainbow
+
+/datum/gear/head/cap/color_presets
+	display_name = "cap, color presets"
+	path = /obj/item/clothing/head/soft/blue
+
+/datum/gear/head/cap/color_presets/New()
 	..()
-	var/caps = list()
-	caps["black cap"] = /obj/item/clothing/head/soft/black
-	caps["blue cap"] = /obj/item/clothing/head/soft/blue
-	caps["green cap"] = /obj/item/clothing/head/soft/green
-	caps["grey cap"] = /obj/item/clothing/head/soft/grey
-	caps["mailman cap"] = /obj/item/clothing/head/mailman
-	caps["orange cap"] = /obj/item/clothing/head/soft/orange
-	caps["purple cap"] = /obj/item/clothing/head/soft/purple
-	caps["rainbow cap"] = /obj/item/clothing/head/soft/rainbow
-	caps["red cap"] = /obj/item/clothing/head/soft/red
-	caps["white cap"] = /obj/item/clothing/head/soft/mime
-	caps["yellow cap"] = /obj/item/clothing/head/soft/yellow
-	caps["major bill's shipping cap"] = /obj/item/clothing/head/soft/mbill
-	gear_tweaks += new/datum/gear_tweak/path(caps)
+	var/cap = list(
+		"White"			=	/obj/item/clothing/head/soft/mime,
+		"Grey"			=	/obj/item/clothing/head/soft/grey,
+		"Black"			=	/obj/item/clothing/head/soft/black,
+		"Red"			=	/obj/item/clothing/head/soft/red,
+		"Orange"		=	/obj/item/clothing/head/soft/orange,
+		"Yellow"		=	/obj/item/clothing/head/soft/yellow,
+		"Green"			=	/obj/item/clothing/head/soft/green,
+		"Blue"			=	/obj/item/clothing/head/soft/blue,
+		"Purple"		=	/obj/item/clothing/head/soft/purple,
+	)
+	gear_tweaks += new /datum/gear_tweak/path(cap)
 
 /datum/gear/head/hairflower
-	display_name = "hair flower pin"
+	display_name = "hair flower pin, red"
 	path = /obj/item/clothing/head/hairflower
-	flags = GEAR_HAS_COLOR_SELECTION
 
-/datum/gear/head/hardhat
-	display_name = "hardhat selection"
-	path = /obj/item/clothing/head/hardhat
+/datum/gear/head/hardhat/color_presets
+	display_name = "hardhat, color presets"
+	path = /obj/item/clothing/head/hardhat/blue
 	cost = 2
 
-/datum/gear/head/hardhat/New()
+/datum/gear/head/hardhat/color_presets/New()
 	..()
-	var/hardhats = list()
-	hardhats["blue hardhat"] = /obj/item/clothing/head/hardhat/blue
-	hardhats["orange hardhat"] = /obj/item/clothing/head/hardhat/orange
-	hardhats["red hardhat"] = /obj/item/clothing/head/hardhat/red
-	hardhats["light damage control helmet"] = /obj/item/clothing/head/hardhat/light
-	hardhats["yellow hardhat"] = /obj/item/clothing/head/hardhat
-	gear_tweaks += new/datum/gear_tweak/path(hardhats)
+	var/hardhat = list(
+		"Red"		=	/obj/item/clothing/head/hardhat/red,
+		"Orange"	=	/obj/item/clothing/head/hardhat/orange,
+		"Yellow"	=	/obj/item/clothing/head/hardhat,
+		"Blue"		=	/obj/item/clothing/head/hardhat/blue,
+	)
+	gear_tweaks += new /datum/gear_tweak/path(hardhat)
 
-/datum/gear/head/formalhat
-	display_name = "formal hat selection"
-	path = /obj/item/clothing/head
+/datum/gear/head/boater
+	display_name = "hat, boatsman"
+	path = /obj/item/clothing/head/boaterhat
 
-/datum/gear/head/formalhat/New()
+/datum/gear/head/bowler
+	display_name = "hat, bowler"
+	path = /obj/item/clothing/head/bowler
+
+/datum/gear/head/fez
+	display_name = "hat, fez"
+	path = /obj/item/clothing/head/fez
+
+/datum/gear/head/tophat
+	display_name = "hat, tophat"
+	path = /obj/item/clothing/head/that
+
+/datum/gear/head/philosopher_wig
+	display_name = "natural philosopher's wig"
+	path = /obj/item/clothing/head/philosopher_wig
+
+/datum/gear/head/cap/ushanka
+	display_name = "cap, ushanka"
+	path = /obj/item/clothing/head/ushanka
+
+/datum/gear/head/cap/ushanka/New()
+    ..()
+    var/ushanka = list(
+        "Tan"	= /obj/item/clothing/head/ushanka,
+        "Black" = /obj/item/clothing/head/ushanka/black
+    )
+    gear_tweaks += new /datum/gear_tweak/path(ushanka)
+
+/datum/gear/head/cap/secfield
+	display_name = "cap, IH field"
+	path = /obj/item/clothing/head/soft/sec2soft
+	allowed_roles = list(JOBS_SECURITY)
+
+/datum/gear/head/cap/sarge
+	display_name = "cap, IH sergeant"
+	path = /obj/item/clothing/head/soft/sarge2soft
+	allowed_roles = list("Ironhammer Commander","Ironhammer Gunnery Sergeant")
+
+/datum/gear/head/cyberpunkgoggle
+	display_name = "Type-34C Semi-Enclosed Headwear"
+	path = /obj/item/clothing/head/armor/helmet/visor/cyberpunkgoggle
+	cost = 2
+
+/datum/gear/head/cap/military
+    display_name = "military cap, color presets"
+    path = /obj/item/clothing/head/soft/green2soft
+
+/datum/gear/head/cap/military/New()
+    ..()
+    var/battledress_serb = list(
+        "Green" = /obj/item/clothing/head/soft/green2soft,
+        "Tan" = /obj/item/clothing/head/soft/tan2soft
+    )
+    gear_tweaks += new /datum/gear_tweak/path(battledress_serb)
+
+/datum/gear/head/tanker_helmet/color_presets
+	display_name = "tanker helmet, color presets"
+	path = /obj/item/clothing/head/armor/helmet/tanker
+	allowed_roles = list("Moebius Roboticist", "Guild Technician", "Technomancer", "Technomancer Exultant", ASSISTANT_TITLE)
+	cost = 2
+
+/datum/gear/head/tanker_helmet/color_presets/New()
 	..()
-	var/formalhats = list()
-	formalhats["boatsman hat"] = /obj/item/clothing/head/boaterhat
-	formalhats["bowler hat"] = /obj/item/clothing/head/bowler
-	formalhats["fedora"] = /obj/item/clothing/head/fedora //m'lady
-	formalhats["feather trilby"] = /obj/item/clothing/head/feathertrilby
-	formalhats["fez"] = /obj/item/clothing/head/fez
-	formalhats["top hat"] = /obj/item/clothing/head/that
-	formalhats["fedora, brown"] = /obj/item/clothing/head/det
-	formalhats["fedora, grey"] = /obj/item/clothing/head/det/grey
-	formalhats["panama hat"] = /obj/item/clothing/head/panama
-	gear_tweaks += new/datum/gear_tweak/path(formalhats)
+	var/tanker_helmet = list(
+		"Black"		=	/obj/item/clothing/head/armor/helmet/tanker,
+		"Green"		=	/obj/item/clothing/head/armor/helmet/tanker/green,
+		"Brown"		=	/obj/item/clothing/head/armor/helmet/tanker/brown,
+		"Gray"		=	/obj/item/clothing/head/armor/helmet/tanker/gray,
+	)
+	gear_tweaks += new /datum/gear_tweak/path(tanker_helmet)
 
-/datum/gear/head/informalhat
-	display_name = "informal hat selection"
-	path = /obj/item/clothing/head
 
-/datum/gear/head/informalhat/New()
-	..()
-	var/informalhats = list()
-	informalhats["cowboy hat"] = /obj/item/clothing/head/cowboy_hat
-	informalhats["ushanka"] = /obj/item/clothing/head/ushanka
-	gear_tweaks += new/datum/gear_tweak/path(informalhats)
 
-/datum/gear/head/hijab
-	display_name = "hijab, colour select"
-	path = /obj/item/clothing/head/hijab
-	flags = GEAR_HAS_COLOR_SELECTION
+/datum/gear/head/cowboy
+    display_name = "cowboy hat, color and size presets"
+    path = /obj/item/clothing/head/cowboy
 
-/datum/gear/head/kippa
-	display_name = "kippa, colour select"
-	path = /obj/item/clothing/head/kippa
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/head/turban
-	display_name = "turban, colour select"
-	path = /obj/item/clothing/head/turban
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/head/taqiyah
-	display_name = "taqiyah, colour select"
-	path = /obj/item/clothing/head/taqiyah
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/head/rastacap
-	display_name = "rastacap"
-	path = /obj/item/clothing/head/rastacap
-
-/datum/gear/head/surgical
-	display_name = "standard surgical caps"
-	path = /obj/item/clothing/head/surgery
-	flags = GEAR_HAS_TYPE_SELECTION | GEAR_HAS_NO_CUSTOMIZATION
-
-/datum/gear/head/surgical/custom
-	display_name = "surgical cap, colour select"
-	flags = GEAR_HAS_COLOR_SELECTION
-
-/datum/gear/head/welding
-	display_name = "welding mask selection"
-	path = /obj/item/clothing/head/welding
-
-/datum/gear/head/welding/New()
-	..()
-	var/welding_masks = list()
-	welding_masks += /obj/item/clothing/head/welding/demon
-	welding_masks += /obj/item/clothing/head/welding/engie
-	welding_masks += /obj/item/clothing/head/welding/fancy
-	welding_masks += /obj/item/clothing/head/welding/knight
-	welding_masks += /obj/item/clothing/head/welding/carp
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(welding_masks)
-
-/datum/gear/head/tankccap
-	display_name = "padded cap"
-	path = /obj/item/clothing/head/tank
-
-/datum/gear/tactical/balaclava
-	display_name = "balaclava"
-	path = /obj/item/clothing/mask/balaclava
-
-/datum/gear/head/corporateberet
-	display_name = "corporate beret selection"
-	path = /obj/item/clothing/head/beret
-	flags = GEAR_HAS_NO_CUSTOMIZATION
-
-/datum/gear/head/corporateberet/New()
-	..()
-	var/list/options = list()
-	options += /obj/item/clothing/head/beret/pcrc
-	options += /obj/item/clothing/head/beret/saare
-	gear_tweaks += new/datum/gear_tweak/path/specified_types_list(options)
-
-/datum/gear/head/deckcrew
-	display_name = "deck crew helmet"
-	path = /obj/item/clothing/head/deckcrew
-	flags = GEAR_HAS_TYPE_SELECTION
-	description = "A helmet with ear protection and a visor, used in hangars on many ships."
+/datum/gear/head/cowboy/New()
+    ..()
+    var/cowboy = list(
+		"Brown"			= /obj/item/clothing/head/cowboy,
+		"Black"			= /obj/item/clothing/head/cowboy/black,
+		"White"			= /obj/item/clothing/head/cowboy/white,
+		"Wide, brown"	= /obj/item/clothing/head/cowboy/wide,
+		"Wide, black"	= /obj/item/clothing/head/cowboy/wide/black,
+		"Wide, white"	= /obj/item/clothing/head/cowboy/wide/white
+	)
+    gear_tweaks += new /datum/gear_tweak/path(cowboy)

@@ -43,11 +43,11 @@
 		hall_delay *= 2
 	next_hallucination = world.time + hall_delay
 	var/list/candidates = list()
-	for(var/T in subtypesof(/datum/hallucination))
+	for(var/T in subtypesof(/datum/hallucination/))
 		var/datum/hallucination/H = new T
 		if(H.can_affect(src))
 			candidates += H
-	if(length(candidates))
+	if(candidates.len)
 		var/datum/hallucination/H = pick(candidates)
 		H.holder = src
 		H.activate()
@@ -67,7 +67,7 @@
 
 /datum/hallucination/proc/end()
 
-/datum/hallucination/proc/can_affect(mob/living/carbon/C)
+/datum/hallucination/proc/can_affect(var/mob/living/carbon/C)
 	if(!C.client)
 		return 0
 	if(min_power > C.hallucination_power)
@@ -125,7 +125,7 @@
 	min_power = 30
 
 /datum/hallucination/gunfire/start()
-	gunshot = pick('sound/weapons/gunshot/gunshot_strong.ogg', 'sound/weapons/gunshot/gunshot2.ogg', 'sound/weapons/gunshot/shotgun.ogg', 'sound/weapons/gunshot/gunshot.ogg','sound/weapons/Taser.ogg')
+	gunshot = pick('sound/weapons/guns/fire/hpistol_fire.ogg', 'sound/weapons/guns/fire/revolver_fire.ogg', 'sound/weapons/guns/fire/shotgunp_fire.ogg', 'sound/weapons/guns/fire/pistol_fire.ogg','sound/weapons/guns/fire/sfrifle_fire.ogg')
 	origin = locate(holder.x + rand(4,8), holder.y + rand(4,8), holder.z)
 	holder.playsound_local(origin,gunshot,50)
 
@@ -133,7 +133,7 @@
 	holder.playsound_local(origin,gunshot,50)
 
 //Hearing someone talking to/about you.
-/datum/hallucination/talking/can_affect(mob/living/carbon/C)
+/datum/hallucination/talking/can_affect(var/mob/living/carbon/C)
 	if(!..())
 		return 0
 	for(var/mob/living/M in oview(C))
@@ -145,27 +145,26 @@
 		if(talker.stat)
 			continue
 		var/message
-		var/display_name = talker.fake_name ? talker.fake_name : talker.real_name
 		if(prob(80))
 			var/list/names = list()
 			var/lastname = copytext(holder.real_name, findtext(holder.real_name, " ")+1)
 			var/firstname = copytext(holder.real_name, 1, findtext(holder.real_name, " "))
 			if(lastname) names += lastname
 			if(firstname) names += firstname
-			if(!length(names))
+			if(!names.len)
 				names += holder.real_name
 			var/add = prob(20) ? ", [pick(names)]" : ""
 			var/list/phrases = list("[prob(50) ? "Hey, " : ""][pick(names)]!","[prob(50) ? "Hey, " : ""][pick(names)]?","Get out[add]!","Go away[add].","What are you doing[add]?","Where's your ID[add]?")
 			if(holder.hallucination_power > 50)
-				phrases += list("What did you come here for[add]?","Don't touch me[add].","You're not getting out of here[add].", "You are a failure, [pick(names)].","Just leave already, [pick(names)]")
+				phrases += list("What did you come here for[add]?","Don't touch me[add].","You're not getting out of here[add].", "You are a failure, [pick(names)].","Just die already, [pick(names)].","Put on some clothes[add].","Take off your clothes[add].")
 			message = pick(phrases)
-			to_chat(holder,"[SPAN_CLASS("game say", "[SPAN_CLASS("name", display_name)] [holder.say_quote(message)], [SPAN_CLASS("message", "[SPAN_CLASS("body", "\"[message]\"")]")]")]")
+			to_chat(holder,"<span class='game say'><span class='name'>[talker.name]</span> [holder.say_quote(message)], <span class='message'><span class='body'>\"[message]\"</span></span></span>")
 		else
-			to_chat(holder,"<B>[display_name]</B> points at [holder.name]")
-			to_chat(holder,"[SPAN_CLASS("game say", "[SPAN_CLASS("name", display_name)] says something softly.")]")
+			to_chat(holder,"<B>[talker.name]</B> points at [holder.name]")
+			to_chat(holder,"<span class='game say'><span class='name'>[talker.name]</span> says something softly.</span>")
 		var/image/speech_bubble = image('icons/mob/talk.dmi',talker,"h[holder.say_test(message)]")
 		spawn(30) qdel(speech_bubble)
-		image_to(holder,speech_bubble)
+		holder << speech_bubble
 		sanity-- //don't spam them in very populated rooms.
 		if(!sanity)
 			return
@@ -197,13 +196,13 @@
 
 /datum/hallucination/mirage/proc/generate_mirage()
 	var/icon/T = new('icons/obj/trash.dmi')
-	return image(T, pick(T.IconStates()), layer = BELOW_TABLE_LAYER)
+	return image(T, pick(T.IconStates()), layer = LOW_ITEM_LAYER)
 
 /datum/hallucination/mirage/start()
 	var/list/possible_points = list()
-	for(var/turf/simulated/floor/F in view(holder, world.view+1))
+	for(var/turf/floor/F in view(holder, world.view+1))
 		possible_points += F
-	if(length(possible_points))
+	if(possible_points.len)
 		for(var/i = 1 to number)
 			var/image/thing = generate_mirage()
 			things += thing
@@ -221,7 +220,7 @@
 	number = 2
 
 /datum/hallucination/mirage/money/generate_mirage()
-	return image('icons/obj/money.dmi', "spacecash[pick(1000,500,200,100,50)]", layer = BELOW_TABLE_LAYER)
+	return image('icons/obj/items.dmi', "spacecash[pick(1000,500,200,100,50)]", layer = LOW_ITEM_LAYER)
 
 //Blood and aftermath of firefight
 /datum/hallucination/mirage/carnage
@@ -230,22 +229,63 @@
 
 /datum/hallucination/mirage/carnage/generate_mirage()
 	if(prob(50))
-		var/image/I = image('icons/effects/blood.dmi', pick("mfloor1", "mfloor2", "mfloor3", "mfloor4", "mfloor5", "mfloor6", "mfloor7"), layer = BELOW_TABLE_LAYER)
+		var/image/I = image('icons/effects/blood.dmi', pick("mfloor1", "mfloor2", "mfloor3", "mfloor4", "mfloor5", "mfloor6", "mfloor7"), layer = LOW_ITEM_LAYER)
 		I.color = COLOR_BLOOD_HUMAN
 		return I
 	else
-		var/image/I = image('icons/obj/weapons/ammo.dmi', "s-casing-spent", layer = BELOW_TABLE_LAYER)
-		I.layer = BELOW_TABLE_LAYER
+		var/image/I = image('icons/obj/ammo.dmi', "s-casing-spent", layer = LOW_ITEM_LAYER)
+		I.layer = LOW_ITEM_LAYER
 		I.dir = pick(GLOB.alldirs)
 		I.pixel_x = rand(-10,10)
 		I.pixel_y = rand(-10,10)
 		return I
 
+//Fake telepathy
+/datum/hallucination/telepahy
+	allow_duplicates = 0
+	duration = 20 MINUTES
+
+/datum/hallucination/telepahy/start()
+	to_chat(holder,"<span class = 'notice'>You expand your mind outwards.</span>")
+	add_verb(holder, /mob/living/carbon/human/proc/fakeremotesay)
+
+/datum/hallucination/telepahy/end()
+	if(holder)
+		remove_verb(holder, /mob/living/carbon/human/proc/fakeremotesay)
+
+/mob/living/carbon/human/proc/fakeremotesay()
+	set name = "Telepathic Message"
+	set category = "Superpower"
+
+	if(!hallucination_power)
+		src.verbs -= /mob/living/carbon/human/proc/fakeremotesay
+		return
+
+	if(stat)
+		to_chat(usr, "<span class = 'warning'>You're not in any state to use your powers right now!'</span>")
+		return
+
+	if(chem_effects[CE_MIND] > 0)
+		to_chat(usr, "<span class = 'warning'>Chemicals in your blood prevent you from using your power!'</span>")
+
+	var/list/creatures = list()
+	for(var/mob/living/carbon/C in SSmobs.mob_list | SShumans.mob_list)
+		creatures += C
+	creatures -= usr
+	var/mob/target = input("Who do you want to project your mind to ?") as null|anything in creatures
+	if (isnull(target))
+		return
+
+	var/msg = sanitize(input(usr, "What do you wish to transmit"))
+	show_message("<span class = 'notice'>You project your mind into [target.name]: \"[msg]\"</span>")
+	if(!stat && prob(20))
+		say(msg)
+
 //Fake attack
 /datum/hallucination/fakeattack
 	min_power = 30
 
-/datum/hallucination/fakeattack/can_affect(mob/living/carbon/C)
+/datum/hallucination/fakeattack/can_affect(var/mob/living/carbon/C)
 	if(!..())
 		return 0
 	for(var/mob/living/M in oview(C,1))
@@ -253,7 +293,7 @@
 
 /datum/hallucination/fakeattack/start()
 	for(var/mob/living/M in oview(holder,1))
-		to_chat(holder, SPAN_CLASS("danger", "[M] has punched [holder]!"))
+		to_chat(holder, SPAN_DANGER("[M] has punched [holder]!"))
 		holder.playsound_local(get_turf(holder),"punch",50)
 
 //Fake injection
@@ -261,4 +301,4 @@
 	min_power = 30
 
 /datum/hallucination/fakeattack/hypo/start()
-	holder.custom_pain(SPAN_WARNING("You feel a tiny prick!"), 1, TRUE)
+	to_chat(holder, SPAN_NOTICE("You feel a tiny prick!"))

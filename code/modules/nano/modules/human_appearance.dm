@@ -1,204 +1,166 @@
 /datum/nano_module/appearance_changer
 	name = "Appearance Editor"
 	available_to_ai = FALSE
-	var/flags
-	var/mob/living/carbon/human/owner
-	var/list/races
-	var/list/heads
-	var/list/faces
-	var/list/langs
+	var/flags = APPEARANCE_ALL_HAIR
+	var/mob/living/carbon/human/owner = null
+	var/list/valid_species = list()
+	var/list/valid_hairstyles = list()
+	var/list/valid_facial_hairstyles = list()
 
+	var/check_whitelist
+	var/list/whitelist
+	var/list/blacklist
+
+
+
+/datum/nano_module/appearance_changer/New(var/location, var/mob/living/carbon/human/H, var/check_species_whitelist = 1, var/list/species_whitelist = list("human"), var/list/species_blacklist = list())
+	..()
+	owner = H
+	src.check_whitelist = check_species_whitelist
+	src.whitelist = species_whitelist
+	src.blacklist = species_blacklist
 
 /datum/nano_module/appearance_changer/Destroy()
 	owner = null
-	races = null
-	heads = null
-	faces = null
-	langs = null
-	. = ..()
+	topic_manager = null	// The mob is the topic manager and should not be deleted
+	..()
 
+/datum/nano_module/appearance_changer/Topic(ref, href_list, var/datum/nano_topic_state/state = GLOB.default_state)
+	if(..())
+		return 1
 
-/datum/nano_module/appearance_changer/New(mob/living/carbon/human/owner, flags)
-	..(owner, null)
-	src.owner = owner
-	src.flags = flags
-	if (flags & APPEARANCE_RACE)
-		races = owner.generate_valid_species(flags)
-	generate_data()
+	if(href_list["name"])
+		if(can_change(APPEARANCE_NAME))
+			if(owner.change_name(href_list["name"]))
+				cut_and_generate_data()
+				return 1
 
+	if(href_list["race"])
+		if(can_change(APPEARANCE_RACE) && (href_list["race"] in valid_species))
+			if(owner.change_species(href_list["race"]))
+				cut_and_generate_data()
+				return 1
+	if(href_list["gender"])
+		if(can_change(APPEARANCE_GENDER) && (href_list["gender"] in owner.species.genders))
+			if(owner.change_gender(href_list["gender"]))
+				cut_and_generate_data()
+				return 1
+	//if(href_list["skin_tone"])
+		// TODO: enable after baymed
+		/*if(can_change_skin_tone())
+			var/new_s_tone = input(usr, "Choose your character's skin-tone:\n1 (lighter) - [owner.species.max_skin_tone()] (darker)", "Skin Tone", -owner.s_tone + 35) as num|null
+			if(isnum(new_s_tone) && can_still_topic(state))// && owner.species.appearance_flags & HAS_SKIN_TONE_NORMAL)	// TODO: enable after baymed
+				new_s_tone = 35 - max(min(round(new_s_tone), owner.species.max_skin_tone()), 1)
+				return owner.change_skin_tone(new_s_tone)*/
+	if(href_list["skin_color"])
+		if(can_change_skin_color())
+			var/new_skin = input(usr, "Choose your character's skin colour: ", "Skin Color", owner.skin_color) as color|null
+			if(new_skin && can_still_topic(state))
+				if(owner.change_skin_color(new_skin))
+					return 1
+	if(href_list["hair"])
+		if(can_change(APPEARANCE_HAIR) && (href_list["hair"] in valid_hairstyles))
+			if(owner.change_hair(href_list["hair"]))
+				return 1
+	if(href_list["hair_color"])
+		if(can_change(APPEARANCE_HAIR_COLOR))
+			var/new_hair = input("Please select hair color.", "Hair Color", owner.hair_color) as color|null
+			if(new_hair && can_still_topic(state))
+				if(owner.change_hair_color(new_hair))
+					return 1
+	if(href_list["facial_hair"])
+		if(can_change(APPEARANCE_FACIAL_HAIR) && (href_list["facial_hair"] in valid_facial_hairstyles))
+			if(owner.change_facial_hair(href_list["facial_hair"]))
+				return 1
+	if(href_list["facial_hair_color"])
+		if(can_change(APPEARANCE_FACIAL_HAIR_COLOR))
+			var/new_facial = input("Please select facial hair color.", "Facial Hair Color", owner.facial_color) as color|null
+			if(new_facial && can_still_topic(state))
+				if(owner.change_facial_hair_color(new_facial))
+					return 1
+	if(href_list["eye_color"])
+		if(can_change(APPEARANCE_EYE_COLOR))
+			var/new_eyes = input("Please select eye color.", "Eye Color", owner.eyes_color) as color|null
+			if(new_eyes && can_still_topic(state))
+				if(owner.change_eye_color(new_eyes))
+					return 1
 
-/datum/nano_module/appearance_changer/proc/generate_data()
-	heads = owner.generate_valid_hairstyles()
-	faces = owner.generate_valid_facial_hairstyles()
-	if (~flags & APPEARANCE_LANG_ANY_ORIGIN)
-		langs = owner.generate_valid_languages()
+	return 0
 
-
-/datum/nano_module/appearance_changer/Topic(href, list/href_list, datum/topic_state/state = GLOB.default_state)
-	. = ..()
-	if (.)
-		return
-	if (QDELETED(owner))
-		return
-
-	if (href_list["race"] && (flags & APPEARANCE_RACE) && (!races || (href_list["race"] in races)))
-		owner.change_species(href_list["race"])
-		generate_data()
-		return TRUE
-
-	if (href_list["gender"] && (flags & APPEARANCE_GENDER) && (href_list["gender"] in owner.species.genders))
-		owner.change_gender(href_list["gender"])
-		generate_data()
-		return TRUE
-
-	if (href_list["pronouns"] && HAS_FLAGS(flags, APPEARANCE_PRONOUNS) && (href_list["pronouns"] in owner.species.pronouns))
-		owner.change_pronouns(href_list["pronouns"])
-		generate_data()
-		return TRUE
-
-	if (href_list["skin_tone"] && (flags & APPEARANCE_SKIN) && (owner.species.appearance_flags & SPECIES_APPEARANCE_HAS_A_SKIN_TONE))
-		var/high = owner.species.max_skin_tone()
-		var/data = input(usr, "Skin Tone:\n1 (pale) ~ [high] (dark)", "Skin Tone", 35 - owner.skin_tone) as null | num
-		if (isnull(data) || !can_still_topic(state))
-			return
-		data = 35 - max(min(round(data), high), 1)
-		return owner.change_skin_tone(data)
-
-	if (href_list["skin_color"] && (flags & APPEARANCE_SKIN) && (owner.species.appearance_flags & SPECIES_APPEARANCE_HAS_SKIN_COLOR))
-		var/color = owner.skin_color
-		var/data = input(usr, "Skin Color:", "Skin Color", color) as null | color
-		if (isnull(data) || !can_still_topic(state))
-			return
-		color = rgb2num(data)
-		if (owner.change_skin_color(arglist(color)))
-			if (flags & APPEARANCE_DNA2)
-				owner.update_dna()
-			return TRUE
-		return
-
-	if (href_list["hair"] && (flags & APPEARANCE_HEAD) && (href_list["hair"] in heads))
-		if (owner.change_hair(href_list["hair"]))
-			if (flags & APPEARANCE_DNA2)
-				owner.update_dna()
-			return TRUE
+/datum/nano_module/appearance_changer/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state = GLOB.default_state)
+	if(!owner || !owner.species)
 		return
 
-	if (href_list["hair_color"] && (flags & APPEARANCE_HEAD_COLOR))
-		var/color = owner.head_hair_color
-		var/data = input(usr, "Hair Color:", "Hair Color", color) as null | color
-		if (isnull(data) || !can_still_topic(state))
-			return
-		color = rgb2num(data)
-		if (owner.change_hair_color(arglist(color)))
-			if (flags & APPEARANCE_DNA2)
-				owner.update_dna()
-			return TRUE
-		return
-
-	if (href_list["facial_hair"] && (flags & APPEARANCE_FACE) && (href_list["facial_hair"] in faces))
-		if (owner.change_facial_hair(href_list["facial_hair"]))
-			if (flags & APPEARANCE_DNA2)
-				owner.update_dna()
-			return TRUE
-		return
-
-	if (href_list["facial_hair_color"] && (flags & APPEARANCE_FACE_COLOR))
-		var/color = owner.facial_hair_color
-		var/data = input(usr, "Facial Hair Color:", "Facial Hair Color", color) as null | color
-		if (isnull(data) || !can_still_topic(state))
-			return
-		color = rgb2num(data)
-		if (owner.change_facial_hair_color(arglist(color)))
-			if (flags & APPEARANCE_DNA2)
-				owner.update_dna()
-			return TRUE
-		return
-
-	if (href_list["eye_color"] && (flags & APPEARANCE_EYES))
-		var/color = owner.eye_color
-		var/data = input(usr, "Eye Color:", "Eye Color", color) as null | color
-		if (isnull(data) || !can_still_topic(state))
-			return
-		color = rgb2num(data)
-		if (owner.change_eye_color(arglist(color)))
-			if (flags & APPEARANCE_DNA2)
-				owner.update_dna()
-			return TRUE
-		return
-
-	if (href_list["language"] && (flags & APPEARANCE_LANG))
-		if (href_list["language_mode"] == "add")
-			if ((~flags & APPEARANCE_LANG_ANY_NUMBER) && length(owner.languages) >= MAX_LANGUAGES)
-				return
-			if ((~flags & APPEARANCE_LANG_ANY_ORIGIN) && !(href_list["language"] in langs))
-				return
-			if (owner.add_language(href_list["language"]))
-				return TRUE
-			return
-		else
-			owner.remove_language(href_list["language"])
-			return TRUE
-
-
-/datum/nano_module/appearance_changer/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui, force_open = TRUE, datum/topic_state/state = GLOB.default_state)
-	if (QDELETED(owner) || !owner.species)
-		return
-
+	generate_data(check_whitelist, whitelist, blacklist)
 	var/list/data = host.initial_data()
 
+	data["change_name"] = can_change(APPEARANCE_NAME)
+	if (data["change_name"])
+		data["name"] = owner.real_name
 	data["specimen"] = owner.species.name
 	data["gender"] = owner.gender
-	data["pronouns"] = owner.pronouns
+	data["change_race"] = can_change(APPEARANCE_RACE)
+	if(data["change_race"])
+		var/species[0]
+		for(var/specimen in valid_species)
+			species[++species.len] =  list("specimen" = specimen)
+		data["species"] = species
 
-	data["change_skin_tone"] = (flags & APPEARANCE_SKIN) && (owner.species.appearance_flags & SPECIES_APPEARANCE_HAS_A_SKIN_TONE)
-	data["change_skin_color"] = (flags & APPEARANCE_SKIN) && (owner.species.appearance_flags & SPECIES_APPEARANCE_HAS_SKIN_COLOR)
-	data["change_eye_color"] = !!(flags & APPEARANCE_EYES)
-	data["change_hair_color"] = !!(flags & APPEARANCE_HEAD_COLOR)
-	data["change_facial_hair_color"] = !!(flags & APPEARANCE_FACE_COLOR)
+	data["change_gender"] = can_change(APPEARANCE_GENDER)
+	if(data["change_gender"])
+		var/genders[0]
+		for(var/gender in owner.species.genders)
+			genders[++genders.len] =  list("gender_name" = gender2text(gender), "gender_key" = gender)
+		data["genders"] = genders
 
-	data["change_race"] = !!(flags & APPEARANCE_RACE)
-	if (data["change_race"])
-		var/list/entries = (data["species"] = list())
-		for (var/race_key in races)
-			entries += list(list("specimen" = race_key))
+	data["change_skin_tone"] = can_change_skin_tone()
+	data["change_skin_color"] = can_change_skin_color()
+	data["change_eye_color"] = can_change(APPEARANCE_EYE_COLOR)
+	data["change_hair"] = can_change(APPEARANCE_HAIR)
+	if(data["change_hair"])
+		var/hair_styles[0]
+		for(var/hair_style in valid_hairstyles)
+			hair_styles[++hair_styles.len] = list("hairstyle" = hair_style)
+		data["hair_styles"] = hair_styles
+		data["hair_style"] = owner.h_style
 
-	data["change_gender"] = !!(flags & APPEARANCE_GENDER)
-	if (data["change_gender"])
-		var/list/entries = (data["genders"] = list())
-		for (var/gender_key in owner.species.genders)
-			entries += list(list("gender_name" = gender2text(gender_key), "gender_key" = gender_key))
+	data["change_facial_hair"] = can_change(APPEARANCE_FACIAL_HAIR)
+	if(data["change_facial_hair"])
+		var/facial_hair_styles[0]
+		for(var/facial_hair_style in valid_facial_hairstyles)
+			facial_hair_styles[++facial_hair_styles.len] = list("facialhairstyle" = facial_hair_style)
+		data["facial_hair_styles"] = facial_hair_styles
+		data["facial_hair_style"] = owner.f_style
 
-	data["change_pronouns"] = !!(flags & APPEARANCE_PRONOUNS)
-	if (data["change_pronouns"])
-		var/list/entries = (data["pronouns_list"] = list())
-		for (var/pronouns in owner.species.pronouns)
-			entries += list(list("pronouns_name" = pronouns, "pronouns_key" = pronouns))
-
-	data["change_hair"] = !!(flags & APPEARANCE_HEAD)
-	if (data["change_hair"])
-		var/list/entries = (data["hair_styles"] = list())
-		for (var/head_key in heads)
-			entries += list(list("hairstyle" = head_key))
-		data["hair_style"] = owner.head_hair_style
-
-	data["change_facial_hair"] = !!(flags & APPEARANCE_FACE)
-	if (data["change_facial_hair"])
-		var/list/entries = (data["facial_hair_styles"] = list())
-		for (var/face_key in faces)
-			entries += list(list("facialhairstyle" = face_key))
-		data["facial_hair_style"] = owner.facial_hair_style
-
-	data["change_languages"] = !!(flags & APPEARANCE_LANG)
-	if (data["change_languages"])
-		var/list/entries = (data["languages"] = list())
-		var/lang_list = (flags & APPEARANCE_LANG_ANY_ORIGIN) ? all_languages : langs
-		for (var/lang_key in lang_list)
-			entries += list(list("language" = lang_key, "selected" = (lang_list[lang_key] in owner.languages)))
-
+	data["change_hair_color"] = can_change(APPEARANCE_HAIR_COLOR)
+	data["change_facial_hair_color"] = can_change(APPEARANCE_FACIAL_HAIR_COLOR)
 	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
-	if (ui)
+	if (!ui)
+		ui = new(user, src, ui_key, "appearance_changer.tmpl", "[src]", 800, 450, state = state)
+		ui.set_initial_data(data)
+		ui.open()
+		ui.set_auto_update(1)
+
+/datum/nano_module/appearance_changer/proc/can_change(var/flag)
+	return owner && (flags & flag)
+
+/datum/nano_module/appearance_changer/proc/can_change_skin_tone()
+	return owner && (flags & APPEARANCE_SKIN)// && owner.species.appearance_flags & HAS_A_SKIN_TONE	// TODO: enable after baymed
+
+/datum/nano_module/appearance_changer/proc/can_change_skin_color()
+	return owner && (flags & APPEARANCE_SKIN) && owner.species.appearance_flags & HAS_SKIN_COLOR
+
+/datum/nano_module/appearance_changer/proc/cut_and_generate_data()
+	// Making the assumption that the available species remain constant
+	valid_facial_hairstyles.Cut()
+	valid_facial_hairstyles.Cut()
+	generate_data()
+
+/datum/nano_module/appearance_changer/proc/generate_data()
+	if(!owner)
 		return
-	ui = new(user, src, ui_key, "appearance_changer.tmpl", "[src]", 800, 450, state = state)
-	ui.set_initial_data(data)
-	ui.open()
-	ui.set_auto_update(TRUE)
+	if(!valid_species.len)
+		valid_species = owner.generate_valid_species(check_whitelist, whitelist, blacklist)
+	if(!valid_hairstyles.len || !valid_facial_hairstyles.len)
+		valid_hairstyles = owner.generate_valid_hairstyles(check_gender = 0)
+		valid_facial_hairstyles = owner.generate_valid_facial_hairstyles()

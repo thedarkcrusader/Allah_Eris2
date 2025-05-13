@@ -1,19 +1,20 @@
-/obj/item/stock_parts/circuitboard/atmoscontrol
+/obj/item/electronics/circuitboard/atmoscontrol
 	name = "\improper Central Atmospherics Computer Circuitboard"
+	rarity_value = 40
 	build_path = /obj/machinery/computer/atmoscontrol
 
 /obj/machinery/computer/atmoscontrol
 	name = "\improper Central Atmospherics Computer"
-	icon = 'icons/obj/machines/computer.dmi'
+	icon = 'icons/obj/computer.dmi'
 	icon_keyboard = "generic_key"
 	icon_screen = "comm_logs"
-	light_color = "#00b000"
+	light_color = COLOR_LIGHTING_BLUE_MACHINERY
 	density = TRUE
 	anchored = TRUE
+	circuit = /obj/item/electronics/circuitboard/atmoscontrol
 	req_access = list(access_ce)
 	var/list/monitored_alarm_ids = null
 	var/datum/nano_module/atmos_control/atmos_control
-	base_type = /obj/machinery/computer/atmoscontrol
 
 /obj/machinery/computer/atmoscontrol/laptop
 	name = "Atmospherics Laptop"
@@ -22,23 +23,22 @@
 	icon_keyboard = "laptop_key"
 	icon_screen = "atmoslaptop"
 	density = FALSE
+	CheckFaceFlag = 0
 
-/obj/machinery/computer/atmoscontrol/laptop/research
-	req_access = list(list(access_research, access_atmospherics, access_engine_equip))
+/obj/machinery/computer/atmoscontrol/attack_hand(mob/user)
+	if(..())
+		return 1
+	nano_ui_interact(user)
 
-/obj/machinery/computer/atmoscontrol/interface_interact(user)
-	ui_interact(user)
-	return TRUE
-
-/obj/machinery/computer/atmoscontrol/emag_act(remaining_carges, mob/user)
+/obj/machinery/computer/atmoscontrol/emag_act(var/remaining_carges, var/mob/user)
 	if(!emagged)
 		user.visible_message(SPAN_WARNING("\The [user] does something \the [src], causing the screen to flash!"),\
 			SPAN_WARNING("You cause the screen to flash as you gain full control."),\
 			"You hear an electronic warble.")
-		atmos_control.emagged = TRUE
+		atmos_control.emagged = 1
 		return 1
 
-/obj/machinery/computer/atmoscontrol/ui_interact(mob/user)
+/obj/machinery/computer/atmoscontrol/nano_ui_interact(var/mob/user)
 	if(!atmos_control)
-		atmos_control = new(src, req_access, monitored_alarm_ids)
-	atmos_control.ui_interact(user)
+		atmos_control = new(src, req_access, req_one_access, monitored_alarm_ids)
+	atmos_control.nano_ui_interact(user)

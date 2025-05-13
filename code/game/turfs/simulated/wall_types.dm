@@ -1,177 +1,104 @@
-//Commonly used
+/turf/wall/reinforced
+	name = "reinforced wall"
+	icon_state = "eris_reinf_wall"
+	health = 600
+	max_health = 600
+	hardness = 140
+	is_reinforced = TRUE
+	wall_type = "eris_reinf_wall"
 
-/turf/simulated/wall/r_wall
-	icon_state = "r_generic"
+/turf/wall/reinforced/get_matter()
+	return list(MATERIAL_PLASTEEL = 5)
 
-/turf/simulated/wall/r_wall/New(newloc)
-	..(newloc, MATERIAL_STEEL,MATERIAL_PLASTEEL) //3strong
+/turf/wall/frontier
+	icon_state = "frontier_wall"
+	wall_style = "fancy"
+	wall_type = "frontier_wall"
 
-/turf/simulated/wall/r_wall/hull
-	name = "hull"
-	color = COLOR_SOL
-	paint_color = COLOR_SOL
-	stripe_color = COLOR_SOL
+/turf/shuttle/wall
+	name = "wall"
+	icon_state = "wall1"
+	opacity = TRUE
+	density = TRUE
+	blocks_air = TRUE
 
-/turf/simulated/wall/r_wall/hull/vox
-	initial_gas = list("nitrogen" = 101.38)
-	color = COLOR_GREEN_GRAY
+/turf/shuttle/wall/cargo
+	name = "Cargo Transport Shuttle (A5)"
+	icon = 'icons/turf/shuttlecargo.dmi'
+	icon_state = "cargoshwall1"
 
-/turf/simulated/wall/prepainted
-	color = COLOR_WALL_GUNMETAL
-	paint_color = COLOR_WALL_GUNMETAL
-	stripe_color = COLOR_GUNMETAL
+/turf/shuttle/wall/escpod
+	name = "Escape Pod"
+	icon = 'icons/turf/shuttleescpod.dmi'
+	icon_state = "escpodwall1"
 
-/turf/simulated/wall/r_wall/prepainted
-	color = COLOR_WALL_GUNMETAL
-	paint_color = COLOR_WALL_GUNMETAL
-	stripe_color = COLOR_GUNMETAL
+/turf/shuttle/wall/mining
+	name = "Mining Barge"
+	icon = 'icons/turf/shuttlemining.dmi'
+	icon_state = "11,23"
 
-/turf/simulated/wall/r_wall/hull/Initialize()
-	. = ..()
-	if(prob(40))
-		var/spacefacing = FALSE
-		for(var/direction in GLOB.cardinal)
-			var/turf/T = get_step(src, direction)
-			var/area/A = get_area(T)
-			if(A && (A.area_flags & AREA_FLAG_EXTERNAL))
-				spacefacing = TRUE
-				break
-		if(spacefacing)
-			var/bleach_factor = rand(10,50)
-			paint_color = adjust_brightness(paint_color, bleach_factor)
-			stripe_color = adjust_brightness(stripe_color, bleach_factor)
-	update_icon()
+/turf/shuttle/wall/science
+	name = "Science Shuttle"
+	icon = 'icons/turf/shuttlescience.dmi'
+	icon_state = "6,18"
 
-/turf/simulated/wall/titanium
-	icon_state = "titanium"
+/turf/shuttle/wall/pulsar
+	name = "Pulsar Shuttle"
+	icon = 'icons/turf/shuttlepulsar.dmi'
+	icon_state = "pulsarwall1"
 
-/turf/simulated/wall/titanium/New(newloc)
-	..(newloc,MATERIAL_TITANIUM)
+/obj/structure/shuttle_part //For placing them over space, if sprite covers not whole tile.
+	name = "shuttle"
+	icon = 'icons/turf/shuttle.dmi'
+	anchored = TRUE
+	density = TRUE
+	bad_type = /obj/structure/shuttle_part
 
-/turf/simulated/wall/r_titanium
-	icon_state = "r_titanium"
+/obj/structure/shuttle_part/cargo
+	name = "Cargo Transport Shuttle (A5)"
+	icon = 'icons/turf/shuttlecargo.dmi'
+	icon_state = "cargoshwall1"
 
-/turf/simulated/wall/r_titanium/New(newloc)
-	..(newloc, MATERIAL_TITANIUM,MATERIAL_TITANIUM)
+/obj/structure/shuttle_part/escpod
+	name = "Escape Pod"
+	icon = 'icons/turf/shuttleescpod.dmi'
+	icon_state = "escpodwall1"
 
-/turf/simulated/wall/ocp_wall
-	icon_state = "r_ocp"
+/obj/structure/shuttle_part/mining
+	name = "Mining Barge"
+	icon = 'icons/turf/shuttlemining.dmi'
+	icon_state = "11,23"
 
-/turf/simulated/wall/ocp_wall/New(newloc)
-	..(newloc, MATERIAL_OSMIUM_CARBIDE_PLASTEEL, MATERIAL_OSMIUM_CARBIDE_PLASTEEL)
+/obj/structure/shuttle_part/science
+	name = "Science Shuttle"
+	icon = 'icons/turf/shuttlescience.dmi'
+	icon_state = "6,18"
 
-//Material walls
+/obj/structure/shuttle_part/pulsar
+	name = "Pulsar Shuttle"
+	icon = 'icons/turf/shuttlepulsar.dmi'
+	icon_state = "pulsarwall1"
 
-/turf/simulated/wall/r_wall/rglass_wall/New(newloc)
-	..(newloc, MATERIAL_GLASS, MATERIAL_STEEL)
-	icon_state = "r_generic"
+/obj/structure/shuttle_part/explosion_act(target_power, explosion_handler/handler)
+	// full block
+	return target_power
 
-/turf/simulated/wall/iron/New(newloc)
-	..(newloc,MATERIAL_IRON)
+/turf/wall/untinted // Left here for the sake of not changing 50+ more files, most of which are maps
 
-/turf/simulated/wall/uranium/New(newloc)
-	..(newloc,MATERIAL_URANIUM)
+/*
+	One Star/Alliance walls, for use on derelict stuff
+*/
+/turf/wall/untinted/onestar
+	icon_state = "onestar_wall"
+	wall_style = "minimalistic"
+	wall_type = "onestar_wall"
 
-/turf/simulated/wall/diamond/New(newloc)
-	..(newloc,MATERIAL_DIAMOND)
-
-/turf/simulated/wall/gold/New(newloc)
-	..(newloc,MATERIAL_GOLD)
-
-/turf/simulated/wall/silver/New(newloc)
-	..(newloc,MATERIAL_SILVER)
-
-/turf/simulated/wall/phoron/New(newloc)
-	..(newloc,MATERIAL_PHORON)
-
-/turf/simulated/wall/sandstone/New(newloc)
-	..(newloc,MATERIAL_SANDSTONE)
-
-/turf/simulated/wall/rutile/New(newloc)
-	..(newloc,MATERIAL_RUTILE)
-
-/turf/simulated/wall/wood
-	icon_state = "woodneric"
-
-/turf/simulated/wall/wood/New(newloc)
-	..(newloc,MATERIAL_WOOD)
-
-/turf/simulated/wall/mahogany
-	icon_state = "woodneric"
-
-/turf/simulated/wall/mahogany/New(newloc)
-	..(newloc,MATERIAL_MAHOGANY)
-
-/turf/simulated/wall/maple
-	icon_state = "woodneric"
-
-/turf/simulated/wall/maple/New(newloc)
-	..(newloc,MATERIAL_MAPLE)
-
-/turf/simulated/wall/ebony
-	icon_state = "woodneric"
-
-/turf/simulated/wall/ebony/New(newloc)
-	..(newloc,MATERIAL_EBONY)
-
-/turf/simulated/wall/walnut
-	icon_state = "woodneric"
-
-/turf/simulated/wall/walnut/New(newloc)
-	..(newloc,MATERIAL_WALNUT)
-
-/turf/simulated/wall/ironphoron/New(newloc)
-	..(newloc,MATERIAL_IRON,MATERIAL_PHORON)
-
-/turf/simulated/wall/golddiamond/New(newloc)
-	..(newloc,MATERIAL_GOLD,MATERIAL_DIAMOND)
-
-/turf/simulated/wall/silvergold/New(newloc)
-	..(newloc,MATERIAL_SILVER,MATERIAL_GOLD)
-
-/turf/simulated/wall/sandstone/diamond/New(newloc)
-	..(newloc,MATERIAL_SANDSTONE,MATERIAL_DIAMOND)
-
-/turf/simulated/wall/crystal/New(newloc)
-	..(newloc,MATERIAL_CRYSTAL)
-
-/turf/simulated/wall/voxshuttle
-	atom_flags = ATOM_FLAG_NO_TOOLS
-
-/turf/simulated/wall/voxshuttle/New(newloc)
-	..(newloc, MATERIAL_VOX)
-
-/turf/simulated/wall/growth/New(newloc)
-	..(newloc, MATERIAL_GROWTH)
-
-/turf/simulated/wall/concrete/New(newloc)
-	..(newloc,MATERIAL_CONCRETE)
-
-//Alien metal walls
-/turf/simulated/wall/alium
-	icon_state = "jaggy"
-	floor_type = /turf/simulated/floor/fixed/alium
-
-/turf/simulated/wall/alium/New(newloc)
-	..(newloc,MATERIAL_ALIENALLOY)
-
-//Cult wall
-/turf/simulated/wall/cult
-	icon_state = "cult"
-
-/turf/simulated/wall/cult/New(newloc, reinforce = 0)
-	..(newloc, MATERIAL_CULT, reinforce ? MATERIAL_REINFORCED_CULT : null)
-
-/turf/simulated/wall/cult/reinf/New(newloc)
-	..(newloc, 1)
-
-/turf/simulated/wall/cult/dismantle_wall()
-	GLOB.cult.remove_cultiness(CULTINESS_PER_TURF)
-	..()
-
-/turf/simulated/wall/cult/can_join_with(turf/simulated/wall/W)
-	if(material && W.material && material.wall_icon_base == W.material.wall_icon_base)
-		return 1
-	else if(istype(W, /turf/simulated/wall))
-		return 1
-	return 0
+/turf/wall/untinted/onestar_reinforced
+	name = "reinforced wall"
+	icon_state = "onestar_reinf_wall"
+	health = 600
+	max_health = 600
+	hardness = 140
+	is_reinforced = TRUE
+	wall_style = "minimalistic"
+	wall_type = "onestar_reinf_wall"

@@ -10,7 +10,7 @@
 /datum/category_group/underwear
 	var/sort_order		// Lower sort order is applied as icons first
 
-/datum/category_group/underwear/dd_SortValue()
+datum/category_group/underwear/dd_SortValue()
 	return sort_order
 
 /datum/category_group/underwear/top
@@ -39,7 +39,6 @@
 /datum/category_item/underwear
 	var/always_last = FALSE          // Should this entry be sorte last?
 	var/is_default = FALSE           // Should this entry be considered the default for its type?
-	var/icon = 'icons/mob/human.dmi' // Which icon to get the underwear from.
 	var/icon_state                   // And the particular item state.
 	var/list/tweaks = list()         // Underwear customizations.
 	var/has_color = FALSE
@@ -57,19 +56,19 @@
 		return "~"+name
 	return name
 
-/datum/category_item/underwear/proc/is_default(gender)
+/datum/category_item/underwear/proc/is_default(var/gender)
 	return is_default
 
-/datum/category_item/underwear/proc/create_underwear(mob/user, list/metadata)
+/datum/category_item/underwear/proc/create_underwear(var/atom/location, var/list/metadata, var/iconfile)	//we iconfile from bodybuild
 	if(!underwear_type)
 		return
 
-	var/obj/item/underwear/UW = new underwear_type()
+	var/obj/item/underwear/UW = new underwear_type(location)
 	UW.SetName(underwear_name)
 	UW.gender = underwear_gender
-	UW.icon = icon
+	UW.icon = iconfile
 	UW.icon_state = icon_state
 
 	for(var/datum/gear_tweak/gt in tweaks)
-		gt.tweak_item(user, UW, metadata && metadata["[gt]"] ? metadata["[gt]"] : gt.get_default())
+		gt.tweak_item(UW, metadata && metadata["[gt]"] ? metadata["[gt]"] : gt.get_default())
 	return UW

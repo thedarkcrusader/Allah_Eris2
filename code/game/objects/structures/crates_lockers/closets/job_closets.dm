@@ -1,94 +1,81 @@
 /* Closets for specific jobs
  * Contains:
- *		Bartender
+ *		Club Manager
+ *      Club Worker
  *		Janitor
- *		Lawyer
  */
 
 /*
  * Bartender
  */
 /obj/structure/closet/gmcloset
-	name = "formal closet"
-	desc = "It's a storage unit for formal clothing."
-	closet_appearance = /singleton/closet_appearance/wardrobe/black
+	name = "Club Manager closet"
+	desc = "A storage unit for formal clothing."
+	icon_door = "black"
 
-/obj/structure/closet/gmcloset/WillContain()
-	return list(
-		/obj/item/clothing/head/that = 2,
-		/obj/item/device/radio/headset/headset_service = 2,
-		/obj/item/clothing/head/hairflower/red,
-		/obj/item/clothing/head/hairflower/pink,
-		/obj/item/clothing/head/hairflower/yellow,
-		/obj/item/clothing/head/hairflower/blue,
-		/obj/item/clothing/under/sl_suit = 2,
-		/obj/item/clothing/under/rank/bartender = 2,
-		/obj/item/clothing/under/dress/dress_saloon,
-		/obj/item/clothing/accessory/waistcoat/black = 2,
-		/obj/item/clothing/shoes/black = 2
-	)
+/obj/structure/closet/gmcloset/populate_contents()
+	new /obj/item/clothing/head/that(src)
+	new /obj/item/clothing/head/that(src)
+	new /obj/item/device/radio/headset/headset_service(src)
+	new /obj/item/device/radio/headset/headset_service(src)
+	new /obj/item/clothing/head/hairflower
+	new /obj/item/clothing/suit/storage/toggle/club(src)
+	new /obj/item/clothing/under/rank/bartender(src)
+	new /obj/item/clothing/under/rank/bartender(src)
+	new /obj/item/clothing/suit/wcoat(src)
+	new /obj/item/clothing/suit/wcoat(src)
+	new /obj/item/clothing/shoes/color/black(src)
+	new /obj/item/clothing/shoes/color/black(src)
+	new /obj/item/clothing/under/rank/bartender/skirt(src)
 
 /*
  * Chef
  */
 /obj/structure/closet/chefcloset
-	name = "chef's closet"
-	desc = "It's a storage unit for foodservice garments."
-	closet_appearance = /singleton/closet_appearance/wardrobe/black
+	name = "Club Worker closet"
+	desc = "A storage unit for club personnel."
+	icon_door = "black"
 
-/obj/structure/closet/chefcloset/WillContain()
-	return list(
-		/obj/item/clothing/under/sundress,
-		/obj/item/clothing/under/waiter = 2,
-		/obj/item/device/radio/headset/headset_service = 2,
-		/obj/item/storage/box/mousetraps = 2,
-		/obj/item/clothing/under/rank/chef,
-		/obj/item/clothing/head/chefhat
-	)
+/obj/structure/closet/chefcloset/populate_contents()
+	new /obj/item/clothing/under/waiter(src)
+	new /obj/item/clothing/under/waiter/skirt(src)
+	new /obj/item/device/radio/headset/headset_service(src)
+	new /obj/item/storage/box/mousetraps(src)
+	new /obj/item/clothing/under/rank/chef(src)
+	new /obj/item/reagent_containers/drywet(src)
+	new /obj/item/clothing/head/chefhat(src)
+	new /obj/item/material/kitchen/rollingpin(src)
+	new /obj/item/tool/knife(src)
+	new /obj/item/tool/shovel/spatula(src)
+	new /obj/item/book/manual/chef_recipes(src)
 
 /*
  * Janitor
  */
 /obj/structure/closet/jcloset
-	name = "custodial closet"
-	desc = "It's a storage unit for janitorial clothes and gear."
-	closet_appearance = /singleton/closet_appearance/wardrobe/mixed
+	name = "janitorial closet" //legacy janitor
+	desc = "A storage unit for janitorial clothes and gear."
+	icon_door = "mixed"
 
-/obj/structure/closet/jcloset/WillContain()
-	return list(
-		/obj/item/clothing/under/rank/janitor,
-		/obj/item/device/radio/headset/headset_service,
-		/obj/item/clothing/gloves/thick,
-		/obj/item/clothing/head/soft/purple,
-		/obj/item/clothing/head/beret/purple,
-		/obj/item/device/flashlight,
-		/obj/item/caution = 4,
-		/obj/item/device/lightreplacer,
-		/obj/item/storage/bag/trash,
-		/obj/item/clothing/shoes/galoshes,
-		/obj/item/soap,
-		/obj/item/reagent_containers/glass/rag,
-		/obj/item/storage/belt/janitor
-	)
-
-/*
- * Lawyer
- */
-/obj/structure/closet/lawcloset
-	name = "legal closet"
-	desc = "It's a storage unit for courtroom apparel and items."
-	closet_appearance = /singleton/closet_appearance/wardrobe
-
-
-/obj/structure/closet/lawcloset/WillContain()
-	return list(
-		/obj/item/clothing/under/lawyer/female,
-		/obj/item/clothing/under/lawyer/black,
-		/obj/item/clothing/under/lawyer/red,
-		/obj/item/clothing/under/lawyer/bluesuit,
-		/obj/item/clothing/suit/storage/toggle/suit/blue,
-		/obj/item/clothing/under/lawyer/purpsuit,
-		/obj/item/clothing/suit/storage/toggle/suit/purple,
-		/obj/item/clothing/shoes/brown,
-		/obj/item/clothing/shoes/black
-	)
+/obj/structure/closet/jcloset/populate_contents()
+	if(prob(50))
+		new /obj/item/storage/backpack/sport/purple(src)
+	else
+		new /obj/item/storage/backpack/satchel(src)
+	new /obj/item/clothing/under/rank/janitor(src)
+	new /obj/item/device/radio/headset/headset_service(src)
+	new /obj/item/clothing/gloves/thick(src)
+	new /obj/item/clothing/head/soft/purple(src)
+	new /obj/item/clothing/head/beret/purple(src)
+	new /obj/item/device/lighting/toggleable/flashlight(src)
+	new /obj/item/caution(src)
+	new /obj/item/caution(src)
+	new /obj/item/caution(src)
+	new /obj/item/caution(src)
+	new /obj/item/device/lightreplacer(src)
+	new /obj/item/storage/bag/trash(src)
+	new /obj/item/clothing/shoes/galoshes(src)
+	new /obj/item/mop(src)
+	new /obj/item/soap/nanotrasen(src)
+	new /obj/item/storage/pouch/small_generic(src) // Because I feel like poor janitor gets it bad.
+	new /obj/item/tool/knife/dagger/nt(src)

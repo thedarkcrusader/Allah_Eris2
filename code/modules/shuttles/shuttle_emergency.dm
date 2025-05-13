@@ -22,25 +22,25 @@
 		var/obj/machinery/computer/shuttle_control/emergency/C = in_use
 		C.reset_authorization()
 
-/datum/shuttle/autodock/ferry/emergency/long_jump(destination, interim, travel_time, direction)
+/datum/shuttle/autodock/ferry/emergency/long_jump(var/destination, var/interim, var/travel_time, var/direction)
 	..(destination, interim, emergency_controller.get_long_jump_time(), direction)
 
 /datum/shuttle/autodock/ferry/emergency/shuttle_moved()
 	if(next_location != waypoint_station)
 		emergency_controller.shuttle_leaving() // This is a hell of a line. v
-		priority_announcement.Announce(replacetext(replacetext((emergency_controller.emergency_evacuation ? GLOB.using_map.emergency_shuttle_leaving_dock : GLOB.using_map.shuttle_leaving_dock), "%dock_name%", "[GLOB.using_map.dock_name]"),  "%ETA%", "[round(emergency_controller.get_eta()/60,1)] minute\s"))
+		priority_announcement.Announce(replacetext(replacetext((emergency_controller.emergency_evacuation ? GLOB.maps_data.emergency_shuttle_leaving_dock : GLOB.maps_data.shuttle_leaving_dock), "%dock_name%", "[dock_name]"),  "%ETA%", "[round(emergency_controller.get_eta()/60,1)] minute\s"))
 	else if(next_location == waypoint_offsite && emergency_controller.has_evacuated())
 		emergency_controller.shuttle_evacuated()
 	..()
 
-/datum/shuttle/autodock/ferry/emergency/can_launch(user)
+/datum/shuttle/autodock/ferry/emergency/can_launch(var/user)
 	if (istype(user, /obj/machinery/computer/shuttle_control/emergency))
 		var/obj/machinery/computer/shuttle_control/emergency/C = user
 		if (!C.has_authorization())
 			return 0
 	return ..()
 
-/datum/shuttle/autodock/ferry/emergency/can_force(user)
+/datum/shuttle/autodock/ferry/emergency/can_force(var/user)
 	if (istype(user, /obj/machinery/computer/shuttle_control/emergency))
 		var/obj/machinery/computer/shuttle_control/emergency/C = user
 
@@ -50,7 +50,7 @@
 			return 0
 	return ..()
 
-/datum/shuttle/autodock/ferry/emergency/can_cancel(user)
+/datum/shuttle/autodock/ferry/emergency/can_cancel(var/user)
 	if(emergency_controller.has_evacuated())
 		return 0
 	if (istype(user, /obj/machinery/computer/shuttle_control/emergency))
@@ -59,33 +59,35 @@
 			return 0
 	return ..()
 
-/datum/shuttle/autodock/ferry/emergency/launch(user)
+/datum/shuttle/autodock/ferry/emergency/launch(var/user)
 	if (!can_launch(user)) return
 
 	if (istype(user, /obj/machinery/computer/shuttle_control/emergency))	//if we were given a command by an emergency shuttle console
 		if (emergency_controller.autopilot)
 			emergency_controller.autopilot = 0
-			to_world(SPAN_NOTICE("<b>Alert: The shuttle autopilot has been overridden. Launch sequence initiated!</b>"))
+			to_chat(world, (SPAN_NOTICE("<b>Alert: The shuttle autopilot has been overridden. Launch sequence initiated!</b>")))
 
 	if(usr)
-		log_and_message_admins("has overridden the shuttle autopilot and activated launch sequence")
+		log_admin("[key_name(usr)] has overridden the shuttle autopilot and activated launch sequence")
+		message_admins("[key_name_admin(usr)] has overridden the shuttle autopilot and activated launch sequence")
 
 	..(user)
 
-/datum/shuttle/autodock/ferry/emergency/force_launch(user)
+/datum/shuttle/autodock/ferry/emergency/force_launch(var/user)
 	if (!can_force(user)) return
 
 	if (istype(user, /obj/machinery/computer/shuttle_control/emergency))	//if we were given a command by an emergency shuttle console
 		if (emergency_controller.autopilot)
 			emergency_controller.autopilot = 0
-			to_world(SPAN_NOTICE("<b>Alert: The shuttle autopilot has been overridden. Bluespace drive engaged!</b>"))
+			to_chat(world, (SPAN_NOTICE("<b>Alert: The shuttle autopilot has been overridden. Bluespace drive engaged!</b>")))
 
 	if(usr)
-		log_and_message_admins("has overridden the shuttle autopilot and forced immediate launch")
+		log_admin("[key_name(usr)] has overridden the shuttle autopilot and forced immediate launch")
+		message_admins("[key_name_admin(usr)] has overridden the shuttle autopilot and forced immediate launch")
 
 	..(user)
 
-/datum/shuttle/autodock/ferry/emergency/cancel_launch(user)
+/datum/shuttle/autodock/ferry/emergency/cancel_launch(var/user)
 
 	if (!can_cancel(user)) return
 
@@ -94,10 +96,11 @@
 		if (istype(user, /obj/machinery/computer/shuttle_control/emergency))	//if we were given a command by an emergency shuttle console
 			if (emergency_controller.autopilot)
 				emergency_controller.autopilot = 0
-				to_world(SPAN_NOTICE("<b>Alert: The shuttle autopilot has been overridden. Launch sequence aborted!</b>"))
+				to_chat(world, (SPAN_NOTICE("<b>Alert: The shuttle autopilot has been overridden. Launch sequence aborted!</b>")))
 
 		if(usr)
-			log_and_message_admins("has overridden the shuttle autopilot and cancelled launch sequence")
+			log_admin("[key_name(usr)] has overridden the shuttle autopilot and cancelled launch sequence")
+			message_admins("[key_name_admin(usr)] has overridden the shuttle autopilot and cancelled launch sequence")
 
 	..(user)
 
@@ -108,29 +111,32 @@
 	var/list/authorized = list()
 
 /obj/machinery/computer/shuttle_control/emergency/proc/has_authorization()
-	return (length(authorized) >= req_authorizations || emagged)
+	return (authorized.len >= req_authorizations || emagged)
 
 /obj/machinery/computer/shuttle_control/emergency/proc/reset_authorization()
 	//no need to reset emagged status. If they really want to go back to the station they can.
 	authorized = initial(authorized)
 
 //returns 1 if the ID was accepted and a new authorization was added, 0 otherwise
-/obj/machinery/computer/shuttle_control/emergency/proc/read_authorization(obj/item/ident)
+/obj/machinery/computer/shuttle_control/emergency/proc/read_authorization(var/obj/item/ident)
 	if (!ident || !istype(ident))
 		return 0
-	if (length(authorized) >= req_authorizations)
+	if (authorized.len >= req_authorizations)
 		return 0 //don't need any more
 
-	var/singleton/security_state/security_state = GET_SINGLETON(GLOB.using_map.security_state)
-	if (!evacuation_controller.emergency_evacuation && security_state.current_security_level_is_lower_than(security_state.high_security_level))
-		src.visible_message("\The [src] buzzes. It does not appear to be accepting any commands.")
-		return 0
+	if (!istype(ident, /obj/item/card/id) && !istype(ident, /obj/item/modular_computer/pda))
+		return
+
+	var/obj/item/card/id/ID
+
+	if (istype(ident, /obj/item/modular_computer/pda))
+		ID = ident.GetIdCard()
+	else
+		ID = ident
 
 	var/list/access
 	var/auth_name
 	var/dna_hash
-
-	var/obj/item/card/id/ID = ident.GetIdCard()
 
 	if(!ID)
 		return
@@ -146,31 +152,32 @@
 		src.visible_message("\The [src] buzzes. That ID has already been scanned.")
 		return 0
 
-	if (!(access_bridge in access))
+	if (!(access_heads in access))
 		src.visible_message("\The [src] buzzes, rejecting [ident].")
 		return 0
 
 	src.visible_message("\The [src] beeps as it scans [ident].")
 	authorized[dna_hash] = auth_name
-	if (req_authorizations - length(authorized))
-		to_world(SPAN_NOTICE("<b>Alert: [req_authorizations - length(authorized)] authorization\s needed to override the shuttle autopilot.</b>"))
+	if (req_authorizations - authorized.len)
+		to_chat(world, (SPAN_NOTICE("<b>Alert: [req_authorizations - authorized.len] authorization\s needed to override the shuttle autopilot.</b>")))
 
 	if(usr)
-		log_and_message_admins("has inserted [ID] into the shuttle control computer - [req_authorizations - length(authorized)] authorisation\s needed")
+		log_admin("[key_name(usr)] has inserted [ID] into the shuttle control computer - [req_authorizations - authorized.len] authorisation\s needed")
+		message_admins("[key_name_admin(usr)] has inserted [ID] into the shuttle control computer - [req_authorizations - authorized.len] authorisation\s needed")
 
 	return 1
 
-/obj/machinery/computer/shuttle_control/emergency/emag_act(remaining_charges, mob/user)
+/obj/machinery/computer/shuttle_control/emergency/emag_act(var/remaining_charges, var/mob/user)
 	if (!emagged)
-		to_chat(user, SPAN_NOTICE("You short out \the [src]'s authorization protocols."))
-		emagged = TRUE
+		to_chat(user, "<span class='notice'>You short out \the [src]'s authorization protocols.</span>")
+		emagged = 1
 		return 1
 
-/obj/machinery/computer/shuttle_control/emergency/use_tool(obj/item/W, mob/living/user, list/click_params)
+/obj/machinery/computer/shuttle_control/emergency/attackby(obj/item/W as obj, mob/user as mob)
 	read_authorization(W)
-	return ..()
+	..()
 
-/obj/machinery/computer/shuttle_control/emergency/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1)
+/obj/machinery/computer/shuttle_control/emergency/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	var/data[0]
 	var/datum/shuttle/autodock/ferry/emergency/shuttle = SSshuttle.shuttles[shuttle_tag]
 	if (!istype(shuttle))
@@ -188,11 +195,11 @@
 			if (shuttle.in_use)
 				shuttle_status = "Busy."
 			else if (!shuttle.location)
-				shuttle_status = "Standing-by at [GLOB.using_map.station_name]."
+				shuttle_status = "Standing-by at [station_name]."
 			else
-				shuttle_status = "Standing-by at [GLOB.using_map.dock_name]."
+				shuttle_status = "Standing-by at [dock_name]."
 		if(WAIT_LAUNCH, FORCE_LAUNCH)
-			shuttle_status = "Shuttle has received command and will depart shortly."
+			shuttle_status = "Shuttle has recieved command and will depart shortly."
 		if(WAIT_ARRIVE)
 			shuttle_status = "Proceeding to destination."
 		if(WAIT_FINISH)
@@ -210,7 +217,7 @@
 			auth_list[i++] = list("auth_name"="", "auth_hash"=null)
 	else
 		for (var/i = 1; i <= req_authorizations; i++)
-			auth_list[i] = list("auth_name"="[SPAN_COLOR("red", "ERROR")]", "auth_hash"=null)
+			auth_list[i] = list("auth_name"="<font color=\"red\">ERROR</font>", "auth_hash"=null)
 
 	var/has_auth = has_authorization()
 
@@ -236,7 +243,7 @@
 		ui.open()
 		ui.set_auto_update(1)
 
-/obj/machinery/computer/shuttle_control/emergency/OnTopic(user, href_list)
+/obj/machinery/computer/shuttle_control/emergency/Topic(user, href_list)
 	if(href_list["removeid"])
 		var/dna_hash = href_list["removeid"]
 		authorized -= dna_hash

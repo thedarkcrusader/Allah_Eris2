@@ -1,18 +1,14 @@
 /obj/structure/curtain
 	name = "curtain"
-	icon = 'icons/obj/structures/curtain.dmi'
+	icon = 'icons/obj/curtain.dmi'
 	icon_state = "closed"
-	layer = ABOVE_WINDOW_LAYER
 	opacity = 1
 	density = FALSE
-
-/obj/structure/curtain/Initialize()
-	.=..()
-	set_extension(src, /datum/extension/turf_hand)
+	layer = WALL_OBJ_LAYER
 
 /obj/structure/curtain/open
 	icon_state = "open"
-	layer = ABOVE_HUMAN_LAYER
+	layer = SIGN_LAYER
 	opacity = 0
 
 /obj/structure/curtain/bullet_act(obj/item/projectile/P, def_zone)
@@ -28,13 +24,13 @@
 	..()
 
 /obj/structure/curtain/proc/toggle()
-	set_opacity(!opacity)
+	opacity = !opacity
 	if(opacity)
 		icon_state = "closed"
-		layer = ABOVE_HUMAN_LAYER
+		layer = WALL_OBJ_LAYER
 	else
 		icon_state = "open"
-		layer = ABOVE_WINDOW_LAYER
+		layer = SIGN_LAYER
 
 /obj/structure/curtain/black
 	name = "black curtain"
@@ -42,7 +38,7 @@
 
 /obj/structure/curtain/medical
 	name = "plastic curtain"
-	color = "#b8f5e3"
+	color = "#B8F5E3"
 	alpha = 200
 
 /obj/structure/curtain/open/bed
@@ -51,15 +47,15 @@
 
 /obj/structure/curtain/open/privacy
 	name = "privacy curtain"
-	color = "#b8f5e3"
+	color = "#B8F5E3"
 
 /obj/structure/curtain/open/shower
 	name = "shower curtain"
-	color = "#acd1e9"
+	color = "#ACD1E9"
 	alpha = 200
 
 /obj/structure/curtain/open/shower/engineering
-	color = "#ffa500"
+	color = "#FFA500"
 
 /obj/structure/curtain/open/shower/security
-	color = "#aa0000"
+	color = "#AA0000"

@@ -1,184 +1,125 @@
 /obj/machinery/keycard_auth
-	name = "keycard authentication device"
-	desc = "This device is used to trigger functions which require more than one ID card to authenticate."
-	icon = 'icons/obj/structures/keycard_authenticator.dmi'
+	name = "Keycard Authentication Device"
+	desc = "This device is used to trigger ship functions, which require more than one ID card to authenticate."
+	icon = 'icons/obj/monitors.dmi'
 	icon_state = "auth_off"
-	var/active = 0 //This gets set to 1 on all devices except the one where the initial request was made.
-	var/event = ""
-	var/screen = 1
-	var/confirmed = 0 //This variable is set by the device that confirms the request.
-	var/confirm_delay = 3 SECONDS
-	var/busy = 0 //Busy when waiting for authentication or an event request has been sent from this device.
-	var/obj/machinery/keycard_auth/event_source
-	var/mob/event_triggered_by
-	var/mob/event_confirmed_by
-	//1 = select event
-	//2 = authenticate
-	anchored = TRUE
-	idle_power_usage = 2
-	active_power_usage = 6
-	power_channel = ENVIRON
-	obj_flags = OBJ_FLAG_WALL_MOUNTED
+	use_power = NO_POWER_USE
+	idle_power_usage = 0
+	active_power_usage = 0
+	interact_offline = TRUE
+	req_access = list(access_keycard_auth)
+	var/static/const/countdown = 3 MINUTES
+	var/static/const/cooldown = 10 MINUTES
+	var/static/list/ongoing_countdowns = list()
+	var/static/list/initiator_card = list()
+	var/static/next_countdown
+	var/static/list/event_names = list(
+		redalert = "red alert",
+		pods = "spacecraft abandonment"
+	)
+	var/static/datum/announcement/priority/kcad_announcement = new(do_log = 1, new_sound = sound('sound/misc/notice1.ogg'), do_newscast = 1)
 
 /obj/machinery/keycard_auth/attack_ai(mob/user as mob)
-	to_chat(user, SPAN_WARNING("A firewall prevents you from interfacing with this device!"))
 	return
 
-/obj/machinery/keycard_auth/use_tool(obj/item/W, mob/living/user, list/click_params)
-	if(inoperable())
-		to_chat(user, "This device is not powered.")
-		return TRUE
+/obj/machinery/keycard_auth/inoperable(var/additional_flags = 0)
+	return (stat & (BROKEN|additional_flags))
 
-	if (isid(W))
-		var/obj/item/card/id/ID = W
-		if(access_keycard_auth in ID.access)
-			if(active == 1)
-				//This is not the device that made the initial request. It is the device confirming the request.
-				if(event_source && event_source.event_triggered_by != usr)
-					event_source.confirmed = 1
-					event_source.event_confirmed_by = usr
-				else
-					to_chat(user, SPAN_WARNING("Unable to confirm, DNA matches that of origin."))
-			else if(screen == 2)
-				event_triggered_by = usr
-				broadcast_request() //This is the device making the initial event request. It needs to broadcast to other devices
-		return TRUE
-
-	return ..()
-
-//icon_state gets set everwhere besides here, that needs to be fixed sometime
-/obj/machinery/keycard_auth/on_update_icon()
-	if(!is_powered())
-		icon_state = "auth_off"
-
-/obj/machinery/keycard_auth/interface_interact(mob/user)
-	if(busy)
-		to_chat(user, "This device is busy.")
-		return TRUE
-	interact(user)
-	return TRUE
-
-/obj/machinery/keycard_auth/interact(mob/user)
-	user.set_machine(src)
-
-	var/dat = "<h1>Keycard Authentication Device</h1>"
-
-	dat += "This device is used to trigger some high security events. It requires the simultaneous swipe of two high-level ID cards."
-	dat += "<br><hr><br>"
-
-	if(screen == 1)
-		dat += "Select an event to trigger:<ul>"
-
-		var/singleton/security_state/security_state = GET_SINGLETON(GLOB.using_map.security_state)
-		if(security_state.current_security_level == security_state.severe_security_level)
-			dat += "<li>Cannot modify the alert level at this time: [security_state.severe_security_level.name] engaged.</li>"
-		else
-			if(security_state.current_security_level == security_state.high_security_level)
-				dat += "<li><A href='byond://?src=\ref[src];triggerevent=Revert alert'>Disengage [security_state.high_security_level.name]</A></li>"
-			else
-				dat += "<li><A href='byond://?src=\ref[src];triggerevent=Red alert'>Engage [security_state.high_security_level.name]</A></li>"
-
-		if(!config.ert_admin_call_only)
-			dat += "<li><A href='byond://?src=\ref[src];triggerevent=Emergency Response Team'>Emergency Response Team</A></li>"
-
-		dat += "<li><A href='byond://?src=\ref[src];triggerevent=Grant Emergency Maintenance Access'>Grant Emergency Maintenance Access</A></li>"
-		dat += "<li><A href='byond://?src=\ref[src];triggerevent=Revoke Emergency Maintenance Access'>Revoke Emergency Maintenance Access</A></li>"
-		dat += "<li><A href='byond://?src=\ref[src];triggerevent=Grant Nuclear Authorization Code'>Grant Nuclear Authorization Code</A></li>"
-		dat += "</ul>"
-		show_browser(user, dat, "window=keycard_auth;size=500x250")
-	if(screen == 2)
-		dat += "Please swipe your card to authorize the following event: <b>[event]</b>"
-		dat += "<p><A href='byond://?src=\ref[src];reset=1'>Back</A>"
-		show_browser(user, dat, "window=keycard_auth;size=500x250")
-	return
-
-/obj/machinery/keycard_auth/CanUseTopic(mob/user, href_list)
-	if(busy)
-		to_chat(user, "This device is busy.")
-		return STATUS_CLOSE
-	if(!user.IsAdvancedToolUser())
-		to_chat(user, FEEDBACK_YOU_LACK_DEXTERITY)
-		return min(..(), STATUS_UPDATE)
-	return ..()
-
-/obj/machinery/keycard_auth/OnTopic(user, href_list)
-	if(href_list["triggerevent"])
-		event = href_list["triggerevent"]
-		screen = 2
-		. = TOPIC_REFRESH
-	if(href_list["reset"])
-		reset()
-		. = TOPIC_REFRESH
-
-	if(. == TOPIC_REFRESH)
-		attack_hand(user)
-
-/obj/machinery/keycard_auth/proc/reset()
-	active = 0
-	event = ""
-	screen = 1
-	confirmed = 0
-	event_source = null
-	icon_state = "auth_off"
-	event_triggered_by = null
-	event_confirmed_by = null
-
-/obj/machinery/keycard_auth/proc/broadcast_request()
-	icon_state = "auth_on"
-	for(var/obj/machinery/keycard_auth/KA in world)
-		if(KA == src) continue
-		KA.reset()
-		spawn()
-			KA.receive_request(src)
-
-	sleep(confirm_delay)
-	if(confirmed)
-		confirmed = 0
-		trigger_event(event)
-		log_and_message_admins("triggered and [key_name(event_confirmed_by)] confirmed event [event]", event_triggered_by || usr)
-	reset()
-
-/obj/machinery/keycard_auth/proc/receive_request(obj/machinery/keycard_auth/source)
-	if(inoperable())
+/obj/machinery/keycard_auth/attack_hand(mob/user)
+	. = ..()
+	if(.)
 		return
-	event_source = source
-	busy = 1
-	active = 1
-	icon_state = "auth_on"
 
-	sleep(confirm_delay)
+	user.set_machine(src)
+	nano_ui_interact(user)
 
-	event_source = null
-	icon_state = "auth_off"
-	active = 0
-	busy = 0
+/obj/machinery/keycard_auth/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
+	var/data[0]
+	var/decl/security_state/security_state = decls_repository.get_decl(GLOB.maps_data.security_state)
 
-/obj/machinery/keycard_auth/proc/trigger_event()
+	data["seclevel"] = security_state.current_security_level.name
+	data["emergencymaint"] = maint_all_access
+	data["events"] = ongoing_countdowns
+	data["oncooldown"] = next_countdown > world.time
+	data["maint_all_access"] = maint_all_access
+
+	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
+	if(!ui)
+		ui = new(user, src, ui_key, "keycard authentication.tmpl", "Keycard Authentication Device", 440, 300)
+		ui.set_initial_data(data)
+		ui.open()
+		ui.set_auto_update(1)
+
+/obj/machinery/keycard_auth/Topic(href, href_list)
+	if(..())
+		return TRUE
+
+	if(!allowed(usr))
+		return TRUE
+
+	if(href_list["start"])
+		if(next_countdown > world.time)
+			return TRUE
+		var/event = href_list["start"]
+		if(ongoing_countdowns[event])
+			return
+		kcad_announcement.Announce("[usr] has initiated [event_names[event]] countdown.")
+		ongoing_countdowns[event] = addtimer(CALLBACK(src, PROC_REF(countdown_finished), event), countdown, TIMER_UNIQUE | TIMER_STOPPABLE)
+		next_countdown = world.time + cooldown
+		var/obj/item/card/id/id = usr.GetIdCard()
+		initiator_card[event] = id
+	if(href_list["cancel"])
+		var/event = href_list["cancel"]
+		if(!ongoing_countdowns[event])
+			return
+		kcad_announcement.Announce("[usr] has cancelled [event_names[event]] countdown.")
+		deltimer(ongoing_countdowns[event])
+		ongoing_countdowns -= event
+		initiator_card -= event
+	if(href_list["proceed"])
+		var/event = href_list["proceed"]
+		if(!ongoing_countdowns[event])
+			return
+		var/obj/item/card/id/id = usr.GetIdCard()
+		if(initiator_card[event] == id)
+			return
+		kcad_announcement.Announce("[usr] has proceeded [event_names[event]] countdown.")
+		countdown_finished(event)
+	if(href_list["emergencymaint"])
+		var/event = href_list["emergencymaint"]
+		switch(event)
+			if("grant")
+				make_maint_all_access()
+			if("revoke")
+				revoke_maint_all_access()
+	playsound(usr.loc, 'sound/machines/button.ogg', 100, 1)
+	return
+
+/obj/machinery/keycard_auth/proc/countdown_finished(event)
 	switch(event)
-		if("Red alert")
-			var/singleton/security_state/security_state = GET_SINGLETON(GLOB.using_map.security_state)
-			security_state.stored_security_level = security_state.current_security_level
+		if("redalert")
+			var/decl/security_state/security_state = decls_repository.get_decl(GLOB.maps_data.security_state)
 			security_state.set_security_level(security_state.high_security_level)
-		if("Revert alert")
-			var/singleton/security_state/security_state = GET_SINGLETON(GLOB.using_map.security_state)
-			security_state.set_security_level(security_state.stored_security_level)
-		if("Grant Emergency Maintenance Access")
-			GLOB.using_map.make_maint_all_access()
-		if("Revoke Emergency Maintenance Access")
-			GLOB.using_map.revoke_maint_all_access()
-		if("Emergency Response Team")
-			if(is_ert_blocked())
-				to_chat(usr, SPAN_WARNING("All emergency response teams are dispatched and can not be called at this time."))
-				return
+		if("pods")
+			evacuation_controller.call_evacuation(null, TRUE)
+	if(event)
+		deltimer(ongoing_countdowns[event])
+		ongoing_countdowns -= event
+		initiator_card -= event
 
-			trigger_armed_response_team(1)
-		if("Grant Nuclear Authorization Code")
-			var/obj/machinery/nuclearbomb/nuke = locate(/obj/machinery/nuclearbomb/station) in world
-			if(nuke)
-				to_chat(usr, "The nuclear authorization code is [nuke.r_code]")
-			else
-				to_chat(usr, "No self destruct terminal found.")
+var/global/maint_all_access = 0
 
-/obj/machinery/keycard_auth/proc/is_ert_blocked()
-	if(config.ert_admin_call_only) return 1
-	return SSticker.mode && SSticker.mode.ert_disabled
+/proc/make_maint_all_access()
+	maint_all_access = 1
+	to_chat(world, "<font size=4 color='red'>Attention!</font>")
+	to_chat(world, "<font color='red'>The maintenance access requirement has been revoked on all airlocks.</font>")
+
+/proc/revoke_maint_all_access()
+	maint_all_access = 0
+	to_chat(world, "<font size=4 color='red'>Attention!</font>")
+	to_chat(world, "<font color='red'>The maintenance access requirement has been readded on all maintenance airlocks.</font>")
+
+/obj/machinery/door/airlock/allowed(mob/M)
+	if(maint_all_access && src.check_access_list(list(access_maint_tunnels)))
+		return 1
+	return ..(M)

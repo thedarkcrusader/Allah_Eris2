@@ -1,199 +1,238 @@
 /obj/structure
-	icon = 'icons/obj/structures/structures.dmi'
-	w_class = ITEM_SIZE_NO_CONTAINER
-	layer = STRUCTURE_LAYER
-
-	health_flags = HEALTH_FLAG_STRUCTURE
-
-	var/fragile
+	icon = 'icons/obj/structures.dmi'
+	w_class = ITEM_SIZE_GARGANTUAN
+	spawn_frequency = 10
+	rarity_value = 10
+	//spawn_tags = SPAWN_TAG_STRUCTURE
+	bad_type = /obj/structure
+	var/health = 100
+	var/maxHealth = 100
+	var/explosion_coverage = 0
+	var/climbable
+	var/breakable
 	var/parts
-	var/list/connections = list("0", "0", "0", "0")
-	var/list/other_connections = list("0", "0", "0", "0")
-	var/list/blend_objects = newlist() // Objects which to blend with
-	var/list/noblend_objects = newlist() //Objects to avoid blending with (such as children of listed blend objects.)
-	var/material/material = null
-	var/footstep_type
-	var/mob_offset = 0 //used for on_structure_offset mob animation
-	var/breakout //if someone is currently breaking out
+	var/list/climbers = list()
 
-/obj/structure/damage_health(damage, damage_type, damage_flags, severity, skip_can_damage_check)
-	if (damage && HAS_FLAGS(damage_flags, DAMAGE_FLAG_TURF_BREAKER))
-		if (fragile)
-			return kill_health()
-		damage = max(damage, 10)
-	return ..()
+/obj/structure/proc/get_health_ratio()
+	if(health)
+		return health/maxHealth
+	else
+		return 1/maxHealth
 
-/obj/structure/proc/mob_breakout(mob/living/escapee)
-	set waitfor = FALSE
-	return FALSE
+// Should  always return the amount of damage done
+/obj/structure/proc/take_damage(damage)
+	// Blocked amount
+	. = health - damage < 0 ? damage - (damage - health) : damage
+	. *= explosion_coverage
+	health -= damage
+	if(health < 0)
+		qdel(src)
+	return
+
+
+
+/**
+ * An overridable proc used by SSfalling to determine whether if the object deals
+ * mimimal dmg or their w_class * 10
+ *
+ * @return	ITEM_SIZE_TINY * 10 	if w_class is not defined in subtypes structures
+ *			w_class * 10 			if w_class is set
+ *
+ * Values are found in code/__defines/inventory_sizes.dm
+ */
+/obj/structure/get_fall_damage(var/turf/from, var/turf/dest)
+	var/damage = w_class * 10 * get_health_ratio()
+
+	if (from && dest)
+		damage *= abs(from.z - dest.z)
+
+	return damage
 
 /obj/structure/Destroy()
-	reset_mobs_offset()
-	var/turf/T = get_turf(src)
-	if(T && parts)
-		new parts(T)
+	if(parts)
+		new parts(loc)
 	. = ..()
-	if(istype(T))
-		T.fluid_update()
 
-/obj/structure/Crossed(mob/living/M)
-	if(istype(M))
-		M.on_structure_offset(mob_offset)
+/obj/structure/attack_hand(mob/user)
+	if(breakable)
+//		if(HULK in user.mutations)
+//			user.say(pick(";RAAAAAAAARGH!", ";HNNNNNNNNNGGGGGGH!", ";GWAAAAAAAARRRHHH!", "NNNNNNNNGGGGGGGGHH!", ";AAAAAAARRRGH!" ))
+//			attack_generic(user,1,"smashes")
+		if(ishuman(user))
+			var/mob/living/carbon/human/H = user
+			if(H.species.can_shred(user))
+				attack_generic(user,1,"slices")
+
+	if(climbers.len && !(user in climbers))
+		user.visible_message(SPAN_WARNING("[user.name] shakes \the [src]."), \
+					SPAN_NOTICE("You shake \the [src]."))
+		structure_shaken()
+
+	return ..()
+
+/obj/structure/attack_tk()
+	return
+
+/obj/structure/explosion_act(target_power, explosion_handler/handler)
+	var/absorbed = take_damage(target_power)
+	return absorbed
+
+/obj/structure/New()
 	..()
+	if(climbable)
+		verbs += /obj/structure/proc/climb_on
 
-/obj/structure/proc/reset_mobs_offset()
-	for(var/mob/living/M in loc)
-		M.on_structure_offset(0)
+/obj/structure/proc/climb_on()
 
-/obj/structure/Initialize()
-	. = ..()
-	if(!CanFluidPass())
-		fluid_update()
+	set name = "Climb structure"
+	set desc = "Climbs onto a structure."
+	set category = "Object"
+	set src in oview(1)
 
-/obj/structure/Move()
-	. = ..()
-	if(. && !CanFluidPass())
-		fluid_update()
+	do_climb(usr)
 
+/obj/structure/MouseDrop_T(mob/target, mob/user)
 
-/obj/structure/use_weapon(obj/item/weapon, mob/living/user, list/click_params)
-	// Natural Weapon - Passthrough to generic attack
-	if (istype(weapon, /obj/item/natural_weapon))
-		attack_generic(user, weapon.force, pick(weapon.attack_verb), damtype = weapon.damtype, dam_flags = weapon.damage_flags())
-		return TRUE
+	var/mob/living/H = user
+	if(istype(H) && can_climb(H) && (target == user || ismech(user.loc)))
+		do_climb(target)
+	else
+		return ..()
 
-	return ..()
-
-/obj/structure/get_interactions_info()
-	. = ..()
-	.[CODEX_INTERACTION_GRAB_AGGRESSIVE] = "<p>On harm intent, slams the victim against \the [initial(name)], causing damage to both the victim and object.</p>"
-	if (HAS_FLAGS(initial(atom_flags), ATOM_FLAG_CLIMBABLE))
-		.[CODEX_INTERACTION_GRAB_AGGRESSIVE] += "<p>On non-harm intent, places the victim on \the [initial(name)] after a 3 second timer.</p>"
-
-
-/obj/structure/use_grab(obj/item/grab/grab, list/click_params)
-	// Harm intent - Slam face against the structure
-	if (grab.assailant.a_intent == I_HURT)
-		if (!grab.force_danger())
-			USE_FEEDBACK_GRAB_MUST_UPGRADE("to slam their face on \the [src]")
-			return TRUE
-		var/blocked = grab.affecting.get_blocked_ratio(BP_HEAD, DAMAGE_BRUTE, damage = 8)
-		if (prob(30 * (1 - blocked)))
-			grab.affecting.Weaken(5)
-		grab.affecting.apply_damage(8, DAMAGE_BRUTE, BP_HEAD)
-		visible_message(
-			SPAN_DANGER("\The [grab.assailant] slams \the [grab.affecting]'s face against \the [src]!"),
-			SPAN_DANGER("You slam \the [grab.affecting]'s face against \the [src]!")
-		)
-		if (material)
-			playsound(src, material.tableslam_noise, 50, 1)
-		else
-			playsound(src, 'sound/weapons/tablehit1.ogg', 50, 1)
-		damage_health(rand(1, 5), DAMAGE_BRUTE)
-		qdel(grab)
-		return TRUE
-
-	// Climbable structure - Put victim on it
-	if (HAS_FLAGS(atom_flags, ATOM_FLAG_CLIMBABLE))
-		if (!grab.force_danger())
-			USE_FEEDBACK_GRAB_MUST_UPGRADE("to put them on \the [src]")
-			return TRUE
-		var/obj/occupied = turf_is_crowded()
-		if (occupied)
-			USE_FEEDBACK_GRAB_FAILURE("There's \a [occupied] blocking \the [src].")
-			return TRUE
-		if (!do_after(grab.assailant, 3 SECONDS, grab.affecting, DO_PUBLIC_UNIQUE) || !grab.use_sanity_check(src))
-			return TRUE
-		occupied = turf_is_crowded()
-		if (occupied)
-			USE_FEEDBACK_GRAB_FAILURE("There's \a [occupied] blocking \the [src].")
-			return TRUE
-		grab.affecting.forceMove(loc)
-		grab.affecting.Weaken(rand(2,5))
-		visible_message(
-			SPAN_WARNING("\The [grab.assailant] puts \the [grab.affecting] on \the [src]."),
-			SPAN_WARNING("You put \the [grab.affecting] on \the [src].")
-		)
-		qdel(grab)
-		return TRUE
-
-	return ..()
-
-/obj/structure/proc/dump_contents()
-	for(var/mob/M in src)
-		M.dropInto(loc)
-		if(M.client)
-			M.client.eye = M.client.mob
-			M.client.perspective = MOB_PERSPECTIVE
-
-	for(var/atom/movable/AM in src)
-		AM.dropInto(loc)
-
-/obj/structure/proc/can_visually_connect()
-	return anchored
-
-/obj/structure/proc/can_visually_connect_to(obj/structure/S)
-	return istype(S, src)
-
-/obj/structure/proc/refresh_neighbors()
-	for(var/thing in RANGE_TURFS(src, 1))
-		var/turf/T = thing
-		T.update_icon()
-
-/obj/structure/proc/update_connections(propagate = 0)
-	var/list/dirs = list()
-	var/list/other_dirs = list()
-
-	for(var/obj/structure/S in orange(src, 1))
-		if(can_visually_connect_to(S))
-			if(S.can_visually_connect())
-				if(propagate)
-					S.update_connections()
-					S.update_icon()
-				dirs += get_dir(src, S)
-
-	if(!can_visually_connect())
-		connections = list("0", "0", "0", "0")
-		other_connections = list("0", "0", "0", "0")
+/obj/structure/proc/can_climb(mob/living/user, post_climb_check=0)
+	if (!climbable || !can_touch(user) || (!post_climb_check && (user in climbers)))
 		return FALSE
 
-	for(var/direction in GLOB.cardinal)
-		var/turf/T = get_step(src, direction)
-		var/success = 0
-		for(var/b_type in blend_objects)
-			if(istype(T, b_type))
-				success = 1
-				if(propagate)
-					var/turf/simulated/wall/W = T
-					if(istype(W))
-						W.update_connections(1)
-				if(success)
-					break
-			if(success)
-				break
-		if(!success)
-			for(var/obj/O in T)
-				for(var/b_type in blend_objects)
-					if(istype(O, b_type))
-						success = 1
-						for(var/obj/structure/S in T)
-							if(can_visually_connect_to(S))
-								success = 0
-						for(var/nb_type in noblend_objects)
-							if(istype(O, nb_type))
-								success = 0
+	if(ismech(user.loc))
+		var/mob/living/mech = user.loc
+		if(!mech.Adjacent(src))
+			to_chat(user, SPAN_DANGER("You can't climb there, the way is blocked."))
+			return FALSE
+	else if (!user.Adjacent(src))
+		to_chat(user, SPAN_DANGER("You can't climb there, the way is blocked."))
+		return FALSE
 
-					if(success)
-						break
-				if(success)
-					break
-
-		if(success)
-			dirs += get_dir(src, T)
-			other_dirs += get_dir(src, T)
-
-	refresh_neighbors()
-
-	connections = dirs_to_corner_states(dirs)
-	other_connections = dirs_to_corner_states(other_dirs)
+	var/obj/occupied = turf_is_crowded()
+	if(occupied)
+		to_chat(user, SPAN_DANGER("There's \a [occupied] in the way."))
+		return FALSE
 	return TRUE
+
+/obj/structure/proc/turf_is_crowded()
+	var/turf/T = get_turf(src)
+	if(!T || !istype(T))
+		return 0
+	for(var/obj/O in T.contents)
+		if(istype(O,/obj/structure))
+			var/obj/structure/S = O
+			if(S.climbable) continue
+		//ON_BORDER structures are handled by the Adjacent() check.
+		if(O && O.density && !(O.flags & ON_BORDER))
+			return O
+	return 0
+
+/obj/structure/proc/neighbor_turf_passable()
+	var/turf/T = get_step(src, src.dir)
+	if(!T || !istype(T))
+		return 0
+	if(T.density)
+		return 0
+	for(var/obj/O in T.contents)
+		if(istype(O,/obj/structure))
+			if(istype(O,/obj/structure/railing))
+				return 1
+			else if(O.density)
+				return 0
+	return 1
+
+/obj/structure/proc/do_climb(mob/living/user)
+	if (!can_climb(user))
+		return
+
+	user.visible_message(SPAN_WARNING("[user] starts climbing onto \the [src]!"))
+	climbers |= user
+
+	var/delay = (issmall(user) ? 20 : 34) * (user.stats.getPerk(PERK_PARKOUR) ? 0.5 : 1)
+	var/duration = max(delay * user.stats.getMult(STAT_VIG, STAT_LEVEL_EXPERT), delay * 0.66)
+	if(!do_after(user, duration, src))
+		climbers -= user
+		return
+
+	if (!can_climb(user, post_climb_check=1))
+		climbers -= user
+		return
+
+	user.forceMove(get_turf(src))
+
+	if (get_turf(user) == get_turf(src))
+		user.visible_message(SPAN_WARNING("[user] climbs onto \the [src]!"))
+	climbers -= user
+	add_fingerprint(user)
+
+/obj/structure/proc/structure_shaken()
+	for(var/mob/living/M in climbers)
+		M.Weaken(1)
+		to_chat(M, SPAN_DANGER("You topple as you are shaken off \the [src]!"))
+		climbers.Cut(1,2)
+
+	for(var/mob/living/M in get_turf(src))
+		if(M.lying) return //No spamming this on people.
+
+		M.Weaken(3)
+		to_chat(M, SPAN_DANGER("You topple as \the [src] moves under you!"))
+
+		if(prob(25))
+
+			var/damage = rand(15,30)
+			var/mob/living/carbon/human/H = M
+			if(!istype(H))
+				to_chat(H, SPAN_DANGER("You land heavily!"))
+				M.adjustBruteLoss(damage)
+				return
+
+			var/obj/item/organ/external/affecting
+
+			switch(pick(list("head","knee","elbow")))
+				if("knee")
+					affecting = H.get_organ(pick(BP_L_LEG , BP_R_LEG))
+				if("elbow")
+					affecting = H.get_organ(pick(BP_L_ARM, BP_R_ARM))
+				if("head")
+					affecting = H.get_organ(BP_HEAD)
+
+			if(affecting)
+				to_chat(M, SPAN_DANGER("You land heavily on your [affecting.name]!"))
+				affecting.take_damage(damage, 0)
+				if(affecting.parent)
+					affecting.parent.add_autopsy_data("Misadventure", damage)
+			else
+				to_chat(H, SPAN_DANGER("You land heavily!"))
+				H.adjustBruteLoss(damage)
+
+			H.UpdateDamageIcon()
+			H.updatehealth()
+	return
+
+/obj/structure/proc/can_touch(var/mob/user)
+	if (!user)
+		return 0
+	if(!Adjacent(user))
+		return 0
+
+	if (!ismech(user) && (user.restrained() || user.buckled))
+		to_chat(user, SPAN_NOTICE("You need your hands and legs free for this."))
+		return 0
+	if (user.stat || user.paralysis || user.sleeping || user.lying || user.weakened)
+		return 0
+	if (issilicon(user))
+		to_chat(user, SPAN_NOTICE("You need hands for this."))
+		return 0
+	return 1
+
+/obj/structure/attack_generic(var/mob/user, var/damage, var/attack_verb, var/wallbreaker)
+	if(!breakable || !damage || !wallbreaker)
+		return 0
+	visible_message(SPAN_DANGER("[user] [attack_verb] the [src] apart!"))
+	attack_animation(user)
+	spawn(1) qdel(src)
+	return 1

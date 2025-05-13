@@ -1,50 +1,47 @@
+// We manually initialize the alarm handlers instead of looping over all existing types
+// to make it possible to write: camera.triggerAlarm() rather than alarm_manager.managers[datum/alarm_handler/camera].triggerAlarm() or a variant thereof.
+/var/global/datum/alarm_handler/atmosphere/atmosphere_alarm
+/var/global/datum/alarm_handler/camera/camera_alarm
+/var/global/datum/alarm_handler/fire/fire_alarm
+/var/global/datum/alarm_handler/motion/motion_alarm
+/var/global/datum/alarm_handler/power/power_alarm
+
 SUBSYSTEM_DEF(alarm)
 	name = "Alarm"
 	wait = 2 SECONDS
 	priority = SS_PRIORITY_ALARM
-	init_order = SS_INIT_ALARM
-	var/static/list/datum/alarm_handler/alarm_handlers
-	var/static/list/datum/alarm_handler/queue = list()
-	var/static/list/datum/alarm/active_alarms = list()
+	init_order = INIT_ORDER_ALARM
 
+	var/list/datum/alarm/all_handlers
+	var/tmp/list/current = list()
+	var/tmp/list/active_alarm_cache = list()
 
-/datum/controller/subsystem/alarm/Initialize(start_uptime)
-	alarm_handlers = list(
-		GLOB.atmosphere_alarm,
-		GLOB.camera_alarm,
-		GLOB.fire_alarm,
-		GLOB.motion_alarm,
-		GLOB.power_alarm
-	)
+/datum/controller/subsystem/alarm/PreInit()
+	atmosphere_alarm = new()
+	camera_alarm = new()
+	fire_alarm = new()
+	motion_alarm = new()
+	power_alarm = new()
 
+/datum/controller/subsystem/alarm/Initialize(start_timeofday)
+	all_handlers = list(atmosphere_alarm, camera_alarm, fire_alarm, motion_alarm, power_alarm)
+	return ..()
 
-/datum/controller/subsystem/alarm/UpdateStat(time)
-	if (PreventUpdateStat(time))
-		return ..()
-	..("Alarms: [length(active_alarms)]")
-
-
-/datum/controller/subsystem/alarm/fire(resumed, no_mc_tick)
+/datum/controller/subsystem/alarm/fire(resumed = FALSE)
 	if (!resumed)
-		active_alarms.Cut()
-		queue = alarm_handlers.Copy()
-		if (!length(queue))
-			return
-	var/cut_until = 1
-	for (var/datum/alarm_handler/alarm_handler as anything in queue)
-		++cut_until
-		alarm_handler.process()
-		active_alarms += alarm_handler.alarms
-		if (no_mc_tick)
-			CHECK_TICK
-		else if (MC_TICK_CHECK)
-			queue.Cut(1, cut_until)
-			return
-	queue.Cut()
+		current = all_handlers.Copy()
+		active_alarm_cache.Cut()
 
+	while (current.len)
+		var/datum/alarm_handler/AH = current[current.len]
+		current.len--
 
-GLOBAL_TYPED_NEW(atmosphere_alarm, /datum/alarm_handler/atmosphere)
-GLOBAL_TYPED_NEW(camera_alarm, /datum/alarm_handler/camera)
-GLOBAL_TYPED_NEW(fire_alarm, /datum/alarm_handler/fire)
-GLOBAL_TYPED_NEW(motion_alarm, /datum/alarm_handler/motion)
-GLOBAL_TYPED_NEW(power_alarm, /datum/alarm_handler/power)
+		AH.Process()
+		active_alarm_cache += AH.alarms
+
+		if (MC_TICK_CHECK)
+			return
+
+/datum/controller/subsystem/alarm/stat_entry(msg)
+	msg += "[LAZYLEN(active_alarm_cache)] alarm\s"
+	return ..()

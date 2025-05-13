@@ -1,20 +1,35 @@
 //Engine control and monitoring console
 
-/obj/machinery/computer/ship/engines
+/obj/machinery/computer/engines
 	name = "engine control console"
+	icon_state = "computer"
 	icon_keyboard = "tech_key"
-	icon_screen = "engines"
-	machine_name = "engine control console"
-	machine_desc = "Allows remote control of a spacecraft's gas thrusters, and displays information about remaining fuel."
-	var/display_state = "status"
+	icon_screen = "engine"
+	circuit = /obj/item/electronics/circuitboard/engines
+	var/state = "status"
+	var/obj/effect/overmap/ship/linked
 
-/obj/machinery/computer/ship/engines/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1)
+/obj/machinery/computer/engines/Initialize()
+	. = ..()
+	linked = map_sectors["[z]"]
+
+/obj/machinery/computer/engines/attack_hand(var/mob/user as mob)
+	if(..())
+		user.unset_machine()
+		return
+
+	if(!isAI(user))
+		user.set_machine(src)
+
+	nano_ui_interact(user)
+
+/obj/machinery/computer/engines/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	if(!linked)
-		display_reconnect_dialog(user, "ship control systems")
+		to_chat(user, "<span class='warning'>Unable to connect to ship control systems.</span>")
 		return
 
 	var/data[0]
-	data["state"] = display_state
+	data["state"] = state
 	data["global_state"] = linked.engines_state
 	data["global_limit"] = round(linked.thrust_limit*100)
 	var/total_thrust = 0
@@ -36,62 +51,56 @@
 
 	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
-		ui = new(user, src, ui_key, "engines_control.tmpl", "[linked.name] Engines Control", 390, 530)
+		ui = new(user, src, ui_key, "engines_control.tmpl", "[linked.name] Engines Control", 380, 530)
 		ui.set_initial_data(data)
 		ui.open()
 		ui.set_auto_update(1)
 
-/obj/machinery/computer/ship/engines/OnTopic(mob/user, list/href_list, state)
+/obj/machinery/computer/engines/Topic(href, href_list, ui_state)
 	if(..())
-		return ..()
+		return 1
 
 	if(href_list["state"])
-		display_state = href_list["state"]
-		return TOPIC_REFRESH
+		state = href_list["state"]
 
 	if(href_list["global_toggle"])
 		linked.engines_state = !linked.engines_state
 		for(var/datum/ship_engine/E in linked.engines)
-			if(linked.engines_state == !E.is_on())
+			if(linked.engines_state != E.is_on())
 				E.toggle()
-		return TOPIC_REFRESH
 
 	if(href_list["set_global_limit"])
 		var/newlim = input("Input new thrust limit (0..100%)", "Thrust limit", linked.thrust_limit*100) as num
-		if(!CanInteract(user, state))
-			return TOPIC_NOACTION
-		linked.thrust_limit = clamp(newlim/100, 0, 1)
+		if(!CanInteract(usr,ui_state))
+			return
+		linked.thrust_limit = CLAMP(newlim/100, 0, 1)
 		for(var/datum/ship_engine/E in linked.engines)
 			E.set_thrust_limit(linked.thrust_limit)
-		return TOPIC_REFRESH
 
 	if(href_list["global_limit"])
-		linked.thrust_limit = clamp(linked.thrust_limit + text2num(href_list["global_limit"]), 0, 1)
+		linked.thrust_limit = CLAMP(linked.thrust_limit + text2num(href_list["global_limit"]), 0, 1)
 		for(var/datum/ship_engine/E in linked.engines)
 			E.set_thrust_limit(linked.thrust_limit)
-		return TOPIC_REFRESH
 
 	if(href_list["engine"])
 		if(href_list["set_limit"])
 			var/datum/ship_engine/E = locate(href_list["engine"])
 			var/newlim = input("Input new thrust limit (0..100)", "Thrust limit", E.get_thrust_limit()) as num
-			if(!CanInteract(user, state))
+			if(!CanInteract(usr,ui_state))
 				return
-			var/limit = clamp(newlim/100, 0, 1)
+			var/limit = CLAMP(newlim/100, 0, 1)
 			if(istype(E))
 				E.set_thrust_limit(limit)
-			return TOPIC_REFRESH
+
 		if(href_list["limit"])
 			var/datum/ship_engine/E = locate(href_list["engine"])
-			var/limit = clamp(E.get_thrust_limit() + text2num(href_list["limit"]), 0, 1)
+			var/limit = CLAMP(E.get_thrust_limit() + text2num(href_list["limit"]), 0, 1)
 			if(istype(E))
 				E.set_thrust_limit(limit)
-			return TOPIC_REFRESH
 
 		if(href_list["toggle"])
 			var/datum/ship_engine/E = locate(href_list["engine"])
 			if(istype(E))
 				E.toggle()
-			return TOPIC_REFRESH
-		return TOPIC_REFRESH
-	return TOPIC_NOACTION
+
+	updateUsrDialog()

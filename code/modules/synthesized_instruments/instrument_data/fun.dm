@@ -19,8 +19,3 @@
 	name = "Chime"
 	id = "chime"
 	samples = list("79"='sound/machines/chime.ogg')
-
-/datum/instrument/fun/diona
-	name = "Diona"
-	id = "diona"
-	samples = list("79"='sound/misc/nymphchirp.ogg')

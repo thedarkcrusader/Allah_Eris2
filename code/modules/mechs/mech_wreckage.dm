@@ -1,98 +1,65 @@
-/obj/structure/mech_wreckage
-	name = "wreckage"
-	desc = "It might have some salvagable parts."
-	density = TRUE
-	opacity = 1
-	anchored = TRUE
+/obj/structure/exosuit_wreckage
+	name = "exosuit wreckage"
+	desc = "It might have some salvagable materials and parts."
+	icon = MECH_WRECKAGE_ICON
 	icon_state = "wreck"
-	icon = 'icons/mecha/mech_part_items.dmi'
-	health_max = 100
-	health_min_damage = 20
-	var/prepared
+	density = TRUE
+	anchored = TRUE
+	var/material = MATERIAL_STEEL
 
-/obj/structure/mech_wreckage/New(newloc, mob/living/exosuit/exosuit, gibbed)
+/obj/structure/exosuit_wreckage/New(newloc, mob/living/exosuit/exosuit)
 	if(exosuit)
-		name = "wreckage of \the [exosuit.name]"
-		if(!gibbed)
-			for(var/obj/item/thing in list(exosuit.arms, exosuit.legs, exosuit.head, exosuit.body))
-				if(thing && prob(40))
+		if(exosuit.name != "exosuit")
+			name = "wreckage of \the [exosuit.name]"
+
+		material = exosuit.material
+
+		for(var/hardpoint in exosuit.hardpoints)
+			if(exosuit.hardpoints[hardpoint] && prob(40))
+				var/obj/item/thing = exosuit.hardpoints[hardpoint]
+				if(exosuit.remove_system(hardpoint))
 					thing.forceMove(src)
-			for(var/hardpoint in exosuit.hardpoints)
-				if(exosuit.hardpoints[hardpoint])
-					if(prob(40))
-						var/obj/item/thing = exosuit.hardpoints[hardpoint]
-						if(exosuit.remove_system(hardpoint))
-							thing.forceMove(src)
-					else
-						//This has been destroyed, some modules may need to perform bespoke logic
-						var/obj/item/mech_equipment/E = exosuit.hardpoints[hardpoint]
-						if(istype(E))
-							E.wreck()
+
+		for(var/obj/item/thing in list(exosuit.arms, exosuit.legs, exosuit.head, exosuit.body))
+			if(prob(40))
+				thing.forceMove(src)
 
 	..()
 
-/obj/structure/mech_wreckage/powerloader/New(newloc)
-	..(newloc, new /mob/living/exosuit/premade/powerloader(newloc), FALSE)
-
-/obj/structure/mech_wreckage/attack_hand(mob/user)
-	if(length(contents))
-		var/obj/item/thing = pick(contents)
-		if(istype(thing))
-			thing.forceMove(get_turf(user))
-			user.put_in_hands(thing)
-			to_chat(user, "You retrieve \the [thing] from \the [src].")
-			return
-	return ..()
-
-
-/obj/structure/mech_wreckage/on_death()
+/obj/structure/exosuit_wreckage/Initialize(newloc)
 	. = ..()
-	visible_message(SPAN_WARNING("\The [src] breaks apart!"))
-	new /obj/item/stack/material/steel(loc, rand(1, 3))
-	qdel_self()
 
+	// Add default frame materials
+	matter = list(
+		MATERIAL_STEEL = rand(10, 20),
+		MATERIAL_PLASTIC = rand(5, 10)
+	)
+	// Add reinforcement materials
+	LAZYAPLUS(matter, material, rand(5, 10))
 
-/obj/structure/mech_wreckage/use_tool(obj/item/tool, mob/user, list/click_params)
-	// Welding Tool, Plasma Cutter - Cut through wreckage
-	if (istype(tool, /obj/item/gun/energy/plasmacutter) || isWelder(tool))
-		if (prepared)
-			USE_FEEDBACK_FAILURE("\The [src] has already been weakened.")
-			return TRUE
-		if (isWelder(tool))
-			var/obj/item/weldingtool/welder = tool
-			if (!welder.remove_fuel(1, user))
-				return TRUE
-		else if (istype(tool, /obj/item/gun/energy/plasmacutter))
-			var/obj/item/gun/energy/plasmacutter/plasmacutter = tool
-			if (!plasmacutter.slice(user))
-				return TRUE
-		prepared = TRUE
-		user.visible_message(
-			SPAN_NOTICE("\The [user] partially cuts through \the [src] with \a [tool]."),
-			SPAN_NOTICE("You partially cut through \the [src] with \a [tool].")
-		)
-		return TRUE
+/obj/structure/exosuit_wreckage/attackby(obj/item/I, mob/user)
+	var/tool_type = I.get_tool_type(user, list(QUALITY_WELDING, QUALITY_SAWING), src)
+	switch(tool_type)
+		if(QUALITY_WELDING, QUALITY_SAWING)
+			to_chat(user, SPAN_NOTICE("You start cutting \the [src] apart."))
+			if(I.use_tool(user, src, WORKTIME_SLOW, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+				to_chat(user, SPAN_NOTICE("You dismantle \the [src]."))
+				drop_materials(drop_location())
+				for(var/obj/thing in contents)
+					thing.forceMove(drop_location())
+				qdel(src)
+			return
 
-	// Wrench - Finish dismantling
-	if (isWrench(tool))
-		if (!prepared)
-			USE_FEEDBACK_FAILURE("\The [src] is too solid to dismantle. Try cutting through it first.")
-			return TRUE
-		new /obj/item/stack/material/steel(loc, rand(5, 10))
-		user.visible_message(
-			SPAN_NOTICE("\The [user] finishes dismantling \the [src] with \a [tool]."),
-			SPAN_NOTICE("You finish dismantling \the [src] with \a [tool].")
-		)
-		qdel_self()
-		return TRUE
+		if(ABORT_CHECK)
+			return
+
+	if(user.a_intent == I_HELP)
+		to_chat(user, SPAN_WARNING("You need something to cut \the [src] apart."))
 
 	return ..()
 
+/obj/structure/exosuit_wreckage/powerloader/New(newloc, mob/living/exosuit/exosuit)
+	..(newloc, exosuit ? new /mob/living/exosuit/premade/powerloader(newloc) : exosuit)
 
-/obj/structure/mech_wreckage/Destroy()
-	for(var/obj/thing in contents)
-		if(prob(65))
-			thing.forceMove(get_turf(src))
-		else
-			qdel(thing)
-	..()
+/obj/structure/exosuit_wreckage/random/New(newloc, mob/living/exosuit/exosuit)
+	..(newloc, exosuit ? new /mob/living/exosuit/premade/random(newloc) : exosuit)

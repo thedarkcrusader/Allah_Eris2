@@ -5,39 +5,17 @@
 	icon = 'icons/obj/forensics.dmi'
 	icon_state = "case"
 	item_state = "case"
-	startswith = list(
-		/obj/item/storage/box/swabs,
-		/obj/item/storage/box/fingerprints,
-		/obj/item/reagent_containers/spray/luminol,
-		/obj/item/device/uv_light,
-		/obj/item/forensics/sample_kit,
-		/obj/item/forensics/sample_kit/powder,
-		/obj/item/storage/csi_markers
-	)
-	contents_allowed = list(
-		/obj/item/storage/box/swabs,
-		/obj/item/storage/box/fingerprints,
-		/obj/item/storage/box/evidence,
-		/obj/item/reagent_containers/spray/luminol,
-		/obj/item/device/uv_light,
-		/obj/item/reagent_containers/syringe,
-		/obj/item/reagent_containers/glass/beaker,
-		/obj/item/forensics/swab,
-		/obj/item/sample/print,
-		/obj/item/sample/fibers,
-		/obj/item/device/taperecorder,
-		/obj/item/device/tape,
-		/obj/item/clothing/gloves,
-		/obj/item/material/folder,
-		/obj/item/paper,
-		/obj/item/photo,
-		/obj/item/paper_bundle,
-		/obj/item/forensics/sample_kit,
-		/obj/item/device/camera,
-		/obj/item/device/taperecorder,
-		/obj/item/device/tape,
-		/obj/item/storage/csi_markers,
-		/obj/item/device/scanner,
-		/obj/item/modular_computer/tablet,
-		/obj/item/evidencebag
-	)
+	storage_slots = 14
+	price_tag = 50
+	rarity_value = 20
+	spawn_frequency = 10
+	spawn_blacklisted = FALSE
+	spawn_tags = SPAWN_TAG_BOX//CUIDADO
+
+/obj/item/storage/briefcase/crimekit/populate_contents()
+	new /obj/item/storage/box/swabs(src)
+	new /obj/item/storage/box/fingerprints(src)
+	new /obj/item/reagent_containers/spray/luminol(src)
+	new /obj/item/device/uv_light(src)
+	new /obj/item/forensics/sample_kit(src)
+	new /obj/item/forensics/sample_kit/powder(src)

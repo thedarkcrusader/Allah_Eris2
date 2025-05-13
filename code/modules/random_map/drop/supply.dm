@@ -3,23 +3,31 @@
 	limit_x = 5
 	limit_y = 5
 
-	explosion_radius = 10
+	explosion_power = 300
+	explosion_falloff = 30
 
 // UNLIKE THE DROP POD, this map deals ENTIRELY with strings and types.
 // Drop type is a string representing a mode rather than an atom or path.
 // supplied_drop_types is a list of types to spawn in the pod.
-/datum/random_map/droppod/supply/get_spawned_drop(turf/T)
+/datum/random_map/droppod/supply/get_spawned_drop(var/turf/T)
+	var/list/floor_tiles = list(T)
+	floor_tiles.Add(cardinal_turfs(T))
 
+	var/obj/structure/largecrate/C = locate(/obj/structure/largecrate) in T
+	if (!C)
+		C = new(T)
 	if(!drop_type) drop_type = pick(supply_drop_random_loot_types())
 
 	if(drop_type == "custom")
-		if(length(supplied_drop_types))
-			var/obj/structure/largecrate/C = locate() in T
+		if(supplied_drop_types.len)
 			for(var/drop_type in supplied_drop_types)
-				var/atom/movable/A = new drop_type(T)
-				if(!ismob(A))
-					if(!C) C = new(T)
-					C.contents |= A
+				var/atom/movable/A
+				if(!ispath(drop_type, /mob))
+					A = new drop_type(C) //Objects spawn inside the crate
+				else
+					A = new drop_type(T) //Mobs spawn outside of it, they're guarding it
+					var/mob/living/L = A
+					L.faction = "DropPod/ref[src]" //Make the mobs not murder each other
 			return
 		else
 			drop_type = pick(supply_drop_random_loot_types())
@@ -29,7 +37,6 @@
 		SDL.drop(T)
 	else
 		error("Unhandled drop type: [drop_type]")
-
 
 /datum/admins/proc/call_supply_drop()
 	set category = "Fun"
@@ -54,18 +61,25 @@
 		choice = alert("Do you wish to add structures or machines?",,"No","Yes")
 		if(choice == "Yes")
 			while(1)
-				var/adding_loot_type = input("Select a new loot path. Cancel to finish.", "Loot Selection", null) as null|anything in typesof(/obj/structure) + typesof(/obj/machinery)
+				var/adding_loot_type = input("Select a new loot path. Cancel to finish.", "Loot Selection", null) as null|anything in typesof(/obj) - typesof(/obj/item)
 				if(!adding_loot_type)
 					break
 				chosen_loot_types |= adding_loot_type
-		choice = alert("Do you wish to add any items?",,"No","Yes")
+		choice = alert("Do you wish to add any non-weapon items?",,"No","Yes")
+		if(choice == "Yes")
+			while(1)
+				var/adding_loot_type = input("Select a new loot path. Cancel to finish.", "Loot Selection", null) as null|anything in typesof(/obj/item) - typesof(/obj/item)
+				if(!adding_loot_type)
+					break
+				chosen_loot_types |= adding_loot_type
+
+		choice = alert("Do you wish to add weapons?",,"No","Yes")
 		if(choice == "Yes")
 			while(1)
 				var/adding_loot_type = input("Select a new loot path. Cancel to finish.", "Loot Selection", null) as null|anything in typesof(/obj/item)
 				if(!adding_loot_type)
 					break
 				chosen_loot_types |= adding_loot_type
-
 		choice = alert("Do you wish to add ABSOLUTELY ANYTHING ELSE? (you really shouldn't need to)",,"No","Yes")
 		if(choice == "Yes")
 			while(1)

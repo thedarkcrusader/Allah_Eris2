@@ -2,11 +2,10 @@
 	return
 
 /datum/evacuation_predicate/Destroy()
-	SHOULD_CALL_PARENT(FALSE)
-	return QDEL_HINT_LETMELIVE
+	return 0
 
 /datum/evacuation_predicate/proc/is_valid()
 	return FALSE
 
-/datum/evacuation_predicate/proc/can_call(user)
+/datum/evacuation_predicate/proc/can_call(var/user)
 	return TRUE

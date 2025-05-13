@@ -1,13 +1,11 @@
 
 /obj/machinery/computer/station_alert
-	name = "alert console"
-	desc = "Used to access the automated alert system."
+	name = "station alert console"
+	desc = "Used to access the station's automated alert system."
 	icon_keyboard = "tech_key"
 	icon_screen = "alert:0"
-	light_color = "#e6ffff"
-	base_type = /obj/machinery/computer/station_alert
-	machine_name = "alert console"
-	machine_desc = "A compact monitoring system that displays a readout of all active atmosphere, camera, and fire alarms on the network."
+	light_color = COLOR_LIGHTING_CYAN_MACHINERY
+	circuit = /obj/item/electronics/circuitboard/stationalert
 	var/datum/nano_module/alarm_monitor/alarm_monitor
 	var/monitor_type = /datum/nano_module/alarm_monitor
 
@@ -31,7 +29,7 @@
 	. = ..()
 	unregister_monitor()
 
-/obj/machinery/computer/station_alert/proc/register_monitor(datum/nano_module/alarm_monitor/monitor)
+/obj/machinery/computer/station_alert/proc/register_monitor(var/datum/nano_module/alarm_monitor/monitor)
 	if(monitor.host != src)
 		return
 
@@ -44,20 +42,21 @@
 		qdel(alarm_monitor)
 		alarm_monitor = null
 
-/obj/machinery/computer/station_alert/interface_interact(user)
-	ui_interact(user)
-	return TRUE
+/obj/machinery/computer/station_alert/attack_hand(mob/user)
+	if(..())
+		return
+	nano_ui_interact(user)
 
-/obj/machinery/computer/station_alert/ui_interact(mob/user)
+/obj/machinery/computer/station_alert/nano_ui_interact(mob/user)
 	if(alarm_monitor)
-		alarm_monitor.ui_interact(user)
+		alarm_monitor.nano_ui_interact(user)
 
 /obj/machinery/computer/station_alert/nano_container()
 	return alarm_monitor
 
-/obj/machinery/computer/station_alert/on_update_icon()
+/obj/machinery/computer/station_alert/update_icon()
 	icon_screen = initial(icon_screen)
-	if(operable())
+	if(!(stat & (BROKEN|NOPOWER)))
 		if(alarm_monitor)
 			if(alarm_monitor.has_major_alarms(get_z(src)))
 				icon_screen = "alert:2"

@@ -1,60 +1,90 @@
-/obj/machinery/computer/upload
-	name = "unused upload console"
-	icon_keyboard = "rd_key"
-	icon_screen = "command"
-	var/mob/living/silicon/current
+//This file was auto-corrected by findeclaration.exe on 25.5.2012 20:42:31
 
-/obj/machinery/computer/upload/use_tool(obj/item/O, mob/living/user, list/click_params)
-	if(istype(O, /obj/item/aiModule))
-		var/obj/item/aiModule/M = O
-		M.install(src, user)
-		return TRUE
-
-	return ..()
-
-/obj/machinery/computer/upload/ai
+/obj/machinery/computer/aiupload
 	name = "\improper AI upload console"
 	desc = "Used to upload laws to the AI."
-	machine_name = "\improper AI upload console"
-	machine_desc = "Maintains a one-way link to ship-bound AI units, allowing remote modification of their laws."
+	icon_keyboard = "rd_key"
+	icon_screen = "command"
+	circuit = /obj/item/electronics/circuitboard/aiupload
+	var/mob/living/silicon/ai/current
+	var/opened = 0
 
-/obj/machinery/computer/upload/ai/interface_interact(mob/user)
-	if(!CanInteract(user, DefaultTopicState()))
-		return FALSE
-	current = select_active_ai(user, get_z(src))
-	if (!current)
-		to_chat(user, "No active AIs detected.")
-	else
-		to_chat(user, "[current.name] selected for law changes.")
-	return TRUE
 
-/obj/machinery/computer/upload/robot
+	verb/AccessInternals()
+		set category = "Object"
+		set name = "Access Computer's Internals"
+		set src in oview(1)
+		if(get_dist(src, usr) > 1 || usr.restrained() || usr.lying || usr.stat || issilicon(usr))
+			return
+
+		opened = !opened
+		if(opened)
+			to_chat(usr, SPAN_NOTICE("The access panel is now open."))
+		else
+			to_chat(usr, SPAN_NOTICE("The access panel is now closed."))
+		return
+
+
+	attackby(obj/item/O as obj, mob/user as mob)
+		if (user.z > 6)
+			to_chat(user, "<span class='danger'>Unable to establish a connection:</span> You're too far away from the station!")
+			return
+		if(istype(O, /obj/item/electronics/ai_module))
+			var/obj/item/electronics/ai_module/M = O
+			M.install(src)
+		else
+			..()
+
+
+	attack_hand(var/mob/user as mob)
+		if(..())
+			return
+
+
+
+		src.current = select_active_ai(user)
+
+		if (!src.current)
+			to_chat(usr, "No active AIs detected.")
+		else
+			to_chat(usr, "[src.current.name] selected for law changes.")
+		return
+
+	attack_ghost(user as mob)
+		return 1
+
+
+/obj/machinery/computer/borgupload
 	name = "cyborg upload console"
 	desc = "Used to upload laws to Cyborgs."
-	machine_name = "cyborg upload console"
-	machine_desc = "Maintains a one-way link to ship-bound synthetics such as cyborgs and robots, allowing remote modification of their laws."
-
-/obj/machinery/computer/upload/robot/interface_interact(mob/user)
-	if(!CanInteract(user, DefaultTopicState()))
-		return FALSE
-	current = freeborg(get_z(src))
-	if (!current)
-		to_chat(user, "No free cyborgs detected.")
-	else
-		to_chat(user, "[current.name] selected for law changes.")
-	return TRUE
+	icon_keyboard = "rd_key"
+	icon_screen = "command"
+	circuit = /obj/item/electronics/circuitboard/borgupload
+	var/mob/living/silicon/robot/current = null
 
 
-/proc/freeborg(z)
-	RETURN_TYPE(/mob/living/silicon/robot)
-	var/list/zs = get_valid_silicon_zs(z)
-	var/select = null
-	var/list/borgs = list()
-	for (var/mob/living/silicon/robot/A in GLOB.player_list)
-		if (A.stat == 2 || A.connected_ai || A.scrambledcodes || istype(A,/mob/living/silicon/robot/drone) || !(get_z(A) in zs))
-			continue
-		var/name = "[A.real_name] ([A.modtype] [A.braintype])"
-		borgs[name] = A
-	if (length(borgs))
-		select = input("Unshackled borg signals detected:", "Borg selection", null, null) as null|anything in borgs
-		return borgs[select]
+	attackby(obj/item/electronics/ai_module/module as obj, mob/user as mob)
+		if(istype(module, /obj/item/electronics/ai_module))
+			module.install(src)
+		else
+			return ..()
+
+
+	attack_hand(var/mob/user as mob)
+		if(src.stat & NOPOWER)
+			to_chat(usr, "The upload computer has no power!")
+			return
+		if(src.stat & BROKEN)
+			to_chat(usr, "The upload computer is broken!")
+			return
+
+		src.current = freeborg()
+
+		if (!src.current)
+			to_chat(usr, "No free cyborgs detected.")
+		else
+			to_chat(usr, "[src.current.name] selected for law changes.")
+		return
+
+	attack_ghost(user as mob)
+		return 1

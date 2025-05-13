@@ -9,16 +9,8 @@
 //			/atom/new_loc: The atom the exitee is now residing in
 //
 
-GLOBAL_TYPED_NEW(exited_event, /singleton/observ/exited)
+GLOBAL_DATUM_INIT(exited_event, /decl/observ/exited, new)
 
-/singleton/observ/exited
+/decl/observ/exited
 	name = "Exited"
 	expected_type = /atom
-
-/******************
-* Exited Handling *
-******************/
-
-/atom/Exited(atom/movable/exitee, atom/new_loc)
-	. = ..()
-	GLOB.exited_event.raise_event(src, exitee, new_loc)

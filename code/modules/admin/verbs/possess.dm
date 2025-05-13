@@ -2,6 +2,11 @@
 	set name = "Possess Obj"
 	set category = "Object"
 
+	if(istype(O,/obj/singularity))
+		if(config.forbid_singulo_possession)
+			to_chat(usr, "It is forbidden to possess singularities.")
+			return
+
 	log_and_message_admins("has possessed [O]")
 
 	if(!usr.control_object) //If you're not already possessing something...
@@ -31,10 +36,3 @@
 	usr.forceMove(O.loc) // Appear where the object you were controlling is -- TLE
 	usr.client.eye = usr
 	usr.control_object = null
-
-/proc/givetestverbs(mob/M as mob in SSmobs.mob_list)
-	set desc = "Give this guy possess/release verbs"
-	set category = "Debug"
-	set name = "Give Possessing Verbs"
-	M.verbs += /proc/possess
-	M.verbs += /proc/release

@@ -1,38 +1,35 @@
+//combat exosuit components use plasteel reinforcement for more durability than most exosuits, and gold for thermal sensors
 /mob/living/exosuit/premade/combat
 	name = "combat exosuit"
 	desc = "A sleek, modern combat exosuit."
 
-/mob/living/exosuit/premade/combat/Initialize()
-	if(!arms)
-		arms = new /obj/item/mech_component/manipulators/combat(src)
-		arms.color = COLOR_GUNMETAL
-	if(!legs)
-		legs = new /obj/item/mech_component/propulsion/combat(src)
-		legs.color = COLOR_GUNMETAL
-	if(!head)
-		head = new /obj/item/mech_component/sensors/combat(src)
-		head.color = COLOR_GUNMETAL
-	if(!body)
-		body = new /obj/item/mech_component/chassis/combat(src)
-		body.color = COLOR_GUNMETAL
+	rarity_value = 60
 
-	. = ..()
+	arms = /obj/item/mech_component/manipulators/combat
+	legs = /obj/item/mech_component/propulsion/combat
+	head = /obj/item/mech_component/sensors/combat
+	body = /obj/item/mech_component/chassis/combat
 
-/mob/living/exosuit/premade/combat/spawn_mech_equipment()
-	..()
-	install_system(new /obj/item/mech_equipment/mounted_system/taser(src), HARDPOINT_LEFT_HAND)
-	install_system(new /obj/item/mech_equipment/mounted_system/taser/ion(src), HARDPOINT_RIGHT_HAND)
-	install_system(new /obj/item/mech_equipment/flash(src), HARDPOINT_LEFT_SHOULDER)
-	install_system(new /obj/item/mech_equipment/light(src), HARDPOINT_RIGHT_SHOULDER)
+	material = MATERIAL_PLASTEEL
+	exosuit_color = COLOR_GUNMETAL
+	installed_software_boards = list(
+		/obj/item/electronics/circuitboard/exosystem/weapons
+	)
+	installed_systems = list(
+		HARDPOINT_LEFT_HAND = /obj/item/mech_equipment/mounted_system/taser,
+		HARDPOINT_RIGHT_HAND = /obj/item/mech_equipment/mounted_system/taser/ion,
+		HARDPOINT_HEAD = /obj/item/mech_equipment/light
+	)
 
-/mob/living/exosuit/premade/combat/military
-	decal = "cammo1"
 
-/mob/living/exosuit/premade/combat/military/alpine
-	decal = "cammo2"
+/mob/living/exosuit/premade/combat/slayer
+	name = "S.C.U. 'Slayer'" //Space Combat Unit
+	desc = "A sleek, modern combat exosuit. It has two red stripes on it's chassis."
 
-/mob/living/exosuit/premade/combat/military/Initialize()
-	. = ..()
-	for(var/obj/thing in list(arms,legs,head,body))
-		thing.color = COLOR_WHITE
-
+	exosuit_color = "#5a6934"
+	decal = "stripes"
+	installed_systems = list(
+		HARDPOINT_LEFT_HAND = /obj/item/mech_equipment/mounted_system/taser/laser,
+		HARDPOINT_RIGHT_HAND = /obj/item/mech_equipment/mounted_system/taser/ion,
+		HARDPOINT_HEAD = /obj/item/mech_equipment/light
+	)

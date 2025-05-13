@@ -1,22 +1,27 @@
 /obj/machinery/computer/robotics
 	name = "robotics control console"
-	desc = "Used to remotely lockdown or monitor linked synthetics."
-	icon = 'icons/obj/machines/computer.dmi'
-	icon_keyboard = "mining_key"
+	desc = "Used to remotely lockdown or detonate linked cyborgs."
+	icon = 'icons/obj/computer.dmi'
+	icon_keyboard = "tech_key"
 	icon_screen = "robot"
-	light_color = "#a97faa"
+	light_color = COLOR_LIGHTING_PURPLE_MACHINERY
 	req_access = list(access_robotics)
-	machine_name = "robotics control console"
-	machine_desc = "A control console that maintains a radio link with ship synthetics. Allows remote monitoring of them, as well as locking down their movement systems."
+	circuit = /obj/item/electronics/circuitboard/robotics
 
-/obj/machinery/computer/robotics/interface_interact(mob/user)
-	ui_interact(user)
-	return TRUE
+	var/safety = 1
 
-/obj/machinery/computer/robotics/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1)
+/obj/machinery/computer/robotics/attack_hand(var/mob/user)
+	if(..())
+		return
+	nano_ui_interact(user)
+
+/obj/machinery/computer/robotics/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
 	var/data[0]
 	data["robots"] = get_cyborgs(user)
+	data["safety"] = safety
+	// Also applies for cyborgs. Hides the manual self-destruct button.
 	data["is_ai"] = issilicon(user)
+
 
 	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
@@ -25,92 +30,142 @@
 		ui.open()
 		ui.set_auto_update(1)
 
-/obj/machinery/computer/robotics/CanUseTopic(user)
-	if(!allowed(user))
-		to_chat(user, SPAN_WARNING("Access Denied"))
-		return STATUS_CLOSE
-	return ..()
+/obj/machinery/computer/robotics/Topic(href, href_list)
+	if(..())
+		return
+	var/mob/user = usr
+	if(!src.allowed(user))
+		to_chat(user, "Access Denied")
+		return
 
-/obj/machinery/computer/robotics/OnTopic(mob/user, href_list)
+	// Destroys the cyborg
+	if(href_list["detonate"])
+		var/mob/living/silicon/robot/target = get_cyborg_by_name(href_list["detonate"])
+		if(!target || !istype(target))
+			return
+		if(isAI(user) && (target.connected_ai != user))
+			to_chat(user, "Access Denied. This robot is not linked to you.")
+			return
+		// Cyborgs may blow up themselves via the console
+		if(isrobot(user) && user != target)
+			to_chat(user, "Access Denied.")
+			return
+		var/choice = input("Really detonate [target.name]?") in list ("Yes", "No")
+		if(choice != "Yes")
+			return
+		if(!target || !istype(target))
+			return
+
+		// Antagonistic cyborgs? Left here for downstream
+		if(target.mind && player_is_antag(target.mind) && target.HasTrait(CYBORG_TRAIT_EMAGGED))
+			to_chat(target, "Extreme danger.  Termination codes detected.  Scrambling security codes and automatic AI unlink triggered.")
+			target.ResetSecurityCodes()
+		else
+			message_admins(SPAN_NOTICE("[key_name_admin(usr)] detonated [target.name]!"))
+			log_game("[key_name(usr)] detonated [target.name]!")
+			to_chat(target, SPAN_DANGER("Self-destruct command received."))
+			spawn(10)
+				target.self_destruct()
+
+
+
 	// Locks or unlocks the cyborg
-	if (href_list["lockdown"])
+	else if (href_list["lockdown"])
 		var/mob/living/silicon/robot/target = get_cyborg_by_name(href_list["lockdown"])
 		if(!target || !istype(target))
-			return TOPIC_HANDLED
+			return
 
 		if(isAI(user) && (target.connected_ai != user))
-			to_chat(user, SPAN_WARNING("Access Denied. This robot is not linked to you."))
-			return TOPIC_HANDLED
+			to_chat(user, "Access Denied. This robot is not linked to you.")
+			return
 
 		if(isrobot(user))
-			to_chat(user, SPAN_WARNING("Access Denied."))
-			return TOPIC_HANDLED
+			to_chat(user, "Access Denied.")
+			return
 
 		var/choice = input("Really [target.lockcharge ? "unlock" : "lockdown"] [target.name] ?") in list ("Yes", "No")
 		if(choice != "Yes")
-			return TOPIC_HANDLED
+			return
 
 		if(!target || !istype(target))
-			return TOPIC_HANDLED
+			return
 
-		if(target.SetLockdown(!target.lockcharge))
-			log_and_message_admins("[target.lockcharge ? "locked down" : "released"] [target.name]!", user)
-			if(target.lockcharge)
-				to_chat(target, SPAN_DANGER("You have been locked down!"))
-			else
-				to_chat(target, SPAN_NOTICE("Your lockdown has been lifted!"))
+		message_admins("<span class='notice'>[key_name_admin(usr)] [target.canmove ? "locked down" : "released"] [target.name]!</span>")
+		log_game("[key_name(usr)] [target.canmove ? "locked down" : "released"] [target.name]!")
+		target.canmove = !target.canmove
+		if (target.lockcharge)
+			target.lockcharge = !target.lockcharge
+			to_chat(target, "Your lockdown has been lifted!")
 		else
-			to_chat(user, SPAN_WARNING("ERROR: Lockdown attempt failed."))
-		. = TOPIC_REFRESH
+			target.lockcharge = !target.lockcharge
+			to_chat(target, "You have been locked down!")
 
 	// Remotely hacks the cyborg. Only antag AIs can do this and only to linked cyborgs.
 	else if (href_list["hack"])
 		var/mob/living/silicon/robot/target = get_cyborg_by_name(href_list["hack"])
 		if(!target || !istype(target))
-			return TOPIC_HANDLED
+			return
 
 		// Antag AI checks
-		if(!istype(user, /mob/living/silicon/ai) || !(user.mind.special_role && user.mind.original == user))
-			to_chat(user, SPAN_WARNING("Access Denied"))
-			return TOPIC_HANDLED
+		if(!isAI(user) || !(user.mind.antagonist.len && user.mind.original == user))
+			to_chat(user, "Access Denied")
+			return
 
-		if(target.emagged)
+		if(target.HasTrait(CYBORG_TRAIT_EMAGGED))
 			to_chat(user, "Robot is already hacked.")
-			return TOPIC_HANDLED
+			return
 
 		var/choice = input("Really hack [target.name]? This cannot be undone.") in list("Yes", "No")
 		if(choice != "Yes")
-			return TOPIC_HANDLED
+			return
 
 		if(!target || !istype(target))
-			return TOPIC_HANDLED
+			return
 
-		log_and_message_admins("emagged [target.name] using robotic console!", user)
-		target.emagged = TRUE
+		message_admins(SPAN_NOTICE("[key_name_admin(usr)] emagged [target.name] using robotic console!"))
+		log_game("[key_name(usr)] emagged [target.name] using robotic console!")
+		target.AddTrait(CYBORG_TRAIT_EMAGGED)
 		to_chat(target, SPAN_NOTICE("Failsafe protocols overriden. New tools available."))
-		. = TOPIC_REFRESH
 
-	else if (href_list["message"])
-		var/mob/living/silicon/robot/target = get_cyborg_by_name(href_list["message"])
-		if(!target || !istype(target))
+	// Arms the emergency self-destruct system
+	else if(href_list["arm"])
+		if(issilicon(user))
+			to_chat(user, "Access Denied")
 			return
 
-		var/message = sanitize(input("Enter message to transmit to the synthetic.") as null|text)
-		if(!message || !istype(target))
+		safety = !safety
+		to_chat(user, "You [safety ? "disarm" : "arm"] the emergency self destruct")
+
+	// Destroys all accessible cyborgs if safety is disabled
+	else if(href_list["nuke"])
+		if(issilicon(user))
+			to_chat(user, "Access Denied")
+			return
+		if(safety)
+			to_chat(user, "Self-destruct aborted - safety active")
 			return
 
-		log_and_message_admins("sent message '[message]' to [target.name] using robotics control console!", user)
-		to_chat(target, SPAN_NOTICE("New remote message received using R-SSH protocol:"))
-		to_chat(target, message)
-		. = TOPIC_REFRESH
+		message_admins(SPAN_NOTICE("[key_name_admin(usr)] detonated all cyborgs!"))
+		log_game("[key_name(usr)] detonated all cyborgs!")
+
+		for(var/mob/living/silicon/robot/R in SSmobs.mob_list)
+			if(isdrone(R))
+				continue
+			// Ignore antagonistic cyborgs
+			if(R.scrambledcodes)
+				continue
+			to_chat(R, SPAN_DANGER("Self-destruct command received."))
+			spawn(10)
+				R.self_destruct()
+
 
 // Proc: get_cyborgs()
 // Parameters: 1 (operator - mob which is operating the console.)
 // Description: Returns NanoUI-friendly list of accessible cyborgs.
-/obj/machinery/computer/robotics/proc/get_cyborgs(mob/operator)
+/obj/machinery/computer/robotics/proc/get_cyborgs(var/mob/operator)
 	var/list/robots = list()
 
-	for(var/mob/living/silicon/robot/R in GLOB.silicon_mobs)
+	for(var/mob/living/silicon/robot/R in SSmobs.mob_list)
 		// Ignore drones
 		if(isdrone(R))
 			continue
@@ -120,17 +175,9 @@
 
 		var/list/robot = list()
 		robot["name"] = R.name
-		var/turf/T = get_turf(R)
-		var/area/A = get_area(T)
-
-		if(istype(T) && istype(A) && (T.z in GLOB.using_map.contact_levels))
-			robot["location"] = "[A.name] ([T.x], [T.y])"
-		else
-			robot["location"] = "Unknown"
-
 		if(R.stat)
 			robot["status"] = "Not Responding"
-		else if (R.lockcharge)
+		else if (!R.canmove)
 			robot["status"] = "Lockdown"
 		else
 			robot["status"] = "Operational"
@@ -147,18 +194,18 @@
 		robot["master_ai"] = R.connected_ai ? R.connected_ai.name : "None"
 		robot["hackable"] = 0
 		// Antag AIs know whether linked cyborgs are hacked or not.
-		if(operator && istype(operator, /mob/living/silicon/ai) && (R.connected_ai == operator) && (operator.mind.special_role && operator.mind.original == operator))
-			robot["hacked"] = R.emagged ? 1 : 0
-			robot["hackable"] = R.emagged? 0 : 1
+		if(operator && isAI(operator) && (R.connected_ai == operator) && (operator.mind.antagonist.len && operator.mind.original == operator))
+			robot["hacked"] = R.HasTrait(CYBORG_TRAIT_EMAGGED) ? 1 : 0
+			robot["hackable"] = R.HasTrait(CYBORG_TRAIT_EMAGGED) ? 0 : 1
 		robots.Add(list(robot))
 	return robots
 
 // Proc: get_cyborg_by_name()
 // Parameters: 1 (name - Cyborg we are trying to find)
 // Description: Helper proc for finding cyborg by name
-/obj/machinery/computer/robotics/proc/get_cyborg_by_name(name)
+/obj/machinery/computer/robotics/proc/get_cyborg_by_name(var/name)
 	if (!name)
 		return
-	for(var/mob/living/silicon/robot/R in GLOB.silicon_mobs)
+	for(var/mob/living/silicon/robot/R in SSmobs.mob_list)
 		if(R.name == name)
 			return R

@@ -1,174 +1,75 @@
-/turf/proc/ReplaceWithLattice(material)
-	var/base_turf = get_base_turf_by_area(src, TRUE)
-	if(type != base_turf)
-		src.ChangeTurf(get_base_turf_by_area(src, TRUE))
-	if(!locate(/obj/structure/lattice) in src)
-		new /obj/structure/lattice(src, material)
+/turf/proc/ReplaceWithLattice()
+	src.ChangeTurf(get_base_turf_by_area(src))
+	new /obj/structure/lattice(locate(src.x, src.y, src.z))
 
 // Removes all signs of lattice on the pos of the turf -Donkieyo
 /turf/proc/RemoveLattice()
 	var/obj/structure/lattice/L = locate(/obj/structure/lattice, src)
 	if(L)
 		qdel(L)
-// Called after turf replaces old one
-/turf/proc/post_change()
-	levelupdate()
-	if (above)
-		above.update_mimic()
 
 //Creates a new turf
-/turf/proc/ChangeTurf(turf/N, tell_universe = TRUE, force_lighting_update = FALSE, keep_air = FALSE)
-	if (!N)
-		return
-
-	if(isturf(N) && !N.flooded && N.flood_object)
-		QDEL_NULL(flood_object)
-
-	// This makes sure that turfs are not changed to space when one side is part of a zone
-	if(N == /turf/space)
-		var/turf/below = GetBelow(src)
-		if(istype(below) && !istype(below,/turf/space))
-			N = /turf/simulated/open
+/turf/proc/ChangeTurf(new_turf_type, force_lighting_update)
+	ASSERT(new_turf_type)
 
 	var/old_density = density
-	var/old_air = air
-	var/old_hotspot = hotspot
-	var/old_turf_fire = null
 	var/old_opacity = opacity
-	var/old_corners = corners
-	var/old_dynamic_lighting = TURF_IS_DYNAMICALLY_LIT_UNSAFE(src)
-	var/old_affecting_lights = affecting_lights
+
+	// This makes sure that turfs are not changed to space when one side is part of a zone
+	if(new_turf_type == /turf/space)
+		force_lighting_update = TRUE
+		var/turf/below = GetBelow(src)
+		if(istype(below) && (TURF_HAS_VALID_ZONE(below) || TURF_HAS_VALID_ZONE(src)))
+			new_turf_type = /turf/open
+
+	var/old_dynamic_lighting = dynamic_lighting
+	var/list/old_affecting_lights = affecting_lights
 	var/old_lighting_overlay = lighting_overlay
-	var/old_ao_neighbors = ao_neighbors
-	var/old_above = above
-	var/old_permit_ao = permit_ao
-	var/old_zflags = z_flags
-	var/old_outside = is_outside
-	var/old_is_open = is_open()
-	var/old_zone_membership_candidate = zone_membership_candidate
+	var/list/old_lighting_corners = corners
 
-	if(isspaceturf(N) || isopenspace(N))
-		QDEL_NULL(turf_fire)
-	else
-		old_turf_fire = turf_fire
+	if(connections)
+		connections.erase_all()
 
-	//log_debug("Replacing [src.type] with [N]")
-
-	changing_turf = TRUE
-
-	if(connections) connections.erase_all()
-
-	ClearOverlays()
-	underlays.Cut()
-	if(istype(src,/turf/simulated))
 		//Yeah, we're just going to rebuild the whole thing.
 		//Despite this being called a bunch during explosions,
 		//the zone will only really do heavy lifting once.
-		var/turf/simulated/S = src
-		if(S.zone) S.zone.rebuild()
-		old_zone_membership_candidate = S.zone_membership_candidate
+		var/turf/S = src
+		if(S.zone) // Remove the 'S.' ? --KIROV
+			S.zone.rebuild()
 
-	if(ambient_group_flags) //Should remove everything about current bitflag, let it be recalculated by SS later
-		SSambient_lighting.clean_turf(src)
+	var/turf/new_turf = new new_turf_type(src)
+	if(istype(new_turf, /turf/floor))
+		new_turf.RemoveLattice()
+		new_turf.fire = fire
+		fire = null
+	else if(fire)
+		fire.RemoveFire()
 
-	// Run the Destroy() chain.
-	qdel(src)
-	var/turf/simulated/W = new N(src)
+	if(new_turf.is_simulated)
+		SSair.mark_for_update(src)
 
-	if (permit_ao)
-		regenerate_ao()
+	new_turf.levelupdate()
+	. =  new_turf
 
-	if (keep_air)
-		W.air = old_air
-
-	if(ispath(N, /turf/simulated))
-		if(old_hotspot)
-			hotspot = old_hotspot
-		if (istype(W,/turf/simulated/floor))
-			W.RemoveLattice()
-	else if(hotspot)
-		qdel(hotspot)
-
-
-	if(tell_universe)
-		GLOB.universe.OnTurfChange(W)
-
-	SSair.mark_for_update(src) //handle the addition of the new turf.
-
-	for(var/turf/space/S in range(W,1)) //Special handling for space, needs to check if it needs to illuminate us!
-		AMBIENT_LIGHT_QUEUE_TURF(S)
-
-	W.above = old_above
-
-	W.post_change()
-	. = W
-
-	W.ao_neighbors = old_ao_neighbors
-	// lighting stuff
-
-	if(SSlighting.initialized)
-		recalc_atom_opacity()
+	for(var/turf/neighbour in RANGE_TURFS(1, src))
+		if(istype(neighbour, /turf/space))
+			var/turf/space/SP = neighbour
+			SP.update_starlight()
+		else if(neighbour.is_simulated)
+			neighbour.update_icon()
+	if(SSlighting && SSlighting.initialized)
 		lighting_overlay = old_lighting_overlay
 		affecting_lights = old_affecting_lights
-		corners = old_corners
-		if (old_opacity != opacity || dynamic_lighting != old_dynamic_lighting || z_flags != old_zflags || force_lighting_update)
+		corners = old_lighting_corners
+		if((old_opacity != opacity) || (dynamic_lighting != old_dynamic_lighting) || force_lighting_update)
 			reconsider_lights()
-			updateVisibility(src)
-
-		if (dynamic_lighting != old_dynamic_lighting)
-			if (TURF_IS_DYNAMICALLY_LIT_UNSAFE(src))
+		if(dynamic_lighting != old_dynamic_lighting)
+			if(dynamic_lighting)
 				lighting_build_overlay()
 			else
 				lighting_clear_overlay()
-
-	W.setup_local_ambient()
-	if(z_flags != old_zflags)
-		W.rebuild_zbleed()
-	// end of lighting stuff
-
-	// Outside/weather stuff. set_outside() updates weather already
-	// so only call it again if it doesn't already handle it.
-	// we check the var rather than the proc, because area outside values usually shouldn't be set on turfs
-	W.last_outside_check = OUTSIDE_UNCERTAIN
-	if(W.is_outside != old_outside)
-		// This will check the exterior atmos participation of this turf and all turfs connected by open space below.
-		W.set_outside(old_outside, skip_weather_update = TRUE)
-	else // If what changed was a ceiling, it's quite likely outside changed for others below
-		if(HasBelow(z) && (W.is_open() != old_is_open)) // Otherwise, we do it here if the open status of the turf has changed.
-			var/turf/checking = src
-			while(HasBelow(checking.z))
-				checking = GetBelow(checking)
-				if(!isturf(checking))
-					break
-				var/turf/simulated/checksim = checking
-				if (istype(checksim))
-					checksim.update_external_atmos_participation()
-				if(!checking.is_open())
-					break
-
-	// In case the turf isn't marked for update in Initialize (e.g. space), we call this to create any unsimulated edges necessary.
-	//Todo move all of this to base turf and get rid of simulated subtype
-	if(istype(W) && W.zone_membership_candidate != old_zone_membership_candidate)
-		W.update_external_atmos_participation()
-
-	W.update_weather(force_update_below = W.is_open() != old_is_open)
-
-	for(var/turf/T in RANGE_TURFS(src, 1))
-		T.update_icon()
-
-	if(density != old_density)
-		GLOB.density_set_event.raise_event(src, old_density, density)
-
-	if(!density)
-		turf_fire = old_turf_fire
-	else if(old_turf_fire)
-		QDEL_NULL(old_turf_fire)
-
-	if(density != old_density || permit_ao != old_permit_ao)
-		regenerate_ao()
-
+	new_turf.update_openspace()
 	GLOB.turf_changed_event.raise_event(src, old_density, density, old_opacity, opacity)
-	updateVisibility(src, FALSE)
 
 /turf/proc/transport_properties_from(turf/other)
 	if(!istype(other, src.type))
@@ -176,15 +77,18 @@
 	src.set_dir(other.dir)
 	src.icon_state = other.icon_state
 	src.icon = other.icon
-	CopyOverlays(other)
+	src.overlays = other.overlays.Copy()
 	src.underlays = other.underlays.Copy()
+	src.opacity = other.opacity
+	if(hasvar(src, "blocks_air"))
+		src.blocks_air = other.blocks_air
 	if(other.decals)
 		src.decals = other.decals.Copy()
 		src.update_icon()
 	return 1
 
 //I would name this copy_from() but we remove the other turf from their air zone for some reason
-/turf/simulated/transport_properties_from(turf/simulated/other)
+/turf/transport_properties_from(turf/other)
 	if(!..())
 		return 0
 
@@ -194,14 +98,3 @@
 		src.air.copy_from(other.zone.air)
 		other.zone.remove(other)
 	return 1
-
-/turf/simulated/wall/transport_properties_from(turf/simulated/wall/other)
-	if(!..())
-		return 0
-	paint_color = other.paint_color
-	return 1
-
-//No idea why resetting the base appearence from New() isn't enough, but without this it doesn't work
-/turf/simulated/shuttle/wall/corner/transport_properties_from(turf/simulated/other)
-	. = ..()
-	reset_base_appearance()

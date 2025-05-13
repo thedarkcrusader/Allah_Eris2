@@ -8,6 +8,7 @@
 
 /obj/item/ai_verbs
 	name = "AI verb holder"
+	spawn_tags = null
 
 /obj/item/ai_verbs/verb/hardsuit_interface()
 	set category = "Hardsuit"
@@ -23,29 +24,29 @@
 		to_chat(usr, "Your module is not installed in a hardsuit.")
 		return
 
-	module.holder.ui_interact(usr, nano_state = GLOB.contained_state)
+	module.holder.nano_ui_interact(usr, nano_state = GLOB.contained_state)
 
 /obj/item/rig_module/ai_container
-
-	name = "\improper IIS module"
+	name = "IIS module"
 	desc = "An integrated intelligence system module suitable for most hardsuits."
-	icon_state = "IIS"
+	icon_state = "iis"
 	toggleable = 1
 	usable = 1
 	disruptive = 0
 	activates_on_touch = 1
+	rarity_value = 2
+	spawn_tags = SPAWN_TAG_RIG_MODULE_COMMON
 
 	engage_string = "Eject AI"
 	activate_string = "Enable Dataspike"
 	deactivate_string = "Disable Dataspike"
 
-	interface_name = "integrated intelligence system"
+	interface_name = "Integrated intelligence system"
 	interface_desc = "A socket that supports a range of artificial intelligence systems."
 
 	var/mob/integrated_ai // Direct reference to the actual mob held in the suit.
-	var/obj/item/ai_card  // Reference to the MMI, posibrain, inteliCard or pAI card previously holding the AI.
+	var/obj/item/ai_card  // Reference to the MMI, posibrain, intellicard or pAI card previously holding the AI.
 	var/obj/item/ai_verbs/verb_holder
-	origin_tech = list(TECH_DATA = 6, TECH_MATERIAL = 5, TECH_ENGINEERING = 6)
 
 /mob
 	var/get_rig_stats = 0
@@ -58,13 +59,6 @@
 		else
 			integrated_ai.get_rig_stats = 0
 
-/mob/living/Stat()
-	. = ..()
-	if(. && get_rig_stats)
-		var/obj/item/rig/rig = get_rig()
-		if(rig)
-			SetupStat(rig)
-
 /obj/item/rig_module/ai_container/proc/update_verb_holder()
 	if(!verb_holder)
 		verb_holder = new(src)
@@ -73,30 +67,30 @@
 	else
 		verb_holder.forceMove(src)
 
-/obj/item/rig_module/ai_container/accepts_item(obj/item/input_device, mob/living/user)
+/obj/item/rig_module/ai_container/accepts_item(var/obj/item/input_device, var/mob/living/user)
 
 	// Check if there's actually an AI to deal with.
 	var/mob/living/silicon/ai/target_ai
-	if(istype(input_device, /mob/living/silicon/ai))
+	if(isAI(input_device))
 		target_ai = input_device
 	else
 		target_ai = locate(/mob/living/silicon/ai) in input_device.contents
 
-	var/obj/item/aicard/card = ai_card
+	var/obj/item/device/aicard/card = ai_card
 
 	// Downloading from/loading to a terminal.
-	if(istype(input_device,/mob/living/silicon/ai) || istype(input_device,/obj/structure/AIcore/deactivated))
+	if(istype(input_device,/obj/machinery/computer/aifixer) || isAI(input_device) || istype(input_device,/obj/structure/AIcore/deactivated))
 
 		// If we're stealing an AI, make sure we have a card for it.
 		if(!card)
-			card = new /obj/item/aicard(src)
+			card = new /obj/item/device/aicard(src)
 
-		// Terminal interaction only works with an inteliCarded AI.
+		// Terminal interaction only works with an intellicarded AI.
 		if(!istype(card))
 			return 0
 
 		// Since we've explicitly checked for three types, this should be safe.
-		input_device.use_tool(card,user)
+		input_device.attackby(card,user)
 
 		// If the transfer failed we can delete the card.
 		if(locate(/mob/living/silicon/ai) in card)
@@ -107,10 +101,10 @@
 		update_verb_holder()
 		return 1
 
-	if(istype(input_device,/obj/item/aicard))
+	if(istype(input_device,/obj/item/device/aicard))
 		// We are carding the AI in our suit.
 		if(integrated_ai)
-			integrated_ai.use_tool(input_device,user)
+			integrated_ai.attackby(input_device,user)
 			// If the transfer was successful, we can clear out our vars.
 			if(integrated_ai.loc != src)
 				integrated_ai = null
@@ -123,9 +117,9 @@
 		return 1
 
 	// Okay, it wasn't a terminal being touched, check for all the simple insertions.
-	if(input_device.type in list(/obj/item/device/paicard, /obj/item/device/mmi, /obj/item/organ/internal/posibrain))
+	if(input_device.type in list(/obj/item/device/paicard, /obj/item/device/mmi, /obj/item/device/mmi/digital/posibrain))
 		if(integrated_ai)
-			integrated_ai.use_tool(input_device,user)
+			integrated_ai.attackby(input_device,user)
 			// If the transfer was successful, we can clear out our vars.
 			if(integrated_ai.loc != src)
 				integrated_ai = null
@@ -145,8 +139,8 @@
 
 	if(!target)
 		if(ai_card)
-			if(istype(ai_card,/obj/item/aicard))
-				ai_card.ui_interact(H, state = GLOB.deep_inventory_state)
+			if(istype(ai_card,/obj/item/device/aicard))
+				ai_card.nano_ui_interact(H, state =GLOB.deep_inventory_state)
 			else
 				eject_ai(H)
 		update_verb_holder()
@@ -157,14 +151,14 @@
 
 	return 0
 
-/obj/item/rig_module/ai_container/removed()
+/obj/item/rig_module/ai_container/uninstalled()
 	eject_ai()
 	..()
 
-/obj/item/rig_module/ai_container/proc/eject_ai(mob/user)
+/obj/item/rig_module/ai_container/proc/eject_ai(var/mob/user)
 
 	if(ai_card)
-		if(istype(ai_card, /obj/item/aicard))
+		if(istype(ai_card, /obj/item/device/aicard))
 			if(integrated_ai && !integrated_ai.stat)
 				if(user)
 					to_chat(user, SPAN_DANGER("You cannot eject your currently stored AI. Purge it manually."))
@@ -180,12 +174,12 @@
 		else if(user)
 			user.put_in_hands(ai_card)
 		else
-			ai_card.dropInto(loc)
+			ai_card.forceMove(get_turf(src))
 	ai_card = null
 	integrated_ai = null
 	update_verb_holder()
 
-/obj/item/rig_module/ai_container/proc/integrate_ai(obj/item/ai,mob/user)
+/obj/item/rig_module/ai_container/proc/integrate_ai(var/obj/item/ai,var/mob/user)
 	if(!ai) return
 
 	// The ONLY THING all the different AI systems have in common is that they all store the mob inside an item.
@@ -194,13 +188,13 @@
 
 		if(ai_mob.key && ai_mob.client)
 
-			if(istype(ai, /obj/item/aicard))
+			if(istype(ai, /obj/item/device/aicard))
 
 				if(!ai_card)
-					ai_card = new /obj/item/aicard(src)
+					ai_card = new /obj/item/device/aicard(src)
 
-				var/obj/item/aicard/source_card = ai
-				var/obj/item/aicard/target_card = ai_card
+				var/obj/item/device/aicard/source_card = ai
+				var/obj/item/device/aicard/target_card = ai_card
 				if(istype(source_card) && istype(target_card))
 					if(target_card.grab_ai(ai_mob, user))
 						source_card.clear()
@@ -208,10 +202,12 @@
 						return 0
 				else
 					return 0
-			else if(user.unEquip(ai, src))
+			else
+				user.drop_from_inventory(ai)
+				ai.forceMove(src)
 				ai_card = ai
-				to_chat(ai_mob, SPAN_NOTICE("You have been transferred to \the [holder]'s [src.name]."))
-				to_chat(user, SPAN_NOTICE("You load \the [ai_mob] into \the [holder]'s [src.name]."))
+				to_chat(ai_mob, "<font color='blue'>You have been transferred to \the [holder]'s [src].</font>")
+				to_chat(user, "<font color='blue'>You load [ai_mob] into \the [holder]'s [src].</font>")
 
 			integrated_ai = ai_mob
 
@@ -226,10 +222,10 @@
 	return
 
 /obj/item/rig_module/datajack
-
 	name = "datajack module"
 	desc = "A simple induction datalink module."
 	icon_state = "datajack"
+	passive_power_cost = 0
 	toggleable = 1
 	activates_on_touch = 1
 	usable = 0
@@ -237,16 +233,17 @@
 	activate_string = "Enable Datajack"
 	deactivate_string = "Disable Datajack"
 
-	interface_name = "contact datajack"
+	interface_name = "Contact datajack"
 	interface_desc = "An induction-powered high-throughput datalink suitable for hacking encrypted networks."
-	var/list/stored_research
+	rarity_value = 3.5
+	spawn_tags = SPAWN_TAG_RIG_MODULE_COMMON
+	var/datum/research/files
 
-/obj/item/rig_module/datajack/Initialize()
-	. =..()
-	stored_research = list()
+/obj/item/rig_module/datajack/New()
+	..()
+	files = new(src)
 
 /obj/item/rig_module/datajack/engage(atom/target)
-
 	if(!..())
 		return 0
 
@@ -258,20 +255,20 @@
 
 /obj/item/rig_module/datajack/accepts_item(obj/item/input_device, mob/living/user)
 
-	if(istype(input_device,/obj/item/disk/tech_disk))
-		to_chat(user, "You slot the disk into [src].")
-		var/obj/item/disk/tech_disk/disk = input_device
-		if(disk.stored)
-			if(load_data(disk.stored))
-				to_chat(user, SPAN_INFO("Download successful; disk erased."))
-				disk.stored = null
+	if(istype(input_device, /obj/item/computer_hardware/hard_drive))
+		to_chat(user, "You connect the disk to [src].")
+		var/obj/item/computer_hardware/hard_drive/disk = input_device
+		if(disk.used_capacity)
+			if(load_data(disk))
+				to_chat(user, SPAN_NOTICE("Download successful."))
 			else
-				to_chat(user, SPAN_WARNING("The disk is corrupt. It is useless to you."))
+				to_chat(user, SPAN_WARNING("The disk does not contain any new research data. It is useless to you."))
 		else
 			to_chat(user, SPAN_WARNING("The disk is blank. It is useless to you."))
 		return 1
 
 	// I fucking hate R&D code. This typecheck spam would be totally unnecessary in a sane setup.
+	// true, but your code is also equally shit
 	else if(istype(input_device,/obj/machinery))
 		var/datum/research/incoming_files
 		if(istype(input_device,/obj/machinery/computer/rdconsole))
@@ -280,97 +277,81 @@
 		else if(istype(input_device,/obj/machinery/r_n_d/server))
 			var/obj/machinery/r_n_d/server/input_machine = input_device
 			incoming_files = input_machine.files
+		else if(istype(input_device,/obj/machinery/autolathe/mechfab))
+			var/obj/machinery/autolathe/mechfab/input_machine = input_device
+			incoming_files = input_machine.files
 
-		if(!incoming_files || !incoming_files.known_tech || !length(incoming_files.known_tech))
+		if(!incoming_files || !incoming_files.researched_nodes.len)
 			to_chat(user, SPAN_WARNING("Memory failure. There is nothing accessible stored on this terminal."))
 		else
 			// Maybe consider a way to drop all your data into a target repo in the future.
-			if(load_data(incoming_files.known_tech))
-				to_chat(user, SPAN_INFO("Download successful; local and remote repositories synchronized."))
+			if(load_data(incoming_files))
+				to_chat(user, "<font color='blue'>Download successful; local and remote repositories synchronized.</font>")
 			else
 				to_chat(user, SPAN_WARNING("Scan complete. There is nothing useful stored on this terminal."))
-		return 1
-	return 0
+		return TRUE
 
-/obj/item/rig_module/datajack/proc/load_data(incoming_data)
-
-	if(islist(incoming_data))
-		for(var/entry in incoming_data)
-			load_data(entry)
-		return 1
-
-	if(istype(incoming_data, /datum/tech))
-		var/data_found
-		var/datum/tech/new_data = incoming_data
-		for(var/datum/tech/current_data in stored_research)
-			if(current_data.id == new_data.id)
-				data_found = 1
-				if(current_data.level < new_data.level)
-					current_data.level = new_data.level
-				break
-		if(!data_found)
-			stored_research += incoming_data
-		return 1
-	return 0
+/obj/item/rig_module/datajack/proc/load_data(datum/research/incoming_files)
+	return files.download_from(incoming_files)
 
 /obj/item/rig_module/electrowarfare_suite
-
 	name = "electrowarfare module"
 	desc = "A bewilderingly complex bundle of fiber optics and chips."
 	icon_state = "ewar"
 	toggleable = 1
 	usable = 0
-	active_power_cost = 100
+	passive_power_cost = 0
+	active_power_cost = 0.08
 
 	activate_string = "Enable Countermeasures"
 	deactivate_string = "Disable Countermeasures"
 
-	interface_name = "electrowarfare system"
+	interface_name = "Electrowarfare system"
 	interface_desc = "An active counter-electronic warfare suite that disrupts AI tracking."
+	rarity_value = 10
 
 /obj/item/rig_module/electrowarfare_suite/activate()
-
 	if(!..())
 		return
 
 	// This is not the best way to handle this, but I don't want it to mess with ling camo
 	var/mob/living/M = holder.wearer
-	M.digitalcamo++
+	if(M)
+		M.digitalcamo++
 
 /obj/item/rig_module/electrowarfare_suite/deactivate()
-
 	if(!..())
 		return
 
 	var/mob/living/M = holder.wearer
-	M.digitalcamo = max(0,(M.digitalcamo-1))
+	if(M)
+		M.digitalcamo = max(0,(M.digitalcamo-1))
 
 /obj/item/rig_module/power_sink
-
 	name = "hardsuit power sink"
 	desc = "An heavy-duty power sink."
 	icon_state = "powersink"
 	toggleable = 1
+	passive_power_cost = 0
 	activates_on_touch = 1
 	disruptive = 0
 
 	activate_string = "Enable Power Sink"
 	deactivate_string = "Disable Power Sink"
 
-	interface_name = "niling d-sink"
+	interface_name = "Niling d-sink"
 	interface_desc = "Colloquially known as a power siphon, this module drains power through the suit hands into the suit battery."
-
-	origin_tech = list(TECH_POWER = 6, TECH_ENGINEERING = 6)
+	rarity_value = 3.5
+	spawn_tags = SPAWN_TAG_RIG_MODULE_COMMON
 	var/atom/interfaced_with // Currently draining power from this device.
 	var/total_power_drained = 0
 	var/drain_loc
-	var/max_draining_rate = 120 KILOWATTS // The same as unupgraded cyborg recharger.
 
 /obj/item/rig_module/power_sink/deactivate()
 
 	if(interfaced_with)
 		if(holder && holder.wearer)
-			to_chat(holder.wearer, SPAN_WARNING("Your power sink retracts as the module deactivates."))
+			to_chat(holder.wearer, "<span class = 'warning'>Your power sink retracts as the module deactivates.</span>")
 		drain_complete()
 	interfaced_with = null
 	total_power_drained = 0
@@ -402,7 +383,7 @@
 	if(target.drain_power(1) <= 0)
 		return 0
 
-	to_chat(H, SPAN_CLASS("danger", "You begin draining power from [target]!"))
+	to_chat(H, "<span class = 'danger'>You begin draining power from [target]!</span>")
 	interfaced_with = target
 	drain_loc = interfaced_with.loc
 
@@ -411,7 +392,7 @@
 
 	return 1
 
-/obj/item/rig_module/power_sink/accepts_item(obj/item/input_device, mob/living/user)
+/obj/item/rig_module/power_sink/accepts_item(var/obj/item/input_device, var/mob/living/user)
 	var/can_drain = input_device.drain_power(1)
 	if(can_drain > 0)
 		engage(input_device)
@@ -434,37 +415,39 @@
 	playsound(H.loc, 'sound/effects/sparks2.ogg', 50, 1)
 
 	if(!holder.cell)
-		to_chat(H, SPAN_CLASS("danger", "Your power sink flashes an error; there is no cell in your rig."))
+		to_chat(H, "<span class = 'danger'>Your power sink flashes an error; there is no cell in your rig.</span>")
 		drain_complete(H)
 		return
 
 	if(!interfaced_with || !interfaced_with.Adjacent(H) || !(interfaced_with.loc == drain_loc))
-		to_chat(H, SPAN_WARNING("Your power sink retracts into its casing."))
+		to_chat(H, "<span class = 'warning'>Your power sink retracts into its casing.</span>")
 		drain_complete(H)
 		return
 
 	if(holder.cell.fully_charged())
-		to_chat(H, SPAN_WARNING("Your power sink flashes an amber light; your rig cell is full."))
+		to_chat(H, "<span class = 'warning'>Your power sink flashes an amber light; your rig cell is full.</span>")
 		drain_complete(H)
 		return
 
-	var/target_drained = interfaced_with.drain_power(0,0,max_draining_rate)
+	// Attempts to drain up to 40kW, determines this value from remaining cell capacity to ensure we don't drain too much..
+	var/to_drain = min(40000, ((holder.cell.maxcharge - holder.cell.charge) / CELLRATE))
+	var/target_drained = interfaced_with.drain_power(0,0,to_drain)
 	if(target_drained <= 0)
-		to_chat(H, SPAN_CLASS("danger", "Your power sink flashes a red light; there is no power left in [interfaced_with]."))
+		to_chat(H, "<span class = 'danger'>Your power sink flashes a red light; there is no power left in [interfaced_with].</span>")
 		drain_complete(H)
 		return
 
 	holder.cell.give(target_drained * CELLRATE)
 	total_power_drained += target_drained
 
-	return
+	return 1
 
-/obj/item/rig_module/power_sink/proc/drain_complete(mob/living/M)
+/obj/item/rig_module/power_sink/proc/drain_complete(var/mob/living/M)
 
 	if(!interfaced_with)
-		if(M) to_chat(M, SPAN_INFO("<b>Total power drained:</b> [round(total_power_drained*CELLRATE)] Wh."))
+		if(M) to_chat(M, "<font color='blue'><b>Total power drained:</b> [round(total_power_drained/1000)]kJ.</font>")
 	else
-		if(M) to_chat(M, SPAN_INFO("<b>Total power drained from [interfaced_with]:</b> [round(total_power_drained*CELLRATE)] Wh."))
+		if(M) to_chat(M, "<font color='blue'><b>Total power drained from [interfaced_with]:</b> [round(total_power_drained/1000)]kJ.</font>")
 		interfaced_with.drain_power(0,1,0) // Damage the victim.
 
 	drain_loc = null
@@ -482,7 +465,7 @@
 	activate_string = "Enable active EMP shielding"
 	deactivate_string = "Disable active EMP shielding"
 
-	interface_name = "active EMP shielding system"
+	interface_name = "Active EMP shielding system"
 	interface_desc = "A highly experimental system that augments the hardsuit's existing EM shielding."
 	var/protection_amount = 20
 

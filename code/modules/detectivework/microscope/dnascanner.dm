@@ -2,8 +2,8 @@
 /obj/machinery/dnaforensics
 	name = "DNA analyzer"
 	desc = "A high tech machine that is designed to read DNA samples properly."
-	icon = 'icons/obj/machines/forensics/dna_scanner.dmi'
-	icon_state = "dna"
+	icon = 'icons/obj/forensics.dmi'
+	icon_state = "dnaopen"
 	anchored = TRUE
 	density = TRUE
 
@@ -15,31 +15,28 @@
 	var/last_process_worldtime = 0
 	var/report_num = 0
 
-/obj/machinery/dnaforensics/use_tool(obj/item/W, mob/living/user, list/click_params)
-	if(!istype(W, /obj/item/forensics/swab))
-		return .. ()
+/obj/machinery/dnaforensics/attackby(var/obj/item/W, mob/user as mob)
 
-	var/obj/item/forensics/swab/swab = W
 	if(bloodsamp)
 		to_chat(user, SPAN_WARNING("There is already a sample in the machine."))
-		return TRUE
+		return
 
 	if(closed)
 		to_chat(user, SPAN_WARNING("Open the cover before inserting the sample."))
-		return TRUE
+		return
 
+	var/obj/item/forensics/swab/swab = W
 	if(istype(swab) && swab.is_used())
-		if(!user.unEquip(W, src))
-			return TRUE
-		bloodsamp = swab
+		user.unEquip(W)
+		src.bloodsamp = swab
+		swab.loc = src
 		to_chat(user, SPAN_NOTICE("You insert \the [W] into \the [src]."))
-		return TRUE
 	else
 		to_chat(user, SPAN_WARNING("\The [src] only accepts used swabs."))
-		return TRUE
+		return
 
-/obj/machinery/dnaforensics/ui_interact(mob/user, ui_key = "main",datum/nanoui/ui = null)
-	if(!is_powered()) return
+/obj/machinery/dnaforensics/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS)
+	if(stat & (NOPOWER)) return
 	if(user.stat || user.restrained()) return
 	var/list/data = list()
 	data["scan_progress"] = round(scanner_progress)
@@ -59,7 +56,7 @@
 
 	if(..()) return 1
 
-	if(!is_powered())
+	if(stat & (NOPOWER))
 		return 0 // don't update UIs attached to this object
 
 	if(href_list["scanItem"])
@@ -102,19 +99,19 @@
 	last_process_worldtime = world.time
 
 /obj/machinery/dnaforensics/proc/complete_scan()
-	src.visible_message(SPAN_NOTICE("[icon2html(src, viewers(get_turf(src)))] makes an insistent chime."), 2)
+	src.visible_message(SPAN_NOTICE("\icon[src] makes an insistent chime."), 2)
 	update_icon()
 	if(bloodsamp)
 		var/obj/item/paper/P = new(src)
-		P.SetName("[src] report #[++report_num]: [bloodsamp.name]")
-		P.SetOverlays("paper_stamped")
+		P.name = "[src] report #[++report_num]: [bloodsamp.name]"
+		P.stamped = list(/obj/item/stamp)
+		P.overlays = list("paper_stamped")
+		//dna data itself
 		var/data = "No scan information available."
-		if(bloodsamp.dna != null || bloodsamp.trace_dna != null)
-			data = "Spectometric analysis on provided sample has determined the presence of DNA.<br><br>"
+		if(bloodsamp.dna != null)
+			data = "Spectometric analysis on provided sample has determined the presence of [bloodsamp.dna.len] strings of DNA.<br><br>"
 			for(var/blood in bloodsamp.dna)
-				data += "[SPAN_NOTICE("Blood type: [bloodsamp.dna[blood]]<br>DNA: [blood]")]<br><br>"
-			for(var/trace in bloodsamp.trace_dna)
-				data += "[SPAN_NOTICE("Trace DNA: [trace]")]<br><br>"
+				data += "\blue Blood type: [bloodsamp.dna[blood]]<br>\nDNA: [blood]<br><br>"
 		else
 			data += "No DNA found.<br>"
 		P.info = "<b>[src] analysis report #[report_num]</b><br>"
@@ -125,9 +122,8 @@
 		update_icon()
 	return
 
-/obj/machinery/dnaforensics/interface_interact(mob/user)
-	ui_interact(user)
-	return TRUE
+/obj/machinery/dnaforensics/attack_hand(mob/user)
+	nano_ui_interact(user)
 
 /obj/machinery/dnaforensics/verb/toggle_lid()
 	set category = "Object"
@@ -144,16 +140,11 @@
 	closed = !closed
 	src.update_icon()
 
-/obj/machinery/dnaforensics/on_update_icon()
-	ClearOverlays()
-	if(panel_open)
-		AddOverlays("[icon_state]_panel")
-	if(is_powered())
-		AddOverlays(emissive_appearance(icon, "[icon_state]_screen"))
-		AddOverlays("[icon_state]_screen")
-	else if(is_powered() && scanning)
-		AddOverlays("[icon_state]_working")
-		AddOverlays(emissive_appearance(icon, "[icon_state]_screen_working"))
-		AddOverlays("[icon_state]_screen_working")
+/obj/machinery/dnaforensics/update_icon()
+	..()
+	if(!(stat & NOPOWER) && scanning)
+		icon_state = "dnaworking"
 	else if(closed)
-		AddOverlays("[icon_state]_closed")
+		icon_state = "dnaclosed"
+	else
+		icon_state = "dnaopen"

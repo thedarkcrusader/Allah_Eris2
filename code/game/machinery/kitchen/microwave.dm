@@ -1,462 +1,477 @@
 
 /obj/machinery/microwave
-	name = "microwave"
-	desc = "A possibly occult device capable of perfectly preparing many types of food."
-	icon = 'icons/obj/machines/kitchen.dmi'
+	name = "Microwave"
+	icon = 'icons/obj/kitchen.dmi'
 	icon_state = "mw"
 	layer = BELOW_OBJ_LAYER
 	density = TRUE
 	anchored = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 5
 	active_power_usage = 100
-	atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_NO_REACT | ATOM_FLAG_OPEN_CONTAINER
-	obj_flags = OBJ_FLAG_CAN_TABLE | OBJ_FLAG_ANCHORABLE
-	construct_state = /singleton/machine_construction/default/panel_closed
-	uncreated_component_parts = null
-	stat_immune = 0
-
-	machine_name = "microwave"
-	machine_desc = "Required for preparing any dish more complicated than a slice of bread. In the future, <i>everything</i> is microwaved."
-
-	var/operating = FALSE // Is it on?
-	var/dirtiness = 0 // Ranges from 0 to 100, increasing a little with failed recipes and emptying reagents
-	var/broken = 0 // If above 0, the microwave is broken and can't be used
-
-	var/power_efficiency = 1.0 // Divider for the microwave's power use
-	var/speed_multiplier = 1.0 // Divider for the microwave's cooking delay
-	var/break_multiplier = 1.0 // Multiplier for break chance
-
-	var/list/ingredients = list()
-
-	var/static/list/radial_options = list(
-		"Eject Contents" = mutable_appearance('icons/screen/radial.dmi', "radial_eject"),
-		"Turn On" = mutable_appearance('icons/screen/radial.dmi', "radial_power")
+	reagent_flags = OPENCONTAINER | NO_REACT
+	var/operating = 0 // Is it on?
+	var/dirty = 0 // = {0..100} Does it need cleaning?
+	var/broken = 0 // ={0,1,2} How broken is it???
+	var/dinger = TRUE //so we don't have the campfire dinging
+	var/global/list/datum/recipe/available_recipes // List of the recipes you can use
+	var/global/list/acceptable_items // List of the items you can put in
+	var/global/list/acceptable_reagents // List of the reagents you can put in
+	var/global/max_n_of_items = 0
+	var/list/blacklisted_from_buffs = list(
+	/obj/item/reagent_containers/food/snacks/donkpocket
 	)
+
 
 // see code/modules/food/recipes_microwave.dm for recipes
 
-/*********************************
-*   Initialization, part logic
-**********************************/
+/*******************
+*   Initialising
+********************/
 
-/obj/machinery/microwave/Initialize()
-	. = ..()
-	create_reagents(100)
-
-/obj/machinery/microwave/RefreshParts()
-	// Microwaves use a manipulator, micro lasers, and matter bin.
-	// The used manipulator determines the power use.
-	// Micro lasers speed cooking up at higher tiers.
-	// Matter bins decrease the chance of breaking or getting dirty.
+/obj/machinery/microwave/New()
 	..()
-	var/laser_rating = clamp(total_component_rating_of_type(/obj/item/stock_parts/micro_laser), 1, 5)
-
-	speed_multiplier = (laser_rating * 0.5)
-	power_efficiency = total_component_rating_of_type(/obj/item/stock_parts/manipulator)
-	break_multiplier = 1 / clamp(total_component_rating_of_type(/obj/item/stock_parts/matter_bin), 1, 3)
+	create_reagents(100)
+	if(!available_recipes)
+		available_recipes = new
+		for (var/type in (typesof(/datum/recipe)-/datum/recipe))
+			available_recipes+= new type
+		acceptable_items = new
+		acceptable_reagents = new
+		for (var/datum/recipe/recipe in available_recipes)
+			for (var/item in recipe.items)
+				acceptable_items |= item
+			for (var/reagent in recipe.reagents)
+				acceptable_reagents |= reagent
+			if(recipe.items)
+				max_n_of_items = max(max_n_of_items,recipe.items.len)
+		// This will do until I can think of a fun recipe to use dionaea in -
+		// will also allow anything using the holder item to be microwaved into
+		// impure carbon. ~Z
+		acceptable_items |= /obj/item/holder
+		acceptable_items |= /obj/item/reagent_containers/food/snacks/grown
 
 /*******************
 *   Item Adding
 ********************/
 
-/obj/machinery/microwave/use_tool(obj/item/O, mob/living/user, list/click_params)
-	if (broken > 0)
-		// Start repairs by using a screwdriver
-		if(broken == 2 && isScrewdriver(O))
+/obj/machinery/microwave/attackby(var/obj/item/I, var/mob/user)
+	if(src.broken > 0)
+
+		var/list/usable_qualities = list()
+		if(broken == 2)
+			usable_qualities.Add(QUALITY_SCREW_DRIVING)
+		if(broken == 1)
+			usable_qualities.Add(QUALITY_BOLT_TURNING)
+
+
+		var/tool_type = I.get_tool_type(user, usable_qualities, src)
+		switch(tool_type)
+
+			if(QUALITY_SCREW_DRIVING)
+				if(broken == 2)
+					user.visible_message( \
+						SPAN_NOTICE("\The [user] starts to fix part of the [src]."), \
+						SPAN_NOTICE("You start to fix part of the [src].") \
+					)
+					if(I.use_tool(user, src, WORKTIME_NORMAL, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+						user.visible_message( \
+							SPAN_NOTICE("\The [user] fixes part of the [src]."), \
+							SPAN_NOTICE("You have fixed part of the [src].") \
+						)
+						src.broken = 1
+						return
+					return
+
+			if(QUALITY_BOLT_TURNING)
+				if(broken == 1)
+					user.visible_message( \
+						SPAN_NOTICE("\The [user] starts to fix part of the [src]."), \
+						SPAN_NOTICE("You start to fix part of the [src].") \
+					)
+					if(I.use_tool(user, src, WORKTIME_NORMAL, tool_type, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+						user.visible_message( \
+							SPAN_NOTICE("\The [user] fixes the [src]."), \
+							SPAN_NOTICE("You have fixed the [src].") \
+						)
+						src.icon_state = "mw"
+						src.broken = 0 // Fix it!
+						src.dirty = 0 // just to be sure
+						src.reagent_flags = OPENCONTAINER
+						return
+					return
+
+			if(ABORT_CHECK)
+				return
+
+//If we dont fix it with code above - return
+		to_chat(user, SPAN_WARNING("It's broken!"))
+		return
+
+	else if(src.dirty==100) // The microwave is all dirty so can't be used!
+		if(istype(I, /obj/item/soap) || istype(I, /obj/item/reagent_containers/glass/rag)) // If they're trying to clean it then let them
 			user.visible_message( \
-				SPAN_NOTICE("\The [user] starts to fix part of the microwave."), \
-				SPAN_NOTICE("You start to fix part of the microwave.") \
+				SPAN_NOTICE("\The [user] starts to clean the [src]."), \
+				SPAN_NOTICE("You start to clean the [src].") \
 			)
-			if (do_after(user, (O.toolspeed * 2) SECONDS, src, DO_REPAIR_CONSTRUCT))
+			if(do_after(user, 20, src))
 				user.visible_message( \
-					SPAN_NOTICE("\The [user] fixes part of the microwave."), \
-					SPAN_NOTICE("You have fixed part of the microwave.") \
+					SPAN_NOTICE("\The [user] has cleaned the [src]."), \
+					SPAN_NOTICE("You have cleaned the [src].") \
 				)
-				broken = 1 // Fix it a bit
-			return TRUE
+				src.dirty = 0 // It's clean!
+				src.broken = 0 // just to be sure
+				src.icon_state = "mw"
+				src.reagent_flags = OPENCONTAINER
+		else //Otherwise bad luck!!
+			to_chat(user, SPAN_WARNING("It's dirty!"))
+			return 1
 
-		// Finish repairs using a wrench
-		if (broken == 1 && isWrench(O))
+	else if(is_type_in_list(I,acceptable_items))
+		if(length(contents) >= max_n_of_items)
+			to_chat(user, SPAN_WARNING("This [src] is full of ingredients, you cannot put more."))
+			return 1
+		if(istype(I, /obj/item/stack) && I:get_amount() > 1) // This is bad, but I can't think of how to change it
+			var/obj/item/stack/S = I
+			new I.type (src)
+			S.use(1)
 			user.visible_message( \
-				SPAN_NOTICE("\The [user] starts to fix part of the microwave."), \
-				SPAN_NOTICE("You start to fix part of the microwave.") \
-			)
-			if (do_after(user, (O.toolspeed * 2) SECONDS, src, DO_REPAIR_CONSTRUCT))
-				user.visible_message( \
-					SPAN_NOTICE("\The [user] fixes the microwave."), \
-					SPAN_NOTICE("You have fixed the microwave.") \
-				)
-				broken = 0 // Fix it!
-				dirtiness = 0 // just to be sure
-				update_icon()
-				atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_OPEN_CONTAINER
-			return TRUE
-
-		// Otherwise, we can't add anything to the micrwoave
-		else
-			to_chat(user, SPAN_WARNING("It's broken, and this isn't the right way to fix it!"))
-			return TRUE
-
-	if(dirtiness == 100) // The microwave is all dirty, so it can't be used!
-		var/has_rag = istype(O, /obj/item/reagent_containers/glass/rag)
-		var/has_cleaner = O.reagents != null && O.reagents.has_reagent(/datum/reagent/space_cleaner, 5)
-		if (has_rag || has_cleaner)
-			user.visible_message( \
-				SPAN_NOTICE("\The [user] starts to clean the microwave."), \
-				SPAN_NOTICE("You start to clean the microwave.") \
-			)
-			if (do_after(user, 2 SECONDS, src, DO_PUBLIC_UNIQUE))
-				user.visible_message( \
-					SPAN_NOTICE("\The [user] has cleaned the microwave."), \
-					SPAN_NOTICE("You clean out the microwave.") \
-				)
-
-				// You can use a rag to wipe down the inside of the microwave
-				// Otherwise, you'll need some space cleaner
-				if (!has_rag)
-					O.reagents.remove_reagent(/datum/reagent/space_cleaner, 5)
-
-				dirtiness = 0 // It's clean!
-				broken = 0 // just to be sure
-				update_icon()
-				atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_OPEN_CONTAINER
-			return TRUE
-
-		// Otherwise, bad luck!
-		else
-			to_chat(user, SPAN_WARNING("You need to clean \the [src] before you use it!"))
-			return TRUE
-
-	if (is_type_in_list(O, GLOB.microwave_accepts_items))
-		if (length(ingredients) >= GLOB.microwave_maximum_item_storage)
-			to_chat(user, SPAN_WARNING("This [src] is full of ingredients - you can't fit any more."))
-			return TRUE
-
-		if (istype(O, /obj/item/stack)) // This is bad, but I can't think of how to change it
-			var/obj/item/stack/S = O
-			if(S.use(1))
-				var/stack_item = new O.type (src)
-				LAZYADD(ingredients, stack_item)
-				user.visible_message( \
-					SPAN_NOTICE("\The [user] has added one of [O] to \the [src]."), \
-					SPAN_NOTICE("You add one of [O] to \the [src]."))
-			return TRUE
-
-		else
-			if (!user.unEquip(O, src))
-				return TRUE
-			LAZYADD(ingredients, O)
-			user.visible_message( \
-				SPAN_NOTICE("\The [user] has added \the [O] to \the [src]."), \
-				SPAN_NOTICE("You add \the [O] to \the [src]."))
-			return TRUE
-
-	if (istype(O,/obj/item/reagent_containers/glass) || \
-	        istype(O,/obj/item/reagent_containers/food/drinks) || \
-	        istype(O,/obj/item/reagent_containers/food/condiment) \
-		)
-		if (!O.reagents)
-			to_chat(user, SPAN_WARNING("\The [O] is empty!"))
-			return TRUE
-		for (var/datum/reagent/R in O.reagents.reagent_list)
-			if (!(R.type in GLOB.microwave_accepts_reagents))
-				to_chat(user, SPAN_WARNING("\The [O] contains \the [R] which is unsuitable for cookery."))
-				return TRUE
-		return FALSE //This will call reagent_container's use_after which handles transferring reagents.
-
-	if (istype(O, /obj/item/storage))
-		if (length(ingredients) >= GLOB.microwave_maximum_item_storage)
-			to_chat(user, SPAN_WARNING("\The [src] is completely full!"))
-			return TRUE
-
-		var/obj/item/storage/bag/P = O
-		var/objects_loaded = 0
-		for(var/obj/G in P.contents)
-			if(length(ingredients) < GLOB.microwave_maximum_item_storage && is_type_in_list(G, GLOB.microwave_accepts_items) && P.remove_from_storage(G, src, 1))
-				objects_loaded++
-				LAZYADD(ingredients, G)
-		P.finish_bulk_removal()
-
-		if (objects_loaded)
-			if (!length(P.contents))
-				user.visible_message(SPAN_NOTICE("\The [user] empties \the [P] into \the [src]."),
-				SPAN_NOTICE("You empty \the [P] into \the [src]."))
-			else
-				user.visible_message(SPAN_NOTICE("\The [user] empties \the [P] into \the [src]."),
-				SPAN_NOTICE("You empty what you can from \the [P] into \the [src]."))
-			return TRUE
-
-		else
-			to_chat(user, SPAN_WARNING("\The [P] doesn't contain any compatible items to put into \the [src]!"))
-
-		return TRUE
-	return ..()
-
-/obj/machinery/microwave/use_grab(obj/item/grab/grab, list/click_params)
-	to_chat(grab.assailant, SPAN_WARNING("This is ridiculous. You can't fit \the [grab.affecting] in \the [src]."))
-	return TRUE
-
-/obj/machinery/microwave/components_are_accessible(path)
-	return (broken == 0) && ..()
-
-/obj/machinery/microwave/cannot_transition_to(state_path, mob/user)
-	if(broken)
-		return SPAN_NOTICE("\The [src] is too broken to do this!")
-	. = ..()
-
-// need physical proximity for our interface.
-/obj/machinery/microwave/DefaultTopicState()
-	return GLOB.physical_state
-
-/obj/machinery/microwave/interface_interact(mob/user)
-	interact(user)
-	return TRUE
-
-
-/obj/machinery/microwave/interact(mob/user)
-	if (isobserver(user))
-		if (!isadmin(user))
+				SPAN_NOTICE("\The [user] has added one of [I] to \the [src]."), \
+				SPAN_NOTICE("You add one of [I] to \the [src]."))
 			return
-	else if (!ishuman(user) && !isrobot(user))
+		else
+		//	user.remove_from_mob(O)	//This just causes problems so far as I can tell. -Pete
+			user.drop_item()
+			I.loc = src
+			user.visible_message( \
+				SPAN_NOTICE("\The [user] has added \the [I] to \the [src]."), \
+				SPAN_NOTICE("You add \the [I] to \the [src]."))
+			return
+
+	else if(istype(I,/obj/item/reagent_containers/glass) || \
+	        istype(I,/obj/item/reagent_containers/food/drinks) || \
+	        istype(I,/obj/item/reagent_containers/food/condiment) \
+		)
+		if(!I.reagents)
+			return 1
+		for (var/datum/reagent/R in I.reagents.reagent_list)
+			if(!acceptable_reagents.Find(R.id))
+				to_chat(user, SPAN_WARNING("Your [I] contains components unsuitable for cookery."))
+				return 1
 		return
+
+	if(QUALITY_BOLT_TURNING in I.tool_qualities)
+		user.visible_message( \
+		"<span class='notice'>\The [user] begins [src.anchored ? "unsecuring" : "securing"] the [src].</span>", \
+		"<span class='notice'>You attempt to [src.anchored ? "unsecure" : "secure"] the [src].</span>"
+		)
+		if(I.use_tool(user, src, WORKTIME_FAST, QUALITY_BOLT_TURNING, FAILCHANCE_EASY,  required_stat = STAT_MEC))
+			user.visible_message( \
+			"<span class='notice'>\The [user] [src.anchored ? "unsecures" : "secures"] the [src].</span>", \
+			"<span class='notice'>You [src.anchored ? "unsecure" : "secure"] the [src].</span>"
+			)
+			src.anchored = !src.anchored
+
+	else
+		to_chat(user, SPAN_WARNING("You have no idea what you can cook with this [I]."))
+	..()
+	src.updateUsrDialog()
+
+/obj/machinery/microwave/affect_grab(var/mob/user, var/mob/target)
+	to_chat(user, SPAN_WARNING("This is ridiculous. You can not fit \the [target] in this [src]."))
+	return FALSE
+
+/obj/machinery/microwave/attack_ai(mob/user as mob)
+	if(isrobot(user) && Adjacent(user))
+		attack_hand(user)
+
+/obj/machinery/microwave/attack_hand(mob/user as mob)
 	user.set_machine(src)
-	if(broken > 0 || operating || dirtiness == 100)
-		return
-	playsound(loc, 'sound/machines/pda_click.ogg', 50, TRUE)
-	var/choice = show_radial_menu(user, src, radial_options, require_near = TRUE, radius = 42, tooltips = TRUE, check_locs = list(src))
-	if (!choice || !user.use_sanity_check(src))
-		return
-	switch(choice)
-		if ("Eject Contents")
-			dispose()
-		if ("Turn On")
-			playsound(loc, 'sound/machines/quiet_beep.ogg', 50, 1)
-			cook()
+	interact(user)
+
+/*******************
+*   Microwave Menu
+********************/
+
+/obj/machinery/microwave/interact(mob/user as mob) // The microwave Menu
+	var/dat = ""
+	if(src.broken > 0)
+		dat = {"<TT>Bzzzzttttt</TT>"}
+	else if(src.operating)
+		dat = {"<TT>Cooking in progress!<BR>Please wait...!</TT>"}
+	else if(src.dirty==100)
+		dat = {"<TT>This [src] is dirty!<BR>Please clean it before use!</TT>"}
+	else
+		var/list/items_counts = new
+		var/list/items_measures = new
+		var/list/items_measures_p = new
+		for (var/obj/O in contents)
+			var/display_name = O.name
+			if(istype(O,/obj/item/reagent_containers/food/snacks/egg))
+				items_measures[display_name] = "egg"
+				items_measures_p[display_name] = "eggs"
+			if(istype(O,/obj/item/reagent_containers/food/snacks/tofu))
+				items_measures[display_name] = "tofu chunk"
+				items_measures_p[display_name] = "tofu chunks"
+			if(istype(O,/obj/item/reagent_containers/food/snacks/meat)) //any meat
+				items_measures[display_name] = "slab of meat"
+				items_measures_p[display_name] = "slabs of meat"
+			if(istype(O,/obj/item/reagent_containers/food/snacks/donkpocket))
+				display_name = "Turnovers"
+				items_measures[display_name] = "turnover"
+				items_measures_p[display_name] = "turnovers"
+			if(istype(O,/obj/item/reagent_containers/food/snacks/meat/carp))
+				items_measures[display_name] = "fillet of meat"
+				items_measures_p[display_name] = "fillets of meat"
+			items_counts[display_name]++
+		for (var/O in items_counts)
+			var/N = items_counts[O]
+			if(!items_measures.Find(O))
+				dat += {"<B>[capitalize(O)]:</B> [N] [lowertext(O)]\s<BR>"}
+			else
+				if(N == 1)
+					dat += {"<B>[capitalize(O)]:</B> [N] [items_measures[O]]<BR>"}
+				else
+					dat += {"<B>[capitalize(O)]:</B> [N] [items_measures_p[O]]<BR>"}
+
+		for (var/datum/reagent/R in reagents.reagent_list)
+			var/display_name = R.name
+			if(R.id == "capsaicin")
+				display_name = "Hotsauce"
+			if(R.id == "frostoil")
+				display_name = "Coldsauce"
+			dat += {"<B>[display_name]:</B> [R.volume] unit\s<BR>"}
+
+		if(length(items_counts) == 0 && length(reagents.reagent_list) == 0)
+			dat = {"<B>The [src] is empty</B><BR>"}
+		else
+			dat = {"<b>Ingredients:</b><br>[dat]"}
+		dat += {"<HR><BR>\
+<A href='?src=\ref[src];action=cook'>Turn on!<BR>\
+<A href='?src=\ref[src];action=dispose'>Eject ingredients!<BR>\
+"}
+
+	user << browse("<HEAD><TITLE>[src] Controls</TITLE></HEAD><TT>[dat]</TT>", "window=[src]")
+	onclose(user, "[src]")
+	return
+
+
 
 /***********************************
 *   Microwave Menu Handling/Cooking
 ************************************/
 
 /obj/machinery/microwave/proc/cook()
-	if(inoperable())
+	if(stat & (NOPOWER|BROKEN))
 		return
 	start()
-	if (!reagents.total_volume && !length(ingredients)) //dry run
-		if (!wzhzhzh(10))
+	if(reagents.total_volume == 0 && !(locate(/obj) in contents)) //dry run
+		if(!wzhzhzh(10))
 			abort()
 			return
 		stop()
 		return
 
-	var/current_weight = length(reagents.reagent_list) + length(ingredients)
-	var/datum/microwave_recipe/recipe
-	for (var/datum/microwave_recipe/candidate as anything in GLOB.microwave_recipes)
-		if (current_weight != candidate.weight)
-			continue
-		if (!candidate.CheckReagents(src))
-			continue
-		if (!candidate.CheckProduce(src))
-			continue
-		if (!candidate.CheckItems(src))
-			continue
-		recipe = candidate
-		break
-
+	var/datum/recipe/recipe = select_recipe(available_recipes,src)
 	var/obj/cooked
-	if (!recipe)
-		dirtiness += 1
-		if (prob(max(10, dirtiness * 5) / break_multiplier))
-			if (!wzhzhzh(4))
+	if(!recipe)
+		dirty += 1
+		if(prob(max(10, dirty * 5)))
+			if(!wzhzhzh(4))
 				abort()
 				return
 			muck_start()
 			wzhzhzh(4)
 			muck_finish()
 			cooked = fail()
-			cooked.dropInto(loc)
+			cooked.loc = src.loc
 			return
-		else if (has_extra_item())
-			if (!wzhzhzh(4))
+		else if(has_extra_item())
+			if(!wzhzhzh(4))
 				abort()
-				return
-			broke()
 			cooked = fail()
-			cooked.dropInto(loc)
+			cooked.loc = src.loc
 			return
 		else
-			if (!wzhzhzh(10))
+			if(!wzhzhzh(10))
 				abort()
 				return
 			stop()
 			cooked = fail()
-			cooked.dropInto(loc)
+			cooked.loc = src.loc
 			return
 	else
 		var/halftime = round(recipe.time/10/2)
-		if (!wzhzhzh(halftime))
+		if(!wzhzhzh(halftime))
 			abort()
 			return
-		if (!wzhzhzh(halftime))
+		if(!wzhzhzh(halftime))
 			abort()
 			cooked = fail()
-			cooked.dropInto(loc)
+			cooked.loc = src.loc
 			return
-		cooked = recipe.CreateResult(src)
-		LAZYCLEARLIST(ingredients)
+		cooked = recipe.make_food(src)
 		stop()
 		if(cooked)
-			cooked.dropInto(loc)
+			cooked.loc = src.loc
 		return
 
-// Behold: the worst proc name in the codebase.
-/obj/machinery/microwave/proc/wzhzhzh(seconds)
-	for (var/i = 1 to seconds)
-		if (inoperable())
-			return FALSE
-		use_power_oneoff(500 / power_efficiency)
-		sleep(10 / speed_multiplier)
-	return TRUE
+/obj/machinery/microwave/proc/wzhzhzh(var/seconds as num) // Whoever named this proc is fucking literally Satan. ~ Z
+	for (var/i=1 to seconds)
+		if(stat & (NOPOWER|BROKEN))
+			return 0
+		use_power(500)
+		sleep(10)
+	return 1
 
 /obj/machinery/microwave/proc/has_extra_item()
-	for (var/obj/O in ingredients) // do not use src or contents unless you want to cook your own components
-		if (!istype(O, /obj/item/reagent_containers/food))
-			return TRUE
-	return FALSE
+	for (var/obj/O in contents)
+		if(!istype(O,/obj/item/reagent_containers/food) && !istype(O, /obj/item/grown))
+			return 1
+	return 0
 
 /obj/machinery/microwave/proc/start()
-	visible_message(SPAN_NOTICE("The microwave turns on."), SPAN_NOTICE("You hear a microwave."))
-	operating = TRUE
-	update_icon()
+	src.visible_message(SPAN_NOTICE("The [src] turns on."), SPAN_NOTICE("You hear a [src]."))
+	src.operating = 1
+	src.icon_state = "mw1"
+	src.updateUsrDialog()
 
 /obj/machinery/microwave/proc/abort()
-	operating = FALSE // Turn it off again aferwards
-	update_icon()
+	src.operating = 0 // Turn it off again aferwards
+	src.icon_state = "mw"
+	src.updateUsrDialog()
 
 /obj/machinery/microwave/proc/stop()
-	playsound(loc, 'sound/machines/ding.ogg', 50, 1)
-	operating = FALSE // Turn it off again aferwards
-	update_icon()
+	if(dinger)
+		playsound(src.loc, 'sound/machines/ding.ogg', 50, 1)
+	src.operating = 0 // Turn it off again aferwards
+	src.icon_state = "mw"
+	src.updateUsrDialog()
 
 /obj/machinery/microwave/proc/dispose()
-	var/disposed = FALSE
-	if (length(ingredients))
-		for (var/obj/O in ingredients)
-			O.dropInto(loc)
-		LAZYCLEARLIST(ingredients)
-		disposed = TRUE
-	if (reagents?.total_volume)
-		reagents.clear_reagents()
-		++dirtiness
-		disposed = TRUE
-	if (disposed)
-		to_chat(usr, SPAN_NOTICE("You dispose of the microwave contents."))
+	for (var/obj/O in contents)
+		O.loc = src.loc
+	if(reagents.total_volume)
+		dirty++
+	reagents.clear_reagents()
+	to_chat(usr, SPAN_NOTICE("You dispose of the [src] contents."))
+	src.updateUsrDialog()
 
 /obj/machinery/microwave/proc/muck_start()
-	playsound(loc, 'sound/effects/splat.ogg', 50, 1) // Play a splat sound
-	update_icon()
+	playsound(src.loc, 'sound/effects/splat.ogg', 50, 1) // Play a splat sound
+	src.icon_state = "mwbloody1" // Make it look dirty!!
 
 /obj/machinery/microwave/proc/muck_finish()
-	playsound(loc, 'sound/machines/ding.ogg', 50, 1)
-	visible_message(SPAN_WARNING("Muck splatters over the inside of \the [src]!"))
-	dirtiness = 100 // Make it dirty so it can't be used util cleaned
-	obj_flags = null //So you can't add condiments
-	operating = FALSE // Turn it off again aferwards
-	update_icon()
-
-/obj/machinery/microwave/proc/broke()
-	var/datum/effect/spark_spread/s = new
-	s.set_up(2, 1, src)
-	s.start()
-	if (prob(100 * break_multiplier))
-		visible_message(SPAN_WARNING("\The [src] breaks!")) //Let them know they're stupid
-		broken = 2 // Make it broken so it can't be used util fixed
-		obj_flags = null //So you can't add condiments
-	else
-		visible_message(SPAN_WARNING("\The [src] sputters and grinds to a halt!"))
-	operating = FALSE // Turn it off again aferwards
-	update_icon()
-
-/obj/machinery/microwave/on_update_icon()
-	if(dirtiness == 100)
-		icon_state = "mwbloody[operating]"
-	else if(broken)
-		icon_state = "mwb"
-	else
-		icon_state = "mw[operating]"
+	if(dinger)
+		playsound(src.loc, 'sound/machines/ding.ogg', 50, 1)
+	src.visible_message(SPAN_WARNING("The [src] gets covered in muck!"))
+	src.dirty = 100 // Make it dirty so it can't be used util cleaned
+	src.reagent_flags = NONE //So you can't add condiments
+	src.icon_state = "mwbloody" // Make it look dirty too
+	src.operating = 0 // Turn it off again aferwards
+	src.updateUsrDialog()
 
 /obj/machinery/microwave/proc/fail()
-	var/amount = 0
-
-	// Kill + delete mobs in mob holders
-	for (var/obj/item/holder/H in ingredients)
-		for (var/mob/living/M in H)
-			M.death()
-			qdel(M)
-
-	for (var/obj/O in ingredients)
-		amount++
-		if (O.reagents)
-			var/reagent_type = O.reagents.get_master_reagent_type()
-			if (reagent_type)
-				amount+=O.reagents.get_reagent_amount(reagent_type)
-		qdel(O)
-
-	LAZYCLEARLIST(ingredients)
-	reagents.clear_reagents()
 	var/obj/item/reagent_containers/food/snacks/badrecipe/ffuu = new(src)
-	ffuu.reagents.add_reagent(/datum/reagent/carbon, amount)
-	ffuu.reagents.add_reagent(/datum/reagent/toxin, amount / 10)
+	var/amount = 0
+	for (var/obj/O in contents-ffuu)
+		amount++
+		if(O.reagents)
+			var/id = O.reagents.get_master_reagent_id()
+			if(id)
+				amount+=O.reagents.get_reagent_amount(id)
+		qdel(O)
+	src.reagents.clear_reagents()
+	ffuu.reagents.add_reagent("carbon", amount)
+	ffuu.reagents.add_reagent("toxin", amount/10)
 	return ffuu
 
-/obj/machinery/microwave/examine(mob/user, distance)
-	. = ..()
-	if(broken > 0)
-		to_chat(user, SPAN_WARNING("This microwave is very broken. You'll need to fix it before you can use it again."))
-	else if (operating)
-		to_chat(user, SPAN_WARNING("Microwaving in progress! Please wait...!"))
-	else if (dirtiness == 100)
-		to_chat(user, SPAN_WARNING("This microwave is covered in muck. You'll need to wipe it down or clean it out before you can use it again."))
-	else if (!length(ingredients) && !length(reagents.reagent_list))
-		to_chat(user, "The microwave is empty.")
-	else if(distance <= 1)
-		var/dat = list()
-		dat += "<b>Ingredients:</b><br>"
-		var/list/items_counts = list()
-		var/list/items_measures = list()
-		var/list/items_measures_p = list()
-		for (var/obj/obj in ingredients)
-			var/display_name = obj.name
-			if (istype(obj,/obj/item/reagent_containers/food/snacks/egg))
-				items_measures[display_name] = "egg"
-				items_measures_p[display_name] = "eggs"
-			if (istype(obj,/obj/item/reagent_containers/food/snacks/tofu))
-				items_measures[display_name] = "tofu chunk"
-				items_measures_p[display_name] = "tofu chunks"
-			if (istype(obj,/obj/item/reagent_containers/food/snacks/meat)) //any meat
-				items_measures[display_name] = "slab of meat"
-				items_measures_p[display_name] = "slabs of meat"
-			if (istype(obj,/obj/item/reagent_containers/food/snacks/donkpocket))
-				display_name = "Turnovers"
-				items_measures[display_name] = "turnover"
-				items_measures_p[display_name] = "turnovers"
-			if (istype(obj,/obj/item/reagent_containers/food/snacks/fish))
-				items_measures[display_name] = "fillet of fish"
-				items_measures_p[display_name] = "fillets of fish"
-			items_counts[display_name]++
-		for (var/name in items_counts)
-			var/count = items_counts[name]
-			if (name in items_measures)
-				if (count == 1)
-					dat += "<b>[capitalize(name)]:</b> [count] [items_measures[name]]"
-				else
-					dat += "<b>[capitalize(name)]:</b> [count] [items_measures_p[name]]"
-			else
-				dat += "<b>[capitalize(name)]:</b> [count] [lowertext(name)]\s"
-		for (var/datum/reagent/reagent in reagents.reagent_list)
-			var/display_name = reagent.name
-			if (reagent.type == /datum/reagent/capsaicin)
-				display_name = "Hotsauce"
-			if (reagent.type == /datum/reagent/frostoil)
-				display_name = "Coldsauce"
-			dat += "<b>[display_name]:</b> [reagent.volume] unit\s"
-		to_chat(user, jointext(dat, null))
+/obj/machinery/microwave/Topic(href, href_list)
+	if(..())
+		return
+
+	usr.set_machine(src)
+	if(src.operating)
+		src.updateUsrDialog()
+		return
+
+	switch(href_list["action"])
+		if("cook")
+			cook()
+
+		if("dispose")
+			dispose()
+	return
+
+/obj/machinery/microwave/campfire
+	name = "burn barrel"
+	icon = 'icons/obj/kitchen.dmi'
+	icon_state = "barrelfire"
+	desc = "A fire in an old barrel. Perfect for campouts in the far corners of the ship."
+	use_power = NO_POWER_USE
+	idle_power_usage = 0
+	active_power_usage = 0
+	dinger = FALSE
+	var/lit = FALSE
+
+/obj/machinery/microwave/campfire/verb/ToggleLight()
+	set name = "Toggle Fire"
+	set category = "Object"
+	set src in view(1)
+
+	if (!Adjacent(usr))
+		to_chat(usr, SPAN_WARNING("You need to be in arm's reach for that!"))
+		return
+
+	if (usr.incapacitated())
+		return
+
+	if(!lit)
+		playsound(loc, 'sound/effects/flare.ogg', 50, 1)
+		visible_message(SPAN_NOTICE("The fire is stoked up."), SPAN_NOTICE("You hear a crackling fire."))
+		icon_state = "barrelfire1"
+		set_light(3,2)
+		lit = TRUE
+	else
+		playsound(loc, 'sound/effects/flare.ogg', 50, 1)
+		icon_state = "barrelfire"
+		set_light(0)
+		lit = FALSE
+
+/obj/machinery/microwave/campfire/start()
+	..()
+	if(!lit)
+		playsound(loc, 'sound/effects/flare.ogg', 50, 1)
+		//playsound(loc, 'sound/effects/campfirecrackle.ogg', 50, 1) // I don't  know how to loop stuff
+		visible_message(SPAN_NOTICE("The fire is stoked up."), SPAN_NOTICE("You hear a crackling fire."))
+		icon_state = "barrelfire1"
+		set_light(3,2)
+		lit = TRUE
+	else
+		playsound(loc, 'sound/effects/flare.ogg', 50, 1)
+		icon_state = "barrelfire1"
+		visible_message(SPAN_NOTICE("You hear a crackling fire."))
+
+/obj/machinery/microwave/campfire/abort()
+	..()
+	playsound(loc, 'sound/effects/flare.ogg', 50, 1)
+	icon_state = "barrelfire1"
+
+/obj/machinery/microwave/campfire/stop()
+	..()
+	playsound(loc, 'sound/effects/flare.ogg', 50, 1)
+	icon_state = "barrelfire1"
+
+/obj/machinery/microwave/campfire/dispose()
+	..()
+	playsound(loc, 'sound/effects/flare.ogg', 50, 1)
+	icon_state = "barrelfire1"
+
+/obj/machinery/microwave/campfire/muck_start()
+	..()
+	icon_state = "barrelfire1"
+
+/obj/machinery/microwave/campfire/muck_finish()
+	..()
+	playsound(loc, 'sound/effects/flare.ogg', 50, 1)
+	icon_state = "barrelfire"

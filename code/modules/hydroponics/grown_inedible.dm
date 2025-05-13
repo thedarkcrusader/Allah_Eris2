@@ -2,69 +2,63 @@
 // Other harvested materials from plants (that are not food)
 // **********************
 
-/obj/item/bananapeel
-	name = "banana peel"
-	desc = "A peel from a banana."
-	icon = 'icons/obj/flora/hydroponics_products.dmi'
-	icon_state = "banana_peel"
-	item_state = "banana_peel"
-	w_class = ITEM_SIZE_SMALL
-	throwforce = 0
-	throw_speed = 4
-	throw_range = 20
+/obj/item/grown // Grown weapons
+	name = "grown_weapon"
+	icon = 'icons/obj/weapons.dmi'
+	spawn_tags = null
+	var/plantname
+	var/potency = 1
 
-/obj/item/carvable
-	name = "master carvable item"
-	desc = "you should not see this."
-	var/list/allow_tool_types = list(
-		/obj/item/material/knife,
-		/obj/item/material/hatchet,
-		/obj/item/circular_saw
-	)
-	var/carve_time = 5 SECONDS
-	var/result_type = null
+/obj/item/grown/New(newloc,planttype)
+	..()
+	create_reagents(50)
 
-/obj/item/carvable/use_tool(obj/item/W, mob/living/user, list/click_params)
-	if (result_type && is_type_in_list(W, allow_tool_types))
-		user.visible_message(
-			SPAN_ITALIC("\The [user] starts to carve \the [src] with \a [W]."),
-			blind_message = SPAN_ITALIC("You can hear quiet scraping."),
-			range = 5
-		)
-		if (!do_after(user, carve_time, src, DO_PUBLIC_UNIQUE))
-			to_chat(user, SPAN_ITALIC("You stop carving \the [src]."))
-			return TRUE
-		var/result = new result_type()
-		user.put_in_hands(result)
-		user.visible_message(
-			SPAN_ITALIC("\The [user] finishes carving \a [result]."),
-			range = 5
-		)
-		qdel(src)
-		return TRUE
+	//Handle some post-spawn var stuff.
+	if(planttype)
+		plantname = planttype
+		var/datum/seed/S = plant_controller.seeds[plantname]
+		if(!S || !S.chems)
+			return
 
-	return ..()
+		potency = S.get_trait(TRAIT_POTENCY)
 
-/obj/item/carvable/corncob
+		for(var/rid in S.chems)
+			var/list/reagent_data = S.chems[rid]
+			var/rtotal = reagent_data[1]
+			if(reagent_data.len > 1 && potency > 0)
+				rtotal += round(potency/reagent_data[2])
+			reagents.add_reagent(rid,max(1,rtotal))
+
+/obj/item/corncob
 	name = "corn cob"
 	desc = "A reminder of meals gone by."
 	icon = 'icons/obj/trash.dmi'
 	icon_state = "corncob"
 	item_state = "corncob"
+	matter = list(MATERIAL_BIOMATTER = 4)
 	w_class = ITEM_SIZE_SMALL
 	throwforce = 0
 	throw_speed = 4
 	throw_range = 20
-	result_type = /obj/item/clothing/mask/smokable/pipe/cobpipe
+	spawn_tags = SPAWN_TAG_JUNK
 
-/obj/item/carvable/corncob/hollowpineapple
-	name = "hollow pineapple"
-	icon_state = "hollowpineapple"
-	item_state = "hollowpineapple"
-	result_type = /obj/item/reagent_containers/food/drinks/glass2/pineapple
+/obj/item/corncob/attackby(obj/item/I, mob/user)
+	..()
+	if(QUALITY_CUTTING in I.tool_qualities)
+		to_chat(user, SPAN_NOTICE("You use [I] to fashion a pipe out of the corn cob!"))
+		new /obj/item/clothing/mask/smokable/pipe/cobpipe (user.loc)
+		qdel(src)
+		return
 
-/obj/item/carvable/corncob/hollowcoconut
-	name = "hollow coconut"
-	icon_state = "hollowcoconut"
-	item_state = "hollowcoconut"
-	result_type = /obj/item/reagent_containers/food/drinks/glass2/coconut
+/obj/item/bananapeel
+	name = "banana peel"
+	desc = "A peel from a banana."
+	icon = 'icons/obj/items.dmi'
+	icon_state = "banana_peel"
+	item_state = "banana_peel"
+	matter = list(MATERIAL_BIOMATTER = 4)
+	w_class = ITEM_SIZE_SMALL
+	throwforce = 0
+	throw_speed = 4
+	throw_range = 20
+	spawn_tags = SPAWN_TAG_JUNK_CLOWN

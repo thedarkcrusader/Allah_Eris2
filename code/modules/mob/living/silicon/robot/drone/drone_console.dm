@@ -1,59 +1,63 @@
+GLOBAL_LIST_INIT(drones, list())
+
 /obj/machinery/computer/drone_control
 	name = "Maintenance Drone Control"
-	desc = "Used to monitor the drone population and the assembler that services them."
-	icon = 'icons/obj/machines/computer.dmi'
+	desc = "Used to monitor the ship's drone population and the assembler that services them."
+	icon = 'icons/obj/computer.dmi'
 	icon_keyboard = "power_key"
-	icon_screen = "power"
+	icon_screen = "dron_control_monitor"
 	req_access = list(access_engine_equip)
-	machine_name = "drone control console"
-	machine_desc = "Used to monitor the status of the ship's maintenance drones. Also allows for simple pings to draw attention to areas in need of repairs."
+	circuit = /obj/item/electronics/circuitboard/drone_control
 
 	//Used when pinging drones.
 	var/drone_call_area = "Engineering"
 	//Used to enable or disable drone fabrication.
 	var/obj/machinery/drone_fabricator/dronefab
 
-/obj/machinery/computer/drone_control/interface_interact(mob/user)
-	interact(user)
-	return TRUE
+/obj/machinery/computer/drone_control/attack_hand(var/mob/user as mob)
+	if(..())
+		return
 
-/obj/machinery/computer/drone_control/interact(mob/user)
+	if(!allowed(user))
+		to_chat(user, SPAN_DANGER("Access denied."))
+		return
+
 	user.set_machine(src)
 	var/dat
 	dat += "<B>Maintenance Units</B><BR>"
 
-	for(var/mob/living/silicon/robot/drone/D in world)
-		if(D.z != src.z)
+	for(var/mob/living/silicon/robot/drone/D in GLOB.drones)
+		if(isNotStationLevel(D.z))
 			continue
-		dat += "<BR>[D.real_name] ([D.stat == 2 ? SPAN_COLOR("red", "INACTIVE") : SPAN_COLOR("green", "ACTIVE")])"
-		dat += "<span style='font-size: 9'><BR>Cell charge: [D.cell.charge]/[D.cell.maxcharge]."
+		dat += "<BR>[D.real_name] ([D.stat == 2 ? "<font color='red'>INACTIVE</FONT>" : "<font color='green'>ACTIVE</FONT>"])"
+		dat += "<font dize = 9><BR>Cell charge: [D.cell.charge]/[D.cell.maxcharge]."
 		dat += "<BR>Currently located in: [get_area(D)]."
-		dat += "<BR><A href='byond://?src=\ref[src];resync=\ref[D]'>Resync</A> | <A href='byond://?src=\ref[src];shutdown=\ref[D]'>Shutdown</A></span>"
+		dat += "<BR><A href='?src=\ref[src];resync=\ref[D]'>Resync</A> | <A href='?src=\ref[src];shutdown=\ref[D]'>Shutdown</A></font>"
 
-	dat += "<BR><BR><B>Request drone presence in area:</B> <A href='byond://?src=\ref[src];setarea=1'>[drone_call_area]</A> (<A href='byond://?src=\ref[src];ping=1'>Send ping</A>)"
+	dat += "<BR><BR><B>Request drone presence in area:</B> <A href='?src=\ref[src];setarea=1'>[drone_call_area]</A> (<A href='?src=\ref[src];ping=1'>Send ping</A>)"
 
 	dat += "<BR><BR><B>Drone fabricator</B>: "
-	dat += "[dronefab ? "<A href='byond://?src=\ref[src];toggle_fab=1'>[(dronefab.produce_drones && dronefab.is_powered()) ? "ACTIVE" : "INACTIVE"]</A>" : "[SPAN_COLOR("red", "<b>FABRICATOR NOT DETECTED.</b>")] (<A href='byond://?src=\ref[src];search_fab=1'>search</a>)"]"
-	show_browser(user, dat, "window=computer;size=400x500")
+	dat += "[dronefab ? "<A href='?src=\ref[src];toggle_fab=1'>[(dronefab.produce_drones && !(dronefab.stat & NOPOWER)) ? "ACTIVE" : "INACTIVE"]</A>" : "<font color='red'><b>FABRICATOR NOT DETECTED.</b></font> (<A href='?src=\ref[src];search_fab=1'>search</a>)"]"
+	user << browse(dat, "window=computer;size=400x500")
 	onclose(user, "computer")
 	return
 
 
 /obj/machinery/computer/drone_control/Topic(href, href_list)
-	if((. = ..()))
+	if(..())
 		return
 
 	if(!allowed(usr))
 		to_chat(usr, SPAN_DANGER("Access denied."))
 		return
 
-	if ((usr.contents.Find(src) || (in_range(src, usr) && isturf(loc))) || (istype(usr, /mob/living/silicon)))
+	if ((usr.contents.Find(src) || (in_range(src, usr) && istype(src.loc, /turf))) || (issilicon(usr)))
 		usr.set_machine(src)
 
 	if (href_list["setarea"])
 
 		//Probably should consider using another list, but this one will do.
-		var/t_area = input("Select the area to ping.", "Set Target Area", null) as null|anything in GLOB.tagger_locations
+		var/t_area = input("Select the area to ping.", "Set Target Area", null) as null|anything in tagger_locations
 
 		if(!t_area)
 			return
@@ -64,7 +68,7 @@
 	else if (href_list["ping"])
 
 		to_chat(usr, SPAN_NOTICE("You issue a maintenance request for all active drones, highlighting [drone_call_area]."))
-		for(var/mob/living/silicon/robot/drone/D in world)
+		for(var/mob/living/silicon/robot/drone/D in GLOB.drones)
 			if(D.client && D.stat == 0)
 				to_chat(D, "-- Maintenance drone presence requested in: [drone_call_area].")
 
@@ -92,7 +96,7 @@
 
 		for(var/obj/machinery/drone_fabricator/fab in oview(3,src))
 
-			if(!fab.is_powered())
+			if(fab.stat & NOPOWER)
 				continue
 
 			dronefab = fab
@@ -112,6 +116,6 @@
 			return
 
 		dronefab.produce_drones = !dronefab.produce_drones
-		to_chat(usr, SPAN_NOTICE("You [dronefab.produce_drones ? "enable" : "disable"] drone production in the nearby fabricator."))
+		to_chat(usr, "<span class='notice'>You [dronefab.produce_drones ? "enable" : "disable"] drone production in the nearby fabricator.</span>")
 
 	src.updateUsrDialog()

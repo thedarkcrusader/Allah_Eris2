@@ -8,18 +8,18 @@ Unless stated otherwise, you just need to place any of things below somewhere on
 # How to make new sector
 *************************************************************
 0. Map whatever.
-1. Make /obj/overmap/visitable/sector/[whatever]
+1. Make /obj/effect/overmap/sector/[whatever]
 	If you want explorations shuttles be able to dock here, remember to set waypoints lists
-2. Put /obj/overmap/visitable/sector/[whatever] on the map. Even if it's multiz, only one is needed, on any z.
+2. Put /obj/effect/overmap/sector/[whatever] on the map. Even if it's multiz, only one is needed, on any z.
 3. Done.
 
 *************************************************************
 # How to make new ship
 *************************************************************
 0. Map whatever.
-1. Make /obj/overmap/visitable/ship/[whatever]
+1. Make /obj/effect/overmap/ship/[whatever]
 	If you want explorations shuttles be able to dock here, remember to set waypoints lists
-2. Put /obj/overmap/visitable/ship/[whatever] on the map. If it's multiz, only one is needed, on any z.
+2. Put /obj/effect/overmap/ship/[whatever] on the map. If it's multiz, only one is needed, on any z.
 3. Put Helm Console anywhere on the map.
 4. Put Engines Control Console anywhere on the map.
 5. Put some engines hooked up to gas supply anywhere on the map.
@@ -28,7 +28,7 @@ Unless stated otherwise, you just need to place any of things below somewhere on
 *************************************************************
 # Overmap object
 *************************************************************
-/obj/overmap/visitable
+/obj/effect/overmap
 ### WHAT IT DOES
 Lets overmap know this place should be represented on the map as a sector/ship.
 If this zlevel (or any of connected ones for multiz) doesn't have this object, you won't be able to travel there by ovemap means.
@@ -46,7 +46,7 @@ restricted_waypoints is list of 'shuttle name = list(landmark_tags)' pairs for w
 *************************************************************
 # Helm console
 *************************************************************
-/obj/machinery/computer/ship/helm
+/obj/machinery/computer/helm
 ### WHAT IT DOES
 Lets you steer ship around on overmap.
 Lets you use autopilot.
@@ -56,7 +56,7 @@ Just place it anywhere on the ship.
 *************************************************************
 # Engines control console
 *************************************************************
-/obj/machinery/computer/ship/engines
+/obj/machinery/computer/engines
 ### WHAT IT DOES
 Lets use set thrust limits for engines of your ship.
 Lets you shutdown/restart the engines.

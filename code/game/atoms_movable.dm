@@ -1,263 +1,90 @@
+
+
+
 /atom/movable
 	layer = OBJ_LAYER
-
-	glide_size = 4
-
-	animate_movement = SLIDE_STEPS
-
-	/// Boolean. Whether or not the atom is affected by being submerged in water. If set to `FALSE`, `water_act()` is called when in contact with fluids.
-	var/waterproof = TRUE
-	/// Bitflag (Any of `MOVABLE_FLAG_*`). Bitflags for movable atoms. See `code\__defines\flags.dm`.
-	var/movable_flags = FLAGS_OFF
-
-	/// Bitflag (Directionals). Direction of the last movement. Generally passed to `step()` as the `dir` parameter. Set during `Move()`.
-	var/last_move = FLAGS_OFF
-	/// Boolean. Whether or not the atom is considered anchored.
+	var/last_move
 	var/anchored = FALSE
-	/// Integer. The atom's current movement speed, calculated as the difference between `world.time` and `l_move_time`. Set during `Move()`.
+	// var/elevation = 2    - not used anywhere
 	var/move_speed = 10
-	/// Integer. The `world.time` of the last movement. Set during `Move()`.
 	var/l_move_time = 1
-	/// Instance. Current thrown thing datum linked to this atom. Set during `throw_at()`.
-	var/datum/thrownthing/throwing
-	/// Integer. The speed at which the atom moves when thrown. Used when calling `throw_at()`, and in `momentum_power()` and `momentum_do()`.
+	var/m_flag = 1
+	var/throwing = 0
+	var/thrower
+	var/turf/throw_source
 	var/throw_speed = 2
-	/// Integer. Maximum range, in tiles, this atom can be thrown.
 	var/throw_range = 7
-	/// Boolean. Whether or not this atom has recently (Within the past 50 ticks) been force moved by `/obj/item/device/radio/electropack/receive_signal()`.
-	var/moved_recently = FALSE
-	/// Instance. The mob currently pulling the atom.
-	var/mob/pulledby = null
-	/// String (Icon state). Used to specify the item state for the on-mob overlays. Primarily only used in `/obj/item/get_icon_state()`. Generally, you should only be updating this in `on_update_icon()`.
-	var/item_state = null // TODO: Move this to `/obj/item`?
-	/// Boolean. Does the atom spin when thrown (of course it does :P)
-	var/does_spin = TRUE
+	var/moved_recently = 0
+	var/mob/pulledby
+	var/item_state // Used to specify the item state for the on-mob overlays.
+	var/inertia_dir = 0
+	var/can_anchor = TRUE
 
-	/// Integer. The icon width this movable expects to have by default.
-	var/icon_width = 32
+	//spawn_values
+	var/price_tag = 0 // The item price in credits. atom/movable so we can also assign a price to animals and other things.
+	var/surplus_tag = FALSE //If true, attempting to export this will net you a greatly reduced amount of credits, but we don't want to affect the actual price tag for selling to others.
+	var/spawn_tags
+	var/rarity_value = 1 //min:1
+	var/spawn_frequency = 0 //min:0
+	var/accompanying_object	// path or text "obj/item,/obj/item/device". This object will spawn alongside (in turf of) the spawned atom.
+	var/prob_aditional_object = 100 // Probability for the accompanying_object to spawn.
+	var/spawn_blacklisted = FALSE // Generally for niche objects, atoms blacklisted can spawn if enabled by spawner. Examples include exoplanet loot tables you don't want spawning within the player starting area.
+	var/bad_type // Use path Ex:(bad_type = obj/item). Generally for abstract code objects, atoms with a set bad_type can never be selected by spawner. Examples include parent objects which should only exist within the code, or deployable embedded items.
 
-	/// Integer. The icon height this movable expects to have by default.
-	var/icon_height = 32
-
-	/// Integer (One of `EMISSIVE_BLOCK_*`). Whether this atom blocks emissive overlays, and what method is used for blocking. See `code\__defines\emissives.dm`.
-	var/blocks_emissive = EMISSIVE_BLOCK_NONE
-	/// Instance. Internal holder for emissive blocker object, DO NOT USE DIRECTLY. Use blocks_emissive
-	var/mutable_appearance/em_block
-
-	/// Bitflag (Directional). Direction the atom is currently travelling for space drift. Set by `space_drift()` and `Bump()`. Used by `momentum_do()` and the `spacedrift` subsystem.
-	var/inertia_dir = FLAGS_OFF
-	/// Instance. The atoms `loc` value during the last space movement. Set by `space_drift()` and the `spacedrift` subsystem.
-	var/atom/inertia_last_loc
-	/// Boolean. Whether or not the atom is currently being moved by space drift inertia. Set by the `spacedrift` subsystem and checked during `Move()`.
-	var/inertia_moving = FALSE
-	/// Integer. `world.time` that the next space drift movement should occur. Set by `Move()` and the `spacedrift` subsystem. Used by the `spacedrift` subsystem.
-	var/inertia_next_move = 0
-	/// Integer. Number of ticks to add to the current `world.time` when updating `inertia_next_move`. Used by `Move()` and the `spacedrift` subsystem.
-	var/inertia_move_delay = 5
-	/// Instance. Atom that should be ignored by `/mob/get_spacemove_backup()`. Updated and used by various movement related procs.
-	var/atom/movable/inertia_ignore
-
-
-/**
- * Initializes space drifting for the atom and adds it to the `spacedrift` subsystem.
- *
- * **Parameters**:
- * - `direction` (Bitflag - Directional) - The direction to start drifting.
- *
- * Returns boolean. If `TRUE`, the atom is now drifting. If `FALSE`, the atom was blocked from drifting.
- */
-/atom/movable/proc/space_drift(direction)//move this down
-	if(!loc || direction & (UP|DOWN) || Process_Spacemove())
-		inertia_dir = 0
-		inertia_ignore = null
-		return 0
-
-	inertia_dir = direction
-	if(!direction)
-		return 1
-	inertia_last_loc = loc
-	SSspacedrift.processing[src] = src
-	return 1
-
-/**
- * Whether or not the atom is able to start drifting. Includes various relevant checks such as gravity, anchored, whether the atom's movement is already being controlled by something else, etc.
- *
- * **Parameters**:
- * - `allow_movement` (Boolean) - Whether or not this check should allow for manual mob movement.
- *
- * Returns boolean. Whether or not space drifting should be blocked/stopped.
- */
-/atom/movable/proc/Process_Spacemove(allow_movement = FALSE)
-	if(!simulated)
-		return TRUE
-
-	if(has_gravity())
-		return TRUE
-
-	if(pulledby)
-		return TRUE
-
-	if(throwing)
-		return TRUE
-
-	if(anchored)
-		return TRUE
-
-	if(!isturf(loc))
-		return TRUE
-
-	if(locate(/obj/structure/lattice) in range(1, get_turf(src))) //Not realistic but makes pushing things in space easier
-		return TRUE
-
-	return FALSE
-
-/atom/movable/hitby(atom/movable/AM, datum/thrownthing/TT)
-	. = ..()
-	process_momentum(AM,TT)
-
-
-/**
- *
- */
-/atom/movable/proc/process_momentum(atom/movable/AM, datum/thrownthing/TT)//physic isn't an exact science
-	. = momentum_power(AM,TT)
-
-	if(.)
-		momentum_do(.,TT,AM)
-
-
-/**
- * Calculates the amount of momentum force this atom receives when impacted by another atom.
- *
- * Called by `process_momentum` as part of the `hitby` chain.
- *
- * **Parameters**:
- * - `AM` - The atom colliding with `src`.
- * - `TT` - The `/datum/thrownthing` instance handling `AM`.
- *
- * Returns float.
- */
-/atom/movable/proc/momentum_power(atom/movable/AM, datum/thrownthing/TT)
-	if(anchored)
-		return 0
-
-	. = (AM.get_mass()*TT.speed)/(get_mass()*min(AM.throw_speed,2))
-	if(has_gravity())
-		. *= 0.5
-
-
-/**
- * Handled momentum logic when impacted by another atom. Typically this means sending this atom flying.
- *
- * Called by `process_momentum` as part of the `hitby` chain.
- *
- * **Parameters**:
- * - `power` (Positive float) - The amount of momentum force as calculated by `/atom/movable/proc/momentum_power()`.
- * - `TT` - The `/datum/thrownthing` instance handling the atom that hit `src`.
- *
- * Has no return value.
- */
-/atom/movable/proc/momentum_do(power, datum/thrownthing/TT)
-	var/direction = TT.init_dir
-	switch(power)
-		if(0.75 to INFINITY)		//blown backward, also calls being pinned to walls
-			throw_at(get_edge_target_turf(src, direction), min((TT.maxrange - TT.dist_travelled) * power, 10), throw_speed * min(power, 1.5))
-
-		if(0.5 to 0.75)	//knocks them back and changes their direction
-			step(src, direction)
-
-		if(0.25 to 0.5)	//glancing change in direction
-			var/drift_dir
-			if(direction & (NORTH|SOUTH))
-				if(inertia_dir & (NORTH|SOUTH))
-					drift_dir |= (direction & (NORTH|SOUTH)) & (inertia_dir & (NORTH|SOUTH))
-				else
-					drift_dir |= direction & (NORTH|SOUTH)
-			else
-				drift_dir |= inertia_dir & (NORTH|SOUTH)
-			if(direction & (EAST|WEST))
-				if(inertia_dir & (EAST|WEST))
-					drift_dir |= (direction & (EAST|WEST)) & (inertia_dir & (EAST|WEST))
-				else
-					drift_dir |= direction & (EAST|WEST)
-			else
-				drift_dir |= inertia_dir & (EAST|WEST)
-			space_drift(drift_dir)
-
-/**
- * The effective mass of this atom.
- *
- * Called by `/atom/movable/proc/momentum_power()` as part of the `hitby()` chain.
- *
- * Returns positive float.
- */
-/atom/movable/proc/get_mass()
-	return 1.5
-
-
-/atom/movable/Initialize()
-	. = ..()
-	update_emissive_blocker()
-	if (em_block)
-		AddOverlays(em_block)
+/atom/movable/Del()
+	if(isnull(gc_destroyed) && loc)
+		testing("GC: -- [type] was deleted via del() rather than qdel() --")
+		CRASH("GC: -- [type] was deleted via del() rather than qdel() --") // stick a stack trace in the runtime logs
+//	else if(isnull(gcDestroyed))
+//		testing("GC: [type] was deleted via GC without qdel()") //Not really a huge issue but from now on, please qdel()
+//	else
+//		testing("GC: [type] was deleted via GC with qdel()")
+	..()
 
 
 /atom/movable/Destroy()
-	if(!(atom_flags & ATOM_FLAG_INITIALIZED))
-		crash_with("\A [src] was deleted before initalization")
-	walk(src, 0)
-	for(var/A in src)
-		qdel(A)
+	. = ..()
+	for(var/atom/movable/AM in contents)
+		qdel(AM)
+
+	if(loc)
+		loc.handle_atom_del(src)
+
 	forceMove(null)
 	if (pulledby)
 		if (pulledby.pulling == src)
 			pulledby.pulling = null
 		pulledby = null
-	if (LAZYLEN(movement_handlers) && !ispath(movement_handlers[1]))
-		QDEL_NULL_LIST(movement_handlers)
-	if (bound_overlay)
-		QDEL_NULL(bound_overlay)
-	if (virtual_mob && !ispath(virtual_mob))
-		qdel(virtual_mob)
-		virtual_mob = null
-	if (em_block)
-		QDEL_NULL(em_block)
-	if (particles)
-		particles = null
+
+/atom/movable/Bump(var/atom/A, yes)
+	if(src.throwing)
+		src.throw_impact(A)
+		src.throwing = 0
+
+
+	if (A && yes)
+		A.last_bumped = world.time
+		A.Bumped(src)
 	return ..()
 
+/atom/movable/proc/entered_with_container(var/atom/old_loc)
+	return
 
-/// Called should be true when calling this in code.
-/atom/movable/Bump(atom/A, called)
-	if (!QDELETED(throwing))
-		throwing.hit_atom(A)
-	if (inertia_dir)
-		inertia_dir = 0
-	if (A && called)
-		A.last_bumped = world.time
-		invoke_async(A, TYPE_PROC_REF(/atom, Bumped), src) // Avoids bad actors sleeping or unexpected side effects, as the legacy behavior was to spawn here
-	..()
+// Gets the top-atom that contains us, doesn't care about how deeply nested a item is
+/atom/proc/getContainingAtom()
+	var/atom/checking = src
+	while(!isturf(checking.loc) && !isnull(checking.loc) && !isarea(checking.loc))
+		checking = checking.loc
+	return checking
 
 
-/**
- * Attempts to move the atom to the destination's contents.
- *
- * Calls `Entered()` and `Exited()` on the destination and origin, respectively.
- *
- * Calls `Entered()` and `Exited()` on the destination and origin's areas, respectively, if the areas are different.
- *
- * Calls `Crossed()` and `Uncrossed()` on atoms that are in the destination and origin, respectively, if `destination` is a turf.
- *
- * **Paratemers**:
- * - `destination` - The atom to move `src` into.
- *
- * Returns boolean.
- */
-/atom/movable/proc/forceMove(atom/destination)
-	if((gc_destroyed && gc_destroyed != GC_CURRENTLY_BEING_QDELETED) && !isnull(destination))
-		CRASH("Attempted to forceMove a QDELETED [src] out of nullspace!!!")
+/atom/movable/proc/forceMove(atom/destination, special_event, glide_size_override)
 	if(loc == destination)
-		return 0
+		return FALSE
+
+	if(glide_size_override)
+		set_glide_size(glide_size_override)
+
 	var/is_origin_turf = isturf(loc)
 	var/is_destination_turf = isturf(destination)
 	// It is a new area if:
@@ -277,296 +104,309 @@
 				origin.loc.Exited(src, destination)
 
 	if(destination)
-		destination.Entered(src, origin)
+		destination.Entered(src, origin, special_event)
 		if(is_destination_turf) // If we're entering a turf, cross all movable atoms
 			for(var/atom/movable/AM in loc)
 				if(AM != src)
 					AM.Crossed(src)
 			if(is_new_area && is_destination_turf)
 				destination.loc.Entered(src, origin)
-	return 1
 
-/atom/movable/forceMove(atom/dest)
-	var/old_loc = loc
-	. = ..()
-	if (.)
-		// observ
-		if(!loc)
-			GLOB.moved_event.raise_event(src, old_loc, null)
+	SEND_SIGNAL(src, COMSIG_MOVABLE_MOVED, origin, loc)
+	if(origin && destination)
+		if(get_z(origin) != get_z(destination))
+			SEND_SIGNAL(src, COMSIG_MOVABLE_Z_CHANGED, get_z(origin) , get_z(destination))
+			update_plane()
+		else if(!is_origin_turf)
+			update_plane()
+			//for(var/atom/movable/thing in contents)
+			//	SEND_SIGNAL(thing, COMSIG_MOVABLE_Z_CHANGED,get_z(origin),get_z(destination))
+	else if(destination)
+		update_plane()
 
-		// freelook
-		if(opacity)
-			updateVisibility(src)
+	// Container change
+	if(origin != destination && !(is_origin_turf && is_destination_turf))
+		var/newContainer = getContainingAtom()
+		var/oldContainer
+		if(is_origin_turf || origin == null)
+			// We are our own top-most container
+			oldContainer = src
+		else
+			oldContainer = origin.getContainingAtom()
 
-		// lighting
-		if (light_source_solo)
-			light_source_solo.source_atom.update_light()
-		else if (light_source_multi)
-			var/datum/light_source/L
-			var/thing
-			for (thing in light_source_multi)
-				L = thing
-				L.source_atom.update_light()
+		if(newContainer != oldContainer)
+			SEND_SIGNAL(src, COMSIG_ATOM_CONTAINERED, newContainer , oldContainer)
 
-/atom/movable/Move(...)
-	var/old_loc = loc
-	. = ..()
-	if (.)
-		if(!loc)
-			GLOB.moved_event.raise_event(src, old_loc, null)
+	GLOB.moved_event.raise_event(src, origin, null)
+	return TRUE
 
-		// freelook
-		if(opacity)
-			updateVisibility(src)
 
-		// lighting
-		if (light_source_solo)
-			light_source_solo.source_atom.update_light()
-		else if (light_source_multi)
-			var/datum/light_source/L
-			var/thing
-			for (thing in light_source_multi)
-				L = thing
-				L.source_atom.update_light()
-
-/**
- * Handles impacting an atom.
- *
- * Called by `/datum/thrownthing/proc/finalize()`.
- *
- * **Parameters**:
- * - `hit_atom` - The atom being impacted. `hitby()` is typically called on this by this proc.
- * - `TT` - The `/datum/thrownthing` instance calling this proc.
- *
- * Has no return value.
- */
-/atom/movable/proc/throw_impact(atom/hit_atom, datum/thrownthing/TT)
-	if(istype(hit_atom,/mob/living))
+//called when src is thrown into hit_atom
+/atom/movable/proc/throw_impact(atom/hit_atom, var/speed)
+	if(isliving(hit_atom))
 		var/mob/living/M = hit_atom
-		M.hitby(src,TT)
+		M.hitby(src,speed)
 
 	else if(isobj(hit_atom))
 		var/obj/O = hit_atom
 		if(!O.anchored)
 			step(O, src.last_move)
-		O.hitby(src,TT)
+		O.hitby(src,speed)
 
 	else if(isturf(hit_atom))
+		src.throwing = 0
 		var/turf/T = hit_atom
-		T.hitby(src,TT)
+		if(T.density)
+			step(src, turn(src.last_move, 180))
+			if(isliving(src))
+				var/mob/living/M = src
+				M.turf_collision(T, speed)
 
-/**
- * Throws the atom at a given target.
- *
- * Initializes a `/datum/thrownthing` handling this atom and adds it to `SSthrowing`.
- *
- * **Parameters**:
- * - `target` - The atom to throw this at.
- * - `range` (Positive integer) - How far this atom is allowed to go before stopping, in tiles.
- * - `speed` (Positive integer) - How fast the atom should move.
- * - `thrower` - The mob throwing this atom, if any.
- * - `spin` (Boolean, default `TRUE`) - If set, the atom spins while flying through the air.
- * - `callback` - A callback to be invoked once the atom has finished its flight. Not called if this proc returns `FALSE`.
- *
- * Returns boolean.
- */
-/atom/movable/proc/throw_at(atom/target, range, speed, mob/thrower, spin = TRUE, datum/callback/callback)
-	. = TRUE
-	if (!target || speed <= 0 || QDELETED(src) || (target.z != src.z))
+//decided whether a movable atom being thrown can pass through the turf it is in.
+/atom/movable/proc/hit_check(var/speed)
+	if(src.throwing)
+		for(var/atom/A in get_turf(src))
+			if(A == src) continue
+			if(isliving(A))
+				if(A:lying) continue
+				//if(SSthrowing.throwing_queue[src][I_THROWNTIME] > world.time - 1 SECONDS && thrower == A) continue
+				src.throw_impact(A,speed)
+			if(isobj(A))
+				if(A.density && !A.throwpass)	// **TODO: Better behaviour for windows which are dense, but shouldn't always stop movement
+					src.throw_impact(A,speed)
+
+/*
+#define I_TARGET 1 /// Index for target
+#define I_SPEED 2 /// Index for speed
+#define I_RANGE 3 /// Index for range
+#define I_MOVED 4 /// Index for amount of turfs we alreathrowing_queue[thing][I_DY] moved by
+#define I_DIST_X 5
+#define I_DIST_Y 6
+#define I_DX 7 // The bias for the X-axis
+#define I_DY 8 // The bias for the Y-axis
+#define I_ERROR 9 // Calculation error accumulated so far
+#define I_TURF_CLICKED 10
+#define I_THROWFLAGS 11 // pass_flags for the thrown obj
+*/
+
+
+/atom/movable/proc/throw_at(atom/target, range, speed, thrower, throwflags)
+	if(!target || range < 1 || speed < 1)
 		return FALSE
-
-	if (pulledby)
-		pulledby.stop_pulling()
-
-	var/datum/thrownthing/TT = new(src, target, range, speed, thrower, callback)
-	throwing = TT
-
-	pixel_z = 0
-	if(spin && does_spin)
-		SpinAnimation(4,1)
-
-	SSthrowing.processing[src] = TT
-
-
-/**
- * Updates the atom's emissive blocker image and assigns it to `em_block`. If no image is generated, `em_block` is left as it was.
- *
- * What this does exactly depends on the value of `blocks_emissive`.
- *
- * Returns `/mutable_appearance`. The value of `em_block`.
- */
-/atom/movable/proc/update_emissive_blocker()
-	switch (blocks_emissive)
-		if (EMISSIVE_BLOCK_GENERIC)
-			em_block = fast_emissive_blocker(src)
-		if (EMISSIVE_BLOCK_UNIQUE)
-			if (!em_block && !QDELING(src))
-				appearance_flags |= KEEP_TOGETHER
-				render_target = ref(src)
-				em_block = emissive_blocker(
-					icon = icon,
-					appearance_flags = appearance_flags,
-					source = render_target
-				)
-	return em_block
-
-
-/atom/movable/update_icon()
-	..()
-	if (em_block)
-		CutOverlays(em_block)
-	update_emissive_blocker()
-	if (em_block)
-		AddOverlays(em_block)
-
-
-//Overlays
-/atom/movable/fake_overlay
-	var/atom/master = null
-	var/follow_proc = TYPE_PROC_REF(/atom/movable, move_to_loc_or_null)
-	anchored = TRUE
-	simulated = FALSE
-
-/atom/movable/fake_overlay/Initialize()
-	if(!loc)
-		crash_with("[type] created in nullspace.")
-		return INITIALIZE_HINT_QDEL
-	master = loc
-	SetName(master.name)
-	set_dir(master.dir)
-
-	if(ismovable(master))
-		GLOB.moved_event.register(master, src, follow_proc)
-		SetInitLoc()
-
-	GLOB.destroyed_event.register(master, src, TYPE_PROC_REF(/datum, qdel_self))
-	GLOB.dir_set_event.register(master, src, PROC_REF(recursive_dir_set))
-
-	. = ..()
-
-/atom/movable/fake_overlay/proc/SetInitLoc()
-	forceMove(master.loc)
-
-/atom/movable/fake_overlay/Destroy()
-	if(ismovable(master))
-		GLOB.moved_event.unregister(master, src)
-	GLOB.destroyed_event.unregister(master, src)
-	GLOB.dir_set_event.unregister(master, src)
-	master = null
-	. = ..()
-
-/atom/movable/fake_overlay/use_grab(obj/item/grab/grab, list/click_params)
-	if (master)
-		return master.use_grab(grab, click_params)
-	return FALSE
-
-/atom/movable/fake_overlay/use_weapon(obj/item/weapon, mob/user, list/click_params)
-	SHOULD_CALL_PARENT(FALSE)
-	if (master)
-		return master.use_weapon(weapon, user, click_params)
-	return FALSE
-
-/atom/movable/fake_overlay/use_tool(obj/item/tool, mob/user, list/click_params)
-	SHOULD_CALL_PARENT(FALSE)
-	if (master)
-		return master.use_tool(tool, user, click_params)
-	return FALSE
-
-/atom/movable/fake_overlay/use_tool(obj/item/tool, mob/user, list/click_params)
-	if (master)
-		return master.use_tool(tool, user)
-	return ..()
-
-/atom/movable/fake_overlay/attack_hand(mob/user)
-	if (master)
-		return master.attack_hand(user)
-
-/**
- * Handler for when this atom touches the edge of a map or z-level.
- *
- * Generally, this handles transitioning to a new z-level if there's a valid connection.
- *
- * Has no return value.
- */
-/atom/movable/proc/touch_map_edge()
-	if(!simulated)
-		return
-
-	if(!z || (z in GLOB.using_map.sealed_levels))
-		return
-
-	if(!GLOB.universe.OnTouchMapEdge(src))
-		return
-
-	if(GLOB.using_map.use_overmap)
-		overmap_spacetravel(get_turf(src), src)
-		return
-
-	var/new_x
-	var/new_y
-	var/new_z = GLOB.using_map.get_transit_zlevel(z)
-	if(new_z)
-		if(x <= TRANSITIONEDGE)
-			new_x = world.maxx - TRANSITIONEDGE - 2
-			new_y = rand(TRANSITIONEDGE + 2, world.maxy - TRANSITIONEDGE - 2)
-
-		else if (x >= (world.maxx - TRANSITIONEDGE + 1))
-			new_x = TRANSITIONEDGE + 1
-			new_y = rand(TRANSITIONEDGE + 2, world.maxy - TRANSITIONEDGE - 2)
-
-		else if (y <= TRANSITIONEDGE)
-			new_y = world.maxy - TRANSITIONEDGE -2
-			new_x = rand(TRANSITIONEDGE + 2, world.maxx - TRANSITIONEDGE - 2)
-
-		else if (y >= (world.maxy - TRANSITIONEDGE + 1))
-			new_y = TRANSITIONEDGE + 1
-			new_x = rand(TRANSITIONEDGE + 2, world.maxx - TRANSITIONEDGE - 2)
-
-		var/turf/T = locate(new_x, new_y, new_z)
-		if(T)
-			forceMove(T)
-
-/**
- * Determines the type of bullet impact effect this atom should use when hit.
- *
- * **Parameters**:
- * - `def_zone` - The body zone the impact effect should be based on. Only used for `/mob` overrides.
- *
- * Returns string (One of `BULLET_IMPACT_*`).
- */
-/atom/movable/proc/get_bullet_impact_effect_type(def_zone)
-	return BULLET_IMPACT_NONE
-
-
-/**
- * Whether or not user is capable of using this atom based on dexterity. Usually this equates to "Are you a human or silicon mob?"
- *
- * **Parameters**:
- * - `user` - The mob attempting to use the atom.
- *
- * Returns boolean.
- */
-/atom/movable/proc/CheckDexterity(mob/living/user)
+	if(target.allow_spin && src.allow_spin)
+		SpinAnimation(5,1)
+	src.throwing = TRUE
+	src.thrower = thrower
+	throw_source = get_turf(thrower)
+	var/dist_x = abs(target.x - src.x)
+	var/dist_y = abs(target.y - src.y)
+	pass_flags += throwflags
+	/// defines for each slot are above the function def
+	var/list/tl = new /list(11)
+	tl[1] = target
+	tl[2] = speed
+	tl[3] = range
+	tl[4] = 0
+	tl[5] = dist_x
+	tl[6] = dist_y
+	tl[7] = (target.x > x ? EAST : WEST)
+	tl[8] =	(target.y > y ? NORTH : SOUTH)
+	tl[9] = (dist_x > dist_y ? dist_x/2 - dist_y : dist_y/2 - dist_x)
+	tl[10] = get_turf(target)
+	tl[11] = throwflags
+	SSthrowing.throwing_queue[src] = tl
 	return TRUE
 
 
-/**
- * Special handler for post-movement logic. Called by `turf/Entered()` if this atom has the `MOVABLE_FLAG_POSTMOVEMENT` flag set.
- *
- * **Parametetrs**:
- * - `old_turf` - The turf that was moved from.
- * - `new_turf` - The turf that was moved to.
- *
- * Has no return value.
- */
-/atom/movable/proc/post_movement(turf/old_turf, turf/new_turf)
+//Overlays
+/atom/movable/overlay
+	var/atom/master
+	anchored = TRUE
+
+/atom/movable/overlay/New()
+	for(var/x in src.verbs)
+		src.verbs -= x
+	..()
+
+/atom/movable/overlay/attackby(a, b)
+	if (src.master)
+		return src.master.attackby(a, b)
 	return
-	
-/atom/movable/get_affecting_weather()
-	var/turf/my_turf = get_turf(src)
-	if(!istype(my_turf))
+
+/atom/movable/overlay/attack_hand(a, b, c)
+	if (src.master)
+		return src.master.attack_hand(a, b, c)
+	return
+
+/atom/movable/proc/touch_map_edge()
+	if(z in GLOB.maps_data.sealed_levels)
 		return
 
-	. = my_turf.weather
-	if(!.) // If we're under or inside shelter, use the z-level rain (for ambience)
-		. = LAZYACCESS(SSweather.weather_by_z, my_turf.z)
+	if(config.use_overmap)
+		overmap_spacetravel(get_turf(src), src)
+		return
+
+	var/move_to_z = src.get_transit_zlevel()
+	var/move_to_x = x
+	var/move_to_y = y
+	if(move_to_z)
+		if(x <= TRANSITIONEDGE)
+			move_to_x = world.maxx - TRANSITIONEDGE - 2
+			move_to_y = rand(TRANSITIONEDGE + 2, world.maxy - TRANSITIONEDGE - 2)
+
+		else if (x >= (world.maxx - TRANSITIONEDGE + 1))
+			move_to_x = TRANSITIONEDGE + 1
+			move_to_y = rand(TRANSITIONEDGE + 2, world.maxy - TRANSITIONEDGE - 2)
+
+		else if (y <= TRANSITIONEDGE)
+			move_to_y = world.maxy - TRANSITIONEDGE -2
+			move_to_x = rand(TRANSITIONEDGE + 2, world.maxx - TRANSITIONEDGE - 2)
+
+		else if (y >= (world.maxy - TRANSITIONEDGE + 1))
+			move_to_y = TRANSITIONEDGE + 1
+			move_to_x = rand(TRANSITIONEDGE + 2, world.maxx - TRANSITIONEDGE - 2)
+
+		forceMove(locate(move_to_x, move_to_y, move_to_z))
+
+//by default, transition randomly to another zlevel
+/atom/movable/proc/get_transit_zlevel()
+	var/list/candidates = GLOB.maps_data.accessable_levels.Copy()
+	candidates.Remove("[src.z]")
+
+	//If something was ejected from the ship, it does not end up on another part of the ship.
+	if (z in GLOB.maps_data.station_levels)
+		for (var/n in GLOB.maps_data.station_levels)
+			candidates.Remove("[n]")
+
+	if(!candidates.len)
+		return null
+	return text2num(pickweight(candidates))
+
+
+/atom/movable/proc/set_glide_size(glide_size_override = 0, var/min = 0.2, var/max = world.icon_size/2)
+	if (!glide_size_override || glide_size_override > max)
+		glide_size = 0
+	else
+		glide_size = max(min, glide_size_override)
+
+/*	for (var/atom/movable/AM in contents)
+		AM.set_glide_size(glide_size, min, max)
+
+*/
+//This proc should never be overridden elsewhere at /atom/movable to keep directions sane.
+// Spoiler alert: it is, in moved.dm
+/atom/movable/Move(NewLoc, Dir = 0, step_x = 0, step_y = 0, var/glide_size_override = 0)
+	if (glide_size_override > 0)
+		set_glide_size(glide_size_override)
+
+	// To prevent issues, diagonal movements are broken up into two cardinal movements.
+	// Is this a diagonal movement?
+	SEND_SIGNAL_OLD(src, COMSIG_MOVABLE_PREMOVE, src)
+	if (Dir & (Dir - 1))
+		if (Dir & NORTH)
+			if (Dir & EAST)
+				// Pretty simple really, try to move north -> east, else try east -> north
+				// Pretty much exactly the same for all the other cases here.
+				if (step(src, NORTH))
+					step(src, EAST)
+				else
+					if (step(src, EAST))
+						step(src, NORTH)
+			else
+				if (Dir & WEST)
+					if (step(src, NORTH))
+						step(src, WEST)
+					else
+						if (step(src, WEST))
+							step(src, NORTH)
+		else
+			if (Dir & SOUTH)
+				if (Dir & EAST)
+					if (step(src, SOUTH))
+						step(src, EAST)
+					else
+						if (step(src, EAST))
+							step(src, SOUTH)
+				else
+					if (Dir & WEST)
+						if (step(src, SOUTH))
+							step(src, WEST)
+						else
+							if (step(src, WEST))
+								step(src, SOUTH)
+	else
+		var/atom/oldloc = src.loc
+		var/olddir = dir //we can't override this without sacrificing the rest of movable/New()
+
+		// Movement has either failed by Bump(), or we get moved to a new Turf after entering
+		// Either way , both should count as failures, the move is not on the aimed turf after all -SPCR 2024
+		. = ..()
+		if(!. || loc != NewLoc)
+			return FALSE
+
+		if(Dir != olddir)
+			dir = olddir
+			set_dir(Dir)
+
+		src.move_speed = world.time - src.l_move_time
+		src.l_move_time = world.time
+		src.m_flag = 1
+
+		if (oldloc != src.loc && oldloc && oldloc.z == src.z)
+			src.last_move = get_dir(oldloc, src.loc)
+
+		// Only update plane if we're located on map
+		if(isturf(loc))
+			// if we wasn't on map OR our Z coord was changed
+			if( !isturf(oldloc) || (get_z(loc) != get_z(oldloc)) )
+				update_plane()
+
+		if(get_z(oldloc) != get_z(loc))
+			SEND_SIGNAL(src, COMSIG_MOVABLE_Z_CHANGED, get_z(oldloc), get_z(NewLoc))
+
+		SEND_SIGNAL(src, COMSIG_MOVABLE_MOVED, oldloc, loc)
+		/* Inserting into contents uses only forceMove
+		if(!isturf(oldloc) || !isturf(loc))
+			SEND_SIGNAL(src, COMSIG_ATOM_CONTAINERED, getContainingAtom())
+		*/
+
+// Wrapper of step() that also sets glide size to a specific value.
+/proc/step_glide(atom/movable/AM, newdir, glide_size_override)
+	AM.set_glide_size(glide_size_override)
+	return step(AM, newdir)
+
+//We're changing zlevel
+/*
+/atom/movable/proc/onTransitZ(old_z, new_z)//uncomment when something is receiving this signal
+	SEND_SIGNAL(src, COMSIG_MOVABLE_Z_CHANGED, old_z, new_z)
+	/*
+	for(var/atom/movable/AM in src) // Notify contents of Z-transition. This can be overridden IF we know the items contents do not care.
+		AM.onTransitZ(old_z,new_z)
+	*/
+*/
+
+/mob/living/proc/update_z(new_z) // 1+ to register, null to unregister
+	if (registered_z != new_z)
+		if (registered_z)
+			SSmobs.mob_living_by_zlevel[registered_z] -= src
+		if (new_z)
+			SSmobs.mob_living_by_zlevel[new_z] += src
+		registered_z = new_z
+
+// if this returns true, interaction to turf will be redirected to src instead
+/atom/movable/proc/preventsTurfInteractions()
+	return FALSE
+
+///Sets the anchored var and returns if it was sucessfully changed or not.
+/atom/movable/proc/set_anchored(anchorvalue)
+	SHOULD_CALL_PARENT(TRUE)
+	if(anchored == anchorvalue || !can_anchor)
+		return FALSE
+	anchored = anchorvalue
+	SEND_SIGNAL_OLD(src, COMSIG_ATOM_UNFASTEN, anchored)
+	. = TRUE
+
+/atom/movable/proc/update_overlays()
+	SHOULD_CALL_PARENT(TRUE)
+	. = list()
+	SEND_SIGNAL_OLD(src, COMSIG_ATOM_UPDATE_OVERLAYS, .)

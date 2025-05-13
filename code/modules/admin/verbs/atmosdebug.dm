@@ -6,6 +6,7 @@
 		to_chat(src, "Only administrators may use this command.")
 		return
 
+
 	if(alert("WARNING: This command should not be run on a live server. Do you want to continue?", "Check Piping", "No", "Yes") == "No")
 		return
 
@@ -27,8 +28,8 @@
 
 	to_chat(usr, "Checking for overlapping pipes...")
 	next_turf:
-		for(var/turf/T)
-			for(var/dir in GLOB.cardinal)
+		for(var/turf/T in turfs)
+			for(var/dir in cardinal)
 				var/list/connect_types = list(1 = 0, 2 = 0, 3 = 0)
 				for(var/obj/machinery/atmospherics/pipe in T)
 					if(dir & pipe.initialize_directions)
@@ -46,13 +47,14 @@
 		to_chat(src, "Only administrators may use this command.")
 		return
 
+
 	for (var/datum/powernet/PN in SSmachines.powernets)
-		if (!PN.nodes || !length(PN.nodes))
-			if(PN.cables && (length(PN.cables) > 1))
+		if (!PN.nodes || !PN.nodes.len)
+			if(PN.cables && (PN.cables.len > 1))
 				var/obj/structure/cable/C = PN.cables[1]
 				to_chat(usr, "Powernet with no nodes! (number [PN.number]) - example cable at [C.x], [C.y], [C.z] in area [get_area(C.loc)]")
 
-		if (!PN.cables || (length(PN.cables) < 10))
-			if(PN.cables && (length(PN.cables) > 1))
+		if (!PN.cables || (PN.cables.len < 10))
+			if(PN.cables && (PN.cables.len > 1))
 				var/obj/structure/cable/C = PN.cables[1]
 				to_chat(usr, "Powernet with fewer than 10 cables! (number [PN.number]) - example cable at [C.x], [C.y], [C.z] in area [get_area(C.loc)]")

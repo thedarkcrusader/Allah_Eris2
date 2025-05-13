@@ -1,38 +1,20 @@
 /**
- * Global init hook.
- * Called in global_init.dm when the server is initialized.
- */
-/hook/global_init
-
-/**
  * Startup hook.
  * Called in world.dm when the server starts.
  */
 /hook/startup
 
 /**
- * Game Ready hook.
- * Called in master.dm once initialization is complete.
- */
-/hook/game_ready
-
-/**
  * Roundstart hook.
- * Called in ticker.dm when a round starts.
+ * Called in gameticker.dm when a round starts.
  */
 /hook/roundstart
 
 /**
  * Roundend hook.
- * Called in ticker.dm when a round ends.
+ * Called in gameticker.dm when a round ends.
  */
 /hook/roundend
-
-/**
- * Shutdown hook.
- * Called in world.dm when world/Del is called.
- */
-/hook/shutdown
 
 /**
  * Death hook.
@@ -51,7 +33,7 @@
 /**
  * Debrained hook.
  * Called in brain_item.dm when someone gets debrained.
- * Parameters: var/obj/item/organ/internal/brain
+ * Parameters: var/obj/item/organ/internal/vital/brain
  */
 /hook/debrain
 
@@ -61,13 +43,6 @@
  * Parameters: var/mob/living/silicon/robot
  */
 /hook/borgify
-
-/**
- * Podman hook.
- * Called in podmen.dm when someone is brought back as a Diona.
- * Parameters: var/mob/living/carbon/alien/diona
- */
-/hook/harvest_podman
 
 /**
  * Payroll revoked hook.
@@ -103,17 +78,3 @@
  * Parameters: var/obj/structure/closet/crate/sold, var/area/shuttle
  */
 /hook/sell_crate
-
-/**
- * Anomaly cage sold hook.
- * Called in supplyshuttle.dm when a anomaly container is sold on the shuttle.
- * Parameters: var/obj/machinery/anomaly_container/sold, var/area/shuttle
- */
-/hook/sell_anomalycage
-
-/**
- * Animal sold hook.
- * Called in supplyshuttle.dm when a anomaly container is sold on the shuttle.
- * Parameters: var/obj/structure/stasis_cage/sold, var/area/shuttle
- */
-/hook/sell_animal

@@ -7,30 +7,34 @@
 	program_menu_icon = "shuffle"
 	extended_desc = "This program allows remote control of air alarms. This program can not be run on tablet computers."
 	required_access = access_atmospherics
-	requires_ntnet = TRUE
+	requires_ntnet = 1
 	network_destination = "atmospheric control system"
 	requires_ntnet_feature = NTNET_SYSTEMCONTROL
 	usage_flags = PROGRAM_LAPTOP | PROGRAM_CONSOLE
-	category = PROG_ENG
 	size = 17
 
 /datum/nano_module/atmos_control
 	name = "Atmospherics Control"
 	var/obj/access = new()
-	var/emagged = FALSE
+	var/emagged = 0
 	var/ui_ref
 	var/list/monitored_alarms = list()
 
-/datum/nano_module/atmos_control/New(atmos_computer, list/req_access, monitored_alarm_ids)
+/datum/nano_module/atmos_control/New(atmos_computer, var/list/req_access, var/list/req_one_access, monitored_alarm_ids)
 	..()
 
 	if(istype(req_access))
 		access.req_access = req_access
 	else if(req_access)
-		log_debug("\The [src] was given an unexpected req_access: [req_access]")
+		log_debug("\The [src] was given an unepxected req_access: [req_access]")
+
+	if(istype(req_one_access))
+		access.req_one_access = req_one_access
+	else if(req_one_access)
+		log_debug("\The [src] given an unepxected req_one_access: [req_one_access]")
 
 	if(monitored_alarm_ids)
-		for(var/obj/machinery/alarm/alarm in SSmachines.machinery)
+		for(var/obj/machinery/alarm/alarm in GLOB.alarm_list)
 			if(alarm.alarm_id && (alarm.alarm_id in monitored_alarm_ids))
 				monitored_alarms += alarm
 		// machines may not yet be ordered at this point
@@ -42,34 +46,20 @@
 
 	if(href_list["alarm"])
 		if(ui_ref)
-			var/obj/machinery/alarm/alarm = locate(href_list["alarm"]) in (length(monitored_alarms) ? monitored_alarms : SSmachines.machinery)
+			var/obj/machinery/alarm/alarm = locate(href_list["alarm"]) in (monitored_alarms.len ? monitored_alarms : GLOB.alarm_list)
 			if(alarm)
-				var/datum/topic_state/TS = generate_state(alarm)
-				alarm.ui_interact(usr, master_ui = ui_ref, state = TS)
+				var/datum/nano_topic_state/TS = generate_state(alarm)
+				alarm.nano_ui_interact(usr, master_ui = ui_ref, state = TS)
 		return 1
 
-/datum/nano_module/atmos_control/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1, master_ui = null, datum/topic_state/state = GLOB.default_state)
+/datum/nano_module/atmos_control/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/master_ui = null, var/datum/nano_topic_state/state = GLOB.default_state)
 	var/list/data = host.initial_data()
 	var/alarms[0]
-	var/alarmsAlert[0]
-	var/alarmsDanger[0]
 
 	// TODO: Move these to a cache, similar to cameras
-	for(var/obj/machinery/alarm/alarm in (length(monitored_alarms) ? monitored_alarms : SSmachines.machinery))
-		var/Z = get_host_z()
-		if ((!length(monitored_alarms)) && (!Z || !AreConnectedZLevels(Z, alarm.z)))
-			continue
-		var/danger_level = max(alarm.danger_level, alarm.alarm_area.atmosalm)
-		if(danger_level == 2)
-			alarmsAlert[LIST_PRE_INC(alarmsAlert)] = list("name" = sanitize(alarm.name), "ref"= "\ref[alarm]", "danger" = danger_level)
-		else if(danger_level == 1)
-			alarmsDanger[LIST_PRE_INC(alarmsDanger)] = list("name" = sanitize(alarm.name), "ref"= "\ref[alarm]", "danger" = danger_level)
-		else
-			alarms[LIST_PRE_INC(alarms)] = list("name" = sanitize(alarm.name), "ref"= "\ref[alarm]", "danger" = danger_level)
-
-	data["alarms"] = sortByKey(alarms, "name")
-	data["alarmsAlert"] = sortByKey(alarmsAlert, "name")
-	data["alarmsDanger"] = sortByKey(alarmsDanger, "name")
+	for(var/obj/machinery/alarm/alarm in (monitored_alarms.len ? monitored_alarms : GLOB.alarm_list))
+		alarms[++alarms.len] = list("name" = sanitize(alarm.name), "ref"= "\ref[alarm]", "danger" = max(alarm.danger_level, alarm.alarm_area.atmosalm))
+	data["alarms"] = alarms
 
 	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if(!ui)
@@ -82,26 +72,26 @@
 	ui_ref = ui
 
 /datum/nano_module/atmos_control/proc/generate_state(air_alarm)
-	var/datum/topic_state/air_alarm/state = new()
+	var/datum/nano_topic_state/air_alarm/state = new()
 	state.atmos_control = src
 	state.air_alarm = air_alarm
 	return state
 
-/datum/topic_state/air_alarm
+/datum/nano_topic_state/air_alarm
 	var/datum/nano_module/atmos_control/atmos_control	= null
 	var/obj/machinery/alarm/air_alarm					= null
 
-/datum/topic_state/air_alarm/can_use_topic(src_object, mob/user)
-	if(alarm_has_access(user))
+/datum/nano_topic_state/air_alarm/can_use_topic(var/src_object, var/mob/user)
+	if(has_access(user))
 		return STATUS_INTERACTIVE
 	return STATUS_UPDATE
 
-/datum/topic_state/air_alarm/href_list(mob/user)
+/datum/nano_topic_state/air_alarm/href_list(var/mob/user)
 	var/list/extra_href = list()
 	extra_href["remote_connection"] = 1
-	extra_href["remote_access"] = alarm_has_access(user)
+	extra_href["remote_access"] = has_access(user)
 
 	return extra_href
 
-/datum/topic_state/air_alarm/proc/alarm_has_access(mob/user)
+/datum/nano_topic_state/air_alarm/proc/has_access(var/mob/user)
 	return user && (isAI(user) || atmos_control.access.allowed(user) || atmos_control.emagged || air_alarm.rcon_setting == RCON_YES || (air_alarm.alarm_area.atmosalm && air_alarm.rcon_setting == RCON_AUTO))

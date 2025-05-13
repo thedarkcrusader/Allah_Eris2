@@ -2,14 +2,18 @@
 /obj/item/device/scanner/plant
 	name = "plant analyzer"
 	desc = "A hand-held botanical scanner used to analyze plants."
-	icon = 'icons/obj/tools/plant_analyzer.dmi'
+	icon = 'icons/obj/device.dmi'
 	icon_state = "hydro"
 	item_state = "analyzer"
-	scan_sound = 'sound/effects/fastbeep.ogg'
-	printout_color = "#eeffe8"
-	var/static/list/valid_targets = list(
+	rarity_value = 50
+
+	matter = list(MATERIAL_PLASTIC = 2, MATERIAL_GLASS = 1)
+
+	var/global/list/valid_targets = list(
 		/obj/item/reagent_containers/food/snacks/grown,
+		/obj/item/grown,
 		/obj/machinery/portable_atmospherics/hydroponics,
+		/obj/machinery/beehive,
 		/obj/item/seeds
 	)
 
@@ -21,37 +25,50 @@
 /obj/item/device/scanner/plant/scan(atom/A, mob/user)
 	scan_title = "[A] at [get_area(A)]"
 	scan_data = plant_scan_results(A)
-	show_menu(user)
+	flick("hydro2", src)
+	show_results(user)
 
 /proc/plant_scan_results(obj/target)
 	var/datum/seed/grown_seed
 	var/datum/reagents/grown_reagents
-	if(istype(target,/obj/item/reagent_containers/food/snacks/grown))
+
+	var/dat = list()
+	if(istype(target, /obj/machinery/beehive))
+		var/obj/machinery/beehive/BH = target
+		dat += SPAN_NOTICE("Scan result of \the [BH]...")
+		dat += "Beehive is [BH.bee_count ? "[round(BH.bee_count)]% full" : "empty"].[BH.bee_count > 90 ? " Colony is ready to split." : ""]"
+		if(BH.frames)
+			dat += "[BH.frames] frames installed, [round(BH.honeycombs / 100)] filled."
+			if(BH.honeycombs < BH.frames * 100)
+				dat += "Next frame is [round(BH.honeycombs % 100)]% full."
+		else
+			dat += "No frames installed."
+		if(BH.smoked)
+			dat += "The hive is smoked."
+		return jointext(dat, "<br>")
+
+	else if(istype(target,/obj/item/reagent_containers/food/snacks/grown))
+
 		var/obj/item/reagent_containers/food/snacks/grown/G = target
-		grown_seed = SSplants.seeds[G.plantname]
+		grown_seed = plant_controller.seeds[G.plantname]
+		grown_reagents = G.reagents
+
+	else if(istype(target,/obj/item/grown))
+
+		var/obj/item/grown/G = target
+		grown_seed = plant_controller.seeds[G.plantname]
 		grown_reagents = G.reagents
 
 	else if(istype(target,/obj/item/seeds))
+
 		var/obj/item/seeds/S = target
 		grown_seed = S.seed
 
 	else if(istype(target,/obj/machinery/portable_atmospherics/hydroponics))
+
 		var/obj/machinery/portable_atmospherics/hydroponics/H = target
 		grown_seed = H.seed
 		grown_reagents = H.reagents
-
-	if(!grown_seed)
-		return
-
-	if(grown_seed.mysterious && !grown_seed.scanned)
-		grown_seed.scanned = TRUE
-		var/area/map = locate(/area/overmap)
-		for(var/obj/overmap/visitable/sector/exoplanet/P in map)
-			if(grown_seed in P.seeds)
-				GLOB.stat_flora_scanned += 1
-				break
-
-	var/list/dat = list()
 
 	var/form_title = "[grown_seed.seed_name] (#[grown_seed.uid])"
 	dat += "<h3>Plant data for [form_title]</h3>"
@@ -66,22 +83,22 @@
 	dat += "<tr><td><b>Potency</b></td><td>[grown_seed.get_trait(TRAIT_POTENCY)]</td></tr>"
 	dat += "</table>"
 
-	if(grown_reagents && grown_reagents.reagent_list && length(grown_reagents.reagent_list))
+	if(grown_reagents && grown_reagents.reagent_list && grown_reagents.reagent_list.len)
 		dat += "<h2>Reagent Data</h2>"
 
 		dat += "<br>This sample contains: "
 		for(var/datum/reagent/R in grown_reagents.reagent_list)
-			dat += "<br>- [R.name], [grown_reagents.get_reagent_amount(R.type)] unit(s)"
+			dat += "<br>- [R.id], [grown_reagents.get_reagent_amount(R.id)] unit(s)"
 
 	dat += "<h2>Other Data</h2>"
 
 	if(grown_seed.get_trait(TRAIT_HARVEST_REPEAT))
-		dat += "This species can be harvested repeatedly.<br>"
+		dat += "This plant can be harvested repeatedly.<br>"
 
 	if(grown_seed.get_trait(TRAIT_IMMUTABLE) == -1)
-		dat += "This species is highly mutable.<br>"
+		dat += "This plant is highly mutable.<br>"
 	else if(grown_seed.get_trait(TRAIT_IMMUTABLE) > 0)
-		dat += "This species does not possess genetics that are alterable.<br>"
+		dat += "This plant does not possess genetics that are alterable.<br>"
 
 	if(grown_seed.get_trait(TRAIT_REQUIRES_NUTRIENTS))
 		if(grown_seed.get_trait(TRAIT_NUTRIENT_CONSUMPTION) < 0.05)
@@ -99,7 +116,7 @@
 		else
 			dat += "It requires a stable supply of water.<br>"
 
-	if(grown_seed.mutants && length(grown_seed.mutants))
+	if(grown_seed.mutants && grown_seed.mutants.len)
 		dat += "It exhibits a high degree of potential subspecies shift.<br>"
 
 	dat += "It thrives in a temperature of [grown_seed.get_trait(TRAIT_IDEAL_HEAT)] Kelvin."
@@ -146,7 +163,7 @@
 		if(1)
 			dat += "<br>It is carnivorous and will eat tray pests for sustenance."
 		if(2)
-			dat	+= "<br>It is carnivorous and poses a significant threat to living things around it."
+			dat += "<br>It is carnivorous and poses a significant threat to living things around it."
 
 	if(grown_seed.get_trait(TRAIT_PARASITE))
 		dat += "<br>It is capable of parisitizing and gaining sustenance from tray weeds."
@@ -154,7 +171,7 @@
 		dat += "<br>It will periodically alter the local temperature by [grown_seed.get_trait(TRAIT_ALTER_TEMP)] degrees Kelvin."
 
 	if(grown_seed.get_trait(TRAIT_BIOLUM))
-		dat += "<br>It is [grown_seed.get_trait(TRAIT_BIOLUM_COLOUR)  ? SPAN_COLOR("[grown_seed.get_trait(TRAIT_BIOLUM_COLOUR)]", "bio-luminescent") : "bio-luminescent"]."
+		dat += "<br>It is [grown_seed.get_trait(TRAIT_BIOLUM_COLOUR)  ? "<font color='[grown_seed.get_trait(TRAIT_BIOLUM_COLOUR)]'>bio-luminescent</font>" : "bio-luminescent"]."
 
 	if(grown_seed.get_trait(TRAIT_PRODUCES_POWER))
 		dat += "<br>The fruit will function as a battery if prepared appropriately."
@@ -179,4 +196,4 @@
 	if(grown_seed.get_trait(TRAIT_CONSUME_GASSES))
 		dat += "<br>It will remove gas from the environment."
 
-	return jointext(dat, null)
+	return JOINTEXT(dat)

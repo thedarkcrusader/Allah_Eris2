@@ -1,22 +1,24 @@
 //	Observer Pattern Implementation: Death
 //		Registration type: /mob
 //
-//		Raised when: A mob is added to the dead_mob_list
+//		Raised when: A mob is added to the GLOB.dead_mob_list
 //
 //		Arguments that the called proc should expect:
-//			/mob/dead: The mob that was added to the dead_mob_list
+//			/mob/dead: The mob that was added to the GLOB.dead_mob_list
 
-GLOBAL_TYPED_NEW(death_event, /singleton/observ/death)
+GLOBAL_DATUM_INIT(death_event, /decl/observ/death, new)
 
-/singleton/observ/death
+/decl/observ/death
 	name = "Death"
 	expected_type = /mob
 
 /*****************
 * Death Handling *
 *****************/
-
+// TODO: enable after baymed
+/*
 /mob/living/add_to_dead_mob_list()
 	. = ..()
 	if(.)
 		GLOB.death_event.raise_event(src)
+*/

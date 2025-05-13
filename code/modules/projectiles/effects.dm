@@ -1,274 +1,177 @@
-/obj/projectile
+/obj/effect/projectile
 	icon = 'icons/effects/projectiles.dmi'
 	icon_state = "bolt"
-	plane = EFFECTS_ABOVE_LIGHTING_PLANE
-	layer = BEAM_PROJECTILE_LAYER //Muzzle flashes would be above the lighting plane anyways.
-	//Standard compiletime light vars aren't working here, so we've made some of our own.
-	light_range = 2
-	light_power = 1
-	light_color = "#ff00dc"
-
+	layer = ABOVE_MOB_LAYER
+	var/lifetime = 3
 	mouse_opacity = 0
 
+/obj/effect/projectile/New(var/turf/location)
+	init_plane()
+	if(istype(location))
+		loc = location
+	update_plane()
+
+/obj/effect/projectile/proc/set_transform(var/matrix/M)
+	if(istype(M))
+		transform = M
+
+/obj/effect/projectile/proc/activate(var/kill_delay = lifetime)
+	spawn(kill_delay)
+		qdel(src)	//see effect_system.dm - sets loc to null and lets GC handle removing these effects
 
 //----------------------------
 // Laser beam
 //----------------------------
-/obj/projectile/laser
-	light_color = COLOR_RED_LIGHT
-
-/obj/projectile/laser/tracer
+/obj/effect/projectile/laser/tracer
 	icon_state = "beam"
 
-/obj/projectile/laser/muzzle
+/obj/effect/projectile/laser/muzzle
 	icon_state = "muzzle_laser"
 
-/obj/projectile/laser/impact
+/obj/effect/projectile/laser/impact
 	icon_state = "impact_laser"
 
 //----------------------------
 // Blue laser beam
 //----------------------------
-/obj/projectile/laser/blue
-	light_color = COLOR_BLUE_LIGHT
-
-/obj/projectile/laser/blue/tracer
+/obj/effect/projectile/laser_blue/tracer
 	icon_state = "beam_blue"
 
-/obj/projectile/laser/blue/muzzle
+/obj/effect/projectile/laser_blue/muzzle
 	icon_state = "muzzle_blue"
 
-/obj/projectile/laser/blue/impact
+/obj/effect/projectile/laser_blue/impact
 	icon_state = "impact_blue"
 
 //----------------------------
 // Omni laser beam
 //----------------------------
-/obj/projectile/laser/omni
-	light_color = COLOR_LUMINOL
-
-/obj/projectile/laser/omni/tracer
+/obj/effect/projectile/laser_omni/tracer
 	icon_state = "beam_omni"
 
-/obj/projectile/laser/omni/muzzle
+/obj/effect/projectile/laser_omni/muzzle
 	icon_state = "muzzle_omni"
 
-/obj/projectile/laser/omni/impact
+/obj/effect/projectile/laser_omni/impact
 	icon_state = "impact_omni"
 
 //----------------------------
 // Xray laser beam
 //----------------------------
-/obj/projectile/laser/xray
-	light_color = "#00cc00"
-
-/obj/projectile/laser/xray/tracer
+/obj/effect/projectile/xray/tracer
 	icon_state = "xray"
 
-/obj/projectile/laser/xray/muzzle
+/obj/effect/projectile/xray/muzzle
 	icon_state = "muzzle_xray"
 
-/obj/projectile/laser/xray/impact
+/obj/effect/projectile/xray/impact
 	icon_state = "impact_xray"
 
 //----------------------------
 // Heavy laser beam
 //----------------------------
-/obj/projectile/laser/heavy
-	light_power = 1
-
-/obj/projectile/laser/heavy/tracer
+/obj/effect/projectile/laser_heavy/tracer
 	icon_state = "beam_heavy"
 
-/obj/projectile/laser/heavy/muzzle
+/obj/effect/projectile/laser_heavy/muzzle
 	icon_state = "muzzle_beam_heavy"
 
-/obj/projectile/laser/heavy/impact
+/obj/effect/projectile/laser_heavy/impact
 	icon_state = "impact_beam_heavy"
+
+//----------------------------
+// Psychic heavy laser beam
+//----------------------------
+/obj/effect/projectile/psychic_laser_heavy/tracer
+	icon_state = "psychic_beam_heavy"
+
+/obj/effect/projectile/psychic_laser_heavy/muzzle
+	icon_state = "psychic_muzzle_beam_heavy"
+
+/obj/effect/projectile/psychic_laser_heavy/impact
+	icon_state = "psychic_impact_beam_heavy"
 
 //----------------------------
 // Pulse laser beam
 //----------------------------
-/obj/projectile/laser/pulse
-	light_power = 1
-	light_color = COLOR_DEEP_SKY_BLUE
-
-/obj/projectile/laser/pulse/tracer
+/obj/effect/projectile/laser_pulse/tracer
 	icon_state = "u_laser"
 
-
-/obj/projectile/laser/pulse/muzzle
+/obj/effect/projectile/laser_pulse/muzzle
 	icon_state = "muzzle_u_laser"
 
-/obj/projectile/laser/pulse/impact
+/obj/effect/projectile/laser_pulse/impact
 	icon_state = "impact_u_laser"
-
-//----------------------------
-// Skrell laser beam
-//----------------------------
-/obj/projectile/laser/pulse/skrell
-	light_power = 1
-	light_color = "#4c00ff"
-
-/obj/projectile/laser/pulse/skrell/tracer
-	icon_state = "pu_laser"
-
-/obj/projectile/laser/pulse/skrell/muzzle
-	icon_state = "muzzle_pu_laser"
-
-/obj/projectile/laser/pulse/skrell/impact
-	icon_state = "impact_pu_laser"
 
 //----------------------------
 // Pulse muzzle effect only
 //----------------------------
-/obj/projectile/pulse/muzzle
+/obj/effect/projectile/pulse/muzzle
 	icon_state = "muzzle_pulse"
-	light_power = 1
-	light_color = COLOR_DEEP_SKY_BLUE
-
-//----------------------------
-// Treye beam
-//----------------------------
-/obj/projectile/trilaser
-	light_color = COLOR_LUMINOL
-
-/obj/projectile/trilaser/tracer
-	icon_state = "plasmacutter"
-
-/obj/projectile/trilaser/muzzle
-	icon_state = "muzzle_plasmacutter"
-
-/obj/projectile/trilaser/impact
-	icon_state = "impact_plasmacutter"
 
 //----------------------------
 // Emitter beam
 //----------------------------
-/obj/projectile/laser/emitter
-	light_power = 1
-	light_color = "#00cc00"
-
-/obj/projectile/laser/emitter/tracer
+/obj/effect/projectile/emitter/tracer
 	icon_state = "emitter"
 
-/obj/projectile/laser/emitter/muzzle
+/obj/effect/projectile/emitter/muzzle
 	icon_state = "muzzle_emitter"
 
-/obj/projectile/laser/emitter/impact
+/obj/effect/projectile/emitter/impact
 	icon_state = "impact_emitter"
 
 //----------------------------
 // Stun beam
 //----------------------------
-/obj/projectile/stun
-	light_color = COLOR_YELLOW
-
-/obj/projectile/stun/tracer
+/obj/effect/projectile/stun/tracer
 	icon_state = "stun"
 
-/obj/projectile/stun/muzzle
+/obj/effect/projectile/stun/muzzle
 	icon_state = "muzzle_stun"
 
-/obj/projectile/stun/impact
+/obj/effect/projectile/stun/impact
 	icon_state = "impact_stun"
 
 //----------------------------
 // Bullet
 //----------------------------
-/obj/projectile/bullet
+/obj/effect/projectile/bullet/muzzle
 	icon_state = "muzzle_bullet"
-	light_range = 5
-	light_power = 1
-	light_color = COLOR_MUZZLE_FLASH
 
 //----------------------------
-// confuse ray
+// Plasma
 //----------------------------
-/obj/projectile/confuseray
-	light_color = COLOR_GREEN_GRAY
+/obj/effect/projectile/plasma/muzzle
+	icon_state = "muzzle_plasma"
 
-/obj/projectile/confuseray/tracer
-	icon_state = "beam_grass"
+/obj/effect/projectile/plasma/muzzle/light
+	icon_state = "muzzle_plasma_pink" //Hue shift of 168
 
-/obj/projectile/confuseray/muzzle
-	icon_state = "muzzle_grass"
+/obj/effect/projectile/plasma/muzzle/heavy
+	icon_state = "muzzle_plasma_blue" //Hue shift of 84
 
-/obj/projectile/confuseray/impact
-	icon_state = "impact_grass"
+/obj/effect/projectile/plasma/tracer
 
-//----------------------------
-// Particle beam
-//----------------------------
-/obj/projectile/laser_particle
-	light_color = COLOR_CYAN
+/obj/effect/projectile/plasma/impact
+	icon_state = "impact_plasma"
+	lifetime = 7.5
 
-/obj/projectile/laser_particle/tracer
-	icon_state = "beam_particle"
+/obj/effect/projectile/plasma/impact/light
+	icon_state = "impact_plasma_pink"
 
-/obj/projectile/laser_particle/muzzle
-	icon_state = "muzzle_particle"
-
-/obj/projectile/laser_particle/impact
-	icon_state = "impact_particle"
+/obj/effect/projectile/plasma/impact/heavy
+	icon_state = "impact_plasma_blue"
 
 //----------------------------
-// Dark matter
+// Cutter
 //----------------------------
-/obj/projectile/darkmatter
-	light_color = COLOR_PURPLE
+/obj/effect/projectile/laser/plasmacutter/tracer
+	icon_state = "plasmacutter"
 
-/obj/projectile/darkmatter/tracer
-	icon_state = "beam_darkb"
+/obj/effect/projectile/laser/plasmacutter/impact
+	icon_state = "impact_plasmacutter"
 
-/obj/projectile/darkmatter/muzzle
-	icon_state = "muzzle_darkb"
+/obj/effect/projectile/laser/plasmacutter/muzzle
+	icon_state = "muzzle_plasmacutter"
 
-/obj/projectile/darkmatter/impact
-	icon_state = "impact_darkb"
-
-	//----------------------------
-// Dark matter stun
-//----------------------------
-/obj/projectile/stun/darkmatter
-	light_color = COLOR_PURPLE
-
-/obj/projectile/stun/darkmatter/tracer
-	icon_state = "beam_darkt"
-
-/obj/projectile/stun/darkmatter/muzzle
-	icon_state = "muzzle_darkt"
-
-/obj/projectile/stun/darkmatter/impact
-	icon_state = "impact_darkt"
-
-//----------------------------
-// Point defense
-//----------------------------
-/obj/projectile/pointdefense
-	light_color = COLOR_GOLD
-	light_power = 1
-
-/obj/projectile/pointdefense/tracer
-	icon_state = "beam_pointdef_d"
-
-/obj/projectile/pointdefense/muzzle
-	icon_state = "muzzle_pointdef_d"
-
-/obj/projectile/pointdefense/impact
-	icon_state = "impact_pointdef_d"
-
-//----------------------------
-// incendiary laser
-//----------------------------
-/obj/projectile/incen
-	light_color = COLOR_PALE_ORANGE
-
-/obj/projectile/incen/tracer
-	icon_state = "beam_incen"
-
-/obj/projectile/incen/muzzle
-	icon_state = "muzzle_incen"
-
-/obj/projectile/incen/impact
-	icon_state = "impact_incen"

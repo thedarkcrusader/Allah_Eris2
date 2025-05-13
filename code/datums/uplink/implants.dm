@@ -6,23 +6,33 @@
 
 /datum/uplink_item/item/implants/imp_freedom
 	name = "Freedom Implant"
-	desc = "An implant with an emotive trigger that can break you free of restraints. Show Security who has the real upperhand!"
-	item_cost = 24
+	item_cost = 4
 	path = /obj/item/storage/box/syndie_kit/imp_freedom
 
 /datum/uplink_item/item/implants/imp_compress
 	name = "Compressed Matter Implant"
-	desc = "An implant with an emotive trigger used to hide a handheld item in your body. \
-	Activating it materializes the item in your hand."
-	item_cost = 32
+	item_cost = 4
+	antag_roles = list(ROLE_CONTRACTOR,ROLE_MARSHAL,ROLE_INQUISITOR,ROLE_MERCENARY,ROLE_CARRION)
 	path = /obj/item/storage/box/syndie_kit/imp_compress
 
 /datum/uplink_item/item/implants/imp_explosive
 	name = "Explosive Implant (DANGER!)"
-	desc = "An explosive impant activated with a vocal trigger or radio signal. \
-	Use the included pad to adjust the settings before implanting."
-	item_cost = 40
+	item_cost = 10
 	path = /obj/item/storage/box/syndie_kit/imp_explosive
+
+/datum/uplink_item/item/implants/imp_spying
+	name = "Spying Implant"
+	item_cost = 1
+	path = /obj/item/storage/box/syndie_kit/imp_spying
+	antag_roles = list(ROLE_CONTRACTOR,ROLE_CARRION,ROLE_BLITZ)
+
+/datum/uplink_item/item/implants/imp_spying/buy(obj/item/device/uplink/U)
+	. = ..()
+	if(.)
+		var/obj/item/storage/box/syndie_kit/imp_spying/B = .
+		var/obj/item/implanter/spying/I = locate() in B
+		var/obj/item/implant/spying/S = I.implant
+		S.owner = U.uplink_owner
 
 /datum/uplink_item/item/implants/imp_uplink
 	name = "Uplink Implant"
@@ -31,13 +41,31 @@
 /datum/uplink_item/item/implants/imp_uplink/New()
 	..()
 	item_cost = round(DEFAULT_TELECRYSTAL_AMOUNT / 2)
-	desc = "This implant holds an uplink containing [IMPLANT_TELECRYSTAL_AMOUNT(DEFAULT_TELECRYSTAL_AMOUNT)] telecrystals, \
-	activatable with an emotive trigger. You will have access to it, as long as it is still inside of you."
+	desc = "Contains [round((DEFAULT_TELECRYSTAL_AMOUNT / 2) * 0.8)] Telecrystal\s"
 
-/datum/uplink_item/item/implants/imp_imprinting
-	name = "Neural Imprinting Implant"
-	desc = "An implant able to be used on someone who is under the influence of Mindbreaker Toxin to give them a \
-	set of law-like instructions to follow. This kit contains a dose of Mindbreaker Toxin."
-	item_cost = 20
-	path = /obj/item/storage/box/syndie_kit/imp_imprinting
-	antag_roles = list(MODE_TRAITOR)
+//To make new disposable cybernetic applicators, you have to go to the /obj/item/organ_module/* itself, and add the following:
+///obj/item/implanter/installer/disposable/CYBERNETIC
+//	name = "disposable cybernetic installer (CYBERNETIC)"
+//	desc = [CYBERNETIC DESCRIPTION, as the disposable applicator will fill in the uplink description otherwise]
+//	mod = /obj/item/organ_module/CYBERNETIC
+//	spawn_tags = null
+//Then here, you reference the new /obj/item/implanter/instaler/disposable/CYBERNETIC as the path. If this doesn't work, god be with ye.
+
+//For the mod_overlay, go to the cybernetic in question, and add:
+//	mod_overlay = "installer_CYBERNETIC"
+//Then add the sprites to the items.dmi, named "installer_CYBERNETIC"
+
+/datum/uplink_item/item/implants/energy_blade
+	name = "Internal Energy Armblade Cybernetic"
+	item_cost = 6
+	path = /obj/item/implanter/installer/disposable/energy_blade
+
+/datum/uplink_item/item/implants/subdermal_armor
+	name = "Subdermal Armor Cybernetic"
+	item_cost = 3
+	path = /obj/item/implanter/installer/disposable/armor
+
+/datum/uplink_item/item/implants/leg_muscle
+	name = "Leg Muscle Cybernetic"
+	item_cost = 3
+	path = /obj/item/implanter/installer/disposable/muscle

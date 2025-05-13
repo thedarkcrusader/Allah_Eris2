@@ -1,10 +1,10 @@
 // DRONE ABILITIES
 /mob/living/silicon/robot/drone/verb/set_mail_tag()
 	set name = "Set Mail Tag"
-	set desc = "Tag yourself for delivery through the disposals system."
+	set desc = "Tag yourself for delivery through the disposals system. Will automatically mail you when used in disposal chute."
 	set category = "Silicon Commands"
 
-	var/new_tag = input("Select the desired destination.", "Set Mail Tag", null) as null|anything in GLOB.tagger_locations
+	var/new_tag = input("Select the desired destination.", "Set Mail Tag", null) as null|anything in tagger_locations
 
 	if(!new_tag)
 		mail_destination = ""
@@ -23,12 +23,15 @@
 
 /mob/living/silicon/robot/drone/MouseDrop(atom/over_object)
 	var/mob/living/carbon/H = over_object
-
-	if(istype(H) && Adjacent(H) && (usr == H) && (H.a_intent == "grab") && hat && H.HasFreeHand())
+	if(!istype(H) || !Adjacent(H)) return ..()
+	if(H.a_intent == I_HELP)
+		get_scooped(H)
+		return
+	else if(H.a_intent == "grab" && hat && !(H.l_hand && H.r_hand))
+		hat.loc = get_turf(src)
 		H.put_in_hands(hat)
 		H.visible_message(SPAN_DANGER("\The [H] removes \the [src]'s [hat]."))
 		hat = null
-		update_icons()
-		return
-
-	return ..()
+		updateicon()
+	else
+		return ..()

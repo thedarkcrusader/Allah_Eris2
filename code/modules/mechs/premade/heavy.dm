@@ -1,41 +1,19 @@
+//heavy exosuit components use plasteel and uranium plating for ultra-durable parts, but have diminished speed and functionality as a result.
 /mob/living/exosuit/premade/heavy
-	name = "Heavy exosuit"
+	name = "heavy exosuit"
 	desc = "A heavily armored combat exosuit."
 
-/mob/living/exosuit/premade/heavy/Initialize()
-	if(!arms)
-		arms = new /obj/item/mech_component/manipulators/heavy(src)
-		arms.color = COLOR_TITANIUM
-	if(!legs)
-		legs = new /obj/item/mech_component/propulsion/heavy(src)
-		legs.color = COLOR_TITANIUM
-	if(!head)
-		head = new /obj/item/mech_component/sensors/heavy(src)
-		head.color = COLOR_TITANIUM
-	if(!body)
-		body = new /obj/item/mech_component/chassis/heavy(src)
-		body.color = COLOR_TITANIUM
-
-	. = ..()
-
-/mob/living/exosuit/premade/heavy/spawn_mech_equipment()
-	..()
-	install_system(new /obj/item/mech_equipment/mounted_system/taser/laser(src), HARDPOINT_LEFT_HAND)
-	install_system(new /obj/item/mech_equipment/mounted_system/taser/ion(src), HARDPOINT_RIGHT_HAND)
-	install_system(new /obj/item/mech_equipment/shields(src), HARDPOINT_BACK)
-
-/mob/living/exosuit/premade/heavy/merc/Initialize()
-	. = ..()
-	if(arms)
-		arms.color = COLOR_RED
-	if(legs)
-		legs.color = COLOR_RED
-	if(head)
-		head.color = COLOR_RED
-	if(body)
-		body.color = COLOR_DARK_GUNMETAL
-
-/mob/living/exosuit/premade/heavy/merc/spawn_mech_equipment()
-	install_system(new /obj/item/mech_equipment/mounted_system/taser(src), HARDPOINT_LEFT_HAND)
-	install_system(new /obj/item/mech_equipment/mounted_system/taser/laser(src), HARDPOINT_RIGHT_HAND)
-	install_system(new /obj/item/mech_equipment/shields(src), HARDPOINT_BACK)
+	material = MATERIAL_PLASTEEL
+	exosuit_color = COLOR_TITANIUM
+	arms = /obj/item/mech_component/manipulators/heavy
+	legs = /obj/item/mech_component/propulsion/heavy
+	head = /obj/item/mech_component/sensors/heavy
+	body = /obj/item/mech_component/chassis/heavy
+	installed_software_boards = list(
+		/obj/item/electronics/circuitboard/exosystem/weapons
+	)
+	installed_systems = list(
+		HARDPOINT_LEFT_HAND = /obj/item/mech_equipment/mounted_system/taser,
+		HARDPOINT_RIGHT_HAND = /obj/item/mech_equipment/mounted_system/taser/ion,
+		HARDPOINT_HEAD = /obj/item/mech_equipment/light
+	)

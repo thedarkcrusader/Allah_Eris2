@@ -1,156 +1,192 @@
 /obj/item/pinpointer
 	name = "pinpointer"
-	icon = 'icons/obj/tools/pinpointer.dmi'
+	icon = 'icons/obj/device.dmi'
 	icon_state = "pinoff"
-	obj_flags = OBJ_FLAG_CONDUCTIBLE
+	flags = CONDUCT
 	slot_flags = SLOT_BELT
 	w_class = ITEM_SIZE_SMALL
 	item_state = "electronic"
-	matter = list(MATERIAL_STEEL = 500)
-	var/weakref/target
-	var/active = 0
-	var/beeping = 2
+	throw_speed = 4
+	throw_range = 20
+	matter = list(MATERIAL_PLASTIC = 2, MATERIAL_GLASS = 1)
+	//spawn_blacklisted = TRUE//antag_item_targets??
+	var/obj/item/disk/nuclear/the_disk
+	var/obj/item/disk/nuclear/slot
+	var/obj/machinery/nuclearbomb/pointbomb
+	var/active = FALSE
+
+
+/obj/item/pinpointer/attack_self()
+	if(!active)
+		active = TRUE
+		if(!slot)
+			workdisk()
+		else
+			worknuclear()
+		to_chat(usr, SPAN_NOTICE("You activate the pinpointer"))
+	else
+		active = FALSE
+		icon_state = "pinoff"
+		to_chat(usr, SPAN_NOTICE("You deactivate the pinpointer"))
+
+/obj/item/pinpointer/attackby(obj/item/I, mob/user, params)
+	if (!slot && istype(I, /obj/item/disk/nuclear))
+		usr.drop_item()
+		I.loc = src
+		src.slot = I
+		update_icon()
+
+/obj/item/pinpointer/MouseDrop(over_object)
+	if((src.loc == usr) && istype(over_object, /obj/screen/inventory/hand) && eject_item(slot, usr))
+		slot = null
+		update_icon()
+	else
+		..()
+
+/obj/item/pinpointer/update_icon()
+	cut_overlays()
+
+	if (slot)
+		var/tooloverlay = "disknukeloaded"
+		overlays += (tooloverlay)
+
+
+/obj/item/pinpointer/proc/workdisk()
+	if(!active) return
+
+	if(slot)
+		worknuclear()
+		playsound(loc, 'sound/machines/twobeep.ogg', 50, 1)	//Plays a beep
+		return
+
+	if(!the_disk)
+		the_disk = locate()
+		if(!the_disk)
+			icon_state = "pinonnull"
+			return
+	set_dir(get_dir(src,the_disk))
+	switch(get_dist(src,the_disk))
+		if(0)
+			icon_state = "pinondirect"
+		if(1 to 8)
+			icon_state = "pinonclose"
+		if(9 to 16)
+			icon_state = "pinonmedium"
+		if(16 to INFINITY)
+			icon_state = "pinonfar"
+	spawn(5) .()
+
+/obj/item/pinpointer/proc/worknuclear()
+	if(!active) return
+
+	if(!slot)
+		workdisk()
+		playsound(loc, 'sound/machines/twobeep.ogg', 50, 1)	//Plays a beep
+		return
+
+	for(var/obj/machinery/nuclearbomb/bomb in world)
+		pointbomb = bomb
+		if(pointbomb.timing)
+			break
+
+	set_dir(get_dir(src, pointbomb))
+	switch(get_dist(src, pointbomb))
+		if(0)
+			icon_state = "pinondirect"
+		if(1 to 8)
+			icon_state = "pinonclose"
+		if(9 to 16)
+			icon_state = "pinonmedium"
+		if(16 to INFINITY)
+			icon_state = "pinonfar"
+	spawn(5) .()
+
+/obj/item/pinpointer/examine(mob/user, extra_description = "")
+	if(slot)
+		extra_description += "Nuclear disk is loaded inside [src]."
+	for(var/obj/machinery/nuclearbomb/bomb in world)
+		if(bomb.timing)
+			extra_description += SPAN_WARNING("Extreme danger. Arming signal detected. Time remaining: [bomb.timeleft]")
+	..(user, extra_description)
 
 /obj/item/pinpointer/Destroy()
-	STOP_PROCESSING(SSobj,src)
-	target = null
+	active = FALSE
 	. = ..()
 
-/obj/item/pinpointer/attack_self(mob/user)
-	toggle(user)
+/obj/item/pinpointer/advpinpointer
+	name = "Advanced Pinpointer"
+	icon = 'icons/obj/device.dmi'
+	desc = "A larger version of the normal pinpointer, this unit features a helpful quantum entanglement detection system to locate various objects that do not broadcast a locator signal."
+	var/mode = 0  // Mode 0 locates disk, mode 1 locates coordinates.
+	var/turf/location
+	var/obj/target
 
-/obj/item/pinpointer/proc/toggle(mob/user)
-	active = !active
-	to_chat(user, "You [active ? "" : "de"]activate [src].")
+/obj/item/pinpointer/advpinpointer/attack_self()
 	if(!active)
-		STOP_PROCESSING(SSobj,src)
+		active = TRUE
+		if(mode == 0)
+			workdisk()
+		if(mode == 1)
+			worklocation()
+		if(mode == 2)
+			workobj()
+		to_chat(usr, SPAN_NOTICE("You activate the pinpointer"))
 	else
-		if(!target)
-			target = acquire_target()
-		START_PROCESSING(SSobj,src)
-	update_icon()
+		active = 0
+		icon_state = "pinoff"
+		to_chat(usr, SPAN_NOTICE("You deactivate the pinpointer"))
 
-/obj/item/pinpointer/advpinpointer/verb/toggle_sound()
-	set category = "Object"
-	set name = "Toggle Pinpointer Beeping"
-	set src in view(1)
+/obj/item/pinpointer/advpinpointer/proc/worklocation()
+	if(!active)
+		return
+	if(!location)
+		icon_state = "pinonnull"
+		return
+	set_dir(get_dir(src,location))
+	switch(get_dist(src,location))
+		if(0)
+			icon_state = "pinondirect"
+		if(1 to 8)
+			icon_state = "pinonclose"
+		if(9 to 16)
+			icon_state = "pinonmedium"
+		if(16 to INFINITY)
+			icon_state = "pinonfar"
+	spawn(5) .()
 
-	if(beeping >= 0)
-		beeping = -1
-		to_chat(usr, "You mute [src].")
-	else
-		beeping = 0
-		to_chat(usr, "You enable the sound indication on [src].")
 
-/obj/item/pinpointer/proc/acquire_target()
-	var/obj/item/disk/nuclear/the_disk = locate()
-	return weakref(the_disk)
-
-/obj/item/pinpointer/Process()
-	update_icon()
+/obj/item/pinpointer/advpinpointer/proc/workobj()
+	if(!active)
+		return
 	if(!target)
+		icon_state = "pinonnull"
 		return
-	if(!target.resolve())
-		target = null
-		return
-
-	if(beeping < 0)
-		return
-	if(beeping == 0)
-		var/turf/here = get_turf(src)
-		var/turf/there = get_turf(target.resolve())
-		if(!istype(there))
-			return
-		var/distance = max(1,get_dist(here, there))
-		var/freq_mod = 1
-		if(distance < world.view)
-			freq_mod = min(world.view/distance, 2)
-		else if (distance > 3*world.view)
-			freq_mod = max(3*world.view/distance, 0.6)
-		playsound(loc, 'sound/machines/buttonbeep.ogg', 1, frequency = freq_mod)
-		if(distance > world.view || here.z != there.z)
-			beeping = initial(beeping)
-	else
-		beeping--
-
-/obj/item/pinpointer/on_update_icon()
-	ClearOverlays()
-	if(!active)
-		return
-	if(!target || !target.resolve())
-		AddOverlays(image(icon,"pin_invalid"))
-		return
-
-	var/turf/here = get_turf(src)
-	var/turf/there = get_turf(target.resolve())
-	if(!istype(there))
-		AddOverlays(image(icon,"pin_invalid"))
-		return
-
-	if(here == there)
-		AddOverlays(image(icon,"pin_here"))
-		return
-
-	if(!(there.z in GetConnectedZlevels(here.z)))
-		AddOverlays(image(icon,"pin_invalid"))
-		return
-	if(here.z > there.z)
-		AddOverlays(image(icon,"pin_down"))
-		return
-	if(here.z < there.z)
-		AddOverlays(image(icon,"pin_up"))
-		return
-
-	dir = get_dir(here,there)
-	var/image/pointer = image(icon,"pin_point")
-	var/distance = get_dist(here,there)
-	if(distance < world.view)
-		pointer.color = COLOR_LIME
-	else if(distance > 4*world.view)
-		pointer.color = COLOR_RED
-	else
-		pointer.color = COLOR_YELLOW
-	AddOverlays(pointer)
-
-//Nuke ops locator
-/obj/item/pinpointer/nukeop
-	var/locate_shuttle = 0
-
-/obj/item/pinpointer/nukeop/Process()
-	var/new_mode
-	if(!locate_shuttle && bomb_set)
-		locate_shuttle = 1
-		new_mode = "Shuttle Locator"
-	else if (locate_shuttle && !bomb_set)
-		locate_shuttle = 0
-		new_mode = "Authentication Disk Locator"
-	if(new_mode)
-		playsound(loc, 'sound/machines/twobeep.ogg', 50, 1)
-		visible_message(SPAN_NOTICE("[new_mode] active."))
-		target = acquire_target()
-	..()
-
-/obj/item/pinpointer/nukeop/acquire_target()
-	if(locate_shuttle)
-		var/obj/machinery/computer/shuttle_control/multi/syndicate/home = locate()
-		return weakref(home)
-	else
-		return ..()
-
-//Deathsquad locator
+	set_dir(get_dir(src,target))
+	switch(get_dist(src,target))
+		if(0)
+			icon_state = "pinondirect"
+		if(1 to 8)
+			icon_state = "pinonclose"
+		if(9 to 16)
+			icon_state = "pinonmedium"
+		if(16 to INFINITY)
+			icon_state = "pinonfar"
+	spawn(5) .()
 
 /obj/item/pinpointer/advpinpointer/verb/toggle_mode()
 	set category = "Object"
 	set name = "Toggle Pinpointer Mode"
 	set src in view(1)
 
-	var/selection = input(usr, "Please select the type of target to locate.", "Mode" , "") as null|anything in list("Location", "Disk Recovery", "DNA", "Other Signature")
-	switch(selection)
-		if("Disk Recovery")
-			var/obj/item/disk/nuclear/the_disk = locate()
-			target = weakref(the_disk)
+	active = FALSE
+	icon_state = "pinoff"
+	target = null
+	location = null
 
+	switch(alert("Please select the mode you want to put the pinpointer in.", "Pinpointer Mode Select", "Location", "Disk Recovery", "Other Signature"))
 		if("Location")
+			mode = 1
+
 			var/locationx = input(usr, "Please input the x coordinate to search for.", "Location?" , "") as num
 			if(!locationx || !(usr in view(1,src)))
 				return
@@ -159,32 +195,129 @@
 				return
 
 			var/turf/Z = get_turf(src)
-			var/turf/location = locate(locationx,locationy,Z.z)
+
+			location = locate(locationx,locationy,Z.z)
 
 			to_chat(usr, "You set the pinpointer to locate [locationx],[locationy]")
 
-			target = weakref(location)
+
+			return attack_self()
+
+		if("Disk Recovery")
+			mode = 0
+			return attack_self()
 
 		if("Other Signature")
-			var/datum/objective/steal/itemlist
-			itemlist = itemlist // To supress a 'variable defined but not used' error.
-			var/targetitem = input("Select item to search for.", "Item Mode Select","") as null|anything in itemlist.possible_items
-			if(!targetitem)
-				return
-			var/obj/item = locate(itemlist.possible_items[targetitem])
-			if(!item)
-				to_chat(usr, "Failed to locate [targetitem]!")
-				return
-			to_chat(usr, "You set the pinpointer to locate [targetitem]")
-			target = weakref(item)
+			mode = 2
+			switch(alert("Search for item signature or DNA fragment?" , "Signature Mode Select" , "" , "Item" , "DNA"))
+				if("Item")
+					var/datum/objective/steal/itemlist
+					itemlist = itemlist // To supress a 'variable defined but not used' error.
+					var/targetitem = input("Select item to search for.", "Item Mode Select","") as null|anything in itemlist.possible_items
+					if(!targetitem)
+						return
+					target=locate(itemlist.possible_items[targetitem])
+					if(!target)
+						to_chat(usr, SPAN_WARNING("Failed to locate [targetitem]!"))
+						return
+					to_chat(usr, SPAN_NOTICE("You set the pinpointer to locate [targetitem]"))
+				if("DNA")
+					var/DNAstring = input("Input DNA string to search for." , "Please Enter String." , "")
+					if(!DNAstring)
+						return
+					for(var/mob/living/carbon/M in SSmobs.mob_list | SShumans.mob_list)
+						if(M.dna_trace == DNAstring)
+							target = M
+							break
 
-		if("DNA")
-			var/DNAstring = input("Input DNA string to search for." , "Please Enter String." , "")
-			if(!DNAstring)
-				return
-			for(var/mob/living/carbon/M in SSmobs.mob_list)
-				if(!M.dna)
-					continue
-				if(M.dna.unique_enzymes == DNAstring)
-					target = weakref(M)
-					break
+			return attack_self()
+
+
+///////////////////////
+//nuke op pinpointers//
+///////////////////////
+
+
+/obj/item/pinpointer/nukeop
+	var/mode = 0	//Mode 0 locates disk, mode 1 locates the shuttle
+	var/obj/machinery/computer/shuttle_control/multi/mercenary/home
+
+/obj/item/pinpointer/nukeop/attack_self(mob/user as mob)
+	if(!active)
+		active = TRUE
+		if(!mode)
+			workdisk()
+			to_chat(user, SPAN_NOTICE("Authentication Disk Locator active."))
+		else
+			worklocation()
+			to_chat(user, SPAN_NOTICE("Shuttle Locator active."))
+	else
+		active = 0
+		icon_state = "pinoff"
+		to_chat(user, SPAN_NOTICE("You deactivate the pinpointer."))
+
+
+/obj/item/pinpointer/nukeop/workdisk()
+	if(!active) return
+	if(mode)		//Check in case the mode changes while operating
+		worklocation()
+		return
+	if(bomb_set)	//If the bomb is set, lead to the shuttle
+		mode = 1	//Ensures worklocation() continues to work
+		worklocation()
+		playsound(loc, 'sound/machines/twobeep.ogg', 50, 1)	//Plays a beep
+		visible_message("Shuttle Locator active.")			//Lets the mob holding it know that the mode has changed
+		return		//Get outta here
+	if(!the_disk)
+		the_disk = locate()
+		if(!the_disk)
+			icon_state = "pinonnull"
+			return
+//	if(loc.z != the_disk.z)	//If you are on a different z-level from the disk
+//		icon_state = "pinonnull"
+//	else
+	set_dir(get_dir(src, the_disk))
+	switch(get_dist(src, the_disk))
+		if(0)
+			icon_state = "pinondirect"
+		if(1 to 8)
+			icon_state = "pinonclose"
+		if(9 to 16)
+			icon_state = "pinonmedium"
+		if(16 to INFINITY)
+			icon_state = "pinonfar"
+
+	spawn(5) .()
+
+
+/obj/item/pinpointer/nukeop/proc/worklocation()
+	if(!active)	return
+	if(!mode)
+		workdisk()
+		return
+	if(!bomb_set)
+		mode = 0
+		workdisk()
+		playsound(loc, 'sound/machines/twobeep.ogg', 50, 1)
+		visible_message(SPAN_NOTICE("Authentication Disk Locator active."))
+		return
+	if(!home)
+		home = locate()
+		if(!home)
+			icon_state = "pinonnull"
+			return
+	if(loc.z != home.z)	//If you are on a different z-level from the shuttle
+		icon_state = "pinonnull"
+	else
+		set_dir(get_dir(src, home))
+		switch(get_dist(src, home))
+			if(0)
+				icon_state = "pinondirect"
+			if(1 to 8)
+				icon_state = "pinonclose"
+			if(9 to 16)
+				icon_state = "pinonmedium"
+			if(16 to INFINITY)
+				icon_state = "pinonfar"
+
+	spawn(5) .()

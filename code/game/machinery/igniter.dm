@@ -1,99 +1,91 @@
 /obj/machinery/igniter
 	name = "igniter"
 	desc = "It's useful for igniting flammable items."
-	icon = 'icons/obj/structures/igniter.dmi'
+	icon = 'icons/obj/stationobjs.dmi'
 	icon_state = "igniter1"
-	var/on = 0
+	var/id = null
+	var/on = FALSE
+	plane = FLOOR_PLANE
 	anchored = TRUE
-	idle_power_usage = 20
-	active_power_usage = 1000
+	use_power = IDLE_POWER_USE
+	idle_power_usage = 2
+	active_power_usage = 4
+	var/_wifi_id
+	var/datum/wifi/receiver/button/igniter/wifi_receiver
 
-	uncreated_component_parts = list(
-		/obj/item/stock_parts/radio/receiver,
-		/obj/item/stock_parts/power/apc
-	)
-	public_variables = list(
-		/singleton/public_access/public_variable/igniter_on
-	)
-	public_methods = list(
-		/singleton/public_access/public_method/igniter_toggle
-	)
-	stock_part_presets = list(/singleton/stock_part_preset/radio/receiver/igniter = 1)
+/obj/machinery/igniter/New()
+	..()
+	update_icon()
 
 /obj/machinery/igniter/Initialize()
 	. = ..()
 	update_icon()
+	if(_wifi_id)
+		wifi_receiver = new(_wifi_id, src)
 
-/obj/machinery/igniter/on_update_icon()
+/obj/machinery/igniter/update_icon()
 	..()
 	icon_state = "igniter[on]"
 
-/obj/machinery/igniter/interface_interact(mob/user)
-	if(!CanInteract(user, DefaultTopicState()))
-		return FALSE
-	ignite()
-	visible_message(SPAN_NOTICE("\The [user] toggles \the [src]."))
-	return TRUE
+/obj/machinery/igniter/Destroy()
+	qdel(wifi_receiver)
+	wifi_receiver = null
+	return ..()
 
-/obj/machinery/igniter/Process()
-	if(is_powered())
+/obj/machinery/igniter/attack_ai(mob/user as mob)
+	return src.attack_hand(user)
+
+/obj/machinery/igniter/attack_hand(mob/user as mob)
+	if(..())
+		return 1
+	ignite()
+
+/obj/machinery/igniter/Process()	//ugh why is this even in process()?
+	if (on && powered() )
 		var/turf/location = src.loc
 		if (isturf(location))
-			location.hotspot_expose(1000)
+			location.hotspot_expose(1000,500,1)
 	return 1
 
-/obj/machinery/igniter/proc/ignite()
-	use_power_oneoff(2000)
-	on = !on
-	if(on)
-		START_PROCESSING_MACHINE(src, MACHINERY_PROCESS_SELF)
-	else
-		STOP_PROCESSING_MACHINE(src, MACHINERY_PROCESS_SELF)
+/obj/machinery/igniter/power_change()
+	..()
 	update_icon()
 
-/singleton/public_access/public_variable/igniter_on
-	expected_type = /obj/machinery/igniter
-	name = "igniter active"
-	desc = "Whether or not the igniter is igniting."
-	can_write = FALSE
-	has_updates = FALSE
+/obj/machinery/igniter/proc/ignite()
+	use_power(50)
+	on = !on
+	update_icon()
 
-/singleton/public_access/public_variable/holosign_on/access_var(obj/machinery/igniter/igniter)
-	return igniter.on
-
-/singleton/public_access/public_method/igniter_toggle
-	name = "igniter toggle"
-	desc = "Toggle the igniter on or off."
-	call_proc = TYPE_PROC_REF(/obj/machinery/igniter, ignite)
-
-/singleton/stock_part_preset/radio/receiver/igniter
-	frequency = BUTTON_FREQ
-	receive_and_call = list("button_active" = /singleton/public_access/public_method/igniter_toggle)
 
 // Wall mounted remote-control igniter.
 
 /obj/machinery/sparker
-	name = "mounted igniter"
+	name = "Mounted igniter"
 	desc = "A wall-mounted ignition device."
-	icon = 'icons/obj/structures/mounted_igniter.dmi'
+	icon = 'icons/obj/stationobjs.dmi'
 	icon_state = "migniter"
+	var/id = null
 	var/disable = 0
 	var/last_spark = 0
 	var/base_state = "migniter"
 	anchored = TRUE
-	idle_power_usage = 20
-	active_power_usage = 1000
+	use_power = IDLE_POWER_USE
+	idle_power_usage = 2
+	active_power_usage = 4
+	var/_wifi_id
+	var/datum/wifi/receiver/button/sparker/wifi_receiver
 
-	uncreated_component_parts = list(
-		/obj/item/stock_parts/radio/receiver,
-		/obj/item/stock_parts/power/apc
-	)
-	public_methods = list(
-		/singleton/public_access/public_method/sparker_spark
-	)
-	stock_part_presets = list(/singleton/stock_part_preset/radio/receiver/sparker = 1)
+/obj/machinery/sparker/Initialize()
+	. = ..()
+	if(_wifi_id)
+		wifi_receiver = new(_wifi_id, src)
 
-/obj/machinery/sparker/on_update_icon()
+/obj/machinery/sparker/Destroy()
+	qdel(wifi_receiver)
+	wifi_receiver = null
+	return ..()
+
+/obj/machinery/sparker/update_icon()
 	..()
 	if(disable)
 		icon_state = "migniter-d"
@@ -104,17 +96,19 @@
 		icon_state = "migniter-p"
 //		src.sd_SetLuminosity(0)
 
-/obj/machinery/sparker/use_tool(obj/item/W, mob/living/user, list/click_params)
-	if(isScrewdriver(W))
+/obj/machinery/sparker/power_change()
+	..()
+	update_icon()
+
+/obj/machinery/sparker/attackby(obj/item/W as obj, mob/user as mob)
+	if (istype(W, /obj/item/tool/screwdriver))
+		add_fingerprint(user)
 		disable = !disable
 		if(disable)
 			user.visible_message(SPAN_WARNING("[user] has disabled the [src]!"), SPAN_WARNING("You disable the connection to the [src]."))
 		else if(!disable)
 			user.visible_message(SPAN_WARNING("[user] has reconnected the [src]!"), SPAN_WARNING("You fix the connection to the [src]."))
 		update_icon()
-		return TRUE
-
-	return ..()
 
 /obj/machinery/sparker/attack_ai()
 	if (anchored)
@@ -131,32 +125,49 @@
 
 
 	flick("migniter-spark", src)
-	var/datum/effect/spark_spread/s = new /datum/effect/spark_spread
+	var/datum/effect/effect/system/spark_spread/s = new /datum/effect/effect/system/spark_spread
 	s.set_up(2, 1, src)
 	s.start()
 	src.last_spark = world.time
-	use_power_oneoff(2000)
+	use_power(1000)
 	var/turf/location = src.loc
 	if (isturf(location))
-		location.hotspot_expose(1000)
+		location.hotspot_expose(1000,500,1)
 	return 1
 
 /obj/machinery/sparker/emp_act(severity)
-	if(inoperable())
+	if(stat & (BROKEN|NOPOWER))
 		..(severity)
 		return
 	ignite()
 	..(severity)
 
-/singleton/public_access/public_method/sparker_spark
-	name = "spark"
-	desc = "Creates sparks to ignite nearby gases."
-	call_proc = TYPE_PROC_REF(/obj/machinery/sparker, ignite)
-
-/singleton/stock_part_preset/radio/receiver/sparker
-	frequency = BUTTON_FREQ
-	receive_and_call = list("button_active" = /singleton/public_access/public_method/sparker_spark)
-
 /obj/machinery/button/ignition
 	name = "ignition switch"
 	desc = "A remote control switch for a mounted igniter."
+
+/obj/machinery/button/ignition/attack_hand(mob/user as mob)
+
+	if(..())
+		return
+
+	use_power(5)
+
+	active = 1
+	icon_state = "launcher1"
+
+	for(var/obj/machinery/sparker/M in GLOB.machines)
+		if (M.id == id)
+			spawn( 0 )
+				M.ignite()
+
+	for(var/obj/machinery/igniter/M in GLOB.machines)
+		if(M.id == id)
+			M.ignite()
+
+	sleep(50)
+
+	icon_state = "launcher0"
+	active = 0
+
+	return

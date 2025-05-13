@@ -1,65 +1,52 @@
 /obj/item/grenade/spawnergrenade
 	desc = "It is set to detonate in 5 seconds. It will unleash unleash an unspecified anomaly into the vicinity."
 	name = "delivery grenade"
-	icon = 'icons/obj/weapons/grenade.dmi'
+	icon = 'icons/obj/grenade.dmi'
 	icon_state = "delivery"
 	item_state = "flashbang"
 	origin_tech = list(TECH_MATERIAL = 3, TECH_MAGNET = 4)
+	matter = list(MATERIAL_STEEL = 3, MATERIAL_PLASMA = 3, MATERIAL_DIAMOND = 1)
+	var/banglet = 0
+	var/spawner_type = null // must be an object path
+	var/deliveryamt = 1 // amount of type to deliver
+	var/thrower_is_friend = FALSE // is whoever primed the grenade a friend?
 
-	/// The obj/mob path to be created when the grenade explodes.
-	var/spawn_type
+/obj/item/grenade/spawnergrenade/prime(mob/user)	// Prime now just handles the two loops that query for people in lockers and people who can see it.
 
-	/// The number of spawn_type to be created when the grenade explodes.
-	var/spawn_amount = 1
+	if(spawner_type && deliveryamt)
+		// Make a quick flash
+		var/turf/T = get_turf(src)
+		playsound(T, 'sound/effects/phasein.ogg', 100, 1)
+		for(var/mob/living/carbon/human/M in viewers(T, null))
+			if(M.eyecheck() < FLASH_PROTECTION_MODERATE)
+				M.flash(0, FALSE , FALSE , FALSE , 0)
 
-	/// If set, the maximum distance to toss spawned atoms when the grenade explodes.
-	var/spawn_throw_range
+		for(var/i=1, i<=deliveryamt, i++)
+			var/atom/movable/x = new spawner_type
+			x.loc = T
+			if(thrower_is_friend && istype(x, /mob/living/simple_animal/hostile))
+				var/mob/living/simple_animal/hostile/L = x
+				L.friends += user
+			if(prob(50))
+				for(var/j = 1, j <= rand(1, 3), j++)
+					step(x, pick(NORTH,SOUTH,EAST,WEST))
 
+			// Spawn some hostile syndicate critters
 
-/obj/item/grenade/spawnergrenade/detonate(mob/living/user)
-	var/turf/origin = get_turf(src)
-	if (origin)
-		playsound(origin, 'sound/effects/phasein.ogg', 100, 1)
-		for (var/mob/living/living in viewers(origin))
-			if (living.eyecheck() < FLASH_PROTECTION_MODERATE)
-				living.flash_eyes()
-		var/list/spawned = list()
-		var/atom/movable/movable
-		var/turf/target
-		for (var/i = spawn_amount to 1 step -1)
-			movable = new spawn_type (origin)
-			spawned += movable
-			if (spawn_throw_range)
-				target = CircularRandomTurfAround(origin, Frand(1, spawn_throw_range))
-				movable.throw_at(target, spawn_throw_range, 3)
-		AfterSpawn(user, spawned)
 	qdel(src)
-
-
-/obj/item/grenade/spawnergrenade/proc/AfterSpawn(mob/living/user, list/spawned)
 	return
 
+/obj/item/grenade/spawnergrenade/manhacks
+	name = "manhack delivery grenade"
+	desc = "Deploys a swarm of floating robots that will attack anyone nearby other than the user. "
+	spawner_type = /mob/living/simple_animal/hostile/viscerator
+	deliveryamt = 5
+	origin_tech = list(TECH_MATERIAL = 3, TECH_MAGNET = 4, TECH_COVERT = 4)
+	thrower_is_friend = TRUE
 
-
-
-/obj/item/grenade/spawnergrenade/viscerator
-	name = "viscerator grenade"
-	spawn_type = /mob/living/simple_animal/hostile/viscerator
-	spawn_amount = 5
-	spawn_throw_range = 3
-
-
-/obj/item/grenade/spawnergrenade/viscerator/AfterSpawn(mob/living/user, list/spawned)
-	if (!istype(user))
-		return
-	for (var/mob/living/simple_animal/hostile/viscerator/viscerator as anything in spawned)
-		viscerator.faction = user.faction
-
-
-
-
-/obj/item/grenade/spawnergrenade/spesscarp
-	name = "carp delivery grenade"
-	spawn_type = /mob/living/simple_animal/hostile/carp
-	spawn_amount = 4
-	spawn_throw_range = 3
+/obj/item/grenade/spawnergrenade/blob
+	name = "bioweapon sample"
+	desc = "Contains an absurdly dangerous bioweapon in suspended animation. It will expand rapidly upon release. Once deployed, run like hell."
+	spawner_type = /obj/effect/blob/core
+	deliveryamt = 1
+	origin_tech = list(TECH_MATERIAL = 3, TECH_MAGNET = 4, TECH_COVERT = 4)

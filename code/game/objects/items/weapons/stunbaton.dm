@@ -1,263 +1,236 @@
 //replaces our stun baton code with /tg/station's code
 /obj/item/melee/baton
-	icon = 'icons/obj/weapons/melee_physical.dmi'
 	name = "stunbaton"
 	desc = "A stun baton for incapacitating people with."
+	icon = 'icons/obj/weapons.dmi'
 	icon_state = "stunbaton"
 	item_state = "baton"
 	slot_flags = SLOT_BELT
-	force = 15
-	throwforce = 7
+	description_info = "Highly effective against uninsulated people. High change to disarm when aimed at arms."
+	description_antag = "Can be sabotaged by inserting plasma into its battery cell. Upon being turned on it will blow"
+	force = WEAPON_FORCE_PAINFUL
+	sharp = FALSE
+	edge = FALSE
+	throwforce = WEAPON_FORCE_PAINFUL
 	w_class = ITEM_SIZE_NORMAL
 	origin_tech = list(TECH_COMBAT = 2)
-	attack_verb = list("beat", "whacked")
-	base_parry_chance = 30
-	attack_ignore_harm_check = TRUE
+	attack_verb = list("beaten")
+	price_tag = 500
 	var/stunforce = 0
-	var/agonyforce = 30
-	var/status = 0		//whether the thing is on or not
-	var/obj/item/cell/bcell
-	var/hitcost = 7
+	var/agonyforce = 40
+	var/status = FALSE		//whether the thing is on or not
+	var/hitcost = 100
+	var/obj/item/cell/cell
+	var/obj/item/cell/starting_cell = /obj/item/cell/medium/high
+	var/suitable_cell = /obj/item/cell/medium
+	light_color = COLOR_LIGHTING_ORANGE_BRIGHT
+	structure_damage_factor = STRUCTURE_DAMAGE_BLUNT
 
-/obj/item/melee/baton/loaded
-	bcell = /obj/item/cell/device/high
-
-/obj/item/melee/baton/New()
-	if(ispath(bcell))
-		bcell = new bcell(src)
-		update_icon()
-	..()
+/obj/item/melee/baton/Initialize()
+	. = ..()
+	if(!cell && suitable_cell && starting_cell)
+		cell = new starting_cell(src)
+	update_icon()
 
 /obj/item/melee/baton/Destroy()
-	if(bcell && !ispath(bcell))
-		qdel(bcell)
-		bcell = null
+	QDEL_NULL(cell)
 	return ..()
 
 /obj/item/melee/baton/get_cell()
-	return bcell
+	return cell
 
-/obj/item/melee/baton/proc/update_status()
-	if(bcell.charge < hitcost)
-		status = 0
+/obj/item/melee/baton/proc/set_status(s)
+	status = s
+	tool_qualities = status ? list(QUALITY_PULSING = 1) : null
+	update_icon()
+
+/obj/item/melee/baton/handle_atom_del(atom/A)
+	..()
+	if(A == cell)
+		cell = null
 		update_icon()
 
-/obj/item/melee/baton/proc/deductcharge(chrgdeductamt)
-	if(bcell)
-		if(bcell.checked_use(chrgdeductamt))
-			update_status()
-			return 1
-		else
-			status = 0
-			update_icon()
-			return 0
-	return null
+/obj/item/melee/baton/proc/deductcharge(var/power_drain)
+	if(cell)
+		. = cell.checked_use(power_drain) //try to use enough power
+		if(!cell.check_charge(hitcost))	//do we have enough power for another hit?
+			set_status(FALSE)
 
-/obj/item/melee/baton/on_update_icon()
+/obj/item/melee/baton/update_icon()
 	if(status)
-		icon_state = "[initial(name)]_active"
-	else if(!bcell)
-		icon_state = "[initial(name)]_nocell"
+		icon_state = "[initial(icon_state)]_active"
+	else if(!cell)
+		icon_state = "[initial(icon_state)]_nocell"
 	else
-		icon_state = "[initial(name)]"
+		icon_state = "[initial(icon_state)]"
 
-	if(icon_state == "[initial(name)]_active")
-		set_light(1.5, 2, "#ff6a00")
+	if(icon_state == "[initial(icon_state)]_active")
+		set_light(1.5, 1)
 	else
 		set_light(0)
 
-/obj/item/melee/baton/examine(mob/user, distance)
-	. = ..()
-	if(distance <= 1)
-		examine_cell(user)
-
-// Addition made by Techhead0, thanks for fullfilling the todo!
-/obj/item/melee/baton/proc/examine_cell(mob/user)
-	if(bcell)
-		to_chat(user, SPAN_NOTICE("The baton is [round(bcell.percent())]% charged."))
-	if(!bcell)
-		to_chat(user, SPAN_WARNING("The baton does not have a power source installed."))
-
-/obj/item/melee/baton/use_tool(obj/item/W, mob/living/user, list/click_params)
-	if(istype(W, /obj/item/cell/device))
-		if(!bcell && user.unEquip(W))
-			W.forceMove(src)
-			bcell = W
-			to_chat(user, SPAN_NOTICE("You install a cell into \the [src]."))
-			update_icon()
+/obj/item/melee/baton/examine(mob/user, extra_description = "")
+	if(get_dist(user, src) < 2)
+		if(cell)
+			extra_description += SPAN_NOTICE("The baton is [round(cell.percent())]% charged.")
 		else
-			to_chat(user, SPAN_NOTICE("\The [src] already has a cell."))
-		return TRUE
-
-	else if(isScrewdriver(W))
-		if(bcell)
-			bcell.update_icon()
-			bcell.dropInto(loc)
-			bcell = null
-			to_chat(user, SPAN_NOTICE("You remove the cell from \the [src]."))
-			status = 0
-			update_icon()
-			return TRUE
-	else
-		return ..()
+			extra_description += SPAN_WARNING("The baton does not have a power source installed.")
+	..(user, extra_description)
 
 /obj/item/melee/baton/attack_self(mob/user)
-	set_status(!status, user)
-	add_fingerprint(user)
-
-/obj/item/melee/baton/throw_impact(atom/hit_atom, datum/thrownthing/TT)
-	if(istype(hit_atom,/mob/living))
-		apply_hit_effect(hit_atom, hit_zone = ran_zone(TT.target_zone, 30))//more likely to hit the zone you target!
-	..()
-
-/obj/item/melee/baton/proc/set_status(newstatus, mob/user)
-	if(bcell && bcell.charge >= hitcost)
-		if(status != newstatus)
-			change_status(newstatus)
-			to_chat(user, SPAN_NOTICE("[src] is now [status ? "on" : "off"]."))
-			playsound(loc, "sparks", 75, 1, -1)
+	if(cell && cell.check_charge(hitcost))
+		set_status(!status)
+		to_chat(user, SPAN_NOTICE("[src] is now [status ? "on" : "off"]."))
+		playsound(loc, "sparks", 75, 1, -1)
 	else
-		change_status(0)
-		if(!bcell)
+		set_status(FALSE)
+		if(!cell)
 			to_chat(user, SPAN_WARNING("[src] does not have a power source!"))
 		else
-			to_chat(user,  SPAN_WARNING("[src] is out of charge."))
+			to_chat(user, SPAN_WARNING("[src] is out of charge."))
+	add_fingerprint(user)
 
-// Proc to -actually- change the status, and update the icons as well.
-// Also exists to ease "helpful" admin-abuse in case an bug prevents attack_self
-// to occur would appear. Hopefully it wasn't necessary.
-/obj/item/melee/baton/proc/change_status(s)
-	if (status != s)
-		status = s
-		update_icon()
-
-/obj/item/melee/baton/use_before(mob/M, mob/user)
-	. = FALSE
-	if (!istype(M))
-		return FALSE
-	if (status && (MUTATION_CLUMSY in user.mutations) && prob(50))
+/obj/item/melee/baton/attack(mob/M, mob/user)
+/*	if(status && (CLUMSY in user.mutations) && prob(50))
 		to_chat(user, SPAN_DANGER("You accidentally hit yourself with the [src]!"))
 		user.Weaken(30)
 		deductcharge(hitcost)
-		return TRUE
-	if (user.a_intent != I_HURT) //If not harm-batonning; bypass use_weapon entirely and just apply stun effect. Set cooldowns since bypassing use_weapon.
-		user.setClickCooldown(user.get_attack_speed(src))
-		user.do_attack_animation(M)
-		apply_hit_effect(M, user, user.zone_sel? user.zone_sel.selecting : ran_zone())
-		return TRUE
+		return
+*/
+	return ..()
 
-/obj/item/melee/baton/apply_hit_effect(mob/living/target, mob/living/user, hit_zone)
+/obj/item/melee/baton/apply_hit_effect(mob/living/target, mob/living/user, var/hit_zone)
 	if(isrobot(target))
 		return ..()
 
 	var/agony = agonyforce
 	var/stun = stunforce
-	var/obj/item/organ/external/affecting = null
+	var/obj/item/organ/external/affecting
 	if(ishuman(target))
 		var/mob/living/carbon/human/H = target
 		affecting = H.get_organ(hit_zone)
-	var/abuser =  user ? "" : "by \the [user]"
-	if (user && user.a_intent == I_HURT)
-		if (!..())
-			return FALSE
+
+	if(user.a_intent == I_HURT)
+		. = ..()
+		if (!.)	//item/attack() does it's own messaging and logs
+			return 0	// item/attack() will return 1 if they hit, 0 if they missed.
 
 		//whacking someone causes a much poorer electrical contact than deliberately prodding them.
 		stun *= 0.5
-		if (status)		//Checks to see if the stunbaton is on.
+		if(status)		//Checks to see if the stunbaton is on.
 			agony *= 0.5	//whacking someone causes a much poorer contact than prodding them.
 		else
 			agony = 0	//Shouldn't really stun if it's off, should it?
 		//we can't really extract the actual hit zone from ..(), unfortunately. Just act like they attacked the area they intended to.
-	else if (!status)
-		if (affecting)
-			target.visible_message(SPAN_WARNING("\The [target] has been prodded in the \the [affecting.name] with \the [src][abuser]. Luckily \the [src] was off."))
+	else if(!status)
+		if(affecting)
+			target.visible_message(SPAN_WARNING("[target] has been prodded in the [affecting.name] with [src] by [user]. Luckily it was off."))
 		else
-			target.visible_message(SPAN_WARNING("\The [target] has been prodded with \the[src][abuser]. Luckily \the [src] was off."))
+			target.visible_message(SPAN_WARNING("[target] has been prodded with [src] by [user]. Luckily it was off."))
 	else
-		if (affecting)
-			target.visible_message(SPAN_DANGER("\The [target] has been prodded in the \the [affecting.name] with \the [src]!"))
+		if(affecting)
+			target.visible_message(SPAN_DANGER("[target] has been prodded in the [affecting.name] with [src] by [user]!"))
 		else
-			target.visible_message(SPAN_DANGER("\The [target] has been prodded with \the [src][abuser]!"))
+			target.visible_message(SPAN_DANGER("[target] has been prodded with [src] by [user]!"))
 		playsound(loc, 'sound/weapons/Egloves.ogg', 50, 1, -1)
 
 	//stun effects
-	if (status)
+	if(status && deductcharge(hitcost))
 		target.stun_effect_act(stun, agony, hit_zone, src)
 		msg_admin_attack("[key_name(user)] stunned [key_name(target)] with the [src].")
-		deductcharge(hitcost)
 
-		if (ishuman(target))
+		if(ishuman(target))
 			var/mob/living/carbon/human/H = target
-			H.forcesay(GLOB.hit_appends)
-	return TRUE
+			H.forcesay(hit_appends)
 
 /obj/item/melee/baton/emp_act(severity)
-	if(bcell)
-		bcell.emp_act(severity)	//let's not duplicate code everywhere if we don't have to please.
+	if(cell)
+		cell.emp_act(severity)	//let's not duplicate code everywhere if we don't have to please.
 	..()
 
-// Stunbaton module for Security synthetics
+/obj/item/melee/baton/mounted
+	name = "IHS \"Compliance\" baton"
+	desc = "A mech sized baton for mech-sized problems."
+	agonyforce = 80
+	// 2x of a normal baton
+	force = WEAPON_FORCE_PAINFUL * 2
+	suitable_cell = FALSE
+	starting_cell = FALSE
+	spawn_blacklisted = TRUE
+
+/obj/item/melee/baton/mounted/deductcharge(power_drain)
+	/// Will be inside of mech equipment , which should be inside of a mech.
+	var/mob/living/exosuit/mountedMech = loc.loc
+	if(!istype(mountedMech))
+		return FALSE
+	var/obj/item/cell/mechCell = mountedMech.get_cell(FALSE)
+	if(!mechCell)
+		set_status(FALSE)
+		return FALSE
+	. = mechCell.checked_use(power_drain) //try to use enough power
+	if(!mechCell.check_charge(hitcost))	//do we have enough power for another hit?
+		set_status(FALSE)
+
+//secborg stun baton module
 /obj/item/melee/baton/robot
-	bcell = null
-	hitcost = 20
-	atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_NO_TOOLS
+	bad_type = /obj/item/melee/baton/robot
 
-// Addition made by Techhead0, thanks for fullfilling the todo!
-/obj/item/melee/baton/robot/examine_cell(mob/user)
-	to_chat(user, SPAN_NOTICE("The baton is running off an external power supply."))
-
-// Override proc for the stun baton module, found in PC Security synthetics
-// Refactored to fix #14470 - old proc defination increased the hitcost beyond
-// usability without proper checks.
-// Also hard-coded to be unuseable outside their righteous synthetic owners.
 /obj/item/melee/baton/robot/attack_self(mob/user)
-	var/mob/living/silicon/robot/R = isrobot(user) ? user : null // null if the user is NOT a robot
-	update_cell(R) // takes both robots and null
-	if (R)
-		return ..()
-	else	// Stop pretending and get out of your cardborg suit, human.
-		to_chat(user, SPAN_WARNING("You don't seem to be able interacting with this by yourself.."))
-		add_fingerprint(user)
-	return 0
-
-/obj/item/melee/baton/robot/apply_hit_effect(mob/living/target, mob/living/user, hit_zone)
-	update_cell(isrobot(user) ? user : null) // update the status before we apply the effects
+	//try to find our power cell
+	var/mob/living/silicon/robot/R = loc
+	if (istype(R))
+		cell = R.cell
 	return ..()
 
-// Updates the baton's cell to use user's own cell
-// Otherwise, if null (when the user isn't a robot), render it unuseable
-/obj/item/melee/baton/robot/proc/update_cell(mob/living/silicon/robot/user)
-	if (!user)
-		bcell = null
-		set_status(0)
-	else if (!bcell || bcell != user.cell)
-		bcell = user.cell // if it is null, nullify it anyway
+/obj/item/melee/baton/robot/attackby(obj/item/W, mob/user)
+	return
 
-// Traitor variant for Engineering synthetics.
-/obj/item/melee/baton/robot/electrified_arm
-	name = "electrified arm"
-	icon = 'icons/obj/gripper.dmi'
-	icon_state = "electrified_arm"
+/obj/item/melee/baton/MouseDrop(over_object)
+	if((loc == usr) && istype(over_object, /obj/screen/inventory/hand) && eject_item(cell, usr))
+		cell = null
+		set_status(FALSE)
+		update_icon()
 
-/obj/item/melee/baton/robot/electrified_arm/on_update_icon()
-	if(status)
-		icon_state = "electrified_arm_active"
-		set_light(1.5, 2, "#006aff")
-	else
-		icon_state = "electrified_arm"
-		set_light(0)
+/obj/item/melee/baton/attackby(obj/item/C, mob/living/user)
+	if(istype(C, suitable_cell) && !cell && insert_item(C, user))
+		cell = C
+		update_icon()
 
 //Makeshift stun baton. Replacement for stun gloves.
 /obj/item/melee/baton/cattleprod
 	name = "stunprod"
 	desc = "An improvised stun baton."
-	icon = 'icons/obj/weapons/melee_physical.dmi'
-	icon_state = "stunprod_nocell"
+	icon_state = "stunprod"
 	item_state = "prod"
-	force = 3
-	throwforce = 5
+	force = WEAPON_FORCE_NORMAL
+	throwforce = WEAPON_FORCE_NORMAL
 	stunforce = 0
-	agonyforce = 60	//same force as a stunbaton, but uses way more charge.
-	hitcost = 25
+	agonyforce = 40	//same force as a stunbaton, but uses way more charge.
+	hitcost = 150
 	attack_verb = list("poked")
 	slot_flags = null
+	starting_cell = null
+	structure_damage_factor = STRUCTURE_DAMAGE_NORMAL
+
+/obj/item/melee/baton/excelbaton
+	name = "Expropriator"
+	desc = "A cheap and effective way to feed the red tide."
+	icon_state = "sovietbaton"
+	item_state = "soviet"
+	light_color = COLOR_LIGHTING_CYAN_BRIGHT
+	force = WEAPON_FORCE_PAINFUL
+	throwforce = WEAPON_FORCE_PAINFUL
+	stunforce = 0
+	agonyforce = 40
+	hitcost = 100
+	attack_verb = list("battered")
+	slot_flags = SLOT_BELT
+	structure_damage_factor = STRUCTURE_DAMAGE_NORMAL
+	matter = list(MATERIAL_STEEL = 15, MATERIAL_PLASTEEL = 5)
+	starting_cell = /obj/item/cell/medium/excelsior
+
+//excelsior baton has 2 inhand sprites
+/obj/item/melee/baton/excelbaton/set_status(s)
+	..()
+	item_state = initial(item_state) + (status ? "_active" : "")
+	update_wear_icon()

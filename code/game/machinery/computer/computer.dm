@@ -1,125 +1,145 @@
 /obj/machinery/computer
 	name = "computer"
-	icon = 'icons/obj/machines/computer.dmi'
+	icon = 'icons/obj/computer.dmi'
 	icon_state = "computer"
 	density = TRUE
 	anchored = TRUE
+	use_power = IDLE_POWER_USE
 	idle_power_usage = 300
 	active_power_usage = 300
-	construct_state = /singleton/machine_construction/default/panel_closed/computer
-	uncreated_component_parts = null
-	stat_immune = 0
-	frame_type = /obj/machinery/constructable_frame/computerframe/deconstruct
 	var/processing = 0
-
-	health_max = 80
-	damage_hitsound = 'sound/weapons/smash.ogg'
-
+	var/CheckFaceFlag = 1 //for direction check
 	var/icon_keyboard = "generic_key"
 	var/icon_screen = "generic"
-	var/light_power_on = 1
-	var/light_range_on = 2
-	var/overlay_layer
-	atom_flags = ATOM_FLAG_NO_TEMP_CHANGE | ATOM_FLAG_CLIMBABLE
-	clicksound = "keyboard"
-
-/obj/machinery/computer/New()
-	overlay_layer = layer
-	..()
+	var/light_range_on = 1.5
+	var/light_power_on = 2
 
 /obj/machinery/computer/Initialize()
 	. = ..()
+	GLOB.computer_list += src
+	power_change()
 	update_icon()
 
-/obj/machinery/computer/can_damage_health(damage, damage_type)
-	if (!can_use_tools)
-		return FALSE
-	. = ..()
-
-/obj/machinery/computer/on_death()
+/obj/machinery/computer/Destroy()
+	GLOB.computer_list -= src
 	..()
-	visible_message(SPAN_WARNING("\The [src] breaks!"))
 
-/obj/machinery/computer/on_update_icon()
-	update_glow()
-	ClearOverlays()
-	icon = initial(icon)
-	icon_state = initial(icon_state)
+/obj/machinery/computer/Process()
+	if(stat & (NOPOWER|BROKEN))
+		return 0
+	return 1
 
-	// Connecting multiple computers in a row
-	if(initial(icon_state) == "computer")
-		var/append_string = ""
-		var/left = turn(dir, 90)
-		var/right = turn(dir, -90)
-		var/turf/L = get_step(src, left)
-		var/turf/R = get_step(src, right)
-		var/obj/machinery/computer/LC = locate() in L
-		var/obj/machinery/computer/RC = locate() in R
-		if(LC && LC.dir == dir && initial(LC.icon_state) == "computer")
-			append_string += "_L"
-		if(RC && RC.dir == dir && initial(RC.icon_state) == "computer")
-			append_string += "_R"
-		icon_state = "computer[append_string]"
+/obj/machinery/computer/emp_act(severity)
+	if(prob(20/severity)) set_broken()
+	..()
 
+/obj/machinery/computer/take_damage(amount)
+	. = ..()
+	if(QDELETED(src))
+		return 0
+	if(amount > maxHealth * 0.33)
+		for(var/x in verbs)
+			verbs -= x
+		set_broken()
+	return 0
 
-	if(reason_broken & MACHINE_BROKEN_NO_PARTS)
-		icon = 'icons/obj/machines/computer.dmi'
-		icon_state = "wired"
-		var/screen = get_component_of_type(/obj/item/stock_parts/console_screen)
-		var/keyboard = get_component_of_type(/obj/item/stock_parts/keyboard)
-		if(screen)
-			AddOverlays("comp_screen")
-		if(keyboard)
-			AddOverlays(icon_keyboard ? "[icon_keyboard]_off" : "keyboard")
-		return
+/obj/machinery/computer/bullet_act(var/obj/item/projectile/Proj)
+	if(prob(Proj.get_structure_damage()))
+		if(!(stat & BROKEN))
+			var/datum/effect/effect/system/smoke_spread/S = new/datum/effect/effect/system/smoke_spread()
+			S.set_up(3, 0, src)
+			S.start()
+		set_broken()
+	..()
 
-	if(!is_powered())
+/obj/machinery/computer/update_icon()
+	overlays.Cut()
+	if(stat & NOPOWER)
+		set_light(0)
 		if(icon_keyboard)
-			AddOverlays(image(icon,"[icon_keyboard]_off", overlay_layer))
+			overlays += image(icon,"[icon_keyboard]_off")
+		update_openspace()
 		return
-
-	if(MACHINE_IS_BROKEN(src))
-		AddOverlays(image(icon,"[icon_state]_broken", overlay_layer))
 	else
-		AddOverlays(get_screen_overlay())
+		set_light(light_range_on, light_power_on)
 
-	AddOverlays(get_keyboard_overlay())
-	var/screen_is_glowing = update_glow()
-	if(screen_is_glowing)
-		AddOverlays(emissive_appearance(icon, icon_screen))
-		if(icon_keyboard)
-			AddOverlays(emissive_appearance(icon, "[icon_keyboard]_mask"))
+	if(stat & BROKEN)
+		overlays += image(icon,"[icon_state]_broken")
+	else
+		overlays += image(icon,icon_screen)
 
-/obj/machinery/computer/proc/get_screen_overlay()
-	return overlay_image(icon,icon_screen)
-
-/obj/machinery/computer/proc/get_keyboard_overlay()
 	if(icon_keyboard)
-		return overlay_image(icon, icon_keyboard, overlay_layer)
+		overlays += image(icon, icon_keyboard)
+	update_openspace()
+
+/obj/machinery/computer/power_change()
+	..()
+	update_icon()
+	if(stat & NOPOWER)
+		set_light(0)
+	else
+		set_light(light_range_on, light_power_on)
+
+
+/obj/machinery/computer/proc/set_broken()
+	stat |= BROKEN
+	update_icon()
 
 /obj/machinery/computer/proc/decode(text)
 	// Adds line breaks
 	text = replacetext(text, "\n", "<BR>")
 	return text
 
-/**
- * Makes the computer emit light if the screen is on.
- * Returns TRUE if the screen is on, otherwise FALSE.
- */
-/obj/machinery/computer/proc/update_glow()
-	if (operable())
-		set_light(light_range_on, light_power_on, light_color)
-		return TRUE
-	else
-		set_light(0)
-		return FALSE
+/obj/machinery/computer/attackby(obj/item/I, mob/user)
+	if(QUALITY_SCREW_DRIVING in I.tool_qualities)
+		if(I.use_tool(user, src, WORKTIME_NORMAL, QUALITY_SCREW_DRIVING, FAILCHANCE_NORMAL, required_stat = STAT_MEC))
+			var/obj/structure/computerframe/A = new /obj/structure/computerframe(src.loc)
+			A.dir = src.dir
+			A.circuit = circuit
+			A.anchored = TRUE
+			for (var/obj/C in src)
+				C.loc = src.loc
+			if (src.stat & BROKEN)
+				to_chat(user, SPAN_NOTICE("The broken glass falls out."))
+				new /obj/item/material/shard(src.loc)
+				A.state = 3
+				A.icon_state = "3"
+			else
+				to_chat(user, SPAN_NOTICE("You disconnect the monitor."))
+				A.state = 4
+				A.icon_state = "4"
+			circuit.deconstruct(src)
+			qdel(src)
 
-/obj/machinery/computer/dismantle(mob/user)
-	if(MACHINE_IS_BROKEN(src))
-		to_chat(user, SPAN_NOTICE("The broken glass falls out."))
-		for(var/obj/item/stock_parts/console_screen/screen in component_parts)
-			qdel(screen)
-			new /obj/item/material/shard(loc)
+	else if(istype(I, /obj/item/device/spy_bug))
+		user.drop_item()
+		I.loc = get_turf(src)
+
 	else
-		to_chat(user, SPAN_NOTICE("You disconnect the monitor."))
-	return ..()
+		..()
+
+/obj/machinery/computer/Topic(href, href_list)
+	if(..())
+		return 1
+	if (issilicon(usr) || !CheckFaceFlag || CheckFace(src,usr))
+		keyboardsound(usr)
+		return 0
+	else
+		to_chat(usr, "You need to stand in front of console's keyboard!")
+		return 1
+
+/obj/proc/keyboardsound(mob/user as mob)
+	if(!issilicon(user))
+		playsound(src, "keyboard", 100, 1, 0)
+
+/obj/machinery/computer/attack_hand(mob/user as mob)//check mob direction
+	if(..())
+		return 1
+	if(!issilicon(user))
+		return 0
+	if (issilicon(usr) || !CheckFaceFlag || CheckFace(src,user))
+		keyboardsound(user)
+		return 0
+	else
+		to_chat(user, "you need stay face to console")
+		return 1

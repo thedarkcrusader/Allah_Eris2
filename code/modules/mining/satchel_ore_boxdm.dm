@@ -2,44 +2,33 @@
 /**********************Ore box**************************/
 
 /obj/structure/ore_box
-	icon = 'icons/obj/ore_boxes.dmi'
+	icon = 'icons/obj/mining.dmi'
 	icon_state = "orebox0"
 	name = "ore box"
 	desc = "A heavy box used for storing ore."
 	density = TRUE
+	rarity_value = 10
+	spawn_tags = SPAWN_TAG_STRUCTURE_COMMON
 	var/last_update = 0
 	var/list/stored_ore = list()
 
+/obj/structure/ore_box/attackby(obj/item/W, mob/user)
+	if (istype(W, /obj/item/ore))
+		user.remove_from_mob(W)
+		src.contents += W
+	if (istype(W, /obj/item/storage))
+		var/obj/item/storage/S = W
+		S.hide_from(usr)
+		if (locate(/obj/item/ore) in S.contents)
+			for(var/obj/item/ore/O in S.contents)
+				S.remove_from_storage(O, src) //This will move the item to this item's contents
+			playsound(loc, S.use_sound, 50, 1, -5)
+			user.visible_message(SPAN_NOTICE("[user.name] empties the [S] into the box"), SPAN_NOTICE("You empty the [S] into the box."), SPAN_NOTICE("You hear a rustling sound"))
+		else
+			to_chat(user, SPAN_WARNING("There's no ore inside the [S] to empty into here"))
+	update_ore_count()
 
-/obj/structure/ore_box/use_tool(obj/item/tool, mob/user, list/click_params)
-	// Ore - Insert ore
-	if (istype(tool, /obj/item/ore))
-		if (!user.unEquip(tool, src))
-			FEEDBACK_UNEQUIP_FAILURE(user, tool)
-			return TRUE
-		update_ore_count()
-		user.visible_message(
-			SPAN_NOTICE("\The [user] puts \a [tool] in \the [src]."),
-			SPAN_NOTICE("You put \the [tool] in \the [src].")
-		)
-		return TRUE
-
-	// Storage - Bulk insert ore
-	if (istype(tool, /obj/item/storage))
-		var/obj/item/storage/storage = tool
-		storage.hide_from(user)
-		for (var/obj/item/ore/ore in storage.contents)
-			storage.remove_from_storage(ore, src, TRUE)
-		storage.finish_bulk_removal()
-		update_ore_count()
-		user.visible_message(
-			SPAN_NOTICE("\The [user] empties \a [tool] into \the [src]."),
-			SPAN_NOTICE("You empty \the [tool] into \the [src].")
-		)
-		return TRUE
-
-	return ..()
-
+	return
 
 /obj/structure/ore_box/proc/update_ore_count()
 
@@ -52,39 +41,28 @@
 		else
 			stored_ore[O.name] = 1
 
-/obj/structure/ore_box/examine(mob/user)
-	. = ..()
+/obj/structure/ore_box/examine(mob/user, extra_description = "")
+	if(get_dist(user, src) < 2) //Can only check the contents of ore boxes if you can physically reach them.
+		if(!LAZYLEN(contents))
+			extra_description += "\nIt is empty."
+		else
+			if(world.time > last_update + 10)
+				update_ore_count() //TODO: Get rid of this --KIROV
+				last_update = world.time
 
-	// Borgs can now check contents too.
-	if((!istype(user, /mob/living/carbon/human)) && (!istype(user, /mob/living/silicon/robot)))
-		return
+			extra_description += "\nIt holds:"
+			for(var/ore in stored_ore)
+				extra_description += "\n- [stored_ore[ore]] [ore]"
 
-	if(!Adjacent(user)) //Can only check the contents of ore boxes if you can physically reach them.
-		return
-
-	add_fingerprint(user)
-
-	if(!length(contents))
-		to_chat(user, "It is empty.")
-		return
-
-	if(world.time > last_update + 10)
-		update_ore_count()
-		last_update = world.time
-
-	to_chat(user, "It holds:")
-	for(var/ore in stored_ore)
-		to_chat(user, "- [stored_ore[ore]] [ore]")
-	return
-
+	..(user, extra_description)
 
 /obj/structure/ore_box/verb/empty_box()
 	set name = "Empty Ore Box"
 	set category = "Object"
 	set src in view(1)
 
-	if(!istype(usr, /mob/living/carbon/human)) //Only living, intelligent creatures with hands can empty ore boxes.
-		to_chat(usr, SPAN_WARNING("You are physically incapable of emptying the ore box."))
+	if(!ishuman(usr)) //Only living, intelligent creatures with hands can empty ore boxes.
+		to_chat(usr, "\red You are physically incapable of emptying the ore box.")
 		return
 
 	if( usr.stat || usr.restrained() )
@@ -96,17 +74,91 @@
 
 	add_fingerprint(usr)
 
-	if(length(contents) < 1)
-		to_chat(usr, SPAN_WARNING("The ore box is empty"))
+	if(contents.len < 1)
+		to_chat(usr, "\red The ore box is empty")
 		return
 
 	for (var/obj/item/ore/O in contents)
-		O.dropInto(loc)
-	to_chat(usr, SPAN_NOTICE("You empty the ore box"))
+		contents -= O
+		O.loc = src.loc
+		O.layer = initial(O.layer)
+		O.set_plane(initial(O.plane))
 
-/obj/structure/ore_box/ex_act(severity)
-	if(severity == EX_ACT_DEVASTATING || (severity < EX_ACT_LIGHT && prob(50)))
-		for (var/obj/item/ore/O in contents)
-			O.dropInto(loc)
-			O.ex_act(severity++)
-		qdel(src)
+	to_chat(usr, "\blue You empty the ore box")
+
+	return
+
+/obj/structure/ore_box/take_damage(damage)
+	. = ..()
+	if(QDELETED(src))
+		return 0
+	for (var/obj/item/ore/O in contents)
+		O.loc = src.loc
+		O.take_damage(damage)
+	return 0
+
+/obj/structure/ore_box/attack_hand(mob/user, list/modifiers)
+	. = ..()
+	if(.)
+		return
+	if(Adjacent(user))
+		ui_interact(user)
+
+/obj/structure/ore_box/attack_robot(mob/user)
+	if(Adjacent(user))
+		ui_interact(user)
+
+/obj/structure/ore_box/proc/dump_box_contents(ore_name, ore_amount=-1)
+	var/drop = drop_location()
+	for(var/obj/item/ore/O in src)
+		if(ore_amount == 0)
+			break
+		if(QDELETED(O))
+			continue
+		if(QDELETED(src))
+			break
+		if(ore_name && O.name != ore_name)
+			continue
+		ore_amount--
+		O.forceMove(drop)
+
+/obj/structure/ore_box/ui_interact(mob/user, datum/tgui/ui)
+	ui = SStgui.try_update_ui(user, src, ui)
+	if(!ui)
+		ui = new(user, src, "OreBox", name)
+		ui.open()
+
+/obj/structure/ore_box/ui_data()
+	var/data = list()
+	data["materials"] = list()
+	for(var/ore in stored_ore)
+		data["materials"] += list(list("name" = ore, "amount" = stored_ore[ore], "type" = ore))
+
+	return data
+
+/obj/structure/ore_box/ui_act(action, params)
+	. = ..()
+	if(.)
+		return
+	if(!Adjacent(usr))
+		return
+	add_fingerprint(usr)
+	switch(action)
+		if("ejectallores")
+			dump_box_contents()
+			to_chat(usr, span_notice("You release all the content of the box."))
+			update_ore_count()
+			return TRUE
+		if("ejectall")
+			var/ore_name = params["type"]
+			dump_box_contents(ore_name)
+			to_chat(usr, span_notice("You release all the [ore_name] ores."))
+			update_ore_count()
+			return TRUE
+		if("eject")
+			var/ore_name = params["type"]
+			var/ore_amount = params["qty"]
+			dump_box_contents(ore_name, ore_amount)
+			to_chat(usr, span_notice("You release [ore_amount] [ore_name] ores."))
+			update_ore_count()
+			return TRUE

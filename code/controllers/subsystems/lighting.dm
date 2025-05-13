@@ -1,214 +1,103 @@
+#define STAGE_SOURCES  1
+#define STAGE_CORNERS  2
+#define STAGE_OVERLAYS 3
+
+var/list/lighting_update_lights    = list() // List of lighting sources  queued for update.
+var/list/lighting_update_corners   = list() // List of lighting corners  queued for update.
+var/list/lighting_update_overlays  = list() // List of lighting overlays queued for update.
+
 SUBSYSTEM_DEF(lighting)
 	name = "Lighting"
-	wait = LIGHTING_INTERVAL
-	priority = SS_PRIORITY_LIGHTING
-	init_order = SS_INIT_LIGHTING
-	runlevels = RUNLEVELS_PREGAME | RUNLEVELS_GAME
+	wait = 1
+	init_order = INIT_ORDER_LIGHTING
+	flags = SS_TICKER
 
-	var/total_lighting_overlays = 0
-	var/total_lighting_sources = 0
-	var/total_ambient_turfs = 0
-	var/total_lighting_corners = 0
+	var/list/currentrun_lights
+	var/list/currentrun_corners
+	var/list/currentrun_overlays
 
-	/// lighting sources  queued for update.
-	var/list/light_queue   = list()
-	var/lq_idex = 1
-	/// lighting corners  queued for update.
-	var/list/corner_queue  = list()
-	var/cq_idex = 1
-	/// lighting overlays queued for update.
-	var/list/overlay_queue = list()
-	var/oq_idex = 1
+	var/resuming_stage = 0
 
-	// - Performance and analytics data
-	var/processed_lights = 0
-	var/processed_corners = 0
-	var/processed_overlays = 0
+/datum/controller/subsystem/lighting/stat_entry(msg)
+	msg = "L:[LAZYLEN(lighting_update_lights)]|C:[LAZYLEN(lighting_update_corners)]|O:[LAZYLEN(lighting_update_overlays)]"
+	return ..()
 
-	var/total_ss_updates = 0
-	var/total_instant_updates = 0
-
-#ifdef USE_INTELLIGENT_LIGHTING_UPDATES
-	var/force_queued = TRUE
-	var/force_override = FALSE	// For admins.
-#endif
-
-/datum/controller/subsystem/lighting/UpdateStat(time)
-	var/list/out = list(
-#ifdef USE_INTELLIGENT_LIGHTING_UPDATES
-		"IUR: [total_ss_updates ? round(total_instant_updates/(total_instant_updates+total_ss_updates)*100, 0.1) : "NaN"]%\n",
-#endif
-		"\tT:{L:[total_lighting_sources] C:[total_lighting_corners] O:[total_lighting_overlays] A:[total_ambient_turfs]}\n",
-		"\tP:{L:[length(light_queue) - (lq_idex - 1)]|C:[length(corner_queue) - (cq_idex - 1)]|O:[length(overlay_queue) - (oq_idex - 1)]}\n",
-		"\tL:{L:[processed_lights]|C:[processed_corners]|O:[processed_overlays]}\n"
-	)
-	..(out.Join())
-
-#ifdef USE_INTELLIGENT_LIGHTING_UPDATES
-
-/hook/roundstart/proc/lighting_init_roundstart()
-	SSlighting.handle_roundstart()
-	return TRUE
-
-/datum/controller/subsystem/lighting/proc/handle_roundstart()
-	force_queued = FALSE
-	total_ss_updates = 0
-	total_instant_updates = 0
-
-#endif
-/// Generate overlays for all Zlevels and then fire normally
 /datum/controller/subsystem/lighting/Initialize(timeofday)
-	var/overlaycount = 0
-	var/starttime = uptime()
+	create_all_lighting_overlays()
+	. = ..()
 
-	// Generate overlays.
-	for (var/zlevel = 1 to world.maxz)
-		overlaycount += InitializeZlev(zlevel)
+/datum/controller/subsystem/lighting/fire(resumed=FALSE)
+	if (resuming_stage == 0 || !resumed)
+		src.currentrun_lights   = lighting_update_lights
+		lighting_update_lights   = list()
 
-	admin_notice(SPAN_DANGER("Created [overlaycount] lighting overlays in [(uptime() - starttime)/10] seconds."), R_DEBUG)
+		resuming_stage = STAGE_SOURCES
 
-	starttime = uptime()
-	// Tick once to clear most lights.
-	fire(FALSE, TRUE)
+	var/list/currentrun_lights = src.currentrun_lights
 
-	admin_notice(SPAN_DANGER("Processed [processed_lights] light sources."), R_DEBUG)
-	admin_notice(SPAN_DANGER("Processed [processed_corners] light corners."), R_DEBUG)
-	admin_notice(SPAN_DANGER("Processed [processed_overlays] light overlays."), R_DEBUG)
-	admin_notice(SPAN_DANGER("Lighting pre-bake completed in [(uptime() - starttime)/10] seconds."), R_DEBUG)
+	while (currentrun_lights.len)
+		var/datum/light_source/L = currentrun_lights[currentrun_lights.len]
+		currentrun_lights.len--
 
-	log_ss("lighting", "NOv:[overlaycount] L:[processed_lights] C:[processed_corners] O:[processed_overlays]")
+		if (L.check() || L.destroyed || L.force_update)
+			L.remove_lum()
+			if (!L.destroyed)
+				L.apply_lum()
 
-	..()
+		else if (L.vis_update)
+			L.smart_vis_update()
 
-/**
- * Go over turfs thay may be dynamically lit and add a lighting overlay if they don't have one. Then do the same for turfs that may be ambient lit.
- *
- * **Parameters**:
- * - `zlev` int - z-level index
- */
-/datum/controller/subsystem/lighting/proc/InitializeZlev(zlev)
-	for (var/thing in Z_ALL_TURFS(zlev))
-		var/turf/T = thing
-		if (TURF_IS_DYNAMICALLY_LIT_UNSAFE(T) && !T.lighting_overlay)	// Can't assume that one hasn't already been created on bay/neb.
-			new /atom/movable/lighting_overlay(T)
-			. += 1
-			if(TURF_IS_AMBIENT_LIT_UNSAFE(T))
-				T.generate_missing_corners()	// Forcibly generate corners.
+		L.vis_update   = FALSE
+		L.force_update = FALSE
+		L.needs_update = FALSE
 
-		CHECK_TICK
+		if (MC_TICK_CHECK)
+			return
 
-/// Initialize a set of turfs (for example as part of loading a map template) It's safe to pass a list of non-turfs to this list - it'll only check turfs.
-/datum/controller/subsystem/lighting/proc/InitializeTurfs(list/targets)
-	for (var/turf/T in (targets || world))
-		if (TURF_IS_DYNAMICALLY_LIT_UNSAFE(T))
-			T.lighting_build_overlay()
+	if (resuming_stage == STAGE_SOURCES || !resumed)
+		// PJB left this in, was causing crashes.
+		//if (currentrun_corners && currentrun_corners.len)
+		//	to_chat(world, "we still have corners to do, but we're gonna override them?")
 
-		// If this isn't here, BYOND will set-background us.
-		CHECK_TICK
+		src.currentrun_corners  = lighting_update_corners
+		lighting_update_corners  = list()
 
-/**
- * Go over light queue and update corners as needed
- * Go over light corner queue and update overlays as needed
- * Go over overlay queue and update as needed
- */
-/datum/controller/subsystem/lighting/fire(resumed = FALSE, no_mc_tick = FALSE)
-	if (!resumed)
-		processed_lights = 0
-		processed_corners = 0
-		processed_overlays = 0
+		resuming_stage = STAGE_CORNERS
 
-	MC_SPLIT_TICK_INIT(3)
-	if (!no_mc_tick)
-		MC_SPLIT_TICK
+	var/list/currentrun_corners = src.currentrun_corners
 
-	var/list/curr_lights = light_queue
-	var/list/curr_corners = corner_queue
-	var/list/curr_overlays = overlay_queue
+	while (currentrun_corners.len)
+		var/datum/lighting_corner/C = currentrun_corners[currentrun_corners.len]
+		currentrun_corners.len--
 
-	while (lq_idex <= length(curr_lights))
-		var/datum/light_source/L = curr_lights[lq_idex++]
+		C.update_overlays()
+		C.needs_update = FALSE
+		if (MC_TICK_CHECK)
+			return
 
-		if (L.needs_update != LIGHTING_NO_UPDATE)
-			total_ss_updates += 1
-			L.update_corners()
+	if (resuming_stage == STAGE_CORNERS || !resumed)
+		src.currentrun_overlays = lighting_update_overlays
+		lighting_update_overlays = list()
 
-			L.needs_update = LIGHTING_NO_UPDATE
+		resuming_stage = STAGE_OVERLAYS
 
-			processed_lights++
+	var/list/currentrun_overlays = src.currentrun_overlays
 
-		if (no_mc_tick)
-			CHECK_TICK
-		else if (MC_TICK_CHECK)
-			break
+	while (currentrun_overlays.len)
+		var/atom/movable/lighting_overlay/O = currentrun_overlays[currentrun_overlays.len]
+		currentrun_overlays.len--
 
-	if (lq_idex > 1)
-		curr_lights.Cut(1, lq_idex)
-		lq_idex = 1
+		O.update_overlay()
+		O.needs_update = FALSE
+		if (MC_TICK_CHECK)
+			return
 
-	if (!no_mc_tick)
-		MC_SPLIT_TICK
-
-	while (cq_idex <= length(curr_corners))
-		var/datum/lighting_corner/C = curr_corners[cq_idex++]
-
-		if (C.needs_update)
-			C.update_overlays()
-
-			C.needs_update = FALSE
-
-			processed_corners++
-
-		if (no_mc_tick)
-			CHECK_TICK
-		else if (MC_TICK_CHECK)
-			break
-
-	if (cq_idex > 1)
-		curr_corners.Cut(1, cq_idex)
-		cq_idex = 1
-
-	if (!no_mc_tick)
-		MC_SPLIT_TICK
-
-	while (oq_idex <= length(curr_overlays))
-		var/atom/movable/lighting_overlay/O = curr_overlays[oq_idex++]
-
-		if (!QDELETED(O) && O.needs_update)
-			O.update_overlay()
-			O.needs_update = FALSE
-
-			processed_overlays++
-
-		if (no_mc_tick)
-			CHECK_TICK
-		else if (MC_TICK_CHECK)
-			break
-
-	if (oq_idex > 1)
-		curr_overlays.Cut(1, oq_idex)
-		oq_idex = 1
+	resuming_stage = 0
 
 /datum/controller/subsystem/lighting/Recover()
-	total_lighting_corners = SSlighting.total_lighting_corners
-	total_lighting_overlays = SSlighting.total_lighting_overlays
-	total_lighting_sources = SSlighting.total_lighting_sources
+	initialized = SSlighting.initialized
+	..()
 
-	light_queue = SSlighting.light_queue
-	corner_queue = SSlighting.corner_queue
-	overlay_queue = SSlighting.overlay_queue
-
-	lq_idex = SSlighting.lq_idex
-	cq_idex = SSlighting.cq_idex
-	oq_idex = SSlighting.oq_idex
-
-	if (lq_idex > 1)
-		light_queue.Cut(1, lq_idex)
-		lq_idex = 1
-
-	if (cq_idex > 1)
-		corner_queue.Cut(1, cq_idex)
-		cq_idex = 1
-
-	if (oq_idex > 1)
-		overlay_queue.Cut(1, oq_idex)
-		oq_idex = 1
+#undef STAGE_SOURCES
+#undef STAGE_CORNERS
+#undef STAGE_OVERLAYS

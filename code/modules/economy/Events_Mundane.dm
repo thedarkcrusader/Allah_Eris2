@@ -5,7 +5,7 @@
 /datum/event/mundane_news/announce()
 	var/datum/trade_destination/affected_dest = pickweight(weighted_mundaneevent_locations)
 	var/event_type = 0
-	if(length(affected_dest.viable_mundane_events))
+	if(affected_dest.viable_mundane_events.len)
 		event_type = pick(affected_dest.viable_mundane_events)
 
 	if(!event_type)
@@ -20,9 +20,9 @@
 		body = ""
 		switch(event_type)
 			if(RESEARCH_BREAKTHROUGH)
-				body = "A major breakthough in the field of [pick("phoron research","super-compressed materials","nano-augmentation","bluespace research","volatile power manipulation")] \
+				body = "A major breakthough in the field of [pick("plasma research","super-compressed materials","nano-augmentation","bluespace research","volatile power manipulation")] \
 				was announced [pick("yesterday","a few days ago","last week","earlier this month")] by a private firm on [affected_dest.name]. \
-				[GLOB.using_map.company_name] declined to comment as to whether this could impinge on profits."
+				[company_name] declined to comment as to whether this could impinge on profits."
 
 			if(ELECTION)
 				body = "The pre-selection of an additional candidates was announced for the upcoming [pick("supervisors council","advisory board","governership","board of inquisitors")] \
@@ -32,7 +32,7 @@
 				"I will maintain my company's record profits","I believe in our future","We must return to our moral core","Just like... chill out dudes")]'."
 
 			if(RESIGNATION)
-				body = "[GLOB.using_map.company_name] regretfully announces the resignation of [pick("Sector Admiral","Division Admiral","Ship Admiral","Vice Admiral")] [random_name(pick(MALE,FEMALE))]."
+				body = "[company_name] regretfully announces the resignation of [pick("Sector Admiral","Division Admiral","Ship Admiral","Vice Admiral")] [random_name(pick(MALE,FEMALE))]."
 				if(prob(25))
 					var/locstring = pick("Segunda","Salusa","Cepheus","Andromeda","Gruis","Corona","Aquila","Asellus") + " " + pick("I","II","III","IV","V","VI","VII","VIII")
 					body += " In a ceremony on [affected_dest.name] this afternoon, they will be awarded the \
@@ -75,14 +75,14 @@
 			if(SONG_DEBUT)
 				body += "[pick("Singer","Singer/songwriter","Saxophonist","Pianist","Guitarist","TV personality","Star")] [random_name(pick(MALE,FEMALE))] \
 				announced the debut of their new [pick("single","album","EP","label")] '[pick("Everyone's","Look at the","Baby don't eye those","All of those","Dirty nasty")] \
-				[pick("roses","three stars","starships","nanobots","cyborgs",SPECIES_SKRELL,"Sren'darr")] \
+				[pick("roses","three stars","starships","nanobots","cyborgs")] \
 				[pick("on Venus","on Reade","on Moghes","in my hand","slip through my fingers","die for you","sing your heart out","fly away")]' \
 				with [pick("pre-puchases available","a release tour","cover signings","a launch concert")] on [affected_dest.name]."
 
 			if(MOVIE_RELEASE)
 				body += "From the [pick("desk","home town","homeworld","mind")] of [pick("acclaimed","award-winning","popular","stellar")] \
 				[pick("playwright","author","director","actor","TV star")] [random_name(pick(MALE,FEMALE))] comes the latest sensation: '\
-				[pick("Deadly","The last","Lost","Dead")] [pick("Starships","Warriors","outcasts",SPECIES_UNATHI,SPECIES_SKRELL)] \
+				[pick("Deadly","The last","Lost","Dead")] [pick("Starships","Warriors","outcasts")] \
 				[pick("of","from","raid","go hunting on","visit","ravage","pillage","destroy")] \
 				[pick("Moghes","Earth","Biesel","Ahdomai","S'randarr","the Void","the Edge of Space")]'.\
 				. Own it on webcast today, or visit the galactic premier on [affected_dest.name]!"
@@ -122,8 +122,7 @@
 				"a huge new ARG by a popular entertainment company","a secret tour by popular artiste [random_name(pick(MALE,FEMALE))]")]. \
 				Nyx Daily is offering discount tickets for two to see [random_name(pick(MALE,FEMALE))] live in return for eyewitness reports and up to the minute coverage."
 
-	for (var/datum/feed_network/N in news_network)
-		N.SubmitArticle(body, author, channel, null, 1)
+	news_network.SubmitArticle(body, author, channel, null, 1)
 
 /datum/event/trivial_news
 	endWhen = 10
@@ -140,8 +139,8 @@
 	"Pens proclaim pencils obsolete, 'lead is dead'.",\
 	"Rock and paper sues scissors for discrimination.",\
 	"Steak tell-all book reveals he never liked sitting by potato.",\
-	"Woodchuck stops counting how many times he's chucked 'Never again'.",\
-	"[affected_dest.name] clerk first person able to pronounce '@*$%!'.",\
+	"Woodchuck stops counting how many times he�s chucked 'Never again'.",\
+	"[affected_dest.name] clerk first person able to pronounce '@*[CREDS]%!'.",\
 	"[affected_dest.name] delis serving boiled paperback dictionaries, 'Adjectives chewy' customers declare.",\
 	"[affected_dest.name] weather deemed 'boring'; meteors and rad storms to be imported.",\
 	"Most [affected_dest.name] security officers prefer cream over sugar.",\
@@ -151,16 +150,14 @@
 	"World largest carp patty at display on [affected_dest.name].",\
 	"Man travels 7000 light years to retrieve lost hankie, 'It was my favourite'.",\
 	"New bowling lane that shoots mini-meteors at bowlers very popular.",\
-	"[pick(SPECIES_UNATHI,"Spacer")] gets tattoo of Nyx on chest '[pick("[GLOB.using_map.boss_short]","star","starship","asteroid")] tickles most'.",\
-	"Skrell marries computer; wedding attended by 100 modems.",\
+	"[pick("Unathi","Spacer")] gets tattoo of Nyx on chest '[pick("[boss_short]","star","starship","asteroid")] tickles most'.",\
 	"Chef reports successfully using harmonica as cheese grater.",\
-	"[GLOB.using_map.company_name] invents handkerchief that says 'Bless you' after sneeze.",\
-	"Clone accused of posing for other clones's school photo.",\
-	"Clone accused of stealing other clones's employee of the month award.",\
-	"Woman robs [station_name()] with hair dryer; crewmen love new style.",\
+	"[company_name] invents handkerchief that says 'Bless you' after sneeze.",\
+	"Clone accused of posing for other clones�s school photo.",\
+	"Clone accused of stealing other clones�s employee of the month award.",\
+	"Woman robs station with hair dryer; crewmen love new style.",\
 	"This space for rent.",\
 	"[affected_dest.name] Baker Wins Pickled Crumpet Toss Three Years Running",\
-	"Skrell Scientist Discovers Abacus Can Be Used To Dry Towels",\
 	"Survey: 'Cheese Louise' Voted Best Pizza Restaurant In Nyx",\
 	"I Was Framed, jokes [affected_dest.name] artist",\
 	"Mysterious Loud Rumbling Noises In [affected_dest.name] Found To Be Mysterious Loud Rumblings",\
@@ -174,8 +171,7 @@
 	"[affected_dest.name] Phonebooks Print All Wrong Numbers; Results In 15 New Marriages",\
 	"Gibson Gazette Updates Frequently Absurd, Poll Indicates",\
 	"Esoteric Verbosity Culminates In Communicative Ennui, [affected_dest.name] Academics Note",\
-	"Survey: 3 Out Of 5 Skrell Loathe Modern Art",\
-	"Skrell Scientist Discovers Gravity While Falling Down Stairs",\
+	"Taj Demand Longer Breaks, Cleaner Litter, Slower Mice",\
 	"Shipment Of Apples Overturns, [affected_dest.name] Diner Offers Applesauce Special",\
 	"Spotted Owl Spotted on [affected_dest.name]",\
 	"From The Desk Of Wise Guy Sammy: One Word In This Gazette Is Sdrawkcab",\
@@ -211,5 +207,5 @@
 	"If Tin Whistles Are Made Of Tin, What Do They Make Foghorns Out Of?",\
 	"Broccoli discovered to be colonies of tiny aliens with murder on their minds"\
 	)
-	for (var/datum/feed_network/N in news_network)
-		N.SubmitArticle(body, author, channel, null, 1)
+
+	news_network.SubmitArticle(body, author, channel, null, 1)

@@ -1,22 +1,35 @@
 GLOBAL_LIST_EMPTY(all_observable_events)
 
-// True if net rebuild will be called manually after an event.
-GLOBAL_VAR_AS(defer_powernet_rebuild, FALSE)
+//see proc/get_average_color()
+GLOBAL_LIST_EMPTY(average_icon_color)
 
-// Those networks can only be accessed by pre-existing terminals. AIs and new terminals can't use them.
-GLOBAL_LIST_AS(restricted_camera_networks, list(
-	NETWORK_ERT,
-	NETWORK_MERCENARY,
-	NETWORK_CRESCENT,
-	"Secret"
-))
+//see getFlatTypeIcon()
+GLOBAL_LIST_EMPTY(initialTypeIcon)
 
-GLOBAL_VAR_AS(stat_flags_planted, 0)
+GLOBAL_DATUM(lobbyScreen, /datum/lobbyscreen)
 
-GLOBAL_VAR_AS(stat_flora_scanned, 0)
+// WORLD TOPIC CACHING //
+GLOBAL_VAR(topic_status_lastcache)
+GLOBAL_LIST(topic_status_cache)
 
-GLOBAL_LIST_EMPTY(stat_fauna_scanned)
+GLOBAL_LIST_INIT(custom_kits, list(
+	"Example OneStar bag of holding" = list(
+		/obj/item/storage/backpack/holding,
+		/obj/item/clothing/under/onestar,
+		/obj/item/clothing/suit/storage/greatcoat/onestar,
+		/obj/item/clothing/head/onestar,
+		/obj/item/tank/onestar_regenerator,
+		/obj/item/clothing/mask/gas,
+		/obj/item/clothing/shoes/jackboots,
+		/obj/item/clothing/glasses/powered/thermal/onestar,
+		/obj/item/gun/projectile/type_47,
+		/obj/item/ammo_magazine/ihclrifle,
+		/obj/item/ammo_magazine/ihclrifle,
+		/obj/item/ammo_magazine/ihclrifle)))
 
-GLOBAL_VAR_AS(extracted_slime_cores_amount, 0)
+// LOGGING  MOVE ME //
+GLOBAL_VAR(log_directory)
+GLOBAL_PROTECT(log_directory)
 
-GLOBAL_VAR_AS(crew_death_count, 0)
+// TGUI MOVE ME //
+GLOBAL_DATUM(changelog_tgui, /datum/changelog)

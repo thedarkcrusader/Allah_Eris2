@@ -3,6 +3,7 @@
  * Stealing a lot of concepts/code from sleepers due to massive laziness.
  * The despawn tick will only fire if it's been more than time_till_despawned ticks
  * since time_entered, which is world.time when the occupant moves in.
+ * ~ Zuhayr
  */
 
 
@@ -11,11 +12,13 @@
 /obj/machinery/computer/cryopod
 	name = "cryogenic oversight console"
 	desc = "An interface between crew and the cryogenic storage oversight systems."
-	icon = 'icons/obj/machines/medical/cryopod.dmi'
+	icon = 'icons/obj/Cryogenic2.dmi'
 	icon_state = "cellconsole"
+	light_power = 1.5
+	light_color = COLOR_LIGHTING_BLUE_MACHINERY
+	circuit = /obj/item/electronics/circuitboard/cryopodcontrol
 	density = FALSE
 	interact_offline = 1
-	stat_immune = MACHINE_STAT_NOSCREEN | MACHINE_STAT_NOINPUT | MACHINE_STAT_NOPOWER
 	var/mode = null
 
 	//Used for logging people entering cryosleep and important items they are carrying.
@@ -29,47 +32,54 @@
 
 /obj/machinery/computer/cryopod/robot
 	name = "robotic storage console"
-	desc = "An interface between crew and the robotic storage systems."
-	icon = 'icons/obj/machines/robot_storage.dmi'
+	desc = "An interface between crew and the robotic storage systems"
+	icon = 'icons/obj/robot_storage.dmi'
 	icon_state = "console"
+	circuit = /obj/item/electronics/circuitboard/robotstoragecontrol
 
 	storage_type = "cyborgs"
 	storage_name = "Robotic Storage Control"
 	allow_items = 0
 
-/obj/machinery/computer/cryopod/on_update_icon()
-	return
+/obj/machinery/computer/cryopod/attack_hand(mob/user = usr)
+	if(stat & (NOPOWER|BROKEN))
+		return
 
-/obj/machinery/computer/cryopod/interface_interact(mob/user)
-	interact(user)
-	return TRUE
-
-/obj/machinery/computer/cryopod/interact(mob/user)
 	user.set_machine(src)
+	src.add_fingerprint(usr)
 
 	var/dat
 
 	dat += "<hr/><br/><b>[storage_name]</b><br/>"
 	dat += "<i>Welcome, [user.real_name].</i><br/><br/><hr/>"
-	dat += "<a href='byond://?src=\ref[src];log=1'>View storage log</a>.<br>"
+	dat += "<a href='?src=\ref[src];log=1'>View storage log</a>.<br>"
 	if(allow_items)
-		dat += "<a href='byond://?src=\ref[src];view=1'>View objects</a>.<br>"
-		dat += "<a href='byond://?src=\ref[src];item=1'>Recover object</a>.<br>"
-		dat += "<a href='byond://?src=\ref[src];allitems=1'>Recover all objects</a>.<br>"
+		dat += "<a href='?src=\ref[src];view=1'>View objects</a>.<br>"
+		dat += "<a href='?src=\ref[src];item=1'>Recover object</a>.<br>"
+		dat += "<a href='?src=\ref[src];allitems=1'>Recover all objects</a>.<br>"
 
-	show_browser(user, dat, "window=cryopod_console")
+	user << browse(dat, "window=cryopod_console")
 	onclose(user, "cryopod_console")
 
-/obj/machinery/computer/cryopod/OnTopic(user, href_list, state)
+/obj/machinery/computer/cryopod/Topic(href, href_list)
+
+	if(..())
+		return
+
+	var/mob/user = usr
+
+	src.add_fingerprint(user)
+
 	if(href_list["log"])
+
 		var/dat = "<b>Recently stored [storage_type]</b><br/><hr/><br/>"
 		for(var/person in frozen_crew)
 			dat += "[person]<br/>"
 		dat += "<hr/>"
-		show_browser(user, dat, "window=cryolog")
-		. = TOPIC_REFRESH
 
-	else if(href_list["view"])
+		user << browse(dat, "window=cryolog")
+
+	if(href_list["view"])
 		if(!allow_items) return
 
 		var/dat = "<b>Recently stored objects</b><br/><hr/><br/>"
@@ -77,61 +87,61 @@
 			dat += "[I.name]<br/>"
 		dat += "<hr/>"
 
-		show_browser(user, dat, "window=cryoitems")
-		. = TOPIC_HANDLED
+		user << browse(dat, "window=cryoitems")
 
 	else if(href_list["item"])
 		if(!allow_items) return
 
-		if(length(frozen_items) == 0)
-			to_chat(user, SPAN_NOTICE("There is nothing to recover from storage."))
-			return TOPIC_HANDLED
+		if(frozen_items.len == 0)
+			to_chat(user, "<span class='notice'>There is nothing to recover from storage.</span>")
+			return
 
-		var/obj/item/I = input(user, "Please choose which object to retrieve.","Object recovery",null) as null|anything in frozen_items
-		if(!I || !CanUseTopic(user, state))
-			return TOPIC_HANDLED
+		var/obj/item/I = input(usr, "Please choose which object to retrieve.","Object recovery",null) as null|anything in frozen_items
+		if(!I)
+			return
 
 		if(!(I in frozen_items))
-			to_chat(user, SPAN_NOTICE("\The [I] is no longer in storage."))
-			return TOPIC_HANDLED
+			to_chat(user, "<span class='notice'>\The [I] is no longer in storage.</span>")
+			return
 
-		visible_message(SPAN_NOTICE("The console beeps happily as it disgorges \the [I]."), range = 3)
+		visible_message("<span class='notice'>The console beeps happily as it disgorges \the [I].</span>")
 
-		I.dropInto(loc)
+		I.forceMove(get_turf(src))
 		frozen_items -= I
-		. = TOPIC_REFRESH
 
 	else if(href_list["allitems"])
-		if(!allow_items) return TOPIC_HANDLED
+		if(!allow_items) return
 
-		if(length(frozen_items) == 0)
-			to_chat(user, SPAN_NOTICE("There is nothing to recover from storage."))
-			return TOPIC_HANDLED
+		if(frozen_items.len == 0)
+			to_chat(user, "<span class='notice'>There is nothing to recover from storage.</span>")
+			return
 
-		visible_message(SPAN_NOTICE("The console beeps happily as it disgorges the desired objects."), range = 3)
+		visible_message("<span class='notice'>The console beeps happily as it disgorges the desired objects.</span>")
 
 		for(var/obj/item/I in frozen_items)
-			I.dropInto(loc)
+			I.forceMove(get_turf(src))
 			frozen_items -= I
-		. = TOPIC_REFRESH
 
-/obj/item/stock_parts/circuitboard/cryopodcontrol
-	name = "circuit board (cryogenic oversight console)"
+	src.updateUsrDialog()
+	return
+
+/obj/item/electronics/circuitboard/cryopodcontrol
+	name = "Circuit board (Cryogenic Oversight Console)"
 	build_path = /obj/machinery/computer/cryopod
 	origin_tech = list(TECH_DATA = 3)
 
-/obj/item/stock_parts/circuitboard/robotstoragecontrol
-	name = "circuit board (robotic storage console)"
+/obj/item/electronics/circuitboard/robotstoragecontrol
+	name = "Circuit board (Robotic Storage Console)"
 	build_path = /obj/machinery/computer/cryopod/robot
 	origin_tech = list(TECH_DATA = 3)
 
 //Decorative structures to go alongside cryopods.
 /obj/structure/cryofeed
-
 	name = "cryogenic feed"
 	desc = "A bewildering tangle of machinery and pipes."
-	icon = 'icons/obj/machines/medical/cryogenic_legacy.dmi'
+	icon = 'icons/obj/Cryogenic2.dmi'
 	icon_state = "cryo_rear"
+	density = TRUE
 	anchored = TRUE
 	dir = WEST
 
@@ -139,26 +149,22 @@
 /obj/machinery/cryopod
 	name = "cryogenic freezer"
 	desc = "A man-sized pod for entering suspended animation."
-	icon = 'icons/obj/machines/medical/cryopod.dmi'
+	icon = 'icons/obj/Cryogenic2.dmi'
 	icon_state = "cryopod"
 	density = TRUE
 	anchored = TRUE
 	dir = WEST
 
-	var/base_icon_state = "cryopod"
-	var/occupied_icon_state = "cryopod_closed"
 	var/on_store_message = "has entered long-term storage."
-	var/on_store_visible_message = "hums and hisses as it moves $occupant$ into storage." // $occupant$ is automatically converted to the occupant's name
 	var/on_store_name = "Cryogenic Oversight"
 	var/on_enter_occupant_message = "You feel cool air surround you. You go numb as your senses turn inward."
 	var/allow_occupant_types = list(/mob/living/carbon/human)
 	var/disallow_occupant_types = list()
 
 	var/mob/occupant = null       // Person waiting to be despawned.
-	var/time_till_despawn = 9000  // Down to 15 minutes //30 minutes-ish is too long
+	var/time_till_despawn = 6000  // 10 minutes-ish safe period before being despawned.
 	var/time_entered = 0          // Used to keep track of the safe period.
 	var/obj/item/device/radio/intercom/announce //
-	var/announce_despawn = TRUE
 
 	var/obj/machinery/computer/cryopod/control_computer
 	var/last_no_computer_message = 0
@@ -166,10 +172,9 @@
 
 	// These items are preserved when the process() despawn proc occurs.
 	var/list/preserve_items = list(
-		/obj/item/integrated_circuit/manipulation/bluespace_rift,
-		/obj/item/integrated_circuit/input/teleporter_locator,
+		/obj/item/hand_tele,
 		/obj/item/card/id/captains_spare,
-		/obj/item/aicard,
+		/obj/item/device/aicard,
 		/obj/item/device/mmi,
 		/obj/item/device/paicard,
 		/obj/item/gun,
@@ -177,17 +182,26 @@
 		/obj/item/clothing/suit,
 		/obj/item/clothing/shoes/magboots,
 		/obj/item/blueprints,
-		/obj/item/clothing/head/helmet/space,
-		/obj/item/storage/internal
+		/obj/item/clothing/head/space,
+		/obj/item/storage/internal,
+		/obj/item/device/von_krabin,
+		/obj/item/complicator,
+		/obj/item/biosyphon,
+		/obj/item/device/last_shelter,
+		/obj/item/device/techno_tribalism,
+		/obj/item/device/radio/random_radio,
+		/obj/item/maneki_neko,
+		/obj/item/tool/sword/nt_sword,
+		/obj/item/reagent_containers/atomic_distillery,
+		/obj/item/reagent_containers/bonsai,
+		/obj/item/reagent_containers/enricher
 	)
 
 /obj/machinery/cryopod/robot
 	name = "robotic storage unit"
 	desc = "A storage unit for robots."
-	icon = 'icons/obj/machines/robot_storage.dmi'
-	icon_state = "pod_0"
-	base_icon_state = "pod_0"
-	occupied_icon_state = "pod_1"
+	icon = 'icons/obj/robot_storage.dmi'
+	icon_state = "pod"
 	on_store_message = "has entered robotic storage."
 	on_store_name = "Robotic Storage Oversight"
 	on_enter_occupant_message = "The storage unit broadcasts a sleep signal to you. Your systems start to shut down, and you enter low-power mode."
@@ -195,71 +209,27 @@
 	disallow_occupant_types = list(/mob/living/silicon/robot/drone)
 	applies_stasis = 0
 
-/obj/machinery/cryopod/lifepod
-	name = "life pod"
-	desc = "A man-sized pod for entering suspended animation. Dubbed 'cryocoffin' by more cynical spacers, it is pretty barebone, counting on stasis system to keep the victim alive rather than packing extended supply of food or air. Can be ordered with symbols of common religious denominations to be used in space funerals too."
-	on_store_name = "Life Pod Oversight"
-	time_till_despawn = 20 MINUTES
-	icon_state = "redpod0"
-	base_icon_state = "redpod0"
-	occupied_icon_state = "redpod1"
-	var/launched = 0
-	var/datum/gas_mixture/airtank
-
-/obj/machinery/cryopod/lifepod/Initialize()
-	. = ..()
-	airtank = new()
-	airtank.temperature = T0C
-	airtank.adjust_gas(GAS_OXYGEN, MOLES_O2STANDARD, 0)
-	airtank.adjust_gas(GAS_NITROGEN, MOLES_N2STANDARD)
-
-/obj/machinery/cryopod/lifepod/return_air()
-	return airtank
-
-/obj/machinery/cryopod/lifepod/proc/launch()
-	launched = 1
-	for(var/d in GLOB.cardinal)
-		var/turf/T = get_step(src,d)
-		var/obj/machinery/door/blast/B = locate() in T
-		if(B && B.density)
-			B.force_open()
-			break
-
-	var/list/possible_locations = list()
-	if(GLOB.using_map.use_overmap)
-		var/obj/overmap/visitable/O = map_sectors["[z]"]
-		for(var/obj/overmap/visitable/OO in range(O,2))
-			if(HAS_FLAGS(OO.sector_flags, OVERMAP_SECTOR_IN_SPACE) || istype(OO,/obj/overmap/visitable/sector/exoplanet))
-				possible_locations |= text2num(level)
-
-	var/newz = GLOB.using_map.get_empty_zlevel()
-	if(length(possible_locations) && prob(10))
-		newz = pick(possible_locations)
-	var/turf/nloc = locate(rand(TRANSITIONEDGE, world.maxx-TRANSITIONEDGE), rand(TRANSITIONEDGE, world.maxy-TRANSITIONEDGE),newz)
-	if(!istype(nloc, /turf/space))
-		explosion(nloc, 6)
-	playsound(loc,'sound/effects/rocket.ogg',100)
-	forceMove(nloc)
-
-//Don't use these for in-round leaving
-/obj/machinery/cryopod/lifepod/Process()
-	if(evacuation_controller && evacuation_controller.state >= EVAC_LAUNCHING)
-		if(occupant && !launched)
-			launch()
-		..()
-
 /obj/machinery/cryopod/New()
 	announce = new /obj/item/device/radio/intercom(src)
+	update_icon()
 	..()
 
 /obj/machinery/cryopod/Destroy()
 	if(occupant)
 		occupant.forceMove(loc)
+		occupant.resting = 1
 	. = ..()
 
 /obj/machinery/cryopod/Initialize()
 	. = ..()
+
 	find_control_computer()
+
+/obj/machinery/cryopod/update_icon()
+	if(occupant)
+		icon_state = "[initial(icon_state)]_1"
+	else
+		icon_state = "[initial(icon_state)]_0"
 
 /obj/machinery/cryopod/proc/find_control_computer(urgent=0)
 	// Workaround for http://www.byond.com/forum/?post=2007448
@@ -270,7 +240,8 @@
 
 	// Don't send messages unless we *need* the computer, and less than five minutes have passed since last time we messaged
 	if(!control_computer && urgent && last_no_computer_message + 5*60*10 < world.time)
-		log_and_message_admins("Cryopod in [src.loc.loc] could not find control computer!", null, src)
+		log_admin("Cryopod in [src.loc.loc] could not find control computer!")
+		message_admins("Cryopod in [src.loc.loc] could not find control computer!")
 		last_no_computer_message = world.time
 
 	return control_computer != null
@@ -290,21 +261,11 @@
 
 	return 1
 
-/obj/machinery/cryopod/examine(mob/user, distance, is_adjacent)
-	. = ..()
-	if (occupant && is_adjacent)
-		occupant.examine(arglist(args))
-
-//Lifted from Unity stasis.dm and refactored.
+//Lifted from Unity stasis.dm and refactored. ~Zuhayr
 /obj/machinery/cryopod/Process()
 	if(occupant)
-		if(applies_stasis && iscarbon(occupant) && (world.time > time_entered + 20 SECONDS))
-			var/mob/living/carbon/C = occupant
-			C.SetStasis(2)
-
 		//Allow a ten minute gap between entering the pod and actually despawning.
-		// Only provide the gap if the occupant hasn't ghosted
-		if ((world.time - time_entered < time_till_despawn) && (occupant.ckey))
+		if(world.time - time_entered < time_till_despawn)
 			return
 
 		if(!occupant.client && occupant.stat<2) //Occupant is living and has no client.
@@ -316,27 +277,41 @@
 
 // This function can not be undone; do not call this unless you are sure
 // Also make sure there is a valid control computer
+/obj/machinery/cryopod/robot/despawn_occupant()
+	var/mob/living/silicon/robot/R = occupant
+	if(!istype(R)) return ..()
+
+	qdel(R.mmi)
+
+	// Cryopod code to extract items from cyborgs before calling ..() so the cybrog is in clean state for proc/despawn_occupant()
+	for(var/obj/item/I in R.module) // the tools the borg has; metal, glass, guns etc
+		for(var/obj/item/O in I) // the things inside the tools, if anything; mainly for janiborg trash bags
+			O.forceMove(R)
+		qdel(I)
+
+	qdel(R.module)
+
+	return ..()
+
+// This function can not be undone; do not call this unless you are sure
+// Also make sure there is a valid control computer
 /obj/machinery/cryopod/proc/despawn_occupant()
-	SHOULD_NOT_SLEEP(TRUE) // Sleeping causes the double-despawn bug
-
-	if (QDELETED(occupant))
-		log_and_message_admins("A mob was deleted while in a cryopod, or the cryopod double-processed. This may cause errors!", null)
-		return
-
-	if (istype(occupant, /mob/living/carbon/human))
-		var/mob/living/carbon/human/human = occupant
-		var/record_name = human.get_id_name("")
-		if (record_name)
-			var/datum/computer_file/report/crew_record/record = get_crewmember_record(record_name)
-			if (record)
-				record.set_status("Stored")
+	var/mob/living/carbon/human/H = occupant
+	var/list/occupant_organs
+	if(istype(H))
+		occupant_organs = H.organs | H.internal_organs
 
 	//Drop all items into the pod.
+	//// Local pod code
 	for(var/obj/item/W in occupant)
+		// Don't delete the organs!
+		if(W in occupant_organs)
+			continue
+
 		occupant.drop_from_inventory(W)
 		W.forceMove(src)
 
-		if(length(W.contents)) //Make sure we catch anything not handled by qdel() on the items.
+		if(W.contents.len) //Make sure we catch anything not handled by qdel() on the items.
 			for(var/obj/item/O in W.contents)
 				if(istype(O,/obj/item/storage/internal)) //Stop eating pockets, you fuck!
 					continue
@@ -346,10 +321,9 @@
 	var/list/items = src.contents.Copy()
 	items -= occupant // Don't delete the occupant
 	items -= announce // or the autosay radio.
-	items -= component_parts
 
+	// Preserve the mmi brain, quite snowflake code here
 	for(var/obj/item/W in items)
-
 		var/preserve = null
 		// Snowflaaaake.
 		if(istype(W, /obj/item/device/mmi))
@@ -369,134 +343,121 @@
 		else
 			if(control_computer && control_computer.allow_items)
 				control_computer.frozen_items += W
-				W.forceMove(null)
+				W.forceMove(NULLSPACE)
 			else
 				W.forceMove(src.loc)
 
-	//Update any existing objectives involving this mob.
-	for(var/datum/objective/O in all_objectives)
-		// We don't want revs to get objectives that aren't for heads of staff. Letting
-		// them win or lose based on cryo is silly so we remove the objective.
-		if(O.target == occupant.mind)
-			if(O.owner && O.owner.current)
-				to_chat(O.owner.current, SPAN_WARNING("You get the feeling your target is no longer within your reach..."))
-			qdel(O)
-
-	//Handle job slot/tater cleanup.
-	if(occupant.mind)
-		if(occupant.mind.assigned_job)
-			occupant.mind.assigned_job.clear_slot()
-
-		if(LAZYLEN(occupant.mind.objectives))
-			occupant.mind.objectives = null
-			occupant.mind.special_role = null
-
-	icon_state = base_icon_state
-
-	//TODO: Check objectives/mode, update new targets if this mob is the target, spawn new antags?
-
-
 	//Make an announcement and log the person entering storage.
+	control_computer.frozen_crew += "[occupant.real_name]" + "[occupant.mind ? ", [occupant.mind.assigned_role]" : ""]" + " - [stationtime2text()]"
+	control_computer._admin_logs += "[key_name(occupant)]" + "[occupant.mind ? ", ([occupant.mind.assigned_role])" : ""]" + " at [stationtime2text()]"
+	log_and_message_admins("[key_name(occupant)]" + "[occupant.mind ? " ([occupant.mind.assigned_role])" : ""]" + " entered cryostorage.")
 
-	// Titles should really be fetched from data records
-	//  and records should not be fetched by name as there is no guarantee names are unique
-	var/role_alt_title = occupant.mind ? occupant.mind.role_alt_title : "Unknown"
+	announce.autosay("[occupant.real_name]" + "[occupant.mind ? ", [occupant.mind.assigned_role]" : ""]" + ", [on_store_message]", "[on_store_name]")
+	visible_message("<span class='notice'>\The [initial(name)] hums and hisses as it moves [occupant.real_name] into storage.</span>")
 
-	if(control_computer)
-		control_computer.frozen_crew += "[occupant.real_name], [role_alt_title] - [stationtime2text()]"
-		control_computer._admin_logs += "[key_name(occupant)] ([role_alt_title]) at [stationtime2text()]"
-	log_and_message_admins("([role_alt_title]) entered cryostorage.", occupant)
+	//When the occupant is put into storage, their respawn time is reduced.
+	//This check exists for the benefit of people who get put into cryostorage while SSD and come back later
+	if(occupant.mind && occupant.mind.key)
+		//Whoever inhabited this body is long gone, we need some black magic to find where and who they are now
+		var/mob/M = key2mob(occupant.mind.key)
+		if(istype(M) && !M.get_respawn_bonus("CRYOSLEEP"))
+			if(M.in_perfect_health())
+				//We send a message to the occupant's current mob - probably a ghost, but who knows.
+				to_chat(M, SPAN_NOTICE("Because your body was put into cryostorage in good health, your crew respawn time has been reduced by [(CRYOPOD_HEALTHY_RESPAWN_BONUS)/600] minutes."))
+				M.set_respawn_bonus("CRYOSLEEP", CRYOPOD_HEALTHY_RESPAWN_BONUS)
+			else
+				to_chat(M, SPAN_NOTICE("Because your body was put into cryostorage in poor health, your crew respawn time has been reduced by [(CRYOPOD_WOUNDED_RESPAWN_BONUS)/600] minutes."))
+				M.set_respawn_bonus("CRYOSLEEP", CRYOPOD_WOUNDED_RESPAWN_BONUS)
+			M << 'sound/effects/magic/blind.ogg' //Play this sound to a player whenever their respawn time gets reduced
 
-	if(announce_despawn)
-		invoke_async(announce, TYPE_PROC_REF(/obj/item/device/radio, autosay), "[occupant.real_name], [role_alt_title], [on_store_message]", "[on_store_name]")
-
-	var/despawnmessage = replacetext(on_store_visible_message, "$occupant$", occupant.real_name)
-	visible_message(SPAN_NOTICE("\The [initial(name)] " + despawnmessage), range = 3)
-
-	//This should guarantee that ghosts don't spawn.
-	occupant.ckey = null
-
-	// Delete the mob.
-	qdel(occupant)
+	// This despawn is not a gib() in this sense, it is used to remove objectives tied on these despawned mobs in cryos
+	occupant.despawn()
 	set_occupant(null)
 
-/obj/machinery/cryopod/proc/attempt_enter(mob/target, mob/user)
-	if (!user.IsAdvancedToolUser())
-		to_chat(user, SPAN_WARNING("You're too simple to understand how to do that."))
-		return
-	if (user.incapacitated() || !user.Adjacent(src))
-		to_chat(user, SPAN_WARNING("You're in no position to do that."))
-		return
-	if (!user.Adjacent(target))
-		to_chat(user, SPAN_WARNING("\The [target] isn't close enough."))
-		return
-	if (user != target  && target.client)
-		var/response = alert(target, "Enter the [src]?", null, "Yes", "No")
-		if (response != "Yes")
-			to_chat(user, SPAN_WARNING("\The [target] refuses."))
-			return
-	if (user.incapacitated() || !user.Adjacent(src))
-		to_chat(user, SPAN_WARNING("You're in no position to do that."))
-		return
-	if (!user.Adjacent(target))
-		to_chat(user, SPAN_WARNING("\The [target] isn't close enough."))
-		return
-	add_fingerprint(user) //Add fingerprints for trying to go in.
-	if (!do_after(user, 2 SECONDS, src, DO_PUBLIC_UNIQUE))
-		return
-	if (!user_can_move_target_inside(target, user))
-		return
-	if (!user.Adjacent(target))
-		to_chat(user, SPAN_WARNING("\The [target] isn't close enough."))
-		return
-	set_occupant(target)
-	if (user != target)
-		add_fingerprint(target) //Add fingerprints of the person stuffed in.
-	log_and_message_admins("placed [target == user ? "themself" : key_name_admin(target)] into \a [src]", user)
-	target.remove_grabs_and_pulls()
-
-/obj/machinery/cryopod/user_can_move_target_inside(mob/target, mob/user)
-	if (occupant)
-		to_chat(user, SPAN_WARNING("\The [src] is already occupied!"))
-		return FALSE
-	if (!check_occupant_allowed(target))
-		return FALSE
-	return ..()
-
-/obj/machinery/cryopod/MouseDrop_T(mob/target, mob/user)
-	if (!CanMouseDrop(target, user) || !ismob(target))
-		return
-	if (!user_can_move_target_inside(target, user))
-		return
-
-	user.visible_message(SPAN_NOTICE("\The [user] begins placing \the [target] into \the [src]."), SPAN_NOTICE("You start placing \the [target] into \the [src]."))
-	attempt_enter(target, user)
-
-/obj/machinery/cryopod/use_grab(obj/item/grab/grab, list/click_params) //Grab is deleted at the level of attempt_enter if all checks are passed.
-	MouseDrop_T(grab.affecting, grab.assailant)
+/obj/machinery/cryopod/affect_grab(var/mob/user, var/mob/target)
+	try_put_inside(target, user)
 	return TRUE
+
+/obj/machinery/cryopod/MouseDrop_T(var/mob/living/L, mob/living/user)
+	if(istype(L) && istype(user))
+		try_put_inside(L, user)
+
+/obj/machinery/cryopod/proc/try_put_inside(var/mob/living/affecting, var/mob/living/user)
+	if(occupant)
+		to_chat(user, "<span class='notice'>\The [src] is in use.</span>")
+		return
+
+	if(!ismob(affecting) || !Adjacent(affecting) || !Adjacent(user))
+		return
+
+	if(!check_occupant_allowed(affecting))
+		return
+
+	var/willing = null //We don't want to allow people to be forced into despawning.
+
+	if(affecting != user && affecting.client)
+		if(alert(affecting,"Would you like to enter long-term storage?",,"Yes","No") == "Yes")
+			if(!affecting)
+				return
+			willing = 1
+	else
+		willing = 1
+
+	if(willing)
+
+		visible_message("[user] starts putting [affecting] into \the [src].")
+
+		if(!do_after(user, 20, src))
+			return
+
+		if(!user || !Adjacent(user))
+			return
+		if(!affecting || !Adjacent(affecting))
+			return
+
+		set_occupant(affecting)
+
+		// Book keeping!
+		var/turf/location = get_turf(src)
+		log_admin("[key_name_admin(affecting)] has entered a stasis pod. (<A HREF='?_src_=holder;adminplayerobservecoodjump=1;X=[location.x];Y=[location.y];Z=[location.z]'>JMP</a>)")
+		message_admins("<span class='notice'>[key_name_admin(affecting)] has entered a stasis pod.</span>")
+		if(user == affecting)
+			src.add_fingerprint(affecting)
+
+		//Despawning occurs when process() is called with an occupant without a client.
+		src.add_fingerprint(user)
+
+
 
 /obj/machinery/cryopod/verb/eject()
 	set name = "Eject Pod"
 	set category = "Object"
 	set src in oview(1)
+	if(!usr) // when called from preferences_spawnpoints.dm there is no usr since it is called indirectly. If there is no occupant and usr something really bad has happened here so just keep them in the pod - Hopek
+		if(!occupant)
+			return
+		usr = occupant
 	if(usr.stat != 0)
 		return
 
-	icon_state = base_icon_state
-
-	//Eject any items that aren't meant to be in the pod.
-	var/list/items = contents - component_parts
-	if(occupant) items -= occupant
-	if(announce) items -= announce
+	//Eject any items that aren't meant to be in the pod. Attempts to put the items back on the occupant otherwise drops them.
+	var/list/items = src.contents
+	if(occupant)
+		if(usr != occupant && !occupant.client && occupant.stat != DEAD)
+			to_chat(usr, SPAN_WARNING("It's locked inside!"))
+			return
+		items -= occupant
+	if(announce)
+		items -= announce
 
 	for(var/obj/item/W in items)
-		W.dropInto(loc)
+		W.forceMove(get_turf(src))
+		occupant.equip_to_appropriate_slot(W) // Items are now ejected. Tries to put them items on the occupant so they don't leave them behind
 
 	src.go_out()
 	add_fingerprint(usr)
 
-	SetName(initial(name))
+	name = initial(name)
 	return
 
 /obj/machinery/cryopod/verb/move_inside()
@@ -508,7 +469,7 @@
 		return
 
 	if(src.occupant)
-		to_chat(usr, SPAN_NOTICE("<B>\The [src] is in use.</B>"))
+		to_chat(usr, "<span class='notice'><B>\The [src] is in use.</B></span>")
 		return
 
 	for(var/mob/living/carbon/slime/M in range(1,usr))
@@ -516,109 +477,92 @@
 			to_chat(usr, "You're too busy getting your life sucked out of you.")
 			return
 
-	visible_message("\The [usr] starts climbing into \the [src].", range = 3)
+	visible_message("[usr] starts climbing into \the [src].")
 
-	if(do_after(usr, 2 SECONDS, src, DO_PUBLIC_UNIQUE))
+	if(do_after(usr, 20, src))
 
 		if(!usr || !usr.client)
 			return
 
 		if(src.occupant)
-			to_chat(usr, SPAN_NOTICE("<B>\The [src] is in use.</B>"))
+			to_chat(usr, "<span class='notice'><B>\The [src] is in use.</B></span>")
 			return
 
+		usr.stop_pulling()
 		set_occupant(usr)
 
 		src.add_fingerprint(usr)
 
 	return
 
+/obj/machinery/cryopod/relaymove(mob/user)
+	/// Why isn't it just eject ? because it somehow breaks SSchunks. ForceMoving out of these does not get registered properly
+	/// The mob does NOT have a LOC when it gets done by eject() , but this way it does for its forceMove() when we call go_out() from here
+	/// I dont know why it is this way , blame Byond ? - SPCR 2023
+	/// I figured it out... its because it used to remove the mob to eject from its contents before actually ejecting them , causing their loc to be null..
+	if(occupant)
+		var/list/items_to_give = contents
+		items_to_give -= announce
+		for(var/obj/item/W in items_to_give)
+			W.forceMove(get_turf(src))
+			occupant.equip_to_appropriate_slot(W) // Items are now ejected. Tries to put them items on the occupant so they don't leave them behind
+		go_out()
+
+
 /obj/machinery/cryopod/proc/go_out()
 
 	if(!occupant)
 		return
 
-	if(occupant.client)
-		occupant.client.eye = src.occupant.client.mob
-		occupant.client.perspective = MOB_PERSPECTIVE
+	set_occupant(null, FALSE)
 
-	occupant.dropInto(loc)
-	set_occupant(null)
+	spawn(30)
+		state("Please remember to check inside the cryopod if any belongings are missing.")
+		playsound(loc, "robot_talk_light", 100, 0, 0)
 
-	icon_state = base_icon_state
+//Notifications is set false when someone spawns in here
+/obj/machinery/cryopod/proc/set_occupant(mob/living/new_occupant, notifications = TRUE)
+	name = initial(name)
+	if(new_occupant)
+		occupant = new_occupant
+		if (occupant.name)
+			name = "[name] ([occupant.name])"
+		else
+			//Name isn't set during spawning, but real_name is. This is used for people spawning in cryopods
+			name = "[name] ([occupant.real_name])"
 
-	return
+		time_entered = world.time
+		if(ishuman(occupant) && applies_stasis)
+			var/mob/living/carbon/human/H = occupant
+			H.EnterStasis()
+			if(H.mind && H.mind.initial_account)
+				var/datum/money_account/A = H.mind.initial_account
+				if(A.employer && A.wage_original) // Dicrease personnel budget of our department, if have one
+					var/datum/money_account/EA = department_accounts[A.employer]
+					var/datum/department/D = GLOB.all_departments[A.employer]
+					if(EA && D) // Don't bother if department have no employer
+						D.budget_personnel -= A.wage_original
+						if(!EA.wage_manual) // Update department account's wage if it's not in manual mode
+							EA.wage = D.get_total_budget()
 
-/obj/machinery/cryopod/proc/set_occupant(mob/living/carbon/occupant, silent)
-	src.occupant = occupant
-	if(!occupant)
-		SetName(initial(name))
-		return
-
-	occupant.stop_pulling()
-	if(occupant.client)
-		if(!silent)
+		if(notifications)
 			to_chat(occupant, SPAN_NOTICE("[on_enter_occupant_message]"))
 			to_chat(occupant, SPAN_NOTICE("<b>If you ghost, log out or close your client now, your character will shortly be permanently removed from the round.</b>"))
-		occupant.client.perspective = EYE_PERSPECTIVE
-		occupant.client.eye = src
-	occupant.forceMove(src)
-	time_entered = world.time
+			if(occupant.in_perfect_health())
+				to_chat(occupant, SPAN_NOTICE("<b>Your respawn time will be reduced by [(CRYOPOD_HEALTHY_RESPAWN_BONUS)/600] minutes, allowing you to respawn as a crewmember much more quickly.</b>"))
+			else
+				to_chat(occupant, SPAN_NOTICE("<b>Your respawn time will be reduced by [(CRYOPOD_WOUNDED_RESPAWN_BONUS)/600] minutes, allowing you to respawn as a crewmember much more quickly.</b>"))
+				to_chat(occupant, SPAN_DANGER("<b>Because you are not in perfect health, respawn time reduction is low. \
+				If you wish to respawn as a different crewmember sooner, you should treat your injuries first</b>"))
+		occupant.forceMove(src)
 
-	SetName("[name] ([occupant])")
-	icon_state = occupied_icon_state
-
-/obj/machinery/cryopod/relaymove(mob/user)
-	go_out()
-
-//A prop version for away missions and such
-
-/obj/structure/broken_cryo
-	name = "broken cryo sleeper"
-	desc = "Whoever was inside isn't going to wake up now. It looks like you could pry it open with a crowbar."
-	icon = 'icons/obj/machines/medical/cryopod.dmi'
-	icon_state = "broken_cryo"
-	anchored = TRUE
-	density = TRUE
-	var/closed = 1
-	var/busy = 0
-	var/remains_type = /obj/item/remains/human
-
-/obj/structure/broken_cryo/attack_hand(mob/user)
-	..()
-	if (closed)
-		to_chat(user, SPAN_NOTICE("You tug at the glass but can't open it with your hands alone."))
 	else
-		to_chat(user, SPAN_NOTICE("The glass is already open."))
+		if(!QDELETED(occupant))
+			occupant.forceMove(get_turf(src))
+			occupant.reset_view(null)
+			if(ishuman(occupant) && applies_stasis)
+				var/mob/living/carbon/human/H = occupant
+				H.ExitStasis()
+		occupant = null
 
-
-/obj/structure/broken_cryo/use_tool(obj/item/tool, mob/user, list/click_params)
-	// Crowbar - Open cryopod
-	if (isCrowbar(tool))
-		if (!closed)
-			USE_FEEDBACK_FAILURE("\The [src] is already open.")
-			return TRUE
-		busy = TRUE
-		user.visible_message(
-			SPAN_NOTICE("\The [user] starts prying \the [src]'s cover off with \a [tool]."),
-			SPAN_NOTICE("You start prying \the [src]'s cover off with \the [tool].")
-		)
-		if (!do_after(user, 5 SECONDS, src, DO_PUBLIC_UNIQUE) || !user.use_sanity_check(src, tool))
-			return TRUE
-		closed = FALSE
-		update_icon()
-		var/obj/dead = new remains_type(loc)
-		dead.dir = dir
-		user.visible_message(
-			SPAN_NOTICE("\The [user] opens \the [src]'s cover with \a [tool], exposing \a [dead]."),
-			SPAN_NOTICE("You open \the [src]'s cover with \the [tool], exposing \a [dead].")
-		)
-		return TRUE
-
-	return ..()
-
-
-/obj/structure/broken_cryo/on_update_icon()
-	icon_state = initial(icon_state)
-	if (!closed)
-		icon_state += "_open"
+	update_icon()

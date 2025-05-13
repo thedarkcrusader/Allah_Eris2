@@ -1,95 +1,163 @@
 SUBSYSTEM_DEF(mapping)
 	name = "Mapping"
-	init_order = SS_INIT_MAPPING
+	init_order = INIT_ORDER_MAPPING
 	flags = SS_NO_FIRE
 
 	var/list/map_templates = list()
-	var/list/space_ruins_templates = list()
-	var/list/exoplanet_ruins_templates = list()
-	var/list/away_sites_templates = list()
-	var/list/submaps = list()
+	var/dmm_suite/maploader = null
+	var/list/teleportlocs = list()
+	var/list/ghostteleportlocs = list()
+	var/cave_ore_count = 0
+
+/datum/controller/subsystem/mapping/Initialize(start_timeofday)
+	if(config.generate_asteroid)
+		// These values determine the specific area that the map is applied to.
+		// Because we do not use Bay's default map, we check the config file to see if custom parameters are needed, so we need to avoid hardcoding.
+		if(GLOB.maps_data.asteroid_levels)
+			for(var/z_level in GLOB.maps_data.asteroid_levels)
+				if(!isnum(z_level))
+					// If it's still not a number, we probably got fed some nonsense string.
+					admin_notice("<span class='danger'>Error: ASTEROID_Z_LEVELS config wasn't given a number.</span>")
+				// Now for the actual map generating.  This occurs for every z-level defined in the config.
+				new /datum/random_map/automata/cave_system(null, 1, 1, z_level, 300, 300)
+		else
+			admin_notice("<span class='danger'>Error: No asteroid z-levels defined in config!</span>")
+
+	if(config.use_overmap)
+		if(!GLOB.maps_data.overmap_z)
+			build_overmap()
+		else
+			testing("Overmap already exist in GLOB.maps_data for [GLOB.maps_data.overmap_z].")
+	else
+		testing("Overmap generation disabled in config.")
+
+//	world.max_z_changed() // This is to set up the player z-level list, maxz hasn't actually changed (probably)
+	maploader = new()
+	load_map_templates()
+	build_pulsar()
+
+	// Generate cache of all areas in world. This cache allows world areas to be looked up on a list instead of being searched for EACH time
+	for(var/area/A in world)
+		GLOB.map_areas += A
+
+	// Do the same for teleport locs
+	for(var/area/AR in world)
+		if(istype(AR, /area/shuttle) ||  istype(AR, /area/wizard_station)) continue
+		if(teleportlocs.Find(AR.name)) continue
+		var/turf/picked = pick_area_turf(AR.type, list(/proc/is_station_turf))
+		if (picked)
+			teleportlocs += AR.name
+			teleportlocs[AR.name] = AR
+
+	teleportlocs = sortAssoc(teleportlocs)
+
+	// And the same for ghost teleport locs
 
 
-/datum/controller/subsystem/mapping/UpdateStat(time)
-	return
+	for(var/area/AR in world)
+		if(ghostteleportlocs.Find(AR.name)) continue
+		if(istype(AR, /area/turret_protected/aisat) || istype(AR, /area/derelict) || istype(AR, /area/shuttle/specops/centcom))
+			ghostteleportlocs += AR.name
+			ghostteleportlocs[AR.name] = AR
+		var/turf/picked = pick_area_turf(AR.type, list(/proc/is_station_turf))
+		if (picked)
+			ghostteleportlocs += AR.name
+			ghostteleportlocs[AR.name] = AR
 
+	ghostteleportlocs = sortAssoc(ghostteleportlocs)
 
-/datum/controller/subsystem/mapping/Initialize(start_uptime)
-	preloadTemplates()
+	return ..()
 
+/datum/controller/subsystem/mapping/proc/build_pulsar()
+	world.incrementMaxZ()
+	GLOB.maps_data.pulsar_z = world.maxz
+	add_z_level(GLOB.maps_data.pulsar_z, GLOB.maps_data.pulsar_z, 1)
+	maploader.load_map(file("maps/pulsar/pulsar.dmm"), z_offset = GLOB.maps_data.pulsar_z)
+	var/list/turfs = list()
+	for(var/square in block(locate(1, 1, GLOB.maps_data.pulsar_z), locate(GLOB.maps_data.pulsar_size, GLOB.maps_data.pulsar_size, GLOB.maps_data.pulsar_z)))
+		// Switch to space turf with green grid overlay
+		var/turf/space/T = square
+		T.name = "[T.x]-[T.y]"
+		T.icon_state = "grid"
+		T.update_starlight()
+		turfs += T
+		CHECK_TICK
+
+	var/area/pulsar/A = new
+	A.contents.Add(turfs)
+
+	for(var/i in 1 to GLOB.maps_data.pulsar_size)
+		var/turf/beam_loc = locate(i, i, GLOB.maps_data.pulsar_z)
+		new /obj/effect/pulsar_beam(beam_loc)
+
+		var/turf/beam_right = locate(i + 1, i, GLOB.maps_data.pulsar_z)
+		new /obj/effect/pulsar_beam/ul(beam_right)
+
+		var/turf/beam_left = locate(i - 1, i, GLOB.maps_data.pulsar_z)
+		new /obj/effect/pulsar_beam/dr(beam_left)
+
+	var/turf/satellite_loc = locate(round((GLOB.maps_data.pulsar_size)/2 + (GLOB.maps_data.pulsar_size)/4), round((GLOB.maps_data.pulsar_size)/2 - (GLOB.maps_data.pulsar_size)/4), GLOB.maps_data.pulsar_z)
+	var/turf/shadow_loc = locate(round((GLOB.maps_data.pulsar_size)/2 - (GLOB.maps_data.pulsar_size)/4), round((GLOB.maps_data.pulsar_size)/2 + (GLOB.maps_data.pulsar_size)/4), GLOB.maps_data.pulsar_z)
+
+	var/obj/effect/pulsar_ship/ship = new /obj/effect/pulsar_ship(satellite_loc)
+	var/newshadow = new /obj/effect/pulsar_ship_shadow(shadow_loc)
+	ship.shadow = newshadow
+
+	if(!GLOB.maps_data.pulsar_star)
+		var/turf/T = locate(round((GLOB.maps_data.pulsar_size - 1)/2), round((GLOB.maps_data.pulsar_size - 1)/2), GLOB.maps_data.pulsar_z)
+		GLOB.maps_data.pulsar_star = new /obj/effect/pulsar(T)
+
+	GLOB.maps_data.sealed_levels |= GLOB.maps_data.pulsar_z
+	generate_pulsar_events()
+
+/datum/controller/subsystem/mapping/proc/generate_pulsar_events()
+	var/event_type = pick(subtypesof(/datum/pulsar_event))
+	var/datum/pulsar_event/event = new event_type
+	event.on_trigger()
+
+/datum/controller/subsystem/mapping/proc/build_overmap()
+	testing("Building overmap...")
+	world.incrementMaxZ()
+	GLOB.maps_data.overmap_z = world.maxz
+	var/list/turfs = list()
+	for (var/square in block(locate(1,1,GLOB.maps_data.overmap_z), locate(GLOB.maps_data.overmap_size, GLOB.maps_data.overmap_size, GLOB.maps_data.overmap_z)))
+		// Switch to space turf with green grid overlay
+		var/turf/space/T = square
+		T.icon_state = "grid"
+		T.update_starlight()
+		turfs += T
+		CHECK_TICK
+
+	var/area/overmap/A = new
+	A.contents.Add(turfs)
+
+    // Spawn star at the center of the overmap
+	var/turf/T = locate(round(GLOB.maps_data.overmap_size/2),round(GLOB.maps_data.overmap_size/2),GLOB.maps_data.overmap_z)
+	new /obj/effect/star(T)
+
+	GLOB.maps_data.sealed_levels |= GLOB.maps_data.overmap_z
+	testing("Overmap build complete.")
 
 /datum/controller/subsystem/mapping/Recover()
 	flags |= SS_NO_INIT
-	map_templates = SSmapping.map_templates
-	space_ruins_templates = SSmapping.space_ruins_templates
-	exoplanet_ruins_templates = SSmapping.exoplanet_ruins_templates
-	away_sites_templates = SSmapping.away_sites_templates
 
-/datum/controller/subsystem/mapping/proc/preloadTemplates(path = "maps/templates/") //see master controller setup
-	var/list/filelist = flist(path)
-	for(var/map in filelist)
-		var/datum/map_template/T = new(paths = "[path][map]", rename = "[map]")
-		map_templates[T.name] = T
-	preloadBlacklistableTemplates()
-
-/datum/controller/subsystem/mapping/proc/preloadBlacklistableTemplates()
-	// Still supporting bans by filename
-	var/list/banned_exoplanet_dmms = generateMapList("config/exoplanet_ruin_blacklist.txt")
-	var/list/banned_space_dmms = generateMapList("config/space_ruin_blacklist.txt")
-	var/list/banned_away_site_dmms = generateMapList("config/away_site_blacklist.txt")
-
-	if (!banned_exoplanet_dmms || !banned_space_dmms || !banned_away_site_dmms)
-		report_progress("One or more map blacklist files are not present in the config directory!")
-
-	var/list/banned_maps = list() + banned_exoplanet_dmms + banned_space_dmms + banned_away_site_dmms
-
-	for(var/item in sortTim(subtypesof(/datum/map_template), GLOBAL_PROC_REF(cmp_ruincost_priority)))
-		var/datum/map_template/map_template_type = item
-		// screen out the abstract subtypes
-		if(!initial(map_template_type.id))
-			continue
-		var/datum/map_template/MT = new map_template_type()
-
-		if (banned_maps)
-			var/is_banned = FALSE
-			for (var/mappath in MT.mappaths)
-				if(banned_maps.Find(mappath))
-					is_banned = TRUE
-					break
-			if (is_banned)
-				continue
-
-		map_templates[MT.name] = MT
-
-		// This is nasty..
-		if(istype(MT, /datum/map_template/ruin/exoplanet))
-			exoplanet_ruins_templates[MT.name] = MT
-		else if(istype(MT, /datum/map_template/ruin/space))
-			space_ruins_templates[MT.name] = MT
-		else if(istype(MT, /datum/map_template/ruin/away_site))
-			away_sites_templates[MT.name] = MT
-
-/proc/generateMapList(filename)
-	RETURN_TYPE(/list)
-	var/list/potentialMaps = list()
-	var/list/Lines = world.file2list(filename)
-	if(!length(Lines))
-		return
-	for (var/t in Lines)
-		if (!t)
-			continue
-		t = trimtext(t)
-		if (length(t) == 0)
-			continue
-		else if (copytext(t, 1, 2) == "#")
-			continue
-		var/pos = findtext(t, " ")
-		var/name = null
-		if (pos)
-			name = lowertext(copytext(t, 1, pos))
+/hook/roundstart/proc/init_overmap_events()
+	if(config.use_overmap)
+		if(GLOB.maps_data.overmap_z)
+			testing("Creating overmap events...")
+			testing_variable(t1, world.tick_usage)
+			overmap_event_handler.create_events(GLOB.maps_data.overmap_z, GLOB.maps_data.overmap_size, GLOB.maps_data.overmap_event_areas)
+			testing("Overmap events created in [(world.tick_usage-t1)*0.01*world.tick_lag] seconds")
 		else
-			name = lowertext(t)
-		if (!name)
+			testing("Overmap failed to create events.")
+			return FALSE
+	return TRUE
+
+/datum/controller/subsystem/mapping/proc/load_map_templates()
+	for(var/T in subtypesof(/datum/map_template))
+		var/datum/map_template/template = T
+		if(!(initial(template.mappath))) // If it's missing the actual path its probably a base type or being used for inheritence.
 			continue
-		potentialMaps.Add(t)
-	return potentialMaps
+		template = new T()
+		map_templates[template.name] = template
+	return TRUE

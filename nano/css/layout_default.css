@@ -1,5 +1,5 @@
 body {
-    background: #272727 url(uiBackground.png) 50% 0 repeat-x;
+    background: #272727 url(uiBasicBackground.png) 50% 0 repeat-x;
 }
 
 #uiWrapper {
@@ -39,6 +39,14 @@ body {
     background: url(uiTitleFluff.png) 50% 50% no-repeat;
 }
 
+#uiTitleButtons {
+    position: absolute;
+    top: 4px;
+    right: 184px;
+    width: 42px;
+    height: 24px;
+}
+
 #uiStatusIcon {
     position: absolute;
     top: 4px;
@@ -71,8 +79,8 @@ body {
     top: 50%;
     left: 50%;
     margin: -512px 0 0 -512px;
-    width: 256px;
-    height: 256px;
+    width: 512px;
+    height: 512px;
     overflow: hidden;
     zoom: 4;
 }
@@ -81,8 +89,8 @@ body {
     position: absolute;
     bottom: 1px;
     left: 1px;
-    width: 256px;
-    height: 256px;
+    width: 512px;
+    height: 512px;
 }
 
 #uiMapContent {

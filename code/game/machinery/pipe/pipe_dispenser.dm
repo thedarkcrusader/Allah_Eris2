@@ -1,112 +1,149 @@
 /obj/machinery/pipedispenser
-	name = "pipe dispenser"
-	icon = 'icons/obj/machines/pipe_dispenser.dmi'
+	name = "Pipe Dispenser"
+	icon = 'icons/obj/stationobjs.dmi'
 	icon_state = "pipe_d"
 	density = TRUE
-	anchored = FALSE
-	stat_immune = MACHINE_STAT_NOSCREEN//Doesn't need screen, just input for the parts wanted
-	obj_flags = OBJ_FLAG_ANCHORABLE
+	anchored = TRUE
+	var/wait = 0
 
-	construct_state = /singleton/machine_construction/default/panel_closed
-	uncreated_component_parts = null
+/obj/machinery/pipedispenser/attack_hand(user as mob)
+	if(..())
+		return
+///// Z-Level stuff
+	var/dat = {"
+<b>Regular pipes:</b><BR>
+<A href='?src=\ref[src];make=0;dir=1'>Pipe</A><BR>
+<A href='?src=\ref[src];make=1;dir=5'>Bent Pipe</A><BR>
+<A href='?src=\ref[src];make=5;dir=1'>Manifold</A><BR>
+<A href='?src=\ref[src];make=8;dir=1'>Manual Valve</A><BR>
+<A href='?src=\ref[src];make=20;dir=1'>Pipe Cap</A><BR>
+<A href='?src=\ref[src];make=19;dir=1'>4-Way Manifold</A><BR>
+<A href='?src=\ref[src];make=18;dir=1'>Manual T-Valve</A><BR>
+<A href='?src=\ref[src];make=43;dir=1'>Manual T-Valve - Mirrored</A><BR>
+<A href='?src=\ref[src];make=21;dir=1'>Upward Pipe</A><BR>
+<A href='?src=\ref[src];make=22;dir=1'>Downward Pipe</A><BR>
+<b>Supply pipes:</b><BR>
+<A href='?src=\ref[src];make=29;dir=1'>Pipe</A><BR>
+<A href='?src=\ref[src];make=30;dir=5'>Bent Pipe</A><BR>
+<A href='?src=\ref[src];make=33;dir=1'>Manifold</A><BR>
+<A href='?src=\ref[src];make=41;dir=1'>Pipe Cap</A><BR>
+<A href='?src=\ref[src];make=35;dir=1'>4-Way Manifold</A><BR>
+<A href='?src=\ref[src];make=37;dir=1'>Upward Pipe</A><BR>
+<A href='?src=\ref[src];make=39;dir=1'>Downward Pipe</A><BR>
+<b>Scrubbers pipes:</b><BR>
+<A href='?src=\ref[src];make=31;dir=1'>Pipe</A><BR>
+<A href='?src=\ref[src];make=32;dir=5'>Bent Pipe</A><BR>
+<A href='?src=\ref[src];make=34;dir=1'>Manifold</A><BR>
+<A href='?src=\ref[src];make=42;dir=1'>Pipe Cap</A><BR>
+<A href='?src=\ref[src];make=36;dir=1'>4-Way Manifold</A><BR>
+<A href='?src=\ref[src];make=38;dir=1'>Upward Pipe</A><BR>
+<A href='?src=\ref[src];make=40;dir=1'>Downward Pipe</A><BR>
+<b>Devices:</b><BR>
+<A href='?src=\ref[src];make=28;dir=1'>Universal pipe adapter</A><BR>
+<A href='?src=\ref[src];make=4;dir=1'>Connector</A><BR>
+<A href='?src=\ref[src];make=7;dir=1'>Unary Vent</A><BR>
+<A href='?src=\ref[src];make=9;dir=1'>Gas Pump</A><BR>
+<A href='?src=\ref[src];make=15;dir=1'>Pressure Regulator</A><BR>
+<A href='?src=\ref[src];make=16;dir=1'>High Power Gas Pump</A><BR>
+<A href='?src=\ref[src];make=10;dir=1'>Scrubber</A><BR>
+<A href='?src=\ref[src];makemeter=1'>Meter</A><BR>
+<A href='?src=\ref[src];make=13;dir=1'>Gas Filter</A><BR>
+<A href='?src=\ref[src];make=23;dir=1'>Gas Filter - Mirrored</A><BR>
+<A href='?src=\ref[src];make=14;dir=1'>Gas Mixer</A><BR>
+<A href='?src=\ref[src];make=25;dir=1'>Gas Mixer - Mirrored</A><BR>
+<A href='?src=\ref[src];make=24;dir=1'>Gas Mixer - T</A><BR>
+<A href='?src=\ref[src];make=26;dir=1'>Omni Gas Mixer</A><BR>
+<A href='?src=\ref[src];make=27;dir=1'>Omni Gas Filter</A><BR>
+<b>Heat exchange:</b><BR>
+<A href='?src=\ref[src];make=2;dir=1'>Pipe</A><BR>
+<A href='?src=\ref[src];make=3;dir=5'>Bent Pipe</A><BR>
+<A href='?src=\ref[src];make=6;dir=1'>Junction</A><BR>
+<A href='?src=\ref[src];make=17;dir=1'>Heat Exchanger</A><BR>
+<b>Insulated pipes:</b><BR>
+<A href='?src=\ref[src];make=11;dir=1'>Pipe</A><BR>
+<A href='?src=\ref[src];make=12;dir=5'>Bent Pipe</A><BR>
 
-	idle_power_usage = 500
-	power_channel = EQUIP
-	use_power = POWER_USE_OFF
+"}
+///// Z-Level stuff
+//What number the make points to is in the define # at the top of construction.dm in same folder
 
-	machine_name = "pipe dispenser"
-	machine_desc = "A semi-portable dispenser that uses compressed matter to create atmospherics pipes. Vital for repair or construction efforts."
-
-	var/pipe_color = "white"
-
-/obj/machinery/pipedispenser/Initialize()//for mapping purposes. Anchor them by map var edit if needed.
-	. = ..()
-	if(anchored)
-		update_use_power(POWER_USE_IDLE)
-
-/obj/machinery/pipedispenser/proc/get_console_data(list/pipe_categories, color_options = FALSE)
-	. = list()
-	. += "<table>"
-	if(color_options)
-		. += "<tr><td>Color</td><td><a href='byond://?src=\ref[src];color=\ref[src]'>[SPAN_COLOR(pipe_color, pipe_color)]</a></td></tr>"
-	for(var/category in pipe_categories)
-		var/datum/pipe/cat = category
-		. += "<tr><td>[SPAN_COLOR("#517087", "<strong>[initial(cat.category)]</strong>")]</td></tr>"
-		for(var/datum/pipe/pipe in pipe_categories[category])
-			var/line = "[pipe.name]</td>"
-			. += "<tr><td>[line]<td><a href='byond://?src=\ref[src];build=\ref[pipe]'>Dispense</a></td><td><a href='byond://?src=\ref[src];buildfive=\ref[pipe]'>5x</a></td><td><a href='byond://?src=\ref[src];buildten=\ref[pipe]'>10x</a></td></tr>"
-	.+= "</table>"
-	. = jointext(., null)
-
-/obj/machinery/pipedispenser/proc/build_quantity(datum/pipe/P, quantity)
-	for(var/I = quantity;I > 0;I -= 1)
-		P.Build(P, loc, pipe_colors[pipe_color])
-		use_power_oneoff(500)
+	user << browse("<HEAD><TITLE>[src]</TITLE></HEAD><TT>[dat]</TT>", "window=pipedispenser")
+	onclose(user, "pipedispenser")
+	return
 
 /obj/machinery/pipedispenser/Topic(href, href_list)
-	if((. = ..()))
+	if(..())
 		return
-	if(href_list["build"])
-		var/datum/pipe/P = locate(href_list["build"])
-		build_quantity(P, 1)
-	if(href_list["buildfive"])
-		var/datum/pipe/P = locate(href_list["buildfive"])
-		build_quantity(P, 5)
-	if(href_list["buildten"])
-		var/datum/pipe/P = locate(href_list["buildten"])
-		build_quantity(P, 10)
-	if(href_list["color"])
-		var/choice = input(usr, "What color do you want pipes to have?") as null|anything in pipe_colors
-		if(!choice)
-			return 1
-		pipe_color = choice
-		updateUsrDialog()
+	if(!anchored || !usr.canmove || usr.stat || usr.restrained() || !in_range(loc, usr))
+		usr << browse(null, "window=pipedispenser")
+		return
+	usr.set_machine(src)
+	src.add_fingerprint(usr)
+	if(href_list["make"])
+		if(!wait)
+			var/pipe_type = text2num(href_list["make"])
+			var/p_dir = text2num(href_list["dir"])
+			var/obj/item/pipe/P = new (/*usr.loc*/ src.loc, pipe_type=pipe_type, dir=p_dir)
+			P.update()
+			P.add_fingerprint(usr)
+			wait = 1
+			spawn(10)
+				wait = 0
+	if(href_list["makemeter"])
+		if(!wait)
+			new /obj/item/pipe_meter(/*usr.loc*/ src.loc)
+			wait = 1
+			spawn(15)
+				wait = 0
+	return
 
-/obj/machinery/pipedispenser/interface_interact(mob/user)
-	interact(user)
-	return TRUE
-
-/obj/machinery/pipedispenser/CanUseTopic(mob/user)
-	if (!anchored)
-		to_chat(user, "You need to anchor \the [src] to be able to operate it.")
-		return STATUS_CLOSE
-	return ..()
-
-/obj/machinery/pipedispenser/interact(mob/user)
-	var/datum/browser/popup = new (user, "Pipe List", "[src] Control Panel")
-	popup.set_content(get_console_data(GLOB.all_pipe_datums_by_category, TRUE))
-	popup.open()
-
-/obj/machinery/pipedispenser/post_anchor_change()
-	if (anchored)
-		set_stat(MACHINE_STAT_MAINT, FALSE)
+/obj/machinery/pipedispenser/attackby(var/obj/item/I, var/mob/user)
+	src.add_fingerprint(usr)
+	if (istype(I, /obj/item/pipe) || istype(I, /obj/item/pipe_meter))
+		to_chat(usr, SPAN_NOTICE("You put [I] back to [src]."))
+		user.drop_item()
+		qdel(I)
+		return
+	var/obj/item/tool/tool = I
+	if (!tool)
+		return ..()
+	if (!tool.use_tool(user, src, WORKTIME_NORMAL, QUALITY_BOLT_TURNING, FAILCHANCE_VERY_EASY, required_stat = STAT_MEC))
+		return ..()
+	anchored = !src.anchored
+	anchored ? (src.stat &= ~MAINT) : (src.stat |= MAINT)
+	if(anchored)
+		power_change()
 	else
-		set_stat(MACHINE_STAT_MAINT, TRUE)
-	..()
+		if (usr.machine==src)
+			usr << browse(null, "window=pipedispenser")
+	user.visible_message( \
+		SPAN_NOTICE("\The [user] [anchored ? "":"un"]fastens \the [src]."), \
+		SPAN_NOTICE("You have [anchored ? "":"un"]fastened \the [src]."), \
+		"You hear ratchet.")
 
-/obj/machinery/pipedispenser/use_tool(obj/item/W, mob/living/user, list/click_params)
-	if (istype(W, /obj/item/pipe) || istype(W, /obj/item/machine_chassis))
-		if(!user.unEquip(W))
-			return TRUE
-		to_chat(user, SPAN_NOTICE("You put \the [W] back into \the [src]."))
-		qdel(W)
-		return TRUE
-
-	return ..()
 
 /obj/machinery/pipedispenser/disposal
-	name = "disposal pipe dispenser"
-	icon = 'icons/obj/machines/pipe_dispenser.dmi'
+	name = "Disposal Pipe Dispenser"
+	icon = 'icons/obj/stationobjs.dmi'
 	icon_state = "pipe_d"
-	machine_name = "disposal pipe dispenser"
-	machine_desc = "Similar to a normal pipe dispenser, but calibrated for the heavy, dense metal tubes used in disposals networks."
+	density = TRUE
+	anchored = TRUE
+
+/*
+//Allow you to push disposal pipes into it (for those with density 1)
+/obj/machinery/pipedispenser/disposal/Crossed(var/obj/structure/disposalconstruct/pipe as obj)
+	if(istype(pipe) && !pipe.anchored)
+		qdel(pipe)
+
+Nah
+*/
 
 //Allow you to drag-drop disposal pipes into it
-/obj/machinery/pipedispenser/disposal/MouseDrop_T(obj/structure/disposalconstruct/pipe as obj, mob/user as mob)
-	if(!CanPhysicallyInteract(user))
+/obj/machinery/pipedispenser/disposal/MouseDrop_T(var/obj/structure/disposalconstruct/pipe as obj, mob/usr as mob)
+	if(!usr.canmove || usr.stat || usr.restrained())
 		return
 
-	if (!istype(pipe) || get_dist(src,pipe) > 1 )
+	if (!istype(pipe) || get_dist(usr, src) > 1 || get_dist(src,pipe) > 1 )
 		return
 
 	if (pipe.anchored)
@@ -114,7 +151,97 @@
 
 	qdel(pipe)
 
-/obj/machinery/pipedispenser/disposal/interact(mob/user)
-	var/datum/browser/popup = new (user, "Disposal Pipe List", "[src] Control Panel")
-	popup.set_content(get_console_data(GLOB.all_disposal_pipe_datums_by_category))
-	popup.open()
+/obj/machinery/pipedispenser/disposal/attack_hand(user as mob)
+	if(..())
+		return
+
+///// Z-Level stuff
+	var/dat = {"<b>Disposal Pipes</b><br><br>
+<A href='?src=\ref[src];dmake=0'>Pipe</A><BR>
+<A href='?src=\ref[src];dmake=1'>Bent Pipe</A><BR>
+<A href='?src=\ref[src];dmake=2'>Junction</A><BR>
+<A href='?src=\ref[src];dmake=3'>Y-Junction</A><BR>
+<A href='?src=\ref[src];dmake=4'>Trunk</A><BR>
+<A href='?src=\ref[src];dmake=5'>Bin</A><BR>
+<A href='?src=\ref[src];dmake=6'>Outlet</A><BR>
+<A href='?src=\ref[src];dmake=7'>Chute</A><BR>
+<A href='?src=\ref[src];dmake=21'>Upwards</A><BR>
+<A href='?src=\ref[src];dmake=22'>Downwards</A><BR>
+<A href='?src=\ref[src];dmake=8'>Sorting</A><BR>
+<A href='?src=\ref[src];dmake=9'>Sorting (Wildcard)</A><BR>
+<A href='?src=\ref[src];dmake=10'>Sorting (Untagged)</A><BR>
+<A href='?src=\ref[src];dmake=11'>Tagger</A><BR>
+<A href='?src=\ref[src];dmake=12'>Tagger (Partial)</A><BR>
+"}
+///// Z-Level stuff
+
+	user << browse("<HEAD><TITLE>[src]</TITLE></HEAD><TT>[dat]</TT>", "window=pipedispenser")
+	return
+
+// 0=straight, 1=bent, 2=junction-j1, 3=junction-j2, 4=junction-y, 5=trunk
+
+
+/obj/machinery/pipedispenser/disposal/Topic(href, href_list)
+	if(..())
+		return
+	usr.set_machine(src)
+	src.add_fingerprint(usr)
+	if(href_list["dmake"])
+		if(!anchored || !usr.canmove || usr.stat || usr.restrained() || !in_range(loc, usr))
+			usr << browse(null, "window=pipedispenser")
+			return
+		if(!wait)
+			var/pipe_type = text2num(href_list["dmake"])
+			var/obj/structure/disposalconstruct/C = new (src.loc)
+			switch(pipe_type)
+				if(0)
+					C.pipe_type = PIPE_TYPE_STRAIGHT
+				if(1)
+					C.pipe_type = PIPE_TYPE_BENT
+				if(2)
+					C.pipe_type = PIPE_TYPE_JUNC
+				if(3)
+					C.pipe_type = PIPE_TYPE_JUNC_Y
+				if(4)
+					C.pipe_type = PIPE_TYPE_TRUNK
+				if(5)
+					C.pipe_type = PIPE_TYPE_BIN
+					C.density = TRUE
+				if(6)
+					C.pipe_type = PIPE_TYPE_OUTLET
+					C.density = TRUE
+				if(7)
+					C.pipe_type = PIPE_TYPE_INTAKE
+					C.density = TRUE
+				if(8)
+					C.pipe_type = PIPE_TYPE_JUNC_SORT
+					C.sort_mode = SORT_TYPE_NORMAL
+				if(9)
+					C.pipe_type = PIPE_TYPE_JUNC_SORT
+					C.sort_mode = SORT_TYPE_WILDCARD
+				if(10)
+					C.pipe_type = PIPE_TYPE_JUNC_SORT
+					C.sort_mode = SORT_TYPE_UNTAGGED
+				if(11)
+					C.pipe_type = PIPE_TYPE_TAGGER
+				if(12)
+					C.pipe_type = PIPE_TYPE_TAGGER_PART
+///// Z-Level stuff
+				if(21)
+					C.pipe_type = PIPE_TYPE_UP
+				if(22)
+					C.pipe_type = PIPE_TYPE_DOWN
+///// Z-Level stuff
+			C.add_fingerprint(usr)
+			C.update()
+			wait = 1
+			spawn(15)
+				wait = 0
+	return
+
+// adding a pipe dispensers that spawn unhooked from the ground
+/obj/machinery/pipedispenser/orderable
+	anchored = FALSE
+
+/obj/machinery/pipedispenser/disposal/orderable
+	anchored = FALSE

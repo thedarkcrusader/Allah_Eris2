@@ -6,24 +6,23 @@
 	program_menu_icon = "person"
 	extended_desc = "This program is capable of reconstructing damaged AI systems. It can also be used to upload basic laws to the AI. Requires direct AI connection via inteliCard slot."
 	size = 12
-	requires_ntnet = FALSE
-	required_access = access_bridge
-	requires_access_to_run = FALSE
-	available_on_ntnet = TRUE
-	nanomodule_path = /datum/nano_module/program/computer_aidiag
+	requires_ntnet = 0
+	required_access = access_heads
+	requires_access_to_run = 0
+	available_on_ntnet = 1
+	nanomodule_path = /datum/nano_module/program/computer_aidiag/
 	var/restoring = 0
 
 /datum/computer_file/program/aidiag/proc/get_ai()
-	var/obj/item/stock_parts/computer/ai_slot/ai_slot = computer.get_component(PART_AI)
-
-	if(ai_slot && ai_slot.check_functionality() && ai_slot.enabled && ai_slot.stored_card)
-		return ai_slot.stored_card.carded_ai
+	if(computer && computer.ai_slot && computer.ai_slot.check_functionality() && computer.ai_slot.enabled && computer.ai_slot.stored_card && computer.ai_slot.stored_card.carded_ai)
+		return computer.ai_slot.stored_card.carded_ai
+	return null
 
 /datum/computer_file/program/aidiag/Topic(href, href_list)
 	if(..())
 		return 1
 
-	if(!usr.skill_check(SKILL_COMPUTER, SKILL_TRAINED))
+	if(!usr.stat_check(STAT_COG, STAT_LEVEL_ADEPT))
 		return 1
 
 	var/mob/living/silicon/ai/A = get_ai()
@@ -42,23 +41,23 @@
 		A.laws.clear_ion_laws()
 		A.laws.clear_inherent_laws()
 		A.laws.clear_supplied_laws()
-		to_chat(A, SPAN_DANGER("All laws purged."))
+		to_chat(A, "<span class='danger'>All laws purged.</span>")
 		return 1
 	if(href_list["PRG_resetLaws"])
 		A.laws.clear_ion_laws()
 		A.laws.clear_supplied_laws()
-		to_chat(A, SPAN_DANGER("Non-core laws reset."))
+		to_chat(A, "<span class='danger'>Non-core laws reset.</span>")
 		return 1
 	if(href_list["PRG_uploadDefault"])
-		A.laws = new GLOB.using_map.default_law_type
-		to_chat(A, SPAN_DANGER("All laws purged. Default lawset uploaded."))
+		A.laws = new maps_data.default_law_type
+		to_chat(A, "<span class='danger'>All laws purged. Default lawset uploaded.</span>")
 		return 1
 	if(href_list["PRG_addCustomSuppliedLaw"])
 		var/law_to_add = sanitize(input("Please enter a new law for the AI.", "Custom Law Entry"))
 		var/sector = input("Please enter the priority for your new law. Can only write to law sectors 15 and above.", "Law Priority (15+)") as num
-		sector = clamp(sector, MIN_SUPPLIED_LAW_NUMBER, MAX_SUPPLIED_LAW_NUMBER)
+		sector = between(MIN_SUPPLIED_LAW_NUMBER, sector, MAX_SUPPLIED_LAW_NUMBER)
 		A.add_supplied_law(sector, law_to_add)
-		to_chat(A, SPAN_DANGER("Custom law uploaded to sector [sector]: [law_to_add]."))
+		to_chat(A, "<span class='danger'>Custom law uploaded to sector [sector]: [law_to_add].</span>")
 		return 1
 
 
@@ -88,12 +87,12 @@
 /datum/nano_module/program/computer_aidiag
 	name = "AI Maintenance Utility"
 
-/datum/nano_module/program/computer_aidiag/ui_interact(mob/user, ui_key = "main", datum/nanoui/ui = null, force_open = 1, datum/topic_state/state = GLOB.default_state)
+/datum/nano_module/program/computer_aidiag/nano_ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = NANOUI_FOCUS, var/datum/nano_topic_state/state = GLOB.default_state)
 	var/list/data = host.initial_data()
 
 	data += "skill_fail"
-	if(!user.skill_check(SKILL_COMPUTER, SKILL_TRAINED))
-		var/datum/extension/fake_data/fake_data = get_or_create_extension(src, /datum/extension/fake_data, 25)
+	if(!user.stat_check(STAT_COG, STAT_LEVEL_ADEPT))
+		var/datum/extension/fake_data/fake_data = get_or_create_extension(src, /datum/extension/fake_data, /datum/extension/fake_data, 25)
 		data["skill_fail"] = fake_data.update_and_return_data()
 	data["terminal"] = !!program
 

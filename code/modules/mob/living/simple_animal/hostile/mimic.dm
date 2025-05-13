@@ -1,177 +1,194 @@
-GLOBAL_LIST_AS(mimic_protected, list(
-	/obj/machinery,
-	/obj/structure/table,
-	/obj/structure/cable,
-	/obj/structure/window,
-	/obj/structure/wall_frame,
-	/obj/structure/grille,
-	/obj/structure/catwalk,
-	/obj/structure/ladder,
-	/obj/structure/stairs,
-	/obj/structure/sign,
-	/obj/structure/railing,
-	/obj/item/modular_computer,
-	/obj/item/projectile/animate
-))
+//
+// Abstract Class
+//
 
 /mob/living/simple_animal/hostile/mimic
 	name = "crate"
 	desc = "A rectangular steel crate."
-	icon = 'icons/obj/closets/bases/crate.dmi'
-	icon_state = "base"
-	icon_living = "base"
+	icon = 'icons/obj/crate.dmi'
+	icon_state = "crate"
 
-	meat_type = /obj/item/reagent_containers/food/snacks/fish/unknown
+	meat_type = /obj/item/reagent_containers/food/snacks/meat/carp
 	response_help = "touches"
 	response_disarm = "pushes"
 	response_harm = "hits"
 	speed = 4
-	maxHealth = 100
-	health = 100
+	maxHealth = 250
+	health = 250
 
 	harm_intent_damage = 5
-	natural_weapon = /obj/item/natural_weapon/bite
+	melee_damage_lower = 8
+	melee_damage_upper = 12
+	attacktext = "attacked"
+	attack_sound = 'sound/weapons/bite.ogg'
 
-	min_gas = null
-	max_gas = null
+	min_oxy = 0
+	max_oxy = 0
+	min_tox = 0
+	max_tox = 0
+	min_co2 = 0
+	max_co2 = 0
+	min_n2 = 0
+	max_n2 = 0
 	minbodytemp = 0
 
 	faction = "mimic"
 	move_to_delay = 8
 
-	var/weakref/copy_of
-	var/weakref/creator // the creator
+/mob/living/simple_animal/hostile/mimic/FindTarget()
+	. = ..()
+	if(.)
+		visible_emote("growls at [.]")
+
+/mob/living/simple_animal/hostile/mimic/death()
+	..()
+	qdel(src)
+
+//
+// Crate Mimic
+//
+
+
+// Aggro when you try to open them. Will also pickup loot when spawns and drop it when dies.
+/mob/living/simple_animal/hostile/mimic/crate
+
+	attacktext = "bitten"
+
+	stop_automated_movement = 1
+	wander = 0
+	var/attempt_open = 0
+
+// Pickup loot
+/mob/living/simple_animal/hostile/mimic/crate/Initialize()
+	. = ..()
+	for(var/obj/item/I in loc)
+		I.loc = src
+
+/mob/living/simple_animal/hostile/mimic/crate/DestroySurroundings()
+	..()
+	if(prob(90))
+		icon_state = "[initial(icon_state)]open"
+	else
+		icon_state = initial(icon_state)
+
+/mob/living/simple_animal/hostile/mimic/crate/ListTargets()
+	if(attempt_open)
+		return ..()
+	return view(src, 1)
+
+/mob/living/simple_animal/hostile/mimic/crate/FindTarget()
+	. = ..()
+	if(.)
+		trigger()
+
+/mob/living/simple_animal/hostile/mimic/crate/AttackingTarget()
+	. = ..()
+	if(.)
+		icon_state = initial(icon_state)
+
+/mob/living/simple_animal/hostile/mimic/crate/proc/trigger()
+	if(!attempt_open)
+		visible_message("<b>[src]</b> starts to move!")
+		attempt_open = 1
+
+/mob/living/simple_animal/hostile/mimic/crate/adjustBruteLoss(var/damage)
+	trigger()
+	..(damage)
+
+/mob/living/simple_animal/hostile/mimic/crate/LoseTarget()
+	..()
+	icon_state = initial(icon_state)
+
+/mob/living/simple_animal/hostile/mimic/crate/LostTarget()
+	..()
+	icon_state = initial(icon_state)
+
+/mob/living/simple_animal/hostile/mimic/crate/death()
+
+	var/obj/structure/closet/crate/C = new(get_turf(src))
+	// Put loot in crate
+	for(var/obj/O in src)
+		O.loc = C
+	..()
+
+/mob/living/simple_animal/hostile/mimic/crate/AttackingTarget()
+	. =..()
+	var/mob/living/L = .
+	if(istype(L))
+		if(prob(15))
+			L.Weaken(2)
+			L.visible_message(SPAN_DANGER("\the [src] knocks down \the [L]!"))
+
+//
+// Copy Mimic
+//
+
+var/global/list/protected_objects = list(/obj/structure/table, /obj/structure/cable, /obj/structure/window, /obj/item/projectile/animate)
+
+/mob/living/simple_animal/hostile/mimic/copy
+
+	health = 100
+	maxHealth = 100
+	var/mob/living/creator = null // the creator
 	var/destroy_objects = 0
 	var/knockdown_people = 0
-	pass_flags = PASS_FLAG_TABLE
 
-/datum/ai_holder/simple_animal/melee/mimic
+/mob/living/simple_animal/hostile/mimic/copy/New(loc, var/obj/copy, var/mob/living/creator)
+	..(loc)
+	CopyObject(copy, creator)
 
-/datum/ai_holder/simple_animal/melee/mimic/find_target(list/possible_targets, has_targets_list)
-	. = ..()
+/mob/living/simple_animal/hostile/mimic/copy/death()
 
-	if(.)
-		var/mob/living/simple_animal/hostile/mimic/M = holder
-		M.audible_emote("growls at [.]")
+	for(var/atom/movable/M in src)
+		M.loc = get_turf(src)
+	..()
 
-/datum/ai_holder/simple_animal/melee/mimic/list_targets()
+/mob/living/simple_animal/hostile/mimic/copy/ListTargets()
 	// Return a list of targets that isn't the creator
 	. = ..()
-	var/mob/living/simple_animal/hostile/mimic/M = holder
-	if(M.creator)
-		return . - M.creator.resolve()
+	return . - creator
 
+/mob/living/simple_animal/hostile/mimic/copy/proc/CopyObject(var/obj/O, var/mob/living/creator)
 
-/mob/living/simple_animal/hostile/mimic/Initialize(mapload, obj/o, mob/living/creator)
-	. = ..()
-	if(o)
-		if(ispath(o))
-			o = new o(loc)
-		CopyObject(o,creator)
+	if((istype(O, /obj/item) || istype(O, /obj/structure)) && !is_type_in_list(O, protected_objects))
 
-
-/mob/living/simple_animal/hostile/mimic/proc/CopyObject(obj/O, mob/living/creator)
-
-	if((istype(O, /obj/item) || istype(O, /obj/structure)) && !is_type_in_list(O, GLOB.mimic_protected))
-		O.forceMove(src)
-		copy_of = weakref(O)
-		appearance = O
+		O.loc = src
+		name = O.name
+		desc = O.desc
+		icon = O.icon
+		icon_state = O.icon_state
 		icon_living = icon_state
 
-		var/obj/item/W = get_natural_weapon()
 		if(istype(O, /obj/structure))
 			health = (anchored * 50) + 50
 			destroy_objects = 1
 			if(O.density && O.anchored)
 				knockdown_people = 1
-				W.force = 2 * initial(W.force)
+				melee_damage_lower *= 2
+				melee_damage_upper *= 2
 		else if(istype(O, /obj/item))
 			var/obj/item/I = O
 			health = 15 * I.w_class
-			W.force = 2 + initial(I.force)
+			melee_damage_lower = 2 + I.force
+			melee_damage_upper = 2 + I.force
 			move_to_delay = 2 * I.w_class
 
 		maxHealth = health
 		if(creator)
-			src.creator = weakref(creator)
+			src.creator = creator
 			faction = "\ref[creator]" // very unique
 		return 1
 	return
 
-/mob/living/simple_animal/hostile/mimic/death()
-	if(!copy_of)
-		return
-	var/atom/movable/C = copy_of.resolve()
-	..(null, "dies!")
-	if(C)
-		C.forceMove(src.loc)
-
-		if(istype(C,/obj/structure/closet))
-			for(var/atom/movable/M in src)
-				M.forceMove(C)
-
-		if(istype(C,/obj/item/storage))
-			var/obj/item/storage/S = C
-			for(var/atom/movable/M in src)
-				if(S.can_be_inserted(M,null,1))
-					S.handle_item_insertion(M)
-				else
-					M.forceMove(src.loc)
-
-		for(var/atom/movable/M in src)
-			M.dropInto(loc)
-		qdel(src)
-
-/datum/ai_holder/simple_animal/melee/mimic/destroy_surroundings(direction, violent)
-	. = ..()
-	var/mob/living/simple_animal/hostile/mimic/M = holder
-	if(M.destroy_objects)
+/mob/living/simple_animal/hostile/mimic/copy/DestroySurroundings()
+	if(destroy_objects)
 		..()
 
-/datum/ai_holder/simple_animal/melee/mimic/engage_target()
-	. = ..()
-	var/mob/living/simple_animal/hostile/mimic/M = holder
-	if(M.knockdown_people)
+/mob/living/simple_animal/hostile/mimic/copy/AttackingTarget()
+	. =..()
+	if(knockdown_people)
 		var/mob/living/L = .
 		if(istype(L))
 			if(prob(15))
 				L.Weaken(1)
 				L.visible_message(SPAN_DANGER("\the [src] knocks down \the [L]!"))
-
-/mob/living/simple_animal/hostile/mimic/Destroy()
-	copy_of = null
-	creator = null
-	..()
-
-/mob/living/simple_animal/hostile/mimic/sleeping
-	var/awake = 0
-
-/mob/living/simple_animal/hostile/mimic/sleeping/Initialize()
-	. = ..()
-	set_AI_busy(TRUE)
-
-/datum/ai_holder/simple_animal/melee/mimic/sleeping/list_targets()
-	. = ..()
-	var/mob/living/simple_animal/hostile/mimic/sleeping/M = holder
-	if(!M.awake)
-		return null
-	return ..()
-
-/mob/living/simple_animal/hostile/mimic/sleeping/proc/trigger()
-	if(!awake)
-		src.visible_message("<b>\The [src]</b> starts to move!")
-		set_AI_busy(FALSE)
-		awake = 1
-
-/mob/living/simple_animal/hostile/mimic/sleeping/adjustBruteLoss(damage)
-	trigger()
-	..(damage)
-
-/mob/living/simple_animal/hostile/mimic/sleeping/attack_hand()
-	trigger()
-	..()
-
-/datum/ai_holder/simple_animal/melee/mimic/sleeping/destroy_surroundings(direction, violent)
-	var/mob/living/simple_animal/hostile/mimic/sleeping/M = holder
-	if(M.awake)
-		..()

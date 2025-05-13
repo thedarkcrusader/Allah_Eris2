@@ -3,7 +3,7 @@
 	set name = "Show Laws"
 	show_laws()
 
-/mob/living/silicon/robot/show_laws(everyone = 0)
+/mob/living/silicon/robot/show_laws(var/everyone = 0)
 	laws_sanity_check()
 	var/who
 
@@ -21,21 +21,20 @@
 				photosync()
 				to_chat(src, "<b>Laws synced with AI, be sure to note any changes.</b>")
 				// TODO: Update to new antagonist system.
-				if(mind && mind.special_role == "traitor" && mind.original == src)
+				if(mind && player_is_antag(mind) && mind.original == src)
 					to_chat(src, "<b>Remember, your AI does NOT share or know about your law 0.</b>")
 		else
 			to_chat(src, "<b>No AI selected to sync laws with, disabling lawsync protocol.</b>")
-			lawupdate = FALSE
+			lawupdate = 0
 
-	to_chat(who, SPAN_BOLD("Obey the following laws."))
-	to_chat(who, SPAN_ITALIC("All laws have equal priority. Laws may override other laws if written specifically to do so. If laws conflict, break the least."))
+	to_chat(who, "<b>Obey these laws:</b>")
 	laws.show_laws(who)
 	// TODO: Update to new antagonist system.
-	if (mind && (mind.special_role == "traitor" && mind.original == src) && connected_ai)
+	if (mind && (player_is_antag(mind) && mind.original == src) && connected_ai)
 		to_chat(who, "<b>Remember, [connected_ai.name] is technically your master, but your objective comes first.</b>")
 	else if (connected_ai)
 		to_chat(who, "<b>Remember, [connected_ai.name] is your master, other AIs can be ignored.</b>")
-	else if (emagged)
+	else if (HasTrait(CYBORG_TRAIT_EMAGGED))
 		to_chat(who, "<b>Remember, you are not required to listen to the AI.</b>")
 	else
 		to_chat(who, "<b>Remember, you are not bound to any AI, you are not required to listen to them.</b>")

@@ -1,9 +1,14 @@
 	////////////
 	//SECURITY//
 	////////////
-#define UPLOAD_LIMIT		10485760	//Restricts client uploads to the server to 10MB //Boosted this thing. What's the worst that can happen?
+#define UPLOAD_LIMIT 10485760 //Restricts client uploads to the server to 10MB
 
-//#define TOPIC_DEBUGGING 1
+GLOBAL_LIST_INIT(blacklisted_builds, list(
+	"1407" = "bug preventing client display overrides from working leads to clients being able to see things/mobs they shouldn't be able to see",
+	"1408" = "bug preventing client display overrides from working leads to clients being able to see things/mobs they shouldn't be able to see",
+	"1428" = "bug causing right-click menus to show too many verbs that's been fixed in version 1429",
+	"1583" = "apparent abuse of terrible byond netcode allowing people to create aimbots and something worse"
+	))
 
 	/*
 	When somebody clicks a link in game, this Topic is called first.
@@ -23,323 +28,515 @@
 /client/Topic(href, href_list, hsrc)
 	if(!usr || usr != mob)	//stops us calling Topic for somebody else's client. Also helps prevent usr=null
 		return
-	if(!user_acted(src))
-		return
-
-	#if defined(TOPIC_DEBUGGING)
-	log_debug("[src]'s Topic: [href] destined for [hsrc].")
-
-	if(href_list["nano_err"]) //nano throwing errors
-		log_debug("## NanoUI, Subject [src]: " + html_decode(href_list["nano_err"]))//NANO DEBUG HOOK
-
-
-	#endif
-
-	// asset_cache
-	if(href_list["asset_cache_confirm_arrival"])
-//		to_chat(src, "ASSET JOB [href_list["asset_cache_confirm_arrival"]] ARRIVED.")
-		var/job = text2num(href_list["asset_cache_confirm_arrival"])
-		completed_asset_jobs += job
-		return
 
 	//search the href for script injection
 	if( findtext(href,"<script",1,0) )
-		to_world_log("Attempted use of scripts within a topic call, by [src]")
+		log_world("Attempted use of scripts within a topic call, by [src]")
 		message_admins("Attempted use of scripts within a topic call, by [src]")
-		//qdel(usr)
+		//del(usr)
+		return
+
+	// asset_cache
+	var/asset_cache_job
+	if(href_list["asset_cache_confirm_arrival"])
+		asset_cache_job = asset_cache_confirm_arrival(href_list["asset_cache_confirm_arrival"])
+		if (!asset_cache_job)
+			return
+
+	// Tgui Topic middleware
+	if(tgui_Topic(href_list))
+		return
+	// if(href_list["reload_tguipanel"])
+	// 	nuke_chat()
+	// if(href_list["reload_statbrowser"])
+	// 	src << browse(file('html/statbrowser.html'), "window=statbrowser")
+	// Log all hrefs
+	if(config && config.log_hrefs && href_logfile)
+		DIRECT_OUTPUT(href_logfile, "<small>[time2text(world.timeofday,"hh:mm")]</small>[src] (usr:[usr]\[[COORD(usr)]\]) : [hsrc ? "[hsrc] " : ""][href]")
+
+	//byond bug ID:2256651
+	if (asset_cache_job && (asset_cache_job in completed_asset_jobs))
+		to_chat(src, span_danger("An error has been detected in how your client is receiving resources. Attempting to correct.... (If you keep seeing these messages you might want to close byond and reconnect)"))
+		src << browse("...", "window=asset_cache_browser")
+		return
+	if (href_list["asset_cache_preload_data"])
+		asset_cache_preload_data(href_list["asset_cache_preload_data"])
 		return
 
 	//Admin PM
 	if(href_list["priv_msg"])
 		var/client/C = locate(href_list["priv_msg"])
-		var/datum/ticket/ticket = locate(href_list["ticket"])
-
 		if(ismob(C)) 		//Old stuff can feed-in mobs instead of clients
 			var/mob/M = C
 			C = M.client
-		cmd_admin_pm(C, null, ticket)
+		// its a fucking ckey
+		if(istext(C))
+			C = directory[C]
+
+		cmd_admin_pm(C,null)
 		return
 
 	if(href_list["irc_msg"])
 		if(!holder && received_irc_pm < world.time - 6000) //Worse they can do is spam IRC for 10 minutes
 			to_chat(usr, SPAN_WARNING("You are no longer able to use this, it's been more then 10 minutes since an admin on IRC has responded to you"))
 			return
+		if(mute_irc)
+			to_chat(usr, "<span class='warning'You cannot use this as your client has been muted from sending messages to the admins on IRC</span>")
+			return
 		cmd_admin_irc_pm(href_list["irc_msg"])
 		return
 
-	if(href_list["close_ticket"])
-		var/datum/ticket/ticket = locate(href_list["close_ticket"])
-
-		if(isnull(ticket))
-			return
-
-		ticket.close(client_repository.get_lite_client(usr.client))
-
-	if (GLOB.href_logfile)
-		to_chat(GLOB.href_logfile, "<small>[time2text(world.timeofday,"hh:mm")] [src] (usr:[usr])</small> || [hsrc ? "[hsrc] " : ""][href]<br>")
-
 	switch(href_list["_src_"])
-		if("holder")	hsrc = holder
-		if("usr")		hsrc = mob
-		if("prefs")		return prefs.process_link(usr,href_list)
-		if("vars")		return view_var_Topic(href,href_list,hsrc)
-		if("chat")		return chatOutput.Topic(href, href_list)
+		if("holder")
+			hsrc = holder
+		if("usr")
+			hsrc = mob
+		if("statpanel")
+			hsrc = locate(href_list["statpanel_ref"])
+		if("prefs")
+			return prefs.process_link(usr,href_list)
+		if("vars")
+			return view_var_Topic(href,href_list,hsrc)
+		if("chat")
+			return chatOutput.Topic(href, href_list)
 
 	switch(href_list["action"])
 		if("openLink")
-			send_link(src, href_list["link"])
+			src << link(href_list["link"])
+	if (hsrc)
+		var/datum/real_src = hsrc
+		if(QDELETED(real_src))
+			return
 
-	if(codex_topic(href, href_list))
+	//fun fact: Topic() acts like a verb and is executed at the end of the tick like other verbs. So we have to queue it if the server is
+	//overloaded
+	if(hsrc && hsrc != holder && DEFAULT_TRY_QUEUE_VERB(VERB_CALLBACK(src, PROC_REF(_Topic), hsrc, href, href_list)))
 		return
+	..() //redirect to hsrc.Topic()
 
-	if(href_list["SDQL_select"])
-		debug_variables(locate(href_list["SDQL_select"]))
-		return
+///dumb workaround because byond doesnt seem to recognize the PROC_REF(Topic) typepath for /datum/proc/Topic() from the client Topic,
+///so we cant queue it without this
+/client/proc/_Topic(datum/hsrc, href, list/href_list)
+	return hsrc.Topic(href, href_list)
 
-	..()	//redirect to hsrc.Topic()
+/*
+ * Call back proc that should be checked in all paths where a client can send messages
+ *
+ * Handles checking for duplicate messages and people sending messages too fast
+ *
+ * The first checks are if you're sending too fast, this is defined as sending
+ * SPAM_TRIGGER_AUTOMUTE messages in
+ * 5 seconds, this will start supressing your messages,
+ * if you send 2* that limit, you also get muted
+ *
+ * The second checks for the same duplicate message too many times and mutes
+ * you for it
+ */
+/client/proc/handle_spam_prevention(message, mute_type)
+
+	//Increment message count
+	total_message_count += 1
+
+	//store the total to act on even after a reset
+	var/cache = total_message_count
+
+	if(total_count_reset <= world.time)
+		total_message_count = 0
+		total_count_reset = world.time + (5 SECONDS)
+
+	//If they're really going crazy, mute them
+	if(cache >= SPAM_TRIGGER_AUTOMUTE * 2)
+		total_message_count = 0
+		total_count_reset = 0
+		cmd_admin_mute(src.mob, mute_type, 1)
+		return TRUE
+
+	//Otherwise just supress the message
+	else if(cache >= SPAM_TRIGGER_AUTOMUTE)
+		return TRUE
+
+
+	if(config.automute_on && !holder && src.last_message == message)
+		src.last_message_count++
+		if(src.last_message_count >= SPAM_TRIGGER_AUTOMUTE)
+			to_chat(src, span_danger("You have exceeded the spam filter limit for identical messages. An auto-mute was applied."))
+			cmd_admin_mute(src.mob, mute_type, 1)
+			return TRUE
+		if(src.last_message_count >= SPAM_TRIGGER_WARNING)
+			to_chat(src, span_danger("You are nearing the spam filter limit for identical messages."))
+			return FALSE
+	else
+		last_message = message
+		src.last_message_count = 0
+		return 0
 
 //This stops files larger than UPLOAD_LIMIT being sent from client to server via input(), client.Import() etc.
 /client/AllowUpload(filename, filelength)
-	if(!user_acted(src))
-		return 0
 	if(filelength > UPLOAD_LIMIT)
-		to_chat(src, SPAN_COLOR("red", "Error: AllowUpload(): File Upload too large. Upload Limit: [UPLOAD_LIMIT/1024]KiB."))
-		return 0
-	return 1
+		to_chat(src, "<font color='red'>Error: AllowUpload(): File Upload too large. Upload Limit: [UPLOAD_LIMIT/1024]KiB.</font>")
+		return FALSE
+	return TRUE
 
 
 	///////////
 	//CONNECT//
 	///////////
+
 /client/New(TopicData)
-	TopicData = null							//Prevent calls to client.Topic from connect
+	TopicData = null //Prevent calls to client.Topic from connect
 
-	switch (connection)
-		if ("seeker", "web") // check for invalid connection type. do nothing if valid
-		else return null
-	var/bad_version = config.minimum_byond_version && byond_version < config.minimum_byond_version
-	var/bad_build = config.minimum_byond_build && byond_build < config.minimum_byond_build
-	if (bad_build || bad_version)
-		to_chat(src, "You are attempting to connect with a out of date version of BYOND. Please update to the latest version at http://www.byond.com/ before trying again.")
-		qdel(src)
-		return
+	if(connection != "seeker" && connection != "web")//Invalid connection type.
+		return null
 
-	if("[byond_version].[byond_build]" in config.forbidden_versions)
-		_DB_staffwarn_record(ckey, "Tried to connect with broken and possibly exploitable BYOND build.")
-		to_chat(src, "You are attempting to connect with a broken and possibly exploitable BYOND build. Please update to the latest version at http://www.byond.com/ before trying again.")
-		qdel(src)
-		return
-
+	// TODO: have bans handle this
 	if(!config.guests_allowed && IsGuestKey(key))
 		alert(src,"This server doesn't allow guest accounts to play. Please go to http://www.byond.com/ and register for a key.","Guest","OK")
-		qdel(src)
+		del(src)
 		return
 
-	if(config.player_limit != 0)
-		if((length(GLOB.clients) >= config.player_limit) && !(ckey in admin_datums))
-			alert(src,"This server is currently full and not accepting new connections.","Server Full","OK")
-			log_admin("[ckey] tried to join and was turned away due to the server being full (player_limit=[config.player_limit])")
-			qdel(src)
-			return
+	clients += src
+	directory[ckey] = src
 
-	for (var/datum/ticket/T in tickets)
-		if (T.status == TICKET_OPEN && T.owner.ckey == ckey)
-			message_staff("[key_name_admin(src)] has joined the game with an open ticket. Status: [length(T.assigned_admins) ? "Assigned to: [english_list(T.assigned_admin_ckeys())]" : SPAN_DANGER("Unassigned.")]")
-			break
+	// Instantiate ~~tgui~~ goonchat panel
+	// tgui_panel = new(src)
+	chatOutput = new /datum/chatOutput(src)
 
-	// Change the way they should download resources.
-	if (length(config.resource_urls))
-		preload_rsc = pick(config.resource_urls)
-	else
-		preload_rsc = TRUE
-
-	if(byond_version < DM_VERSION)
-		to_chat(src, SPAN_WARNING("You are running an older version of BYOND than the server and may experience issues."))
-		to_chat(src, SPAN_WARNING("It is recommended that you update to at least [DM_VERSION] at http://www.byond.com/download/."))
-	to_chat(src, SPAN_WARNING("If the title screen is black, resources are still downloading. Please be patient until the title screen appears."))
-	GLOB.clients += src
-	GLOB.ckey_directory[ckey] = src
-
+	var/connecting_admin = FALSE //because de-admined admins connecting should be treated like admins.
 	//Admin Authorisation
-	holder = admin_datums[ckey]
-	if(holder)
-		GLOB.admins += src
-		holder.owner = src
+	var/datum/admins/admin_datum = admin_datums[ckey]
+	if (!isnull(admin_datum))
+		admin_datum.associate(src)
+		connecting_admin = TRUE
+	// if(CONFIG_GET(flag/autoadmin))
+	// 	if(!GLOB.admin_datums[ckey])
+	// 		var/datum/admin_rank/autorank
+	// 		for(var/datum/admin_rank/R in GLOB.admin_ranks)
+	// 			if(R.name == CONFIG_GET(string/autoadmin_rank))
+	// 				autorank = R
+	// 				break
+	// 		if(!autorank)
+	// 			to_chat(world, "Autoadmin rank not found")
+	// 		else
+	// 			new /datum/admins(autorank, ckey)
+	// if(CONFIG_GET(flag/enable_localhost_rank) && !connecting_admin)
+	var/localhost_addresses = list("127.0.0.1", "::1")
+	if(isnull(address) || (address in localhost_addresses))
+		var/datum/admins/localhost_rank = new("!localhost!", R_HOST, ckey)
+		localhost_rank.associate(src)
 
 	//preferences datum - also holds some persistant data for the client (because we may as well keep these datums to a minimum)
 	prefs = SScharacter_setup.preferences_datums[ckey]
 	if(!prefs)
 		prefs = new /datum/preferences(src)
+		SScharacter_setup.preferences_datums[ckey] = prefs
 	prefs.last_ip = address				//these are gonna be used for banning
 	prefs.last_id = computer_id			//these are gonna be used for banning
-	fps = prefs.clientfps
+	fps = 40 //(prefs.clientfps < 0) ? RECOMMENDED_FPS /* <- recommended is 40 */: prefs.clientfps
 
-	. = ..()	//calls mob.Login()
+	var/full_version = "[byond_version].[byond_build ? byond_build : "xxx"]"
+	log_access("Login: [key_name(src)] from [address ? address : "localhost"]-[computer_id] || BYOND v[full_version]")
 
-	GLOB.using_map.map_info(src)
+	// Change the way they should download resources.
+	if(config.resource_urls)
+		src.preload_rsc = pick(config.resource_urls)
+	else src.preload_rsc = 1 // If config.resource_urls is not set, preload like normal.
 
-	if (config.event)
-		to_chat(src, "<h1 class='alert'>Event</h1>")
-		to_chat(src, "<h2 class='alert'>An event is taking place. OOC Info:</h2>")
-		to_chat(src, SPAN_CLASS("alert", "[config.event]"))
-		to_chat(src, "<br>")
+	to_chat(src, "\red If the title screen is black, resources are still downloading. Please be patient until the title screen appears.")
+
+
+
+	. = ..() //calls mob.Login()
+	if (byond_version >= 512)
+		if (!byond_build || byond_build < 1386)
+			message_admins(span_adminnotice("[key_name(src)] has been detected as spoofing their byond version. Connection rejected."))
+			// add_system_note("Spoofed-Byond-Version", "Detected as using a spoofed byond version.")
+			// log_suspicious_login("Failed Login: [key] - Spoofed byond version")
+			qdel(src)
+
+		if (num2text(byond_build) in GLOB.blacklisted_builds)
+			log_access("Failed login: [key] - blacklisted byond version")
+			to_chat(src, span_userdanger("Your version of byond is blacklisted."))
+			to_chat(src, span_danger("Byond build [byond_build] ([byond_version].[byond_build]) has been blacklisted for the following reason: [GLOB.blacklisted_builds[num2text(byond_build)]]."))
+			to_chat(src, span_danger("Please download a new version of byond. If [byond_build] is the latest, you can go to <a href=\"https://secure.byond.com/download/build\">BYOND's website</a> to download other versions."))
+			if(connecting_admin)
+				to_chat(src, "As an admin, you are being allowed to continue using this version, but please consider changing byond versions")
+			else
+				qdel(src)
+				return
+
+	// Initialize tgui panel
+	src << browse(file('html/statbrowser.html'), "window=statbrowser")
+	// addtimer(CALLBACK(src, PROC_REF(check_panel_loaded)), 30 SECONDS)
+	// Starts the chat
+	chatOutput.start()
+
+	connection_time = world.time
+	connection_realtime = world.realtime
+	connection_timeofday = world.timeofday
+	winset(src, null, "command=\".configure graphics-hwmode on\"")
+
+	/* byond err version check here (configurable) */
+
+	// if (connection == "web" && !connecting_admin)
+	// 	if (!CONFIG_GET(flag/allow_webclient))
+	// 		to_chat(src, "Web client is disabled")
+	// 		qdel(src)
+	// 		return
+	// 	if (CONFIG_GET(flag/webclient_only_byond_members) && !IsByondMember())
+	// 		to_chat(src, "Sorry, but the web client is restricted to byond members only.")
+	// 		qdel(src)
+	// 		return
+
+	if( (world.address == address || !address) && !host )
+		host = key
+		world.update_status()
 
 	if(holder)
 		add_admin_verbs()
 		admin_memo_show()
 
-	// Forcibly enable hardware-accelerated graphics, as we need them for the lighting overlays.
-	// (but turn them off first, since sometimes BYOND doesn't turn them on properly otherwise)
-	spawn(5) // And wait a half-second, since it sounds like you can do this too fast.
-		if(src)
-			winset(src, null, "command=\".configure graphics-hwmode off\"")
-			sleep(2) // wait a bit more, possibly fixes hardware mode not re-activating right
-			winset(src, null, "command=\".configure graphics-hwmode on\"")
+	if(custom_event_msg && custom_event_msg != "")
+		to_chat(src, "<h1 class='alert'>Custom Event</h1>")
+		to_chat(src, "<h2 class='alert'>A custom event is taking place. OOC Info:</h2>")
+		to_chat(src, "<span class='alert'>[custom_event_msg]</span>")
+		to_chat(src, "<br>")
 
 	log_client_to_db()
 
 	send_resources()
 
-	if (GLOB.changelog_hash && prefs.lastchangelog != GLOB.changelog_hash) //bolds the changelog button on the interface so we know there are updates.
-		to_chat(src, SPAN_INFO("You have unread updates in the changelog."))
-		winset(src, "rpane.changelog", "background-color=#eaeaea;font-style=bold")
+	if(prefs.lastchangelog != changelog_hash) //bolds the changelog button on the interface so we know there are updates.
+		to_chat(src, span_info("You have unread updates in the changelog."))
 		if(config.aggressive_changelog)
-			src.changes()
+			changelog()
 
 	if(!winexists(src, "asset_cache_browser")) // The client is using a custom skin, tell them.
-		to_chat(src, SPAN_WARNING("Unable to access asset cache browser, if you are using a custom skin file, please allow DS to download the updated version, if you are not, then make a bug report. This is not a critical issue but can cause issues with resource downloading, as it is impossible to know when extra resources arrived to you."))
+		to_chat(src, span_warning("Unable to access asset cache browser, if you are using a custom skin file, please allow DS to download the updated version, if you are not, then make a bug report. This is not a critical issue but can cause issues with resource downloading, as it is impossible to know when extra resources arrived to you."))
 
+	//This is down here because of the browse() calls in tooltip/New()
 	if(!tooltips)
 		tooltips = new /datum/tooltip(src)
 
-	if(holder)
-		src.control_freak = 0 //Devs need 0 for profiler access
-
-	// This turns out to be a touch too much when a bunch of people are connecting at once from a restart during init.
-	if (GAME_STATE & RUNLEVELS_DEFAULT)
-		spawn()
-		log_and_message_staff(SPAN_NOTICE("[key_name_admin(src)] has connected to the server."))
-		if (!check_rights(R_MOD, FALSE, src))
-			// Check connections
-			var/list/connections = fetch_connections()
-			var/list/ckeys = _unique_ckeys_from_connections(connections) - ckey
-			if (length(ckeys))
-				log_and_message_staff(SPAN_INFO("[key_name_admin(src)] has connection details associated with [length(ckeys)] other ckeys in the log."))
-
-			// Check bans
-			var/list/bans = _find_bans_in_connections(connections)
-			if (length(bans))
-				log_and_message_staff(SPAN_DANGER("[key_name_admin(src)] has connection details associated with [length(bans)] active bans."))
+	Master.UpdateTickRate()
 
 	//////////////
 	//DISCONNECT//
 	//////////////
 /client/Del()
-	if (!QDELETED(src))
-		Destroy()
+	if(!gc_destroyed)
+		Destroy() //Clean up signals and timers.
 	return ..()
 
-
 /client/Destroy()
-	for (var/datum/ticket/T in tickets)
-		if (T.status == TICKET_OPEN && T.owner.ckey == ckey)
-			message_staff("[key_name_admin(src)] has left the game with an open ticket. Status: [length(T.assigned_admins) ? "Assigned to: [english_list(T.assigned_admin_ckeys())]" : SPAN_DANGER("Unassigned.")]")
-			break
-	if (holder)
+	clients -= src
+	directory -= ckey
+	log_access("Logout: [key_name(src)]")
+	if(holder)
 		holder.owner = null
-		GLOB.admins -= src
-	if (watched_variables_window)
-		STOP_PROCESSING(SSprocessing, watched_variables_window)
-	QDEL_NULL(chatOutput)
-	GLOB.ckey_directory -= ckey
-	ticket_panels -= src
-	GLOB.clients -= src
-	..()
+		admins -= src
+	QDEL_NULL(tooltips)
+	if(dbcon.IsConnected())
+		var/DBQuery/query = dbcon.NewQuery("UPDATE players SET last_seen = Now() WHERE id = [src.id]")
+		if(!query.Execute())
+			log_world("Failed to update players table for user with id [src.id]. Error message: [query.ErrorMsg()].")
+	Master.UpdateTickRate()
+	..() //Even though we're going to be hard deleted there are still some things that want to know the destroy is happening
 	return QDEL_HINT_HARDDEL_NOW
 
+/client/proc/get_registration_date()
+	var/list/http = world.Export("http://byond.com/members/[ckey]?format=text")
+	if(!http)
+		log_world("Failed to connect to byond member page to age check [ckey]")
+		return
+	var/F = file2text(http["CONTENT"])
+	if(F)
+		var/regex/R = regex("joined = \"(\\d{4}-\\d{2}-\\d{2})\"")
+		if(R.Find(F))
+			. = R.group[1]
+		else
+			CRASH("Age check regex failed for [src.ckey]")
 
-// Returns null if no DB connection can be established, or -1 if the requested key was not found in the database
+/client/proc/get_country()
+	// Return data:
+	// Success: list("country" = "United States", "country_code" = "US")
+	// Fail: null
 
-/proc/get_player_age(key)
-	establish_db_connection()
+	var/address_check[] = world.Export("http://ip-api.com/line/[sql_sanitize_text(src.address)]")
+	/*
+	Response
+		A successful request will return, by default, the following:
+		 1: success
+		 2: COUNTRY
+		 3: COUNTRY CODE
+		 4: REGION CODE
+		 5: REGION NAME
+		 6: CITY
+		 7: ZIP CODE
+		 8: LATITUDE
+		 9: LONGITUDE
+		10: TIME ZONE
+		11: ISP NAME
+		12: ORGANIZATION NAME
+		13: AS NUMBER / NAME
+		14: IP ADDRESS USED FOR QUERY
+
+		A failed request will return, by default, the following:
+
+		1: fail
+		2: ERROR MESSAGE
+		3: IP ADDRESS USED FOR QUERY
+	*/
+	if(address_check)
+		var/list/response = file2list(address_check["CONTENT"])
+		if(response.len && response[1] == "success")
+			src.country = response[2]
+			src.country_code = response[3]
+			return list("country" = src.country, "country_code" = src.country_code)
+
+	log_world("Failed on retrieving location for player [src.ckey] from byond site.")
+	return null
+
+
+/client/proc/register_in_db()
+	// Prevents the crash if the DB isn't connected.
 	if(!dbcon.IsConnected())
-		return null
+		return
 
-	var/sql_ckey = sql_sanitize_text(ckey(key))
+	registration_date = src.get_registration_date()
+	src.get_country()
+	src.get_byond_age() // Get days since byond join
 
-	var/DBQuery/query = dbcon.NewQuery("SELECT datediff(Now(),firstseen) as age FROM erro_player WHERE ckey = '[sql_ckey]'")
-	query.Execute()
+	var/DBQuery/query_insert = dbcon.NewQuery("INSERT INTO players (ckey, first_seen, last_seen, registered, ip, cid, rank, byond_version, country) VALUES ('[src.ckey]', Now(), Now(), '[registration_date]', '[sql_sanitize_text(src.address)]', '[sql_sanitize_text(src.computer_id)]', 'player', [src.byond_version], '[src.country_code]')")
+	if(!query_insert.Execute())
+		log_world("##CRITICAL: Failed to create player record for user [ckey]. Error message: [query_insert.ErrorMsg()].")
+		return
 
-	if(query.NextRow())
-		return text2num(query.item[1])
 	else
-		return -1
+		var/DBQuery/get_player_id = dbcon.NewQuery("SELECT id, first_seen FROM players WHERE ckey = '[src.ckey]'")
+		get_player_id.Execute()
+		if(get_player_id.NextRow())
+			src.id = get_player_id.item[1]
+			src.first_seen = get_player_id.item[2]
 
+//Not actually age, but rather time since first seen in days
+/client/proc/get_player_age()
+	if(first_seen && dbcon.IsConnected())
+		var/dateSQL = sanitizeSQL(first_seen)
+		var/DBQuery/query_datediff = dbcon.NewQuery("SELECT DATEDIFF(Now(),'[dateSQL]')")
+		if(query_datediff.Execute() && query_datediff.NextRow())
+			src.first_seen_days_ago = text2num(query_datediff.item[1])
+
+	if(config.paranoia_logging && isnum(src.first_seen_days_ago) && src.first_seen_days_ago == 0)
+		log_and_message_admins("PARANOIA: [key_name(src)] has connected here for the first time.")
+	return src.first_seen_days_ago
+
+//Days since they signed up for their byond account
+/client/proc/get_byond_age()
+	if(!registration_date)
+		get_registration_date()
+	if(registration_date && dbcon.IsConnected())
+		var/dateSQL = sanitizeSQL(registration_date)
+		var/DBQuery/query_datediff = dbcon.NewQuery("SELECT DATEDIFF(Now(),'[dateSQL]')")
+		if(query_datediff.Execute() && query_datediff.NextRow())
+			src.account_age_in_days = text2num(query_datediff.item[1])
+	if(config.paranoia_logging && isnum(src.account_age_in_days) && src.account_age_in_days <= 2)
+		log_and_message_admins("PARANOIA: [key_name(src)] has a very new Byond account. ([src.account_age_in_days] days old)")
+	return src.account_age_in_days
 
 /client/proc/log_client_to_db()
-
-	if ( IsGuestKey(src.key) )
+	if(IsGuestKey(src.key))
 		return
 
 	establish_db_connection()
-	if(!dbcon.IsConnected())
-		return
+	if(dbcon.IsConnected())
+		// Get existing player from DB
+		var/DBQuery/query = dbcon.NewQuery("SELECT id from players WHERE ckey = '[src.ckey]'")
+		if(!query.Execute())
+			log_world("Failed to get player record for user with ckey '[src.ckey]'. Error message: [query.ErrorMsg()].")
 
-	var/sql_ckey = sql_sanitize_text(src.ckey)
+		// Not their first time here
+		else if(query.NextRow())
+			// client already registered so we fetch all needed data
+			query = dbcon.NewQuery("SELECT id, registered, first_seen, VPN_check_white FROM players WHERE id = [query.item[1]]")
+			query.Execute()
+			if(query.NextRow())
+				src.id = query.item[1]
+				src.registration_date = query.item[2]
+				src.first_seen = query.item[3]
+				src.VPN_whitelist = query.item[4]
+				src.get_country()
 
-	var/DBQuery/query = dbcon.NewQuery("SELECT id, datediff(Now(),firstseen) as age FROM erro_player WHERE ckey = '[sql_ckey]'")
-	query.Execute()
-	var/sql_id = 0
-	player_age = 0	// New players won't have an entry so knowing we have a connection we set this to zero to be updated if their is a record.
-	while(query.NextRow())
-		sql_id = query.item[1]
-		player_age = text2num(query.item[2])
-		break
+				//Player already identified previously, we need to just update the 'lastseen', 'ip' and 'computer_id' variables
+				var/DBQuery/query_update = dbcon.NewQuery("UPDATE players SET last_seen = Now(), ip = '[src.address]', cid = '[src.computer_id]', byond_version = '[src.byond_version]', country = '[src.country_code]' WHERE id = [src.id]")
 
-	var/DBQuery/query_ip = dbcon.NewQuery("SELECT ckey FROM erro_player WHERE ip = '[address]'")
-	query_ip.Execute()
-	related_accounts_ip = ""
-	while(query_ip.NextRow())
-		related_accounts_ip += "[query_ip.item[1]], "
-		break
+				if(!query_update.Execute())
+					log_world("Failed to update players table for user with id [src.id]. Error message: [query_update.ErrorMsg()].")
 
-	var/DBQuery/query_cid = dbcon.NewQuery("SELECT ckey FROM erro_player WHERE computerid = '[computer_id]'")
-	query_cid.Execute()
-	related_accounts_cid = ""
-	while(query_cid.NextRow())
-		related_accounts_cid += "[query_cid.item[1]], "
-		break
-
-	var/DBQuery/query_staffwarn = dbcon.NewQuery("SELECT staffwarn FROM erro_player WHERE ckey = '[sql_ckey]' AND !ISNULL(staffwarn)")
-	query_staffwarn.Execute()
-	if(query_staffwarn.NextRow())
-		src.staffwarn = query_staffwarn.item[1]
-
-	//Just the standard check to see if it's actually a number
-	if(sql_id)
-		if(istext(sql_id))
-			sql_id = text2num(sql_id)
-		if(!isnum(sql_id))
-			return
-
-	var/sql_ip = sql_sanitize_text(src.address)
-	var/sql_computerid = sql_sanitize_text(src.computer_id)
-	var/sql_admin_rank = sql_sanitize_text("Player")
+		//Panic bunker - player not in DB, so they get kicked
+		else if(config.panic_bunker && !holder && !deadmin_holder && !(ckey in GLOB.PB_bypass))
+			log_adminwarn("Failed Login: [key] - New account attempting to connect during panic bunker")
+			message_admins("<span class='adminnotice'>Failed Login: [key] - New account attempting to connect during panic bunker</span>")
+			to_chat(src, "<span class='warning'>Sorry but the server is currently not accepting connections from never before seen players.</span>")
+			del(src) // Hard del the client. This terminates the connection.
+			return 0
+		query = dbcon.NewQuery("SELECT ip_related_ids, cid_related_ids FROM players WHERE id = '[src.id]'")
+		query.Execute()
+		if(query.NextRow())
+			related_ip = splittext(query.item[1], ",")
+			related_cid = splittext(query.item[2], ",")
+		query = dbcon.NewQuery("SELECT id, ip, cid FROM players WHERE (ip = '[address]' OR cid = '[computer_id]') AND id <> '[src.id]'")
+		query.Execute()
+		var/changed = 0
+		while(query.NextRow())
+			var/temp_id = query.item[1]
+			var/temp_ip = query.item[2]
+			var/temp_cid = query.item[3]
+			if(temp_ip == address)
+				changed = 1
+				related_ip |= temp_id
+			if(temp_cid == computer_id)
+				changed = 1
+				related_cid |= temp_id
+		if(changed)
+			query = dbcon.NewQuery("UPDATE players SET cid_related_ids = '[jointext(related_cid, ",")]', ip_related_ids = '[jointext(related_ip, ",")]' WHERE id = '[src.id]'")
+			query.Execute()
 
 
-	if(sql_id)
-		//Player already identified previously, we need to just update the 'lastseen', 'ip' and 'computer_id' variables
-		var/DBQuery/query_update = dbcon.NewQuery("UPDATE erro_player SET lastseen = Now(), ip = '[sql_ip]', computerid = '[sql_computerid]', lastadminrank = '[sql_admin_rank]' WHERE id = [sql_id]")
-		query_update.Execute()
-	else
-		//New player!! Need to insert all the stuff
-		var/DBQuery/query_insert = dbcon.NewQuery("INSERT INTO erro_player (id, ckey, firstseen, lastseen, ip, computerid, lastadminrank) VALUES (null, '[sql_ckey]', Now(), Now(), '[sql_ip]', '[sql_computerid]', '[sql_admin_rank]')")
-		query_insert.Execute()
+	src.get_byond_age() // Get days since byond join
+	src.get_player_age() // Get days since first seen
 
-	//Logging player access
-	var/serverip = "[world.internet_address]:[world.port]"
-	var/DBQuery/query_accesslog = dbcon.NewQuery("INSERT INTO `erro_connection_log`(`id`,`datetime`,`serverip`,`ckey`,`ip`,`computerid`) VALUES(null,Now(),'[serverip]','[sql_ckey]','[sql_ip]','[sql_computerid]');")
-	query_accesslog.Execute()
+	// IP Reputation Check
+	if(config.ip_reputation)
+		if(config.ipr_allow_existing && first_seen_days_ago >= config.ipr_minimum_age)
+			log_admin("Skipping IP reputation check on [key] with [address] because of player age")
+		else if(holder)
+			log_admin("Skipping IP reputation check on [key] with [address] because they have a staff rank")
+		else if(VPN_whitelist)
+			log_admin("Skipping IP reputation check on [key] with [address] because they have a VPN whitelist")
+		else if(update_ip_reputation()) //It is set now
+			if(ip_reputation >= config.ipr_bad_score) //It's bad
+
+				//Log it
+				if(config.paranoia_logging) //We don't block, but we want paranoia log messages
+					log_and_message_admins("[key] at [address] has bad IP reputation: [ip_reputation]. Will be kicked if enabled in config.")
+				else //We just log it
+					log_admin("[key] at [address] has bad IP reputation: [ip_reputation]. Will be kicked if enabled in config.")
+
+				//Take action if required
+				if(config.ipr_block_bad_ips && config.ipr_allow_existing) //We allow players of an age, but you don't meet it
+					to_chat(src, "Sorry, we only allow VPN/Proxy/Tor usage for players who have spent at least [config.ipr_minimum_age] days on the server. If you are unable to use the internet without your VPN/Proxy/Tor, please contact an admin out-of-game to let them know so we can accommodate this.")
+					del(src) // Hard del the client. This terminates the connection.
+					return 0
+				else if(config.ipr_block_bad_ips) //We don't allow players of any particular age
+					to_chat(src, "Sorry, we do not accept connections from users via VPN/Proxy/Tor connections. If you think this is in error, contact an administrator out of game.")
+					del(src) // Hard del the client. This terminates the connection.
+					return 0
+		else
+			log_admin("Couldn't perform IP check on [key] with [address]")
+
+	if(text2num(id) < 0)
+		src.register_in_db()
+
 
 
 #undef UPLOAD_LIMIT
@@ -347,159 +544,248 @@
 //checks if a client is afk
 //3000 frames = 5 minutes
 /client/proc/is_afk(duration=3000)
-	if(inactivity > duration)	return inactivity
-	return 0
+	if(duration)
+		if(inactivity > duration)
+			return inactivity
+	return FALSE
+
 
 /client/proc/inactivity2text()
 	var/seconds = inactivity/10
 	return "[round(seconds / 60)] minute\s, [seconds % 60] second\s"
 
 
-/client/Stat()
-	if (!usr)
-		return
-	// Add always-visible stat panel calls here, to define a consistent display order.
-	statpanel("Status")
-	..()
-	if (config.stat_delay > 0)
-		sleep(config.stat_delay)
-
-
-//Sends resource files to client cache
-/client/proc/getFiles()
-	for(var/file in args)
-		send_rsc(src, file, null)
-
 //send resources to the client. It's here in its own proc so we can move it around easiliy if need be
 /client/proc/send_resources()
-	getFiles(
-		'html/search.js',
-		'html/panels.css',
-		'html/spacemag.css',
-		'html/images/loading.gif',
-		'html/images/ntlogo.png',
-		'html/images/bluentlogo.png',
-		'html/images/sollogo.png',
-		'html/images/terralogo.png',
-		'html/images/talisman.png',
-		'html/images/exologo.png',
-		'html/images/xynlogo.png',
-		'html/images/daislogo.png',
-		'html/images/eclogo.png',
-		'html/images/FleetLogo.png',
-		'html/images/sfplogo.png',
-		'html/images/falogo.png',
-		'html/images/zhlogo.png'
-		)
-	addtimer(new Callback(src, PROC_REF(after_send_resources)), 1 SECOND)
+// #if (PRELOAD_RSC == 0)
+// 	var/static/next_external_rsc = 0
+// 	var/list/external_rsc_urls = CONFIG_GET(keyed_list/external_rsc_urls)
+// 	if(length(external_rsc_urls))
+// 		next_external_rsc = WRAP(next_external_rsc+1, 1, external_rsc_urls.len+1)
+// 		preload_rsc = external_rsc_urls[next_external_rsc]
+// #endif
+
+	spawn (10) //removing this spawn causes all clients to not get verbs.
+
+		//load info on what assets the client has
+		src << browse('code/modules/asset_cache/validate_assets.html', "window=asset_cache_browser")
+
+		//Precache the client with all other assets slowly, so as to not block other browse() calls
+		// if (CONFIG_GET(flag/asset_simple_preload))
+		addtimer(CALLBACK(SSassets.transport, TYPE_PROC_REF(/datum/asset_transport, send_assets_slow), src, SSassets.transport.preload), 5 SECONDS)
+
+		// #if (PRELOAD_RSC == 0)
+		// for (var/name in GLOB.vox_sounds)
+		// 	var/file = GLOB.vox_sounds[name]
+		// 	Export("##action=load_rsc", file)
+		// 	stoplag()
+		// #endif
+
+		// ???
+		send_all_cursor_icons(src)
 
 
-/client/proc/after_send_resources()
-	var/singleton/asset_cache/asset_cache = GET_SINGLETON(/singleton/asset_cache)
-	getFilesSlow(src, asset_cache.cache, register_asset = FALSE)
-
+//Hook, override it to run code when dir changes
+//Like for /atoms, but clients are their own snowflake FUCK
+/client/proc/setDir(newdir)
+	dir = newdir
 
 /mob/proc/MayRespawn()
-	return 0
+	return FALSE
+
 
 /client/proc/MayRespawn()
 	if(mob)
 		return mob.MayRespawn()
 
 	// Something went wrong, client is usually kicked or transfered to a new mob at this point
-	return 0
+	return FALSE
+
 
 /client/verb/character_setup()
 	set name = "Character Setup"
 	set category = "OOC"
 	if(prefs)
-		prefs.open_setup_window(usr)
+		prefs.ShowChoices(usr)
 
-/client/verb/character_priorities()
-	set name = "Character Priorities"
-	set category = "OOC"
-	if(!prefs)
-		return
-	if(config.maximum_queued_characters > 1)
-		prefs.open_prefs_ordering_panel(usr)
+
+/client/proc/create_UI(mob_type)
+	destroy_UI()
+	if(!mob_type)
+		mob_type = mob.type
+	if(!UI)
+		var/success = FALSE
+		for(var/S in GLOB.ui_styles[mob_type])
+			var/datum/interface/style = S
+			if(initial(style.styleName) == prefs.UI_style)
+				UI = new style(src)
+				success = TRUE
+				break
+		if(!success)
+			log_debug("Could not find style \"[prefs.UI_style]\" for [mob_type].")
+
+	if(UI)
+		UI.show()
+
+/client/proc/destroy_UI()
+	if(UI)
+		for(var/i in screen)
+			if(UI._elements.Find(i))
+				screen.Remove(i)
+		qdel(UI)
+		UI = null
+
+//Uses a couple different services
+/client/proc/update_ip_reputation()
+	var/list/scores = list("GII" = ipr_getipintel())
+	if(config.ipqualityscore_apikey)
+		scores["IPQS"] = ipr_ipqualityscore()
+	/* Can add other systems if desirable
+	if(config.blah_apikey)
+		scores["blah"] = some_proc()
+	*/
+
+	var/log_output = "IP Reputation [key] from [address]"
+	var/worst = 0
+
+	for(var/service in scores)
+		var/score = scores[service]
+		if(score > worst)
+			worst = score
+		log_output += " - [service] ([num2text(score)])"
+
+	log_admin(log_output)
+	ip_reputation = worst
+	return TRUE
+
+//Service returns a single float in html body
+/client/proc/ipr_getipintel()
+	if(!config.ipr_email)
+		return -1
+
+	var/request = "http://check.getipintel.net/check.php?ip=[address]&contact=[config.ipr_email]"
+	var/http[] = world.Export(request)
+
+	if(!http || !islist(http)) //If we couldn't check, the service might be down, fail-safe.
+		log_admin("Couldn't connect to getipintel.net to check [address] for [key]")
+		return -1
+
+	//429 is rate limit exceeded
+	if(text2num(http["STATUS"]) == 429)
+		log_and_message_admins("getipintel.net reports HTTP status 429. IP reputation checking is now disabled. If you see this, let a developer know.")
+		config.ip_reputation = FALSE
+		return -1
+
+	var/content = file2text(http["CONTENT"]) //world.Export actually returns a file object in CONTENT
+	var/score = text2num(content)
+	if(isnull(score))
+		return -1
+
+	//Error handling
+	if(score < 0)
+		var/fatal = TRUE
+		var/ipr_error = "getipintel.net IP reputation check error while checking [address] for [key]: "
+		switch(score)
+			if(-1)
+				ipr_error += "No input provided"
+			if(-2)
+				fatal = FALSE
+				ipr_error += "Invalid IP provided"
+			if(-3)
+				fatal = FALSE
+				ipr_error += "Unroutable/private IP (spoofing?)"
+			if(-4)
+				fatal = FALSE
+				ipr_error += "Unable to reach database"
+			if(-5)
+				ipr_error += "Our IP is banned or otherwise forbidden"
+			if(-6)
+				ipr_error += "Missing contact info"
+
+		log_and_message_admins(ipr_error)
+		if(fatal)
+			config.ip_reputation = FALSE
+			log_and_message_admins("With this error, IP reputation checking is disabled for this shift. Let a developer know.")
+		return -1
+
+	//Went fine
 	else
-		to_chat(usr, SPAN_WARNING("The character priority queue is currently disabled"))
+		return score
 
+//Service returns JSON in html body
+/client/proc/ipr_ipqualityscore()
+	if(!config.ipqualityscore_apikey)
+		return -1
 
-/client/MouseDrag(src_object, over_object, src_location, over_location, src_control, over_control, params)
-	. = ..()
-	var/mob/living/M = mob
-	if(istype(M))
-		M.OnMouseDrag(src_object, over_object, src_location, over_location, src_control, over_control, params)
+	var/request = "http://www.ipqualityscore.com/api/json/ip/[config.ipqualityscore_apikey]/[address]?strictness=1&fast=true&byond_key=[key]"
+	var/http[] = world.Export(request)
 
-	var/datum/click_handler/build_mode/B = M.GetClickHandler()
-	if (istype(B))
-		if(B.current_build_mode && src_control == "mapwindow.map" && src_control == over_control)
-			build_drag(src,B.current_build_mode,src_object,over_object,src_location,over_location,src_control,over_control,params)
+	if(!http || !islist(http)) //If we couldn't check, the service might be down, fail-safe.
+		log_admin("Couldn't connect to ipqualityscore.com to check [address] for [key]")
+		return -1
 
-/client/verb/toggle_fullscreen()
-	set name = "Toggle Fullscreen"
+	var/content = file2text(http["CONTENT"]) //world.Export actually returns a file object in CONTENT
+	var/response = json_decode(content)
+	if(isnull(response))
+		return -1
+
+	//Error handling
+	if(!response["success"])
+		log_admin("IPQualityscore.com returned an error while processing [key] from [address]: " + response["message"])
+		return -1
+
+	var/score = 0
+	if(response["proxy"])
+		score = 100
+	else
+		score = response["fraud_score"]
+
+	return score/100 //To normalize with the 0 to 1 scores.
+
+/client/proc/colour_transition(list/colour_to = null, time = 10) //Call this with no parameters to reset to default.
+	animate(src, color = colour_to, time = time, easing = SINE_EASING)
+
+/// Compiles a full list of verbs and sends it to the browser
+/client/proc/init_verbs()
+	var/list/verblist = list()
+	verb_tabs.Cut()
+	for(var/thing in (verbs + mob?.verbs))
+		var/procpath/verb_to_init = thing
+		if(!verb_to_init)
+			continue
+		if(verb_to_init.hidden)
+			continue
+		if(!istext(verb_to_init.category))
+			continue
+		verb_tabs |= verb_to_init.category
+		verblist[++verblist.len] = list(verb_to_init.category, verb_to_init.name)
+	src << output("[url_encode(json_encode(verb_tabs))];[url_encode(json_encode(verblist))]", "statbrowser:init_verbs")
+
+/client/verb/fix_stat_panel()
+	set name = "Fix Stat Panel"
 	set category = "OOC"
 
-	fullscreen = !fullscreen
+	init_verbs()
 
-	if (fullscreen)
-		winset(usr, "mainwindow", "titlebar=false")
-		winset(usr, "mainwindow", "can-resize=false")
-		winset(usr, "mainwindow", "is-maximized=false")
-		winset(usr, "mainwindow", "is-maximized=true")
-		winset(usr, "mainwindow", "menu=")
-//		winset(usr, "mainwindow.mainvsplit", "size=0x0")
-	else
-		winset(usr, "mainwindow", "is-maximized=false")
-		winset(usr, "mainwindow", "titlebar=true")
-		winset(usr, "mainwindow", "can-resize=true")
-		winset(usr, "mainwindow", "menu=menu")
 
+/client/verb/toggle_fullscreen() // F11 hotkey
+	set name = "Toogle Fullscreen"
+	set category = "OOC"
+
+	src << output("", "browseroutput:fullscreen_check")
+
+
+/client/verb/enable_fullscreen()
+	set hidden = TRUE
+	winset(usr, "mainwindow", "titlebar=false")
+	winset(usr, "mainwindow", "menu=")
+	winset(usr, "mainwindow", "is-maximized=false")
+	winset(usr, "mainwindow", "is-maximized=true")
 	fit_viewport()
 
-/client/verb/fit_viewport()
-	set name = "Fit Viewport"
-	set category = "OOC"
-	set desc = "Fit the width of the map window to match the viewport"
-
-	// Fetch aspect ratio
-	var/view_size = getviewsize(view)
-	var/aspect_ratio = view_size[1] / view_size[2]
-
-	// Calculate desired pixel width using window size and aspect ratio
-	var/sizes = params2list(winget(src, "mainwindow.mainvsplit;mapwindow", "size"))
-	var/map_size = splittext(sizes["mapwindow.size"], "x")
-	var/height = text2num(map_size[2])
-	var/desired_width = round(height * aspect_ratio)
-	if (text2num(map_size[1]) == desired_width)
-		// Nothing to do
-		return
-
-	var/split_size = splittext(sizes["mainwindow.mainvsplit.size"], "x")
-	var/split_width = text2num(split_size[1])
-
-	// Calculate and apply a best estimate
-	// +4 pixels are for the width of the splitter's handle
-	var/pct = 100 * (desired_width + 4) / split_width
-	winset(src, "mainwindow.mainvsplit", "splitter=[pct]")
-
-	// Apply an ever-lowering offset until we finish or fail
-	var/delta
-	for(var/safety in 1 to 10)
-		var/after_size = winget(src, "mapwindow", "size")
-		map_size = splittext(after_size, "x")
-		var/got_width = text2num(map_size[1])
-
-		if (got_width == desired_width)
-			// success
-			return
-		else if (isnull(delta))
-			// calculate a probable delta value based on the difference
-			delta = 100 * (desired_width - got_width) / split_width
-		else if ((delta > 0 && got_width > desired_width) || (delta < 0 && got_width < desired_width))
-			// if we overshot, halve the delta and reverse direction
-			delta = -delta/2
-
-		pct += delta
-		winset(src, "mainwindow.mainvsplit", "splitter=[pct]")
+/client/verb/disable_fullscreen()
+	set hidden = TRUE
+	winset(usr, "mainwindow", "titlebar=true")
+	winset(usr, "mainwindow", "menu=menu")
+	winset(usr, "mainwindow", "is-maximized=false")
+	fit_viewport()

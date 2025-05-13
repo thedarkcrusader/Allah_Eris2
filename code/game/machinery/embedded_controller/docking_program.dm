@@ -1,4 +1,15 @@
 
+#define STATE_UNDOCKED		0
+#define STATE_DOCKING		1
+#define STATE_UNDOCKING		2
+#define STATE_DOCKED		3
+
+#define MODE_NONE			0
+#define MODE_SERVER			1
+#define MODE_CLIENT			2	//The one who initiated the docking, and who can initiate the undocking. The server cannot initiate undocking, and is the one responsible for deciding to accept a docking request and signals when docking and undocking is complete. (Think server == station, client == shuttle)
+
+#define MESSAGE_RESEND_TIME 5	//how long (in seconds) do we wait before resending a message
+
 /*
 	*** STATE TABLE ***
 
@@ -39,7 +50,7 @@
 	*** Override, what is it? ***
 
 	The purpose of enabling the override is to prevent the docking program from automatically doing things with the docking port when docking or undocking.
-	Maybe the shuttle is full of plamsa/phoron for some reason, and you don't want the door to automatically open, or the airlock to cycle.
+	Maybe the shuttle is full of plamsa/plasma for some reason, and you don't want the door to automatically open, or the airlock to cycle.
 	This means that the prepare_for_docking/undocking and finish_docking/undocking procs don't get called.
 
 	The docking controller will still check the state of the docking port, and thus prevent the shuttle from launching unless they force the launch (handling forced
@@ -59,39 +70,22 @@
 
 	var/override_enabled = 0	//when enabled, do not open/close doors or cycle airlocks and wait for the player to do it manually
 	var/received_confirm = 0	//for undocking, whether the server has recieved a confirmation from the client
-	var/docking_codes			//would only allow docking when receiving signal with these, if set
-	var/display_name			//how would it show up on docking monitoring program, area name + coordinates if unset
 
-/datum/computer/file/embedded_program/docking/New(obj/machinery/embedded_controller/M)
+/datum/computer/file/embedded_program/docking/New()
 	..()
-	if(id_tag)
-		if(SSshuttle.docking_registry[id_tag])
-			crash_with("Docking controller tag [id_tag] had multiple associated programs.")
-		SSshuttle.docking_registry[id_tag] = src
 
-/datum/computer/file/embedded_program/docking/Destroy()
-	SSshuttle.docking_registry -= id_tag
-	return ..()
+	var/datum/existing = locate(id_tag) //in case a datum already exists with our tag
+	if(existing)
+		existing.tag = null //take it from them
 
-/datum/computer/file/embedded_program/docking/receive_user_command(command)
-	if(command == "dock" || command == "undock")
 
-		if(!tag_target)			//Prevents from self destructing if no docking buddy
-			return FALSE
+	tag = id_tag //Greatly simplifies shuttle initialization
 
-		var/datum/signal/signal = new()
-		signal.data["tag"] = tag_target
-		signal.data["command"] = "request_[command]"
-		signal.data["recipient"] = id_tag
-		signal.data["code"] = docking_codes
-		receive_signal(signal)
-		return TRUE
 
 /datum/computer/file/embedded_program/docking/receive_signal(datum/signal/signal, receive_method, receive_param)
 	var/receive_tag = signal.data["tag"]		//for docking signals, this is the sender id
 	var/command = signal.data["command"]
 	var/recipient = signal.data["recipient"]	//the intended recipient of the docking signal
-
 	if (recipient != id_tag)
 		return	//this signal is not for us
 
@@ -114,20 +108,16 @@
 
 		if ("request_dock")
 			if (control_mode == MODE_NONE && dock_state == STATE_UNDOCKED)
-				tag_target = receive_tag
-
-				if(docking_codes)
-					var/code = signal.data["code"]
-					if(code != docking_codes)
-						return
-
 				control_mode = MODE_SERVER
 
 				dock_state = STATE_DOCKING
 				broadcast_docking_status()
 
+
+				tag_target = receive_tag
 				if (!override_enabled)
 					prepare_for_docking()
+
 				send_docking_command(tag_target, "confirm_dock")	//acknowledge the request
 
 		if ("confirm_undock")
@@ -150,7 +140,7 @@
 			if (receive_tag == tag_target)
 				reset()
 
-/datum/computer/file/embedded_program/docking/process()
+/datum/computer/file/embedded_program/docking/Process()
 	switch(dock_state)
 		if (STATE_DOCKING)	//waiting for our docking port to be ready for docking
 			if (ready_for_docking())
@@ -199,7 +189,7 @@
 		control_mode = MODE_NONE
 
 
-/datum/computer/file/embedded_program/docking/proc/initiate_docking(target)
+/datum/computer/file/embedded_program/docking/proc/initiate_docking(var/target)
 	if (dock_state != STATE_UNDOCKED || control_mode == MODE_SERVER)	//must be undocked and not serving another request to begin a new docking handshake
 		return
 
@@ -222,6 +212,7 @@
 
 //tell the docking port to start getting ready for docking - e.g. pressurize
 /datum/computer/file/embedded_program/docking/proc/prepare_for_docking()
+	response_sent = 0
 	return
 
 //are we ready for docking?
@@ -260,8 +251,6 @@
 	received_confirm = 0
 
 /datum/computer/file/embedded_program/docking/proc/force_undock()
-//	log_debug("[id_tag]: forcing undock")
-
 	if (tag_target)
 		send_docking_command(tag_target, "dock_error")
 	reset()
@@ -276,12 +265,11 @@
 /datum/computer/file/embedded_program/docking/proc/can_launch()
 	return undocked()
 
-/datum/computer/file/embedded_program/docking/proc/send_docking_command(recipient, command)
+/datum/computer/file/embedded_program/docking/proc/send_docking_command(var/recipient, var/command)
 	var/datum/signal/signal = new
 	signal.data["tag"] = id_tag
 	signal.data["command"] = command
 	signal.data["recipient"] = recipient
-	signal.data["code"] = docking_codes
 	post_signal(signal)
 
 /datum/computer/file/embedded_program/docking/proc/broadcast_docking_status()
@@ -298,5 +286,5 @@
 		if (STATE_UNDOCKING) return "undocking"
 		if (STATE_DOCKED) return "docked"
 
-/datum/computer/file/embedded_program/docking/proc/get_name()
-	return display_name ? display_name : "[get_area(master)] ([master.x], [master.y])"
+
+

@@ -5,12 +5,13 @@ These are the default click code call sequences used when clicking on stuff with
 Atoms:
 
 mob/ClickOn() calls the item's resolve_attackby() proc.
-item/resolve_attackby() calls the target atom's use_tool() proc.
+item/resolve_attackby() calls the target atom's attackby() proc.
 
 Mobs:
 
-item/use_weapon() generates attack logs, determines miss chance, sets click cooldown and calls the apply_hit_effect() proc. If you override this, consider whether you need to set a click cooldown, play attack animations, and generate logs yourself.
-use_weapon also call resolve_item_attack() and do mob-type specific stuff (like determining hit/miss, handling shields, etc).
+mob/living/attackby() after checking for surgery, calls the item's attack() proc.
+item/attack() generates attack logs, sets click cooldown and calls the mob's attacked_with_item() proc. If you override this, consider whether you need to set a click cooldown, play attack animations, and generate logs yourself.
+mob/attacked_with_item() should then do mob-type specific stuff (like determining hit/miss, handling shields, etc) and then possibly call the item's apply_hit_effect() proc to actually apply the effects of being hit.
 
 Item Hit Effects:
 
@@ -18,474 +19,314 @@ item/apply_hit_effect() can be overriden to do whatever you want. However "stand
 avoid code duplication. This includes items that may sometimes act as a standard weapon in addition to having other effects (e.g. stunbatons on harm intent).
 */
 
-
-/**
- * Called when the item is in the active hand and clicked, or the `activate held object` verb is used.
- *
- * **Parameters**:
- * - `user` - The mob using the item.
- *
- * Should have no return value.
- */
-/obj/item/proc/attack_self(mob/living/user)
+// Called when the item is in the active hand, and clicked; alternately, there is an 'activate held object' verb or you can hit pagedown.
+/obj/item/proc/attack_self(mob/user)
 	return
 
 
-/**
- * Called when the item is in the active hand and another atom is clicked. This is generally called by `ClickOn()`.
- *
- * This passes down to `use_before()`, `use_weapon()`, `use_tool()`, and then use_after() in that order,
- * depending on item flags and user's intent.
- * use_grab() is run in an override of resolve_attackby() processed at the grab's level, and is not part of this chain.
- *
- * **Parameters**:
- * - `atom` - The atom that was clicked.
- * - `user` - The mob using the item.
- * - `click_params` - List of click parameters. See BYOND's `CLick()` documentation.
- *
- * Returns boolean to indicate whether the attack call was handled or not.
- */
-/obj/item/proc/resolve_attackby(atom/atom, mob/living/user, click_params)
-	if (!atom.can_use_item(src, user, click_params))
-		return FALSE
-	atom.pre_use_item(src, user, click_params)
-	var/use_call
-
-	use_call = "use"
-	. = use_before(atom, user, click_params)
-	if (!. && (user.a_intent == I_HURT || user.a_intent == I_DISARM))
-		use_call = "weapon"
-		. = atom.use_weapon(src, user, click_params)
-	if (!.)
-		use_call = "tool"
-		. = atom.use_tool(src, user, click_params)
-	if (!.)
-		use_call = "use"
-		. = use_after(atom, user, click_params)
-	if (!.)
-		use_call = null
-	atom.post_use_item(src, user, ., use_call, click_params)
-
-
-/**
- * Handler for operations to occur before running the chain of use_* procs. Always called.
- *
- * By default, this does nothing.
- *
- * **Parameters**:
- * - `tool` - The item being used.
- * - `user` - The mob performing the interaction.
- * - `click_params` - List of click parameters.
- *
- * Has no return value.
- */
-/atom/proc/pre_use_item(obj/item/tool, mob/living/user, click_params)
+// Called at the start of resolve_attackby(), before the actual attack.
+// Return a nonzero value to abort the attack
+/obj/item/proc/pre_attack(atom/a, mob/user, var/params)
 	return
 
+//I would prefer to rename this to attack(), but that would involve touching hundreds of files.
+/obj/item/proc/resolve_attackby(atom/A, mob/user, params)
+	if(item_flags & ABSTRACT)//Abstract items cannot be interacted with. They're not real.
+		return 1
+	if (pre_attack(A, user, params))
+		return 1 //Returning 1 passes an abort signal upstream
+	add_fingerprint(user)
+	if(ishuman(user))//monkeys can use items, unfortunately
+		var/mob/living/carbon/human/H = user
+		if(H.blocking)
+			H.stop_blocking()
+	if(ishuman(user) && !(user == A) && !(user.loc == A) && (w_class >=  ITEM_SIZE_NORMAL) && wielded && user.a_intent == I_HURT && !istype(src, /obj/item/gun) && !istype(A, /obj/structure) && !istype(A, /turf/wall) && A.loc != user && !no_swing)
+		swing_attack(A, user, params)
+		if(istype(A, /turf/floor)) // shitty hack so you can attack floors while wielding a large weapon
+			return A.attackby(src, user, params)
+		return 1 //Swinging calls its own attacks
+	return A.attackby(src, user, params)
 
-/**
- * Handler for operations to occur after running the chain of use_* procs. Always called.
- *
- * By default, this adds fingerprints to the atom and tool.
- *
- * **Parameters**:
- * - `tool` - The item being used.
- * - `user` - The mob performing the interaction.
- * - `interaction_handled` (boolean) - Whether or not the use call was handled.
- * - `use_call` (string) - The use call proc that handled the interaction, or null.
- * - `click_params` - List of click parameters.
- *
- * Has no return value.
- */
-/atom/proc/post_use_item(obj/item/tool, mob/living/user, interaction_handled, use_call, click_params)
-	if (interaction_handled)
-		if (!HAS_FLAGS(tool.item_flags, ITEM_FLAG_NO_PRINT))
-			tool.add_fingerprint(user)
-			add_fingerprint(user, tool = tool)
-
-
-/// Whether or not an item interaction is possible. Checked before any use calls.
-/atom/proc/can_use_item(obj/item/tool, mob/living/user, click_params)
-	// No Tools flag check
-	if (HAS_FLAGS(atom_flags, ATOM_FLAG_NO_TOOLS))
-		USE_FEEDBACK_FAILURE("\The [src] can't be interacted with.")
-		return FALSE
-	return TRUE
-
-
-/obj/can_use_item(obj/item/tool, mob/living/user, click_params)
-	. = ..()
-	if (!.)
-		return
-	if (hides_under_flooring())
-		var/turf/turf = get_turf(src)
-		if (!turf.is_plating())
-			USE_FEEDBACK_FAILURE("You must remove the plating before you can interact with \the [src].")
-			return FALSE
-		var/obj/structure/catwalk/catwalk = locate() in get_turf(src)
-		if (catwalk)
-			if (catwalk.plated_tile && !catwalk.hatch_open)
-				USE_FEEDBACK_FAILURE("\The [catwalk]'s hatch needs to be opened before you can access \the [src].")
+//Returns TRUE if attack is to be carried out, FALSE otherwise.
+/obj/item/proc/double_tact(mob/user, atom/atom_target, adjacent)
+	if(atom_target.loc == user)//putting stuff in your backpack, or something else on your person?
+		return TRUE //regular bags won't even be able to hold items this big, but who knows
+	if((w_class >= ITEM_SIZE_HUGE || (w_class == ITEM_SIZE_BULKY && !wielded)) && !abstract && !istype(src, /obj/item/gun) && !no_double_tact)//grabs have colossal w_class. You can't raise something that does not exist.
+		if(!adjacent || istype(atom_target, /turf) || istype(atom_target, /mob) || user.a_intent == I_HURT)//guns have the point blank privilege
+			if(!ready)
+				user.visible_message(SPAN_DANGER("[user] raises [src]!"))
+				ready = TRUE
+				var/obj/effect/effect/melee/alert/A = new()
+				user.vis_contents += A
+				qdel(A)
+				var/unready_time = world.time + (10 SECONDS)
+				while(world.time < unready_time)
+					sleep(1)
+					if(!(ready))
+						user.vis_contents -= A
+						return FALSE
+					if(!(is_equipped()))
+						ready = FALSE
+						user.vis_contents -= A
+						return FALSE
+				user.visible_message(SPAN_NOTICE("[user] lowers \his [src]."))
+				ready = FALSE
+				user.vis_contents -= A
 				return FALSE
-			else if (!catwalk.plated_tile)
-				USE_FEEDBACK_FAILURE("\The [catwalk] is blocking access to \the [src].")
-				return FALSE
-
-
-/turf/can_use_item(obj/item/tool, mob/living/user, click_params)
-	. = ..()
-	if (!.)
-		return
-	var/area/area = get_area(src)
-	if (!area?.can_modify_area())
-		USE_FEEDBACK_FAILURE("This area does not allow structural modifications.")
-		return FALSE
-
-
-/turf/simulated/floor/can_use_item(obj/item/tool, mob/living/user, click_params)
-	. = ..()
-	if (!.)
-		return
-	var/obj/structure/catwalk/catwalk = locate() in src
-	if (catwalk)
-		if (catwalk.plated_tile && !catwalk.hatch_open)
-			USE_FEEDBACK_FAILURE("\The [catwalk]'s hatch needs to be opened before you can access \the [src].")
-			return FALSE
-		else if (!catwalk.plated_tile)
-			USE_FEEDBACK_FAILURE("\The [catwalk] is blocking access to \the [src].")
-			return FALSE
-
-
-/**
- * Validates the mob can perform general interactions. Primarily intended for use after inputs, sleeps, timers, etc to ensure the action can still be completed.
- *
- * **Parameters**:
- * - `target` - The atom being interacted with.
- * - `tool` - The item being used to interact. Optional. Defaults to `FALSE` to differentiate between a nulled reference and an empty parameter.
- * - `flags` (Bitflag, any of `SANITY_CHECK_*`, default `SANITY_CHECK_DEFAULT`) - Bitflags of additional settings. See `code\__defines\misc.dm`.
- *
- * Returns boolean.
- */
-/mob/proc/use_sanity_check(atom/target, atom/tool = FALSE, flags = SANITY_CHECK_DEFAULT)
-	// Deletion checks
-	if (QDELETED(src))
-		return FALSE
-	var/silent = HAS_FLAGS(flags, SANITY_CHECK_SILENT)
-	if (QDELETED(target))
-		if (!silent)
-			FEEDBACK_FAILURE(src, "[target ? "\The [target]" : "The object you were interacting with"] no longer exists.")
-		return FALSE
-	if (tool != FALSE && QDELETED(tool))
-		if (!silent)
-			FEEDBACK_FAILURE(src, "[tool ? "\The [tool]" : "The item you were using"] no longer exists.")
-		return FALSE
-
-	// Target checks
-	if (isturf(target.loc) && !Adjacent(target))
-		if (!silent)
-			FEEDBACK_FAILURE(src, "You must remain next to \the [target].")
-		return FALSE
-	if (target.loc == src && HAS_FLAGS(flags, SANITY_CHECK_TARGET_UNEQUIP) && !canUnEquip(target))
-		if (!silent)
-			FEEDBACK_UNEQUIP_FAILURE(src, target)
-		return FALSE
-	if (HAS_FLAGS(flags, SANITY_CHECK_TOPIC_INTERACT) && !CanInteractWith(src, target, target.DefaultTopicState()))
-		if (!silent)
-			FEEDBACK_FAILURE(src, "You can't interact with \the [src].")
-		return FALSE
-	if (HAS_FLAGS(flags, SANITY_CHECK_TOPIC_PHYSICALLY_INTERACT) && !CanPhysicallyInteractWith(src, target))
-		if (!silent)
-			FEEDBACK_FAILURE(src, "You can't physically interact with \the [src].")
-		return FALSE
-
-	// Tool checks - Skip these if there is no tool
-	if (!tool)
-		return TRUE
-	if (HAS_FLAGS(flags, SANITY_CHECK_BOTH_ADJACENT) && tool.loc != src && !tool.Adjacent(target))
-		if (!silent)
-			FEEDBACK_FAILURE(src, "\The [tool] must stay next to \the [target].")
-		return FALSE
-
-	// These checks only apply to items
-	if (isitem(tool))
-		if (HAS_FLAGS(flags, SANITY_CHECK_TOOL_UNEQUIP) && !canUnEquip(tool))
-			if (!silent)
-				FEEDBACK_UNEQUIP_FAILURE(src, tool)
-			return FALSE
-		if (HAS_FLAGS(flags, SANITY_CHECK_TOOL_IN_HAND))
-			var/active = get_active_hand()
-			if (istype(active, /obj/item/gripper))
-				var/obj/item/gripper/gripper = active
-				active = gripper.wrapped
-			if (active != tool)
-				if (!silent)
-					FEEDBACK_FAILURE(src, "\The [tool] must stay in your active hand.")
-				return FALSE
-	return TRUE
-
-
-/**
- * Interaction handler for being clicked on with a grab. This is called regardless of user intent.
- *
- * **Parameters**:
- * - `grab` - The grab item being used.
- * - `click_params` - List of click parameters.
- *
- * Returns boolean to indicate whether the attack call was handled or not. If `FALSE`, the next `use_*` proc in the
- * resolve chain will be called.
- */
-/atom/proc/use_grab(obj/item/grab/grab, list/click_params)
-	return FALSE
-
-
-/**
- * Interaction handler for using an item on this atom with harm intent. Generally, this is for attacking the atom.
- *
- * **Parameters**:
- * - `weapon` - The item being used on this atom.
- * - `user` - The mob interacting with this atom.
- * - `click_params` - List of click parameters.
- *
- * Returns boolean to indicate whether the attack call was handled or not. If `FALSE`, the next `use_*` proc in the
- * resolve chain will be called.
- */
-/atom/proc/use_weapon(obj/item/weapon, mob/living/user, list/click_params)
-	SHOULD_CALL_PARENT(TRUE)
-	if (weapon.force > 0 && get_max_health() && !HAS_FLAGS(weapon.item_flags, ITEM_FLAG_NO_BLUDGEON))
-		user.setClickCooldown(user.get_attack_speed(weapon))
-		user.do_attack_animation(src)
-		var/damage_flags = weapon.damage_flags()
-		if (!can_damage_health(weapon.force, weapon.damtype, damage_flags))
-			playsound(src, use_weapon_hitsound ? weapon.hitsound : damage_hitsound, 50, TRUE)
-			user.visible_message(
-				SPAN_WARNING("\The [user] hits \the [src] with \a [weapon], but it bounces off!"),
-				SPAN_WARNING("You hit \the [src] with \the [weapon], but it bounces off!")
-			)
-			return TRUE
-		playsound(src, use_weapon_hitsound ? weapon.hitsound : damage_hitsound, 75, TRUE)
-		user.visible_message(
-			SPAN_DANGER("\The [user] hits \the [src] with \a [weapon]!"),
-			SPAN_DANGER("You hit \the [src] with \the [weapon]!")
-		)
-		damage_health(weapon.force, weapon.damtype, damage_flags, skip_can_damage_check = TRUE)
-		return TRUE
-
-	return FALSE
-
-
-/mob/living/use_weapon(obj/item/weapon, mob/living/user, list/click_params)
-	if (weapon.force > 0 && get_max_health() && !HAS_FLAGS(weapon.item_flags, ITEM_FLAG_NO_BLUDGEON))
-		user.setClickCooldown(user.get_attack_speed(weapon))
-		user.do_attack_animation(src)
-		if (!aura_check(AURA_TYPE_WEAPON, weapon, user))
-			return TRUE
-		var/damage_flags = weapon.damage_flags()
-		var/weapon_mention
-		if (weapon.attack_message_name())
-			weapon_mention = " with [weapon.attack_message_name()]"
-		var/attack_verb = "[pick(weapon.attack_verb)]"
-
-		if (!can_damage_health(weapon.force, weapon.damtype, damage_flags))
-			playsound(src, weapon.hitsound, 50, TRUE)
-			user.visible_message(
-				SPAN_WARNING("\The [user] hit \the [src] [weapon_mention], but it bounced off!"),
-				SPAN_WARNING("You hit \the [src] [weapon_mention], but it bounced off!"),
-				exclude_mobs = list(src)
-			)
-			show_message(
-				SPAN_WARNING("\The [user] hit you [weapon_mention], but it bounced off!"),
-				VISIBLE_MESSAGE,
-				SPAN_WARNING("You felt something bounce off you harmlessly.")
-			)
-			return TRUE
-
-		var/hit_zone = resolve_item_attack(weapon, user, user.zone_sel? user.zone_sel.selecting : ran_zone())
-		if (!hit_zone)
-			return TRUE
-
-		playsound(src, weapon.hitsound, 75, TRUE)
-		user.visible_message(
-			SPAN_DANGER("\The [user] [attack_verb] \the [src] [weapon_mention]"),
-			SPAN_DANGER("You [attack_verb] \the [src] [weapon_mention]!"),
-			exclude_mobs = list(src)
-		)
-		show_message(
-			SPAN_DANGER("\The [user] [attack_verb] you [weapon_mention]!"),
-			VISIBLE_MESSAGE,
-			SPAN_DANGER("You feel something hit you!")
-		)
-
-		if (!weapon.no_attack_log)
-			admin_attack_log(
-				user,
-				src,
-				"Attacked using \a [weapon] (DAMTYE: [uppertext(weapon.damtype)])",
-				"Was attacked with \a [weapon] (DAMTYE: [uppertext(weapon.damtype)])",
-				"used \a [weapon] (DAMTYE: [uppertext(weapon.damtype)]) to attack"
-			)
-
-		var/datum/attack_result/result = hit_zone
-		if (istype(result))
-			if (result.hit_zone)
-				var/mob/living/victim = result.attackee ? result.attackee : src
-				weapon.apply_hit_effect(victim, user, result.hit_zone)
+			else
+				ready = FALSE
 				return TRUE
-		if (hit_zone)
-			weapon.apply_hit_effect(src, user, hit_zone)
-		return TRUE
-	return ..()
-
-
-/**
- * Interaction handler for using an item on this atom with a non-harm intent, or if `use_weapon()` did not resolve an
- * action. Generally, this is for any standard interactions with items.
- *
- * **Parameters**:
- * - `tool` - The item being used on this atom.
- * - `user` - The mob interacting with this atom.
- * - `click_params` - List of click parameters.
- *
- * Returns boolean to indicate whether the attack call was handled or not. If `FALSE`, the next `use_*` proc in the
- * resolve chain will be called.
- */
-/atom/proc/use_tool(obj/item/tool, mob/living/user, list/click_params)
-	SHOULD_CALL_PARENT(TRUE)
-	return FALSE
-
-
-/mob/living/use_tool(obj/item/tool, mob/living/user, list/click_params)
-	// Surgery is handled by the tool
-	if (can_operate(src, user) && tool.do_surgery(src, user))
-		return TRUE
-
-	if (length(auras))
-		for (var/obj/aura/web/web in auras)
-			web.remove_webbing(user)
+		else
 			return TRUE
-	return ..()
-
-
-/// Truthy if user can operate on target
-/proc/can_operate(mob/living/carbon/target, mob/living/carbon/user)
-	if (target == user)
-		var/zone = check_zone(user.zone_sel.selecting)
-		if (user.hand)
-			switch (zone)
-				if (BP_HEAD, BP_L_ARM, BP_L_HAND)
-					return FALSE
-		switch (zone)
-			if (BP_HEAD, BP_R_ARM, BP_R_HAND)
-				return FALSE
-	var/turf/target_turf = get_turf(target)
-	if (locate(/obj/machinery/optable, target_turf))
-		return TRUE
-	if (locate(/obj/structure/bed, target_turf))
-		return TRUE
-	if (locate(/obj/structure/roller_bed, target_turf))
-		return TRUE
-	if (locate(/obj/structure/table, target_turf))
-		return TRUE
-	if (locate(/obj/rune, target_turf))
-		return TRUE
-	return FALSE
-
-
-/mob/living/carbon/human/use_tool(obj/item/tool, mob/user, list/click_params)
-	// Anything on Self - Devour
-	if (user == src && zone_sel.selecting == BP_MOUTH && can_devour(tool, silent = TRUE))
-		var/obj/item/blocked = check_mouth_coverage()
-		if (blocked)
-			USE_FEEDBACK_FAILURE("\The [blocked] is in the way!")
-			return TRUE
-		devour(tool)
+	else
 		return TRUE
 
-	return ..()
 
-/**
- * Called when the item is in the active hand and another atom is clicked and `resolve_attackby()` returns FALSE. This is generally called by `ClickOn()`.
- * Works on ranged targets, unlike resolve_attackby()
- *
- * **Parameters**:
- * - `target` - The atom that was clicked on.
- * - `user` - The mob clicking on the target.
- * - `proximity_flag` (boolean) - TRUE is this was called on something adjacent to or in the inventory of `user`.
- * - `click_parameters` - List of click parameters. See BYOND's `CLick()` documentation.
- *
- * Should have no return value.
- */
-/obj/item/proc/afterattack(atom/target, mob/living/user, proximity_flag, click_parameters)
+/obj/item/proc/swing_attack(atom/A, mob/user, params)
+	var/holdinghand = user.get_inventory_slot(src)
+	if(params && islist(params) && params["mech"])
+		holdinghand = params["mech_hand"]
+	var/turf/R
+	var/turf/C
+	var/turf/L
+	if(A.x == 0 && A.y == 0 && A.z == 0) //Attacking equipped items results in them getting forwarded
+		C = get_turf(user)
+	else
+		C = get_turf(A)
+	var/_dir
+	if(C == get_turf(user)) //If turf matches with user, move the attack towards where the user is facing
+		_dir = user.dir
+		C = get_step(C, _dir)
+	else
+		_dir = get_dir(user, A)
+	switch(_dir)
+		if(NORTH)
+			R = get_step(C, EAST)
+			L = get_step(C, WEST)
+		if(SOUTH)
+			R = get_step(C, WEST)
+			L = get_step(C, EAST)
+		if(EAST)
+			R = get_step(C, SOUTH)
+			L = get_step(C, NORTH)
+		if(WEST)
+			R = get_step(C, NORTH)
+			L = get_step(C, SOUTH)
+		if(NORTHEAST)
+			R = get_step(C, SOUTH)
+			L = get_step(C, WEST)
+		if(NORTHWEST)
+			R = get_step(C, EAST)
+			L = get_step(C, SOUTH)
+		if(SOUTHEAST)
+			R = get_step(C, WEST)
+			L = get_step(C, NORTH)
+		if(SOUTHWEST)
+			R = get_step(C, NORTH)
+			L = get_step(C, EAST)
+	var/obj/effect/effect/melee/swing/S = new(get_turf(user))
+	S.dir = _dir
+	user.visible_message(SPAN_DANGER("[user] swings \his [src]"))
+	playsound(loc, 'sound/effects/swoosh.ogg', 50, 1, -1)
+	switch(holdinghand)
+		if(slot_l_hand)
+			flick("left_swing", S)
+			var/dmg_modifier = 1
+			dmg_modifier = tileattack(user, L, modifier = 1)
+			dmg_modifier = tileattack(user, C, modifier = dmg_modifier, original_target = A)
+			tileattack(user, R, modifier = dmg_modifier)
+			QDEL_IN(S, 2 SECONDS)
+		if(slot_r_hand)
+			flick("right_swing", S)
+			var/dmg_modifier = 1
+			dmg_modifier = tileattack(user, R, modifier = 1)
+			dmg_modifier = tileattack(user, C, modifier = dmg_modifier, original_target = A)
+			tileattack(user, L, modifier = dmg_modifier)
+			QDEL_IN(S, 2 SECONDS)
+	user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
+
+/atom/proc/attackby(obj/item/W, mob/user, params)
 	return
 
+/atom/movable/attackby(obj/item/I, mob/living/user)
+	if(!(I.flags & NOBLUDGEON))
+		if(user.client && user.a_intent == I_HELP)
+			return
 
-/**
- * Called when the item is in the active hand and another atom is clicked. This is generally called by the target's
- * `resolve_attackby()` proc.
- * Use it for item-level behavior you don't necessarily want running before use_tool/use_weapon.
- * You will need to use type checks on atom/target on overrides; or else this will be called on anything you click.
- *
- * **Parameters**:
- * - `target` - The atom that was clicked on.
- * - `user` - The mob clicking on the target.
- * - `click_parameters` - List of click parameters. See BYOND's `Click()` documentation.
- *
- * Returns boolean to indicate whether the use call was handled or not.
- */
-/obj/item/proc/use_after(atom/target, mob/living/user, click_parameters)
+		user.do_attack_animation(src)
+		if (I.hitsound)
+			playsound(loc, I.hitsound, 50, 1, -1)
+		visible_message(SPAN_DANGER("[src] has been hit by [user] with [I]."))
+		user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
+
+// meant for handling stuff when destroyed
+/obj/proc/nt_sword_handle()
 	return FALSE
 
+/obj/proc/nt_sword_attack(obj/item/I, mob/living/user)//for sword of truth
+	. = FALSE
+	if(!istype(I, /obj/item/tool/sword/nt_sword))
+		return FALSE
+	var/obj/item/tool/sword/nt_sword/NT = I
+	if(user.a_intent != I_HURT)
+		to_chat(user, SPAN_NOTICE("You need to be in a harming stance."))
+		return FALSE
+	if(NT.isBroken)
+		return FALSE
+	if(!(NT.flags & NOBLUDGEON))
+		if(user.a_intent == I_HELP)
+			return FALSE
+		user.do_attack_animation(src)
+		if (NT.hitsound)
+			playsound(loc, I.hitsound, 50, 1, -1)
+		visible_message(SPAN_DANGER("[src] has been hit by [user] with [NT]."))
+		user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
+		for(var/mob/living/carbon/human/H in viewers(user))
+			SEND_SIGNAL_OLD(H, SWORD_OF_TRUTH_OF_DESTRUCTION, src)
+		if(eotp)
+			eotp.addObservation(200)
+			eotp.power_gaine *= 2
+			eotp.max_observation *= 1.25
+			eotp.armaments_rate *= 2
+			eotp.max_armaments_points *= 2
+		nt_sword_handle()
+		qdel(src)
 
-/**
- * Called when a mob is clicked while the item is in the active hand. This is usually called first by the mob's `resolve_attackby()` proc.
- * Use this to set item-level overrides that you want running first. If you have an override you don't want running before use_tool and use_weapon, put it in use_after().
- * You will need to use type checks on atom/target on overrides; or else this will be called on anything you click.
- * If returns FALSE, the rest of the resolve_attackby() chain is called.
- *
- * **Parameters**:
- * - `target` - The atom that was clicked.
- * - `user` - The mob that clicked the target.
- * * - `click_parameters` - List of click parameters. See BYOND's `Click()` documentation.
- */
-/obj/item/proc/use_before(atom/target, mob/living/user, click_parameters)
-	return FALSE
+		. = TRUE
 
 
-/**
- * Called when a weapon is used to make a successful melee attack on a mob. Generally called by the target's `use_weapon()` proc.
- * Overriden to apply special effects like electrical shocks from stun batons/defib paddles.
- *
- * **Parameters**:
- * - `target` - The mob struck with the weapon.
- * - `user` - The mob using the weapon.
- * - `hit_zone` - The mob targeting zone that should be struck with the weapon.
- *
- * Returns boolean to indicate whether or not damage was dealt.
- */
-/obj/item/proc/apply_hit_effect(mob/living/target, mob/living/user, hit_zone)
+/obj/item/attackby(obj/item/I, mob/living/user, var/params)
+	return
+
+/mob/living/attackby(obj/item/I, mob/living/user, var/params)
+	if(!ismob(user))
+		return FALSE
+	var/surgery_check = can_operate(src, user)
+	if(surgery_check && do_surgery(src, user, I, surgery_check)) //Surgery
+		return TRUE
+	else
+		return I.attack(src, user, user.targeted_organ)
+
+//Used by Area of effect attacks, if it returns FALSE, it failed
+/obj/item/proc/attack_with_multiplier(mob/living/user, var/atom/target, var/modifier = 1)
+	if(!wielded && modifier > 0)
+		return FALSE
+	var/original_force = force
+	var/original_unwielded_force = force_wielded_multiplier ? force / force_wielded_multiplier : force / 1.3
+	force *= modifier
+	target.attackby(src, user)
+	force = wielded ? original_force : round(original_unwielded_force, 1)
+	return TRUE
+
+//Same as above but for mobs
+/obj/item/proc/attack_with_multiplier_mob(mob/living/user, var/mob/living/target, var/modifier = 1)
+	if(!wielded && modifier > 0)
+		return FALSE
+	var/original_force = force
+	var/original_unwielded_force = force_wielded_multiplier ? force / force_wielded_multiplier : force / 1.3
+	force *= modifier
+	attack(target, user, user.targeted_organ)
+	force = wielded ? original_force : round(original_unwielded_force, 1)
+	return TRUE
+
+//Area of effect attacks (swinging), return remaining damage
+/obj/item/proc/tileattack(mob/living/user, turf/targetarea, var/modifier = 1, var/swing_degradation = 0.2, var/original_target)
+	if(istype(targetarea, /turf/wall))
+		var/turf/W = targetarea
+		if(attack_with_multiplier(user, W, modifier))
+			return (modifier - swing_degradation) // We hit a static object, prevents hitting anything underneath
+	var/successful_hit = FALSE
+	for(var/obj/S in targetarea)
+		if ((S.density || istype(S, /obj/effect/plant)) && !istype(S, /obj/structure/table) && !istype(S, /obj/machinery/disposal) && !istype(S, /obj/structure/closet))
+			if(attack_with_multiplier(user, S, modifier))
+				successful_hit = TRUE // Livings or targeted mobs can still be hit
+	if(successful_hit)
+		modifier -= swing_degradation // Only deduct damage once for dense objects
+	var/list/living_mobs = new/list()
+	var/list/dead_mobs = new/list()
+	for(var/mob/living/M in targetarea)
+		if(M != user)
+			if(M.stat == DEAD)
+				dead_mobs.Add(M)
+			else
+				living_mobs.Add(M)
+	var/mob/living/target
+	if(original_target && istype(original_target, /mob/living)) // Check if original target is a mob
+		if(LAZYFIND(living_mobs, original_target) || LAZYFIND(dead_mobs, original_target)) // Check if original target is a mob on this tile
+			target = original_target
+			if(attack_with_multiplier_mob(user, target, modifier))
+				modifier -= swing_degradation
+			if(target.density) // If the original target was dense, the rest of the mobs are shielded
+				return modifier
+
+	while(living_mobs.len && modifier > 0)
+		target = pick_n_take(living_mobs)
+		if(attack_with_multiplier_mob(user, target, modifier))
+			modifier -= swing_degradation
+		successful_hit = TRUE
+		if(target.density) // If we hit a dense target, the rest of the mobs are shielded
+			return modifier
+	if(!successful_hit && dead_mobs.len) // If we hit nothing, try to hit dead mobs
+		target = pick(dead_mobs)
+		if(attack_with_multiplier_mob(user, target, modifier))
+			modifier -= swing_degradation
+	return modifier
+// modifying force after calling attack() here is a bad idea, as the force can be changed by means of embedding in a target, which leads to unwielding a weapon.
+//This code replicates the damage reduction caused by unwielding something, but it will likely cause problems elsewhere.
+
+// Proximity_flag is 1 if this afterattack was called on something adjacent, in your square, or on your person.
+// Click parameters is the params string from byond Click() code, see that documentation.
+/obj/item/proc/afterattack(atom/A as mob|obj|turf|area, mob/user, proximity, params)
+	if((!proximity && !ismob(A)) || !wielded || !extended_reach)//extended reach is only for mobs when you wield the spear
+		return
+	if(get_dist(user.loc, A.loc) < 3)//okay, we are in reach, now we need to check if there is anything dense in our path
+		var/turf/T = get_step(user.loc, get_dir(user, A))
+		if(T.Enter(user))
+			resolve_attackby(A, user, params)
+	return
+
+//I would prefer to rename this attack_as_weapon(), but that would involve touching hundreds of files.
+/obj/item/proc/attack(mob/living/M, mob/living/user, target_zone)
+	if(!force || (flags & NOBLUDGEON))
+		return FALSE
+
+	if(!user)
+		return FALSE
+
+	/////////////////////////
+	user.lastattacked = M
+	M.lastattacker = user
+
+	if(!no_attack_log)
+		user.attack_log += "\[[time_stamp()]\]<font color='red'> Attacked [M.name] ([M.ckey]) with [name] (INTENT: [uppertext(user.a_intent)]) (DAMTYE: [uppertext(damtype)])</font>"
+		M.attack_log += "\[[time_stamp()]\]<font color='orange'> Attacked by [user.name] ([user.ckey]) with [name] (INTENT: [uppertext(user.a_intent)]) (DAMTYE: [uppertext(damtype)])</font>"
+		msg_admin_attack("[key_name(user)] attacked [key_name(M)] with [name] (INTENT: [uppertext(user.a_intent)]) (DAMTYE: [uppertext(damtype)])" )
+	/////////////////////////
+
+	user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
+	user.do_attack_animation(M)
+
+	var/hit_zone = M.resolve_item_attack(src, user, target_zone)
+	if(hit_zone)
+		apply_hit_effect(M, user, hit_zone)
+
+	return TRUE
+
+//Called when a weapon is used to make a successful melee attack on a mob. Returns the blocked result
+/obj/item/proc/apply_hit_effect(mob/living/target, mob/living/user, var/hit_zone)
+	if(hitsound)
+		playsound(loc, hitsound, 50, 1, -1)
+
+	if (is_hot() >= HEAT_MOBIGNITE_THRESHOLD)
+		target.IgniteMob()
+
 	var/power = force
-	return target.hit_with_weapon(src, user, power, hit_zone)
-
-
-/**
- * Used to get how fast a mob should attack, and influences click delay.
- * This is just for inheritance.
- *
- * **Parameters**:
- * - `item` - The item being used in the attack, if any.
- *
- * Returns a number indicating the determined attack cooldown/speed.
- */
-/mob/proc/get_attack_speed(obj/item/item)
-	return DEFAULT_ATTACK_COOLDOWN
-
-
-/mob/living/get_attack_speed(obj/item/item)
-	var/speed = base_attack_cooldown
-	if (istype(item))
-		speed = item.attack_cooldown + item.w_class
-	return speed
-
-
-/datum/attack_result
-	var/hit_zone = 0
-	var/mob/living/attackee
+	if(ishuman(user))
+		var/mob/living/carbon/human/H = user
+		power *= H.damage_multiplier
+		if(H.holding_back)
+			power /= 2
+//	if(HULK in user.mutations)
+//		power *= 2
+	target.hit_with_weapon(src, user, power, hit_zone)
+	return

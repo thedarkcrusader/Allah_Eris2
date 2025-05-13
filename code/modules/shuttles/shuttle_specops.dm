@@ -4,7 +4,7 @@
 	req_access = list(access_cent_specops)
 
 /obj/machinery/computer/shuttle_control/specops/attack_ai(user as mob)
-	to_chat(user, SPAN_WARNING("Access Denied."))
+	to_chat(user, "<span class='warning'>Access Denied.</span>")
 	return 1
 
 /datum/shuttle/autodock/ferry/specops
@@ -22,12 +22,12 @@
 	announcer = new /obj/item/device/radio/intercom(null)//We need a fake AI to announce some stuff below. Otherwise it will be wonky.
 	announcer.config(list("Response Team" = 0))
 
-/datum/shuttle/autodock/ferry/specops/proc/radio_announce(message)
+/datum/shuttle/autodock/ferry/specops/proc/radio_announce(var/message)
 	if(announcer)
 		announcer.autosay(message, "A.L.I.C.E.", "Response Team")
 
 
-/datum/shuttle/autodock/ferry/specops/launch(user)
+/datum/shuttle/autodock/ferry/specops/launch(var/user)
 	if (!can_launch())
 		return
 
@@ -35,14 +35,14 @@
 		var/obj/machinery/computer/C = user
 
 		if(world.time <= reset_time)
-			C.visible_message(SPAN_NOTICE("[GLOB.using_map.boss_name] will not allow the Special Operations shuttle to launch yet."))
+			C.visible_message("<span class='notice'>[boss_name] will not allow the Special Operations shuttle to launch yet.</span>")
 			if (((world.time - reset_time)/10) > 60)
-				C.visible_message(SPAN_NOTICE("[-((world.time - reset_time)/10)/60] minutes remain!"))
+				C.visible_message("<span class='notice'>[-((world.time - reset_time)/10)/60] minutes remain!</span>")
 			else
-				C.visible_message(SPAN_NOTICE("[-(world.time - reset_time)/10] seconds remain!"))
+				C.visible_message("<span class='notice'>[-(world.time - reset_time)/10] seconds remain!</span>")
 			return
 
-		C.visible_message(SPAN_NOTICE("The Special Operations shuttle will depart in [(specops_countdown_time/10)] seconds."))
+		C.visible_message("<span class='notice'>The Special Operations shuttle will depart in [(specops_countdown_time/10)] seconds.</span>")
 
 	if (location)	//returning
 		radio_announce("THE SPECIAL OPERATIONS SHUTTLE IS PREPARING TO RETURN")
@@ -51,9 +51,9 @@
 
 	sleep_until_launch()
 
-	if (location)
-		var/obj/machinery/light/small/readylight/light = locate() in shuttle_area
-		if(light) light.set_state(0)
+//	if (location)
+//		var/obj/machinery/light/small/readylight/light = locate() in shuttle_area
+//		if(light) light.set_state(0)
 
 	//launch
 	radio_announce("ALERT: INITIATING LAUNCH SEQUENCE")
@@ -66,15 +66,15 @@
 		if (!location)	//just arrived home
 			for(var/turf/T in get_area_turfs(shuttle_area))
 				var/mob/M = locate(/mob) in T
-				to_chat(M, SPAN_DANGER("You have arrived at [GLOB.using_map.boss_name]. Operation has ended!"))
+				to_chat(M, "<span class='danger'>You have arrived at [boss_name]. Operation has ended!</span>")
 		else	//just left for the station
 			launch_mauraders()
 			for(var/turf/T in get_area_turfs(shuttle_area))
 				var/mob/M = locate(/mob) in T
-				to_chat(M, SPAN_DANGER("You have arrived at [GLOB.using_map.station_name]. Commence operation!"))
+				to_chat(M, "<span class='danger'>You have arrived at [station_name]. Commence operation!</span>")
 
-				var/obj/machinery/light/small/readylight/light = locate() in T
-				if(light) light.set_state(1)
+//				var/obj/machinery/light/small/readylight/light = locate() in T
+//				if(light) light.set_state(1)
 
 /datum/shuttle/autodock/ferry/specops/cancel_launch()
 	if (!can_cancel())
@@ -84,7 +84,7 @@
 	radio_announce("ALERT: LAUNCH SEQUENCE ABORTED")
 	if (istype(in_use, /obj/machinery/computer))
 		var/obj/machinery/computer/C = in_use
-		C.visible_message(SPAN_WARNING("Launch sequence aborted."))
+		C.visible_message("<span class='warning'>Launch sequence aborted.</span>")
 	..()
 
 
@@ -135,7 +135,7 @@
 	//Begin Marauder launchpad.
 	spawn(0)//So it parallel processes it.
 		for(var/obj/machinery/door/blast/M in special_ops)
-			switch(M.id_tag)
+			switch(M.id)
 				if("ASSAULT0")
 					spawn(10)//1 second delay between each.
 						M.open()
@@ -157,16 +157,16 @@
 				spawn_marauder.Add(L)
 		for(var/obj/landmark/L in world)
 			if(L.name == "Marauder Exit")
-				var/obj/portal/P = new(L.loc)
-				P.set_invisibility(INVISIBILITY_ABSTRACT)//So it is not seen by anyone.
+				var/obj/effect/portal/P = new(L.loc)
+				P.invisibility = 101//So it is not seen by anyone.
 				P.failchance = 0//So it has no fail chance when teleporting.
-				P.target = pick(spawn_marauder)//Where the marauder will arrive.
+				P.set_target(pick(spawn_marauder))//Where the marauder will arrive.
 				spawn_marauder.Remove(P.target)
 
 		sleep(10)
 
 		for(var/obj/machinery/mass_driver/M in special_ops)
-			switch(M.id_tag)
+			switch(M.id)
 				if("ASSAULT0")
 					spawn(10)
 						M.drive()
@@ -183,7 +183,7 @@
 		sleep(50)//Doors remain open for 5 seconds.
 
 		for(var/obj/machinery/door/blast/M in special_ops)
-			switch(M.id_tag)//Doors close at the same time.
+			switch(M.id)//Doors close at the same time.
 				if("ASSAULT0")
 					spawn(0)
 						M.close()
