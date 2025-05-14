@@ -177,7 +177,7 @@ Turf and target are seperate in case you want to teleport some distance from a t
 			return 1
 	return 0
 
-/proc/sign(x)
+/proc/signn(x)
 	return x!=0?x/abs(x):0
 
 /proc/getline(atom/M, atom/N)//Ultra-Fast Bresenham Line-Drawing Algorithm
@@ -1335,5 +1335,3 @@ var/list/FLOORITEMS = list(
 		digit_numbers--
 		generated_code += "[generate_single_gun_number()]" // cast to string
 	return generated_code
-
-
