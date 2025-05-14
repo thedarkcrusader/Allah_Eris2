@@ -28,7 +28,6 @@
 
 /mob/living/carbon/superior_animal/roach/support/Destroy()
 	QDEL_NULL(gas_sac)
-	overseer?.removeHealer(src)
 	return ..()
 
 /mob/living/carbon/superior_animal/roach/support/proc/gas_attack()
@@ -36,7 +35,7 @@
 		return
 
 	var/location = get_turf(src)
-	var/datum/effect/effect/system/smoke_spread/chem/roach/S = new()
+	var/datum/effect/effect/system/smoke_spread/chem/S = new
 
 	S.attach(location)
 	S.set_up(gas_sac, gas_sac.total_volume, 0, location)
@@ -61,19 +60,10 @@
 	if(!target_mob)
 		return
 
-	if(prob(7) && !(/obj/effect/effect/smoke/chem/roach in loc)) // don't stack it passively
+	if(prob(7))
 		gas_attack()
 
 /mob/living/carbon/superior_animal/roach/support/findTarget()
 	. = ..()
-	if(. && !((/obj/effect/effect/smoke/chem/roach in get_turf(.)) && (/obj/effect/effect/smoke/chem/roach in loc)) && gas_attack())// if you aren't clouding your/their area, attempt to gas
+	if(. && gas_attack())
 		visible_emote("charges at [.] in clouds of poison!")
-
-/mob/living/carbon/superior_animal/roach/support/joinOvermind(datum/overmind/roachmind/jointhis)
-	jointhis.addHealer(src) // Seuche is Healer
-	overseer = jointhis
-
-/mob/living/carbon/superior_animal/roach/support/leaveOvermind()
-	overseer?.removeHealer(src) // Healer Seuche
-	overseer?.casualties.Remove(src)
-	overseer = null

@@ -44,13 +44,11 @@
 	start_icon = icon("icons/HUD/storage_start.png")
 	middle_icon = icon("icons/HUD/storage_middle.png")
 	end_icon = icon("icons/HUD/storage_end.png")
-	appearance_flags = NO_CLIENT_COLOR
 
 /HUD_element/threePartBox/storedItemBackground
 	start_icon = icon("icons/HUD/stored_start.png")
 	middle_icon = icon("icons/HUD/stored_middle.png")
 	end_icon = icon("icons/HUD/stored_end.png")
-	appearance_flags = NO_CLIENT_COLOR
 
 /HUD_element/slottedItemBackground
 	icon = 'icons/HUD/block.png'
@@ -105,7 +103,6 @@
 	closeButton.setHideParentOnClick(TRUE)
 	closeButton.setClickProc(TYPE_PROC_REF(/obj/item/storage, closeButtonClick), src)
 	closeButton.setData("item", src)
-	closeButton.appearance_flags = NO_CLIENT_COLOR
 
 	//storage space based items
 	if((storage_slots == null) && !display_contents_with_number)
