@@ -13,8 +13,12 @@ GLOBAL_REAL(GLOB, /datum/controller/global_vars)
 	GLOB = src
 
 	var/datum/controller/exclude_these = new
-	gvars_datum_in_built_vars = exclude_these.vars + list(NAMEOF(src, gvars_datum_protected_varlist), NAMEOF(src, gvars_datum_in_built_vars), NAMEOF(src, gvars_datum_init_order))
-	QDEL_IN(exclude_these, 0) //signal logging isn't ready
+	// I know this is dumb but the nested vars list hangs a ref to the datum. This fixes that
+	// I have an issue report open, lummox has not responded. It might be a FeaTuRE
+	// Sooo we gotta be dumb
+	var/list/controller_vars = exclude_these.vars.Copy()
+	gvars_datum_in_built_vars = controller_vars + list(NAMEOF(src, gvars_datum_protected_varlist), NAMEOF(src, gvars_datum_in_built_vars), NAMEOF(src, gvars_datum_init_order))
+	QDEL_IN(exclude_these, 0)	//signal logging isn't ready
 
 	log_world("[vars.len - gvars_datum_in_built_vars.len] global variables")
 
@@ -25,13 +29,16 @@ GLOBAL_REAL(GLOB, /datum/controller/global_vars)
 	SHOULD_CALL_PARENT(FALSE)
 	return QDEL_HINT_IWILLGC
 
-/datum/controller/global_vars/VV_hidden()//Part of bay var viewer improvements
-	return ..() + gvars_datum_protected_varlist
+/datum/controller/global_vars/stat_entry()
+	if(!statclick)
+		statclick = new/obj/effect/statclick/debug(null, "Initializing...", src)
 
-// /datum/controller/global_vars/vv_edit_var(var_name, var_value)
-// 	if(gvars_datum_protected_varlist[var_name])
-// 		return FALSE
-// 	return ..()
+	stat("Globals:", statclick.update("Edit"))
+
+/datum/controller/global_vars/vv_edit_var(var_name, var_value)
+	if(gvars_datum_protected_varlist[var_name])
+		return FALSE
+	return ..()
 
 /datum/controller/global_vars/Initialize()
 	gvars_datum_init_order = list()

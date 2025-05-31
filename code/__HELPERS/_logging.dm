@@ -1,20 +1,11 @@
 //wrapper macros for easier grepping
 #define DIRECT_OUTPUT(A, B) A << B
-#define DIRECT_INPUT(A, B) A >> B
 #define SEND_IMAGE(target, image) DIRECT_OUTPUT(target, image)
 #define SEND_SOUND(target, sound) DIRECT_OUTPUT(target, sound)
 #define SEND_TEXT(target, text) DIRECT_OUTPUT(target, text)
 #define WRITE_FILE(file, text) DIRECT_OUTPUT(file, text)
-#define READ_FILE(file, text) DIRECT_INPUT(file, text)
-//print an error message to world.log
-
-
-// On Linux/Unix systems the line endings are LF, on windows it's CRLF, admins that don't use notepad++
-// will get logs that are one big line if the system is Linux and they are using notepad.  This solves it by adding CR to every line ending
-// in the logs.  ascii character 13 = CR
-
-/var/global/log_end= world.system_type == UNIX ? ascii2text(13) : ""
-
+#define WRITE_LOG(log, text) text2file(text,log) //rustg_log_write
+#define TIMETOTEXT4LOGS time2text(world.timeofday,"hh:mm:ss")
 //print a warning message to world.log
 #define WARNING(MSG) warning("[MSG] in [__FILE__] at line [__LINE__] src: [UNLINT(src)] usr: [usr].")
 /proc/warning(msg)
@@ -24,175 +15,210 @@
 //not an error or a warning, but worth to mention on the world log, just in case.
 #define NOTICE(MSG) notice(MSG)
 /proc/notice(msg)
-	msg = "## NOTICE: [msg]"
+	msg = "[TIMETOTEXT4LOGS] ## NOTICE: [msg]"
 	log_world(msg)
 
 //print a testing-mode debug message to world.log and world
 #ifdef TESTING
-#define testing(msg) log_world("## TESTING: [msg]"); to_chat(world, "## TESTING: [msg]")
-#define testing_variable(variable, value) var variable = value
+#define testing(msg) log_world("[TIMETOTEXT4LOGS] ## TESTING: [msg]"); to_chat(world, "## TESTING: [msg]")
 #else
 #define testing(msg)
-#define testing_variable(variable, value)
 #endif
 
-#if defined(UNIT_TESTS) || defined(SPACEMAN_DMM)
 /proc/log_test(text)
-	// WRITE_LOG(GLOB.test_log, text)
-	log_world("## CI: [text]")
+#ifdef UNIT_TESTS
+	WRITE_LOG(GLOB.test_log, text)
 	SEND_TEXT(world.log, text)
 #endif
 
-#if defined(REFERENCE_DOING_IT_LIVE)
-#define log_reftracker(msg) log_harddel("## REF SEARCH [msg]")
 
-/proc/log_harddel(text)
-	log_world("## HARDDEL: [text]")
-
-#elif defined(REFERENCE_TRACKING) // Doing it locally
-#define log_reftracker(msg) log_world("## REF SEARCH [msg]")
-
-#else //Not tracking at all
-#define log_reftracker(msg)
-#endif
-
-/proc/error(msg)
-	log_world("## ERROR: [msg][log_end]")
-
-/proc/game_log(category, text)
-	diary << "\[[time_stamp()]] [game_id] [category]: [text][log_end]"
-
+/* Items with ADMINPRIVATE prefixed are stripped from public logs. */
 /proc/log_admin(text)
-	admin_log.Add(text)
-	lobby_message(message = text, color = "#FFA500")
-	if (config.log_admin)
-		game_log("ADMIN", text)
+	GLOB.admin_log.Add(text)
+	if (CONFIG_GET(flag/log_admin))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] ADMIN: [text]")
 
-/proc/log_debug(text)
-	if (config.log_debug)
-		game_log("DEBUG", text)
-
-	for(var/client/C in admins)
-		if(C.get_preference_value(/datum/client_preference/staff/show_debug_logs) == GLOB.PREF_SHOW)
-			to_chat(C, "DEBUG: [text]")
-
-/proc/log_game(text)
-	if (config.log_game)
-		game_log("GAME", text)
-
-/proc/log_vote(text)
-	if (config.log_vote)
-		game_log("VOTE", text)
-
-/proc/log_access(text)
-	if (config.log_access)
-		game_log("ACCESS", text)
-
-/proc/log_say(text)
-	if (config.log_say)
-		game_log("SAY", text)
-
-/proc/log_ooc(text)
-	if (config.log_ooc)
-		game_log("OOC", text)
-
-/proc/log_whisper(text)
-	if (config.log_whisper)
-		game_log("WHISPER", text)
-
-/proc/log_emote(text)
-	if (config.log_emote)
-		game_log("EMOTE", text)
-
-/proc/log_attack(text)
-	if (config.log_attack)
-		game_log("ATTACK", text)
+/proc/log_admin_private(text)
+	GLOB.admin_log.Add(text)
+	if (CONFIG_GET(flag/log_admin))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] ADMINPRIVATE: [text]")
 
 /proc/log_adminsay(text)
-	if (config.log_adminchat)
-		game_log("ADMINSAY", text)
+	GLOB.admin_log.Add(text)
+	if (CONFIG_GET(flag/log_adminchat))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] ADMINPRIVATE: ASAY: [text]")
 
-/proc/log_adminwarn(text)
-	if (config.log_adminwarn)
-		game_log("ADMINWARN", text)
-
-
-/**
- * Appends a tgui-related log entry. All arguments are optional.
- */
-/proc/log_tgui(user, message, context,
-		datum/tgui_window/window,
-		datum/src_object)
-	var/entry = ""
-	// Insert user info
-	if(!user)
-		entry += "<nobody>"
-	else if(istype(user, /mob))
-		var/mob/mob = user
-		entry += "[mob.ckey] (as [mob] at [mob.x],[mob.y],[mob.z])"
-	else if(istype(user, /client))
-		var/client/client = user
-		entry += "[client.ckey]"
-	// Insert context
-	if(context)
-		entry += " in [context]"
-	else if(window)
-		entry += " in [window.id]"
-	// Resolve src_object
-	if(!src_object && window?.locked_by)
-		src_object = window.locked_by.src_object
-	// Insert src_object info
-	if(src_object)
-		entry += "\nUsing: [src_object.type] [REF(src_object)]"
-	// Insert message
-	if(message)
-		entry += "\n[message]"
-	game_log("TGUI", entry)
-	// WRITE_LOG(GLOB.tgui_log, entry)
+/proc/log_dsay(text)
+	if (CONFIG_GET(flag/log_adminchat))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] ADMIN: DSAY: [text]")
 
 
-/proc/log_to_dd(text)
-	log_world(text)
-	if(config.log_world_output)
-		game_log("DD_OUTPUT", text)
+/* All other items are public. */
+/proc/log_game(text)
+	if (CONFIG_GET(flag/log_game))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] GAME: [text]")
 
-/proc/log_misc(text)
-	game_log("MISC", text)
+/proc/log_mecha(text)
+	if (CONFIG_GET(flag/log_mecha))
+		WRITE_LOG(GLOB.world_mecha_log, "\[[TIMETOTEXT4LOGS]\] MECHA: [text]")
 
-/proc/log_unit_test(text)
-	log_world("## UNIT_TEST ##: [text]")
-	log_debug(text)
+/proc/log_virus(text)
+	if (CONFIG_GET(flag/log_virus))
+		WRITE_LOG(GLOB.world_virus_log, "\[[TIMETOTEXT4LOGS]\] VIRUS: [text]")
 
-/proc/log_qdel(text)
-	world_qdel_log << "\[[time_stamp()]] [game_id] QDEL: [text][log_end]"
+/proc/log_cloning(text, mob/initiator)
+	if(CONFIG_GET(flag/log_cloning))
+		WRITE_LOG(GLOB.world_cloning_log, "\[[TIMETOTEXT4LOGS]\] CLONING: [text]")
+
+/proc/log_paper(text)
+	WRITE_LOG(GLOB.world_paper_log, "\[[TIMETOTEXT4LOGS]\] PAPER: [text]")
 
 /proc/log_asset(text)
-	game_log("ASSET", text)
+	WRITE_LOG(GLOB.world_asset_log, "\[[TIMETOTEXT4LOGS]\] ASSET: [text]")
 
-/// Logging for mapping errors
-/proc/log_mapping(text, skip_world_log)
-#ifdef UNIT_TESTS
-	GLOB.unit_test_mapping_logs += text
+/proc/log_access(text)
+	if (CONFIG_GET(flag/log_access))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] ACCESS: [text]")
+
+/proc/log_law(text)
+	if (CONFIG_GET(flag/log_law))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] LAW: [text]")
+
+/proc/log_attack(text)
+	if (CONFIG_GET(flag/log_attack))
+		WRITE_LOG(GLOB.world_attack_log, "\[[TIMETOTEXT4LOGS]\] ATTACK: [text]")
+
+/proc/log_manifest(ckey, datum/mind/mind,mob/body, latejoin = FALSE)
+	if(CONFIG_GET(flag/log_manifest))
+		WRITE_LOG(GLOB.world_manifest_log, "\[[TIMETOTEXT4LOGS]\] [ckey] \\ [body.real_name] \\ [mind.assigned_role.title] \\ [mind.special_role ? mind.special_role : "NONE"] \\ [latejoin ? "LATEJOIN":"ROUNDSTART"]")
+
+/proc/log_bomber(atom/user, details, atom/bomb, additional_details, message_admins = TRUE)
+	var/bomb_message = "\[[TIMETOTEXT4LOGS]\] [details][bomb ? " [bomb.name] at [AREACOORD(bomb)]": ""][additional_details ? " [additional_details]" : ""]."
+
+	if(user)
+		user.log_message(bomb_message, LOG_GAME) //let it go to individual logs as well as the game log
+		bomb_message = "[key_name(user)] at [AREACOORD(user)] [bomb_message]"
+	else
+		log_game(bomb_message)
+
+	GLOB.bombers += bomb_message
+
+	if(message_admins)
+		message_admins("[user ? "[ADMIN_LOOKUPFLW(user)] at [ADMIN_VERBOSEJMP(user)] " : ""][details][bomb ? " [bomb.name] at [ADMIN_VERBOSEJMP(bomb)]": ""][additional_details ? " [additional_details]" : ""].")
+
+/proc/log_say(text)
+	if (CONFIG_GET(flag/log_say))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] SAY: [text]")
+
+/proc/log_ooc(text)
+	if (CONFIG_GET(flag/log_ooc))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] OOC: [text]")
+
+/proc/log_looc(text)
+	if (CONFIG_GET(flag/log_looc))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] LOOC: [text]")
+
+/proc/log_whisper(text)
+	if (CONFIG_GET(flag/log_whisper))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] WHISPER: [text]")
+
+/proc/log_emote(text)
+	if (CONFIG_GET(flag/log_emote))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] EMOTE: [text]")
+
+/proc/log_prayer(text)
+	if (CONFIG_GET(flag/log_prayer))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] PRAY: [text]")
+
+/proc/log_pda(text)
+	if (CONFIG_GET(flag/log_pda))
+		WRITE_LOG(GLOB.world_pda_log, "\[[TIMETOTEXT4LOGS]\] PDA: [text]")
+
+/proc/log_comment(text)
+	if (CONFIG_GET(flag/log_pda))
+		//reusing the PDA option because I really don't think news comments are worth a config option
+		WRITE_LOG(GLOB.world_pda_log, "\[[TIMETOTEXT4LOGS]\] COMMENT: [text]")
+
+/proc/log_telecomms(text)
+	if (CONFIG_GET(flag/log_telecomms))
+		WRITE_LOG(GLOB.world_telecomms_log, "\[[TIMETOTEXT4LOGS]\] TCOMMS: [text]")
+
+/proc/log_chat(text)
+	if (CONFIG_GET(flag/log_pda))
+		//same thing here
+		WRITE_LOG(GLOB.world_pda_log, "\[[TIMETOTEXT4LOGS]\] CHAT: [text]")
+
+/proc/log_vote(text)
+	if (CONFIG_GET(flag/log_vote))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] VOTE: [text]")
+
+/proc/log_telepathy(text)
+	if (CONFIG_GET(flag/log_telepathy))
+		WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] ANTAG TELEPATHY: [text]")
+
+/proc/log_topic(text)
+	WRITE_LOG(GLOB.world_game_log, "\[[TIMETOTEXT4LOGS]\] TOPIC: [text]")
+
+/proc/log_href(text)
+	WRITE_LOG(GLOB.world_href_log, "\[[TIMETOTEXT4LOGS]\] HREF: [text]")
+
+/proc/log_sql(text)
+	WRITE_LOG(GLOB.sql_error_log, "\[[TIMETOTEXT4LOGS]\] SQL: [text]")
+
+/proc/log_qdel(text)
+	WRITE_LOG(GLOB.world_qdel_log, "\[[TIMETOTEXT4LOGS]\] QDEL: [text]")
+
+/proc/log_query_debug(text)
+	WRITE_LOG(GLOB.query_debug_log, "\[[TIMETOTEXT4LOGS]\] SQL: [text]")
+
+/proc/log_job_debug(text)
+	if (CONFIG_GET(flag/log_job_debug))
+		WRITE_LOG(GLOB.world_job_debug_log, "\[[TIMETOTEXT4LOGS]\] JOB: [text]")
+
+/* Log to both DD and the logfile. */
+/proc/log_world(text)
+#ifdef USE_CUSTOM_ERROR_HANDLER
+	WRITE_LOG(GLOB.world_runtime_log, text)
 #endif
-	log_world("## MAPPING: [text]")
-	if(skip_world_log)
-		return
-	log_world(text)
+	SEND_TEXT(world.log, text)
 
-//pretty print a direction bitflag, can be useful for debugging.
-/proc/print_dir(var/dir)
-	var/list/comps = list()
-	if(dir & NORTH) comps += "NORTH"
-	if(dir & SOUTH) comps += "SOUTH"
-	if(dir & EAST) comps += "EAST"
-	if(dir & WEST) comps += "WEST"
-	if(dir & UP) comps += "UP"
-	if(dir & DOWN) comps += "DOWN"
+/* Log to the logfile only. */
+/proc/log_runtime(text)
+	WRITE_LOG(GLOB.world_runtime_log, text)
 
-	return english_list(comps, nothing_text="0", and_text="|", comma_text="|")
+/* Rarely gets called; just here in case the config breaks. */
+/proc/log_config(text)
+	WRITE_LOG(GLOB.config_error_log, text)
+	SEND_TEXT(world.log, text)
+
+/proc/log_mapping(text)
+	WRITE_LOG(GLOB.world_map_error_log, text)
+
+/proc/log_character(text)
+	WRITE_LOG(GLOB.character_list_log, text)
+
+/proc/log_hunted(text)
+	WRITE_LOG(GLOB.hunted_log, text)
+
+/* ui logging */
+
+/proc/log_tgui(text)
+	WRITE_LOG(GLOB.tgui_log, text)
+
+/proc/log_storyteller(text, list/data)
+	WRITE_LOG(GLOB.world_game_log, "STORYTELLERS: [text]")
+
+/* For logging round startup. */
+/proc/start_log(log)
+	WRITE_LOG(log, "\[[TIMETOTEXT4LOGS]\] Starting up round ID [GLOB.rogue_round_id].\n-------------------------")
+
+/* Close open log handles. This should be called as late as possible, and no logging should hapen after. */
+/proc/shutdown_logging()
+	rustg_log_close_all()
+
 
 /* Helper procs for building detailed log lines */
-/proc/key_name(whom, include_link = null, include_name = TRUE, highlight_special_characters = TRUE)
+/proc/key_name(whom, include_link = null, include_name = TRUE)
 	var/mob/M
 	var/client/C
 	var/key
@@ -214,10 +240,10 @@
 	else if(istext(whom))
 		key = whom
 		ckey = ckey(whom)
-		// C = GLOB.directory[ckey]
-		// if(C)
-		// 	M = C.mob
-	else if(istype(whom, /datum/mind))
+		C = GLOB.directory[ckey]
+		if(C)
+			M = C.mob
+	else if(istype(whom,/datum/mind))
 		var/datum/mind/mind = whom
 		key = mind.key
 		ckey = ckey(key)
@@ -247,14 +273,14 @@
 		include_link = FALSE
 
 	if(key)
-		if(C?.holder && C.holder.fakekey && !include_name)
+		if(C && C.holder && C.holder.fakekey && !include_name)
 			if(include_link)
-				. += "<a href='?priv_msg=[REF(C)]'>"
+				. += "<a href='?priv_msg=[C.findStealthKey()]'>"
 			. += "Administrator"
 		else
 			if(include_link)
-				. += "<a href='?priv_msg=[REF(ckey)]'>"
-			. += key
+				. += "<a href='?priv_msg=[ckey]'>"
+			. += "[key]"
 		if(!C)
 			. += "\[DC\]"
 
@@ -264,74 +290,31 @@
 		. += "*no key*"
 
 	if(include_name)
-		var/name
 		if(M)
 			if(M.real_name)
-				name += "/([M.real_name])"
+				. += "/([M.real_name]"
+				if(M.real_name != M.name)
+					. += " AS [M.name]"
+				. += ")"
 			else if(M.name)
-				name += "/([M.name])"
+				. += "/([M.name])"
 		else if(fallback_name)
-			name += "/([fallback_name])"
-
-		if(include_link && is_special_character(M) && highlight_special_characters)
-			. += "/(<font color='#FFA500'>[name]</font>)" //Orange
-		else
-			. += "/([name])"
+			. += "/([fallback_name])"
 
 	return .
 
 /proc/key_name_admin(whom, include_name = TRUE)
 	return key_name(whom, TRUE, include_name)
 
-// Helper procs for building detailed log lines
-/datum/proc/get_log_info_line()
-	return "[src] ([type]) ([any2ref(src)])"
+/proc/loc_name(atom/A)
+	if(!istype(A))
+		return "(INVALID LOCATION)"
 
-/area/get_log_info_line()
-	return "[..()] ([isnum(z) ? "[x],[y],[z]" : "0,0,0"])"
+	var/turf/T = A
+	if (!istype(T))
+		T = get_turf(A)
 
-/turf/get_log_info_line()
-	return "[..()] ([x],[y],[z]) ([loc ? loc.type : "NULL"])"
-
-/atom/movable/get_log_info_line()
-	var/turf/t = get_turf(src)
-	return "[..()] ([t ? t : "NULL"]) ([t ? "[t.x],[t.y],[t.z]" : "0,0,0"]) ([t ? t.type : "NULL"])"
-
-/mob/get_log_info_line()
-	return ckey ? "[..()] ([ckey])" : ..()
-
-/proc/log_info_line(var/datum/d)
-	if(isnull(d))
-		return "*null*"
-	if(islist(d))
-		var/list/L = list()
-		for(var/e in d)
-			L += log_info_line(e)
-		return "\[[jointext(L, ", ")]\]" // We format the string ourselves, rather than use json_encode(), because it becomes difficult to read recursively escaped "
-	if(!istype(d))
-		return json_encode(d)
-	return d.get_log_info_line()
-
-/proc/log_world(text) //general logging; displayed both in DD and in the text file
-	if(config && config.log_runtime)
-		runtime_diary << text	//save to it
-	world.log << text	//do that
-
-
-// Helper proc for building detailed log lines
-/proc/datum_info_line(datum/d)
-	if(!istype(d))
-		return
-	if(!ismob(d))
-		return "[d] ([d.type])"
-	var/mob/m = d
-	return "[m] ([m.ckey]) ([m.type])"
-
-/proc/atom_loc_line(var/atom/a)
-	if(!istype(a))
-		return
-	var/turf/t = get_turf(a)
-	if(istype(t))
-		return "[a.loc] ([t.x],[t.y],[t.z]) ([a.loc.type])"
-	else if(a.loc)
-		return "[a.loc] (0,0,0) ([a.loc.type])"
+	if(istype(T))
+		return "([AREACOORD(T)])"
+	else if(A.loc)
+		return "(UNKNOWN (?, ?, ?))"

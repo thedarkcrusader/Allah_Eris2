@@ -1,96 +1,117 @@
 /obj/effect/mine
-	name = "Mine"
-	desc = "I Better stay away from that thing."
-	density = TRUE
+	name = "dummy mine"
+	desc = ""
+	density = FALSE
 	anchored = TRUE
-	icon = 'icons/obj/weapons.dmi'
+	icon = 'icons/obj/items_and_weapons.dmi'
 	icon_state = "uglymine"
-	var/triggerproc = "explode" //name of the proc thats called when the mine is triggered
 	var/triggered = 0
 
-/obj/effect/mine/New()
-	icon_state = "uglyminearmed"
+/obj/effect/mine/proc/mineEffect(mob/victim)
+	to_chat(victim, "<span class='danger'>*click*</span>")
 
 /obj/effect/mine/Crossed(AM as mob|obj)
-	Bumped(AM)
+	if(isturf(loc))
+		if(ismob(AM))
+			var/mob/MM = AM
+			if(!(MM.movement_type & FLYING))
+				triggermine(AM)
+		else
+			triggermine(AM)
 
-/obj/effect/mine/Bumped(mob/M as mob|obj)
-
-	if(triggered) return
-
-	if(ishuman(M))
-		for(var/mob/O in viewers(world.view, src.loc))
-			to_chat(O, "<font color='red'>[M] triggered the \icon[src] [src]</font>")
-		triggered = 1
-		call(src,triggerproc)(M)
-
-/obj/effect/mine/proc/triggerrad(obj)
-	var/datum/effect/effect/system/spark_spread/s = new
+/obj/effect/mine/proc/triggermine(mob/victim)
+	if(triggered)
+		return
+	visible_message("<span class='danger'>[victim] sets off [icon2html(src, viewers(src))] [src]!</span>")
+	var/datum/effect_system/spark_spread/s = new /datum/effect_system/spark_spread
 	s.set_up(3, 1, src)
 	s.start()
-	obj:radiation += 50
+	mineEffect(victim)
+	triggered = 1
 	qdel(src)
 
-/obj/effect/mine/proc/triggerstun(obj)
-	if(ismob(obj))
-		var/mob/M = obj
-		M.Stun(30)
-	var/datum/effect/effect/system/spark_spread/s = new
-	s.set_up(3, 1, src)
-	s.start()
-	qdel(src)
 
-/obj/effect/mine/proc/triggern2o(obj)
-	//example: n2o triggerproc
-	//note: im lazy
+/obj/effect/mine/explosive
+	name = "explosive mine"
+	var/range_devastation = 0
+	var/range_heavy = 1
+	var/range_light = 2
+	var/range_flash = 3
 
-	for (var/turf/floor/target in RANGE_TURFS(1,src))
-		if(!target.blocks_air)
-			target.assume_gas("sleeping_agent", 30)
+/obj/effect/mine/explosive/mineEffect(mob/victim)
+	explosion(loc, range_devastation, range_heavy, range_light, range_flash)
 
-	qdel(src)
-
-/obj/effect/mine/proc/triggerplasma(obj)
-	for (var/turf/floor/target in RANGE_TURFS(1,src))
-		if(!target.blocks_air)
-			target.assume_gas("plasma", 30)
-
-			target.hotspot_expose(1000, CELL_VOLUME)
-
-	qdel(src)
-
-/obj/effect/mine/proc/triggerkick(obj)
-	var/datum/effect/effect/system/spark_spread/s = new
-	s.set_up(3, 1, src)
-	s.start()
-	qdel(obj:client)
-	qdel(src)
-
-/obj/effect/mine/proc/explode(obj)
-	explosion(get_turf(src), 500, 250)
-	qdel(src)
-
-/obj/effect/mine/dnascramble
-	name = "Radiation Mine"
-	icon_state = "uglymine"
-	triggerproc = "triggerrad"
-
-/obj/effect/mine/plasma
-	name = "Plasma Mine"
-	icon_state = "uglymine"
-	triggerproc = "triggerplasma"
-
-/obj/effect/mine/kick
-	name = "Kick Mine"
-	icon_state = "uglymine"
-	triggerproc = "triggerkick"
-
-/obj/effect/mine/n2o
-	name = "N2O Mine"
-	icon_state = "uglymine"
-	triggerproc = "triggern2o"
 
 /obj/effect/mine/stun
-	name = "Stun Mine"
-	icon_state = "uglymine"
-	triggerproc = "triggerstun"
+	name = "stun mine"
+	var/stun_time = 80
+
+/obj/effect/mine/stun/mineEffect(mob/living/victim)
+	if(isliving(victim))
+		victim.Paralyze(stun_time)
+
+/obj/effect/mine/kickmine
+	name = "kick mine"
+
+/obj/effect/mine/kickmine/mineEffect(mob/victim)
+	if(isliving(victim) && victim.client)
+		to_chat(victim, "<span class='danger'>I have been kicked FOR NO REISIN!</span>")
+		qdel(victim.client)
+
+/obj/effect/mine/sound
+	name = "honkblaster 1000"
+	var/sound = 'sound/blank.ogg'
+
+/obj/effect/mine/sound/mineEffect(mob/victim)
+	playsound(loc, sound, 100, TRUE)
+
+
+/obj/effect/mine/sound/bwoink
+	name = "bwoink mine"
+	sound = 'sound/blank.ogg'
+
+/obj/effect/mine/pickup
+	name = "pickup"
+	desc = ""
+	icon = 'icons/effects/effects.dmi'
+	icon_state = "electricity2"
+	density = FALSE
+	var/duration = 0
+
+/obj/effect/mine/pickup/Initialize()
+	. = ..()
+	animate(src, pixel_y = 4, time = 20, loop = -1)
+
+/obj/effect/mine/pickup/triggermine(mob/victim)
+	if(triggered)
+		return
+	triggered = 1
+	invisibility = INVISIBILITY_ABSTRACT
+	mineEffect(victim)
+	qdel(src)
+
+/obj/effect/mine/pickup/healing
+	name = "Blue Orb"
+	desc = ""
+	color = "#0000FF"
+
+/obj/effect/mine/pickup/healing/mineEffect(mob/living/carbon/victim)
+	if(!victim.client || !istype(victim))
+		return
+	to_chat(victim, "<span class='notice'>I feel great!</span>")
+	victim.revive(full_heal = TRUE, admin_revive = TRUE)
+
+/obj/effect/mine/pickup/speed
+	name = "Yellow Orb"
+	desc = ""
+	color = "#FFFF00"
+	duration = 300
+
+/obj/effect/mine/pickup/speed/mineEffect(mob/living/carbon/victim)
+	if(!victim.client || !istype(victim))
+		return
+	to_chat(victim, "<span class='notice'>I feel fast!</span>")
+	victim.add_movespeed_modifier(MOVESPEED_ID_YELLOW_ORB, update=TRUE, priority=100, multiplicative_slowdown=-2, blacklisted_movetypes=(FLYING|FLOATING))
+	sleep(duration)
+	victim.remove_movespeed_modifier(MOVESPEED_ID_YELLOW_ORB)
+	to_chat(victim, "<span class='notice'>I slow down.</span>")

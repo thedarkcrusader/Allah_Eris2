@@ -1,139 +1,114 @@
-/mob/living/carbon/human/movement_delay()
+/mob/living/carbon/human/get_movespeed_modifiers()
+	var/list/considering = ..()
+	. = considering
+	if(HAS_TRAIT(src, TRAIT_IGNORESLOWDOWN))
+		for(var/id in .)
+			var/list/data = .[id]
+			if(data[MOVESPEED_DATA_INDEX_FLAGS] & IGNORE_NOSLOW)
+				.[id] = data
 
-	var/tally = ..()
-	if(species.slowdown)
-		tally += species.slowdown
-	if (istype(loc, /turf/space)) // It's hard to be slowed down in space by... anything
-		return tally
-	/// No slowdown for mech pilots , mech already handles movement.
-	if(ismech(loc))
+/mob/living/carbon/human/slip(knockdown_amount, obj/O, lube, paralyze, forcedrop)
+	if(HAS_TRAIT(src, TRAIT_NOSLIPALL))
 		return 0
-
-	if(embedded_flag)
-		handle_embedded_objects() //Moving with objects stuck in you can cause bad times.
-	if(CE_SPEEDBOOST in chem_effects)
-		tally -= chem_effects[CE_SPEEDBOOST]
-	if(isturf(loc))
-		var/turf/T = loc
-		if(T.get_lumcount() < 0.6)
-			if(stats.getPerk(PERK_NIGHTCRAWLER))
-				tally -= 0.5
-			else if(see_invisible != SEE_INVISIBLE_NOLIGHTING)
-				tally += 0.5
-	if(stats.getPerk(PERK_FAST_WALKER))
-		tally -= 0.5
-	if(blocking)
-		tally += 1
-
-	if(recoil)
-		var/obj/item/gun/GA = get_active_hand()
-		var/obj/item/gun/GI = get_inactive_hand()
-
-		var/brace_recoil = 0
-		if(istype(GA))
-			var/datum/recoil/R = GA.recoil
-			brace_recoil = R.getRating(RECOIL_TWOHAND)
-		if(istype(GI))
-			var/datum/recoil/R = GI.recoil
-			brace_recoil = max(brace_recoil, R.getRating(RECOIL_TWOHAND))
-
-		if(brace_recoil)
-			tally += CLAMP(round(recoil) / (60 / brace_recoil), 0, 8) // Scales with the size of the gun - bigger guns slow you more
-		else
-			tally += CLAMP(round(recoil) / 20, 0, 8) // Lowest possible while holding a gun
-
-	var/obj/item/implant/core_implant/cruciform/C = get_core_implant(/obj/item/implant/core_implant/cruciform)
-	if(C && C.active)
-		var/obj/item/cruciform_upgrade/upgrade = C.upgrade
-		if(upgrade && upgrade.active && istype(upgrade, CUPGRADE_SPEED_OF_THE_CHOSEN))
-			var/obj/item/cruciform_upgrade/speed_of_the_chosen/sotc = upgrade
-			tally -= sotc.speed_increase
-
-	var/hunger_deficiency = (MOB_BASE_MAX_HUNGER - nutrition)
-	if(hunger_deficiency >= 200) tally += (hunger_deficiency / 100) //If youre starving, movement slowdown can be anything up to 4.
-
-	if(istype(buckled, /obj/structure/bed/chair/wheelchair))
-		//Not porting bay's silly organ checking code here
-		tally += 1 //Small slowdown so wheelchairs aren't turbospeed
-	else
-		if(wear_suit)
-			tally += wear_suit.slowdown
-		if(shoes)
-			tally += shoes.slowdown
-
-	//tally += min((shock_stage / 100) * 3, 3) //Scales from 0 to 3 over 0 to 100 shock stage
-	tally += clamp((get_dynamic_pain() - get_painkiller()) / 40, 0, 3) // Scales from 0 to 3,
-
-	if (bodytemperature < 283.222)
-		tally += (283.222 - bodytemperature) / 10 * 1.75
-	tally += stance_damage // missing/damaged legs or augs affect speed
-
-	if(slowdown)
-		tally += 1
-
-	tally += (r_hand?.slowdown_hold + l_hand?.slowdown_hold)
-
-	return tally
-
-
-/mob/living/carbon/human/allow_spacemove()
-	//Can we act?
-	if(restrained())	return 0
-
-	//Do we have a working jetpack?
-	var/obj/item/tank/jetpack/thrust = get_jetpack()
-
-	if(thrust)
-		if(thrust.allow_thrust(JETPACK_MOVE_COST, src))
-			if (thrust.stabilization_on)
-				return TRUE
-			return -1
-
-	//If no working jetpack then use the other checks
+	if (!(lube&GALOSHES_DONT_HELP))
+		if(HAS_TRAIT(src, TRAIT_NOSLIPWATER))
+			return 0
+		if(shoes && istype(shoes, /obj/item/clothing))
+			var/obj/item/clothing/CS = shoes
+			if (CS.clothing_flags & NOSLIP)
+				return 0
 	return ..()
 
-/mob/living/carbon/human/slip_chance(var/prob_slip = 5)
-	if(!..())
-		return 0
+/mob/living/carbon/human/mob_has_gravity()
+	. = ..()
+	if(!.)
+		if(mob_negates_gravity())
+			. = 1
 
-	//Check hands and mod slip
-	if(!l_hand)
-		prob_slip -= 2
-	else if(l_hand.w_class <= ITEM_SIZE_SMALL)
-		prob_slip -= 1
-	if (!r_hand)
-		prob_slip -= 2
-	else if(r_hand.w_class <= ITEM_SIZE_SMALL)
-		prob_slip -= 1
+/mob/living/carbon/human/mob_negates_gravity()
+	return ((shoes && shoes.negates_gravity()) || (dna?.species?.negates_gravity(src)))
 
-	return prob_slip
+/mob/living/carbon/human/Move(NewLoc, direct)
+/*	if(fixedeye || tempfixeye)
+		switch(dir)
+			if(NORTH)
+				if(direct == WEST|EAST)
+					OffBalance(30)
+			if(SOUTH)
+				if(direct == WEST|EAST)
+					OffBalance(30)
+			if(EAST)
+				if(direct == NORTH|SOUTH)
+					OffBalance(30)
+			if(WEST)
+				if(direct == NORTH|SOUTH)
+					OffBalance(30)*/
 
-/mob/living/carbon/human/check_shoegrip()
-	if(species.flags & NO_SLIP)
-		return 1
-	if(shoes && (shoes.item_flags & NOSLIP) && istype(shoes, /obj/item/clothing/shoes/magboots))  //magboots + dense_object = no floating
-		return 1
-	return 0
+	. = ..()
+	if(loc == NewLoc)
+		if(!has_gravity(loc))
+			return
 
-/mob/living/carbon/human/add_momentum(direction)
-	if(momentum_dir == direction)
-		momentum_speed++
-	else if(momentum_dir == reverse_dir[direction])
-		momentum_speed = 0
-		momentum_dir = direction
-	else
-		momentum_speed--
-		momentum_dir = direction
-	momentum_speed = CLAMP(momentum_speed, 0, 10)
-	update_momentum()
+		if(hostage) // If we have a hostage.
+			hostage.hostagetaker = null
+			hostage = null
+			to_chat(src, "<span class='danger'>I need to stand still to make sure I don't lose concentration on my hostage!</span>")
 
-/mob/living/carbon/human/proc/update_momentum()
-	if(momentum_speed)
-		momentum_reduction_timer = addtimer(CALLBACK(src, PROC_REF(calc_momentum)), 1 SECONDS, TIMER_STOPPABLE)
-	else
-		momentum_speed = 0
-		deltimer(momentum_reduction_timer)
+		if(hostagetaker) // If we are TAKEN hostage. Confusing vars at first but then it makes sense.
+			attackhostage()
 
-/mob/living/carbon/human/proc/calc_momentum()
-	momentum_speed--
-	update_momentum()
+		if(wear_armor)
+			if(body_position != LYING_DOWN)
+				var/obj/item/clothing/C = wear_armor
+				C.step_action()
+
+		if(wear_shirt)
+			if(body_position != LYING_DOWN)
+				var/obj/item/clothing/C = wear_shirt
+				C.step_action()
+
+		if(cloak)
+			if(body_position != LYING_DOWN)
+				var/obj/item/clothing/C = cloak
+				C.step_action()
+
+		if(shoes)
+			if(body_position != LYING_DOWN)
+				var/obj/item/clothing/shoes/S = shoes
+
+				//Bloody footprints
+				var/turf/T = get_turf(src)
+				if(S.bloody_shoes && S.bloody_shoes[S.blood_state])
+					for(var/obj/effect/decal/cleanable/blood/footprints/oldFP in T)
+						if (oldFP.blood_state == S.blood_state)
+							return
+					//No oldFP or they're all a different kind of blood
+					S.bloody_shoes[S.blood_state] = max(0, S.bloody_shoes[S.blood_state] - BLOOD_LOSS_PER_STEP)
+					if (S.bloody_shoes[S.blood_state] > BLOOD_LOSS_IN_SPREAD)
+						var/obj/effect/decal/cleanable/blood/footprints/FP = new /obj/effect/decal/cleanable/blood/footprints(T)
+						FP.blood_state = S.blood_state
+						FP.entered_dirs |= dir
+						FP.bloodiness = S.bloody_shoes[S.blood_state] - BLOOD_LOSS_IN_SPREAD
+						FP.add_blood_DNA(GET_ATOM_BLOOD_DNA(S))
+						FP.update_icon()
+					update_inv_shoes()
+				//End bloody footprints
+				S.step_action()
+		if(mouth)
+			if(mouth.spitoutmouth && prob(5))
+				visible_message("<span class='warning'>[src] spits out [mouth].</span>")
+				dropItemToGround(mouth, silent = FALSE)
+		if(held_items.len)
+			for(var/obj/item/I in held_items)
+				if(I.minstr)
+					var/effective = I.minstr
+					if(I.wielded)
+						effective = max(I.minstr / 2, 1)
+					if(effective > STASTR)
+						if(prob(effective))
+							dropItemToGround(I, silent = FALSE)
+
+/mob/living/carbon/human/Process_Spacemove(movement_dir = 0) //Temporary laziness thing. Will change to handles by species reee.
+	if(dna?.species?.space_move(src))
+		return TRUE
+	return ..()

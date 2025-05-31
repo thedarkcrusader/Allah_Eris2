@@ -1,82 +1,121 @@
-// All mobs should have custom emote, really..
-//m_type == 1 --> visual.
-//m_type == 2 --> audible
-/mob/proc/custom_emote(var/m_type=1,var/message = null)
-	if(usr && stat || !use_me && usr == src)
-		to_chat(src, "You are unable to emote.")
-		return
+///How confused a carbon must be before they will not vomit
+#define BEYBLADE_PUKE_THRESHOLD (0 SECONDS)
+///How must nutrition is lost when a carbon pukes
+#define BEYBLADE_PUKE_NUTRIENT_LOSS 60
+///How often a carbon becomes penalized
+#define BEYBLADE_DIZZINESS_PROBABILITY 20
+///How long the screenshake lasts
+#define BEYBLADE_DIZZINESS_DURATION (1 SECONDS)
 
-	var/muzzled = istype(src.wear_mask, /obj/item/clothing/mask/muzzle) || istype(src.wear_mask, /obj/item/grenade)
-	if(m_type == 2 && muzzled) return
+//The code execution of the emote datum is located at code/datums/emotes.dm
+/mob/proc/emote(act, m_type = null, message = null, intentional = FALSE, forced = FALSE, targetted = FALSE, custom_me = FALSE)
+	var/oldact = act
+	act = lowertext(act)
+	var/param = message
+	var/custom_param = findchar(act, " ")
+//	if(custom_param)
+//		param = copytext(act, custom_param + 1, length(act) + 1)
+//		act = copytext(act, 1, custom_param)
 
-	var/input
-	if(!message)
-		input = sanitize(input(src,"Choose an emote to display.") as text|null)
+	if(intentional || !forced)
+		if(custom_me)
+			if(world.time < next_me_emote)
+				return
+		else
+			if(world.time < next_emote)
+				return
+
+	var/list/key_emotes = GLOB.emote_list[act]
+	var/mute_time = 0
+	if(!length(key_emotes) || custom_param)
+		if(intentional)
+			if(client)
+				if(get_playerquality(client.ckey) <= -10)
+					to_chat(src, "<span class='warning'>Unrecognized emote.</span>")
+					return
+			var/list/custom_emote = GLOB.emote_list["me"]
+			for(var/datum/emote/P in custom_emote)
+				mute_time = P.mute_time
+				P.run_emote(src, oldact, m_type, intentional, targetted)
+				break
 	else
-		input = message
-	if(input)
-		message = "<B>[src]</B> [input]"
+		for(var/datum/emote/P in key_emotes)
+			mute_time = P.mute_time
+			if(P.run_emote(src, param, m_type, intentional, targetted))
+				break
+
+	if(custom_me)
+		next_me_emote = world.time + mute_time
 	else
-		return
+		next_emote = world.time + mute_time
 
+/atom/movable/proc/send_speech_emote(message, range = 7, obj/source = src, bubble_type, list/spans, datum/language/message_language = null, message_mode, original_message)
+	var/rendered = compose_message(src, message_language, message, , spans, message_mode)
+	for(var/_AM in get_hearers_in_view(range, source))
+		var/atom/movable/AM = _AM
+		AM.Hear(rendered, src, message_language, message, , spans, message_mode)
+//	if(intentional)
+//		to_chat(src, "<span class='notice'>Unusable emote '[act]'. Say *help for a list.</span>")
+/*
+/datum/emote/flip
+	key = "flip"
+	key_third_person = "flips"
+	restraint_check = TRUE
+	mob_type_allowed_typecache = list(/mob/living, /mob/dead/observer)
+	mob_type_ignore_stat_typecache = list(/mob/dead/observer)
 
-	if (message)
-		log_emote("[name]/[key] : [message]")
+/datum/emote/living/carbon/human/flip/can_run_emote(mob/user, status_check = TRUE , intentional)
+	return FALSE
 
-		send_emote(message, m_type)
+/datum/emote/flip/run_emote(mob/user, params, type_override, intentional)
+	. = ..()
+	if(.)
+		user.SpinAnimation(7,1)
+*/
+/datum/emote/spin
+	key = "spin"
+	key_third_person = "spins"
+	restraint_check = TRUE
+	mob_type_allowed_typecache = list(/mob/living, /mob/dead/observer)
+	mob_type_ignore_stat_typecache = list(/mob/dead/observer)
+	mute_time = 5 SECONDS
 
-/mob/proc/emote_dead(var/message)
+/mob/living/carbon/human/verb/emote_spin()
+	set name = "Spin"
+	set category = "Emotes"
+	emote("spin", intentional = TRUE)
 
-	if(client.prefs.muted & MUTE_DEADCHAT)
-		to_chat(src, SPAN_DANGER("You cannot send deadchat emotes (muted)."))
-		return
+/datum/emote/spin/can_run_emote(mob/living/carbon/user, status_check = TRUE , intentional)
+	. = ..()
+	if(!iscarbon(user))
+		return FALSE
+	if(user.IsImmobilized())
+		return FALSE
 
-	if(get_preference_value(/datum/client_preference/show_dsay) == GLOB.PREF_HIDE)
-		to_chat(src, SPAN_DANGER("You have deadchat muted."))
-		return
+/datum/emote/spin/run_emote(mob/living/carbon/user, params ,  type_override, intentional)
+	. = ..()
+	if(.)
+		user.spin(4, 1)
+		user.Immobilize(5)
 
-	if(!src.client.holder)
-		if(!config.dsay_allowed)
-			to_chat(src, SPAN_DANGER("Deadchat is globally muted."))
+		if(user.dizziness > BEYBLADE_PUKE_THRESHOLD)
+			user.vomit(BEYBLADE_PUKE_NUTRIENT_LOSS, distance = 0)
 			return
 
+		if(prob(BEYBLADE_DIZZINESS_PROBABILITY))
+			to_chat(user, span_warning("You feel woozy from spinning."))
+			user.Dizzy(BEYBLADE_DIZZINESS_DURATION)
 
-	var/input
-	if(!message)
-		input = sanitize(input(src, "Choose an emote to display.") as text|null)
-	else
-		input = message
+		// if(iscyborg(user) && user.has_buckled_mobs())
+		// 	var/mob/living/silicon/robot/R = user
+		// 	var/datum/component/riding/riding_datum = R.GetComponent(/datum/component/riding)
+		// 	if(riding_datum)
+		// 		for(var/mob/M in R.buckled_mobs)
+		// 			riding_datum.force_dismount(M)
+		// 	else
+		// 		R.unbuckle_all_mobs()
 
-	if(input)
-		log_emote("Ghost/[src.key] : [input]")
-		say_dead_direct(input, src)
-
-//This is a central proc that all emotes are run through. This handles sending the messages to living mobs
-/mob/proc/send_emote(var/message, var/type)
-	var/list/messageturfs = list()//List of turfs we broadcast to.
-	var/list/messagemobs = list()//List of living mobs nearby who can hear it, and distant ghosts who've chosen to hear it
-	var/list/messagemobs_neardead = list()//List of nearby ghosts who can hear it. Those that qualify ONLY go in this list
-	for (var/turf in view(world.view, get_turf(src)))
-		messageturfs += turf
-
-	for(var/mob/M in GLOB.player_list)
-		if (!M.client || istype(M, /mob/new_player))
-			continue
-		if(get_turf(M) in messageturfs)
-			if (istype(M, /mob/observer))
-				messagemobs_neardead += M
-				continue
-			else if (istype(M, /mob/living) && !(type == 2 && (get_active_mutation(M, MUTATION_DEAF) || ear_deaf)))
-				messagemobs += M
-		else if(src.client)
-			if  (M.stat == DEAD && (M.get_preference_value(/datum/client_preference/ghost_ears) == GLOB.PREF_ALL_SPEECH))
-				messagemobs += M
-				continue
-
-	for (var/mob/N in messagemobs)
-		N.show_message(message, type)
-
-	message = "<B>[message]</B>"
-
-	for (var/mob/O in messagemobs_neardead)
-		O.show_message(message, type)
+#undef BEYBLADE_PUKE_THRESHOLD
+#undef BEYBLADE_PUKE_NUTRIENT_LOSS
+#undef BEYBLADE_DIZZINESS_PROBABILITY
+#undef BEYBLADE_DIZZINESS_DURATION

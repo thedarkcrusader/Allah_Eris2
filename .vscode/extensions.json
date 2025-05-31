@@ -1,10 +1,10 @@
 {
-  "recommendations": [
-    "stylemistake.auto-comment-blocks",
-    "biomejs.biome",
-    "platymuus.dm-langclient",
-    "anturk.dmi-editor",
-    "eamodio.gitlens",
-    "oderwat.indent-rainbow"
-  ]
+	"recommendations": [
+		"platymuus.dm-langclient",
+		"EditorConfig.EditorConfig",
+		"dbaeumer.vscode-eslint",
+		"stylemistake.auto-comment-blocks",
+		"anturk.dmi-editor",
+		"esbenp.prettier-vscode"
+	]
 }

@@ -3,21 +3,27 @@
 Usage:
 Override /Run() to run your test code
 
-Call TEST_FAIL() to fail the test (You should specify a reason)
+Call Fail() to fail the test (You should specify a reason)
 
 You may use /New() and /Destroy() for setup/teardown respectively
 
-You can use the run_loc_floor_bottom_left and run_loc_floor_top_right to get turfs for testing
+You can use the run_loc_bottom_left and run_loc_top_right to get turfs for testing
 
 */
-
-/// IMPORTANT !!! IF YOU ARE CHANGING CC CHANGE THIS TOO
 
 GLOBAL_DATUM(current_test, /datum/unit_test)
 GLOBAL_VAR_INIT(failed_any_test, FALSE)
 GLOBAL_VAR(test_log)
-/// When unit testing, all logs sent to log_mapping are stored here and retrieved in log_mapping unit test.
-GLOBAL_LIST_EMPTY(unit_test_mapping_logs)
+
+/// The name of the test that is currently focused.
+/// Use the PERFORM_ALL_TESTS macro instead.
+GLOBAL_VAR_INIT(focused_test, focused_test())
+
+/proc/focused_test()
+	for(var/datum/unit_test/unit_test as anything in subtypesof(/datum/unit_test))
+		if(initial(unit_test.focus))
+			return unit_test
+	return null
 
 /datum/unit_test
 	//Bit of metadata for the future maybe
@@ -25,48 +31,53 @@ GLOBAL_LIST_EMPTY(unit_test_mapping_logs)
 
 	/// The bottom left floor turf of the testing zone
 	var/turf/run_loc_floor_bottom_left
-
 	/// The top right floor turf of the testing zone
 	var/turf/run_loc_floor_top_right
 
 	///The priority of the test, the larger it is the later it fires
 	var/priority = TEST_DEFAULT
+
 	//internal shit
+	var/list/allocated
 	var/focus = FALSE
 	var/succeeded = TRUE
-	var/list/allocated
 	var/list/fail_reasons
 
+	/// List of atoms that we don't want to ever initialize in an agnostic context, like for Create and Destroy. Stored on the base datum for usability in other relevant tests that need this data.
+	var/static/list/uncreatables = null
+
+	var/static/datum/space_level/reservation
 
 /proc/cmp_unit_test_priority(datum/unit_test/a, datum/unit_test/b)
 	return initial(a.priority) - initial(b.priority)
 
 /datum/unit_test/New()
-	// due to this coderbase being unpog we wont be having automatic space allocation for testing.
-	// if (isnull(reservation))
-	// 	var/datum/map_template/unit_tests/template = new
-	// 	reservation = template.load_new_z()
+	if(isnull(reservation))
+		var/datum/map_template/unit_tests/template = new
+		reservation = template.load_new_z()
+
+	if(isnull(uncreatables))
+		uncreatables = build_list_of_uncreatables()
 
 	allocated = new
-	// run_loc_floor_bottom_left = get_turf(locate(/obj/effect/landmark/unit_test_bottom_left) in GLOB.landmarks_list)
-	// run_loc_floor_top_right = get_turf(locate(/obj/effect/landmark/unit_test_top_right) in GLOB.landmarks_list)
+	run_loc_floor_bottom_left = get_turf(locate(/obj/effect/landmark/unit_test_bottom_left) in GLOB.landmarks_list)
+	run_loc_floor_top_right = get_turf(locate(/obj/effect/landmark/unit_test_top_right) in GLOB.landmarks_list)
 
-	run_loc_floor_bottom_left = get_turf(locate(20,20,6))
-	run_loc_floor_top_right = get_turf(locate(20,21,6))
-
-	TEST_ASSERT(isturf(run_loc_floor_bottom_left), "run_loc_floor_bottom_left was not a floor ([run_loc_floor_bottom_left])")
-	TEST_ASSERT(isturf(run_loc_floor_top_right), "run_loc_floor_top_right was not a floor ([run_loc_floor_top_right])")
+	TEST_ASSERT(isfloorturf(run_loc_floor_bottom_left), "run_loc_floor_bottom_left was not a floor ([run_loc_floor_bottom_left])")
+	TEST_ASSERT(isfloorturf(run_loc_floor_top_right), "run_loc_floor_top_right was not a floor ([run_loc_floor_top_right])")
 
 /datum/unit_test/Destroy()
 	QDEL_LIST(allocated)
 	// clear the test area
-	for (var/turf/turf in block(locate(1, 1, run_loc_floor_bottom_left.z), locate(world.maxx, world.maxy, run_loc_floor_bottom_left.z)))
-		for (var/content in turf.contents)
+	for(var/turf/turf as anything in Z_TURFS(run_loc_floor_bottom_left.z))
+		for(var/content as anything in turf.contents)
+			if(istype(content, /obj/effect/landmark))
+				continue
 			qdel(content)
 	return ..()
 
 /datum/unit_test/proc/Run()
-	TEST_FAIL("Run() called parent or not implemented")
+	Fail("Run() called parent or not implemented")
 
 /datum/unit_test/proc/Fail(reason = "No reason", file = "OUTDATED_TEST", line = 1)
 	succeeded = FALSE
@@ -88,97 +99,157 @@ GLOBAL_LIST_EMPTY(unit_test_mapping_logs)
 	allocated += instance
 	return instance
 
-/datum/unit_test/proc/test_screenshot(name, icon/icon)
-	if (!istype(icon))
-		TEST_FAIL("[icon] is not an icon.")
-		return
+/datum/unit_test/proc/log_for_test(text, priority, file, line)
+	var/map_name = SSmapping.config?.map_name
 
-	var/path_prefix = replacetext(replacetext("[type]", "/datum/unit_test/", ""), "/", "_")
-	name = replacetext(name, "/", "_")
+	// Need to escape the text to properly support newlines.
+	var/annotation_text = replacetext(text, "%", "%25")
+	annotation_text = replacetext(annotation_text, "\n", "%0A")
 
-	var/filename = "code/modules/unit_tests/screenshots/[path_prefix]_[name].png"
+	log_world("::[priority] file=[file],line=[line],title=[map_name]: [type]::[annotation_text]")
 
-	if (fexists(filename))
-		var/data_filename = "data/screenshots/[path_prefix]_[name].png"
-		fcopy(icon, data_filename)
-		log_test("[path_prefix]_[name] was found, putting in data/screenshots")
-	else if (fexists("code"))
-		// We are probably running in a local build
-		fcopy(icon, filename)
-		TEST_FAIL("Screenshot for [name] did not exist. One has been created.")
-	else
-		// We are probably running in real CI, so just pretend it worked and move on
-		fcopy(icon, "data/screenshots_new/[path_prefix]_[name].png")
-
-		log_test("[path_prefix]_[name] was put in data/screenshots_new")
-
-/proc/RunUnitTest(test_path, list/test_results)
-	var/datum/unit_test/test = new test_path
-
-	GLOB.current_test = test
-	var/duration = REALTIMEOFDAY
-
-	test.Run()
-
-	duration = REALTIMEOFDAY - duration
-	GLOB.current_test = null
-	GLOB.failed_any_test |= !test.succeeded
-
-	var/list/log_entry = list(
-		"[test.succeeded ? TEST_OUTPUT_GREEN("PASS") : TEST_OUTPUT_RED("FAIL")]: [test_path] [duration / 10]s",
+/datum/unit_test/proc/final/build_list_of_uncreatables()
+	var/list/ignore = list(
+		//Never meant to be created, errors out the ass for mobcode reasons
+		/mob/living/carbon,
+		//Needs a seed passed, but subtypes set one by default
+		/obj/item/grown,
+		/obj/item/reagent_containers/food/snacks/grown,
+		//Template type
+		/obj/effect/mob_spawn,
+		//Singleton
+		/mob/dview,
+		//Template type
+		/obj/item/bodypart,
+		//template types
+		//template type again
+		/obj/item/storage/fancy,
+		//needs a mob passed to view it
+		/atom/movable/screen/credit,
+		//invalid without mob/living passed
+		/obj/shapeshift_holder,
+		// requires a pod passed
+		/obj/effect/DPfall,
+		/obj/effect/DPtarget,
+		// prompts loc for input
+		/obj/item/clothing/shirt/grenzelhoft,
 	)
-	var/list/fail_reasons = test.fail_reasons
-	// var/map_name = SSmapping.config.map_name
+	//these are VERY situational and need info passed
+	ignore += typesof(/obj/effect/abstract)
+	//needs a lich passed
+	ignore += typesof(/obj/item/phylactery)
+	//cba to fix hitscans erroring in Destroy, so just ignore all projectiles
+	ignore += typesof(/obj/projectile)
+	//Say it with me now, type template
+	ignore += typesof(/obj/effect/mapping_helpers)
+	//This turf existing is an error in and of itself
+	ignore += typesof(/turf/baseturf_skipover)
+	ignore += typesof(/turf/baseturf_bottom)
+	//We have a baseturf limit of 10, adding more than 10 baseturf helpers will kill CI, so here's a future edge case to fix.
+	ignore += typesof(/obj/effect/baseturf_helper)
+	//Expects a mob to holderize, we have nothing to give
+	ignore += typesof(/obj/item/clothing/head/mob_holder)
+	//Needs cards passed into the initilazation args
+	ignore += typesof(/obj/item/toy/cards/cardhand)
+	//needs multiple atoms passed
+	ignore += typesof(/obj/effect/buildmode_line)
+	//runtimes without a landmark to spawn on
+	ignore += typesof(/obj/structure/industrial_lift)
 
-	for(var/reasonID in 1 to LAZYLEN(fail_reasons))
-		var/text = fail_reasons[reasonID][1]
-		var/file = fail_reasons[reasonID][2]
-		var/line = fail_reasons[reasonID][3]
+	ignore += typesof(/obj/effect/spawner)
+	ignore += typesof(/atom/movable/screen)
 
-		// Github action annotation.
-		// See https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions
-
-		// Need to escape the text to properly support newlines.
-		var/annotation_text = replacetext(text, "%", "%25")
-		annotation_text = replacetext(annotation_text, "\n", "%0A")
-
-		log_world("::error file=[file],line=[line],title=[station_name]: [test_path]::[annotation_text]")
-
-		// Normal log message
-		log_entry += "\tREASON #[reasonID]: [text] at [file]:[line]"
-
-	var/message = log_entry.Join("\n")
-	log_test(message)
-
-	test_results[test_path] = list("status" = test.succeeded ? UNIT_TEST_PASSED : UNIT_TEST_FAILED, "message" = message, "name" = test_path)
-
-	qdel(test)
+	return ignore
 
 /proc/RunUnitTests()
 	CHECK_TICK
 
 	var/list/tests_to_run = subtypesof(/datum/unit_test)
 	var/list/focused_tests = list()
-	for (var/_test_to_run in tests_to_run)
+	for(var/_test_to_run in tests_to_run)
 		var/datum/unit_test/test_to_run = _test_to_run
 		if (initial(test_to_run.focus))
 			focused_tests += test_to_run
 	if(length(focused_tests))
 		tests_to_run = focused_tests
 
-	tests_to_run = sortTim(tests_to_run, /proc/cmp_unit_test_priority)
+	sortTim(tests_to_run, GLOBAL_PROC_REF(cmp_unit_test_priority))
 
 	var/list/test_results = list()
 
+	//Hell code, we're bound to end the round somehow so let's stop if from ending while we work
+	SSticker.delay_end = TRUE
 	for(var/unit_path in tests_to_run)
 		CHECK_TICK //We check tick first because the unit test we run last may be so expensive that checking tick will lock up this loop forever
 		RunUnitTest(unit_path, test_results)
+	SSticker.delay_end = FALSE
 
 	var/file_name = "data/unit_tests.json"
 	fdel(file_name)
 	file(file_name) << json_encode(test_results)
 
-	global.universe_has_ended = TRUE
+	SSticker.force_ending = 1
+	//We have to call this manually because del_text can preceed us, and SSticker doesn't fire in the post game
+	SSticker.declare_completion()
+
+/proc/RunUnitTest(datum/unit_test/test_path, list/test_results)
+	if(ispath(test_path, /datum/unit_test/focus_only))
+		return
+
+	if(initial(test_path.abstract_type) == test_path)
+		return
+
+	var/datum/unit_test/test = new test_path
+
+	GLOB.current_test = test
+	var/duration = REALTIMEOFDAY
+	var/skip_test = (test_path in SSmapping.config?.skipped_tests)
+	var/test_output_desc = "[test_path]"
+	var/message = ""
+
+	log_world("::group::[test_path]")
+
+	if(skip_test)
+		log_world("SKIPPED Skipped run on map [SSmapping.config?.map_name].")
+
+	else
+
+		test.Run()
+
+		duration = REALTIMEOFDAY - duration
+		GLOB.current_test = null
+		GLOB.failed_any_test |= !test.succeeded
+
+		var/list/log_entry = list()
+		var/list/fail_reasons = test.fail_reasons
+
+		for(var/reasonID in 1 to LAZYLEN(fail_reasons))
+			var/text = fail_reasons[reasonID][1]
+			var/file = fail_reasons[reasonID][2]
+			var/line = fail_reasons[reasonID][3]
+
+			test.log_for_test(text, "error", file, line)
+
+			// Normal log message
+			log_entry += "\tFAILURE #[reasonID]: [text] at [file]:[line]"
+
+		if(length(log_entry))
+			message = log_entry.Join("\n")
+			log_test(message)
+
+		test_output_desc += " [duration / 10]s"
+		if (test.succeeded)
+			log_world("PASS [test_output_desc]")
+
+	log_world("::endgroup::")
+
+	if (!test.succeeded && !skip_test)
+		log_world("::error::FAIL [test_output_desc]")
+
+	var/final_status = skip_test ? UNIT_TEST_SKIPPED : (test.succeeded ? UNIT_TEST_PASSED : UNIT_TEST_FAILED)
+	test_results[test_path] = list("status" = final_status, "message" = message, "name" = test_path)
+
+	qdel(test)
 
 /datum/map_template/unit_tests
 	name = "Unit Tests Zone"

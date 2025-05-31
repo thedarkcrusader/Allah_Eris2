@@ -1,152 +1,173 @@
-// BYOND lower-cases color values, and thus we do so as well to ensure atom.color == COLOR_X will work correctly
-#define COLOR_BLACK            "#000000"
-#define COLOR_NAVY_BLUE        "#000080"
-#define COLOR_GREEN            "#008000"
-#define COLOR_DARK_GRAY        "#404040"
-#define COLOR_MAROON           "#800000"
-#define COLOR_PURPLE           "#800080"
-#define COLOR_VIOLET           "#9933ff"
-#define COLOR_OLIVE            "#808000"
-#define COLOR_BROWN_ORANGE     "#824b28"
-#define COLOR_DARK_ORANGE      "#b95a00"
-#define COLOR_GRAY40           "#666666"
-#define COLOR_SEDONA           "#cc6600"
-#define COLOR_DARK_BROWN       "#917448"
-#define COLOR_BLUE             "#0000ff"
-#define COLOR_DEEP_SKY_BLUE    "#00e1ff"
-#define COLOR_LIME             "#00ff00"
-#define COLOR_CYAN             "#00ffff"
-#define COLOR_TEAL             "#33cccc"
-#define COLOR_RED              "#ff0000"
-#define COLOR_PINK             "#ff00ff"
-#define COLOR_ORANGE           "#ff9900"
-#define COLOR_YELLOW           "#ffff00"
+// This is eventually for wjohn to add more color standardization stuff like I keep asking him >:(
+#define COLOR_BLOOD "#c90000"
+
+#define COLOR_INPUT_DISABLED "#000000"
+#define COLOR_INPUT_ENABLED "#231d1d"
+
+#define COLOR_DARKMODE_BACKGROUND "#202020"
+#define COLOR_DARKMODE_DARKBACKGROUND "#171717"
+#define COLOR_DARKMODE_TEXT "#a4bad6"
+
+#define COLOR_WHITE            "#EEEEEE"
+#define COLOR_SILVER           "#C0C0C0"
 #define COLOR_GRAY             "#808080"
-#define COLOR_RED_GRAY         "#aa5f61"
-#define COLOR_BROWN            "#b19664"
-#define COLOR_GREEN_GRAY       "#8daf6a"
-#define COLOR_BLUE_GRAY        "#6a97b0"
-#define COLOR_SUN              "#ec8b2f"
-#define COLOR_PURPLE_GRAY      "#a2819e"
-#define COLOR_BLUE_LIGHT       "#33ccff"
-#define COLOR_RED_LIGHT        "#ff3333"
-#define COLOR_BEIGE            "#ceb689"
-#define COLOR_PALE_GREEN_GRAY  "#aed18b"
-#define COLOR_PALE_RED_GRAY    "#cc9090"
-#define COLOR_PALE_PURPLE_GRAY "#bda2ba"
-#define COLOR_PALE_BLUE_GRAY   "#8bbbd5"
-#define COLOR_LUMINOL          "#66ffff"
-#define COLOR_SILVER           "#c0c0c0"
-#define COLOR_GRAY80           "#cccccc"
-#define COLOR_OFF_WHITE        "#eeeeee"
-#define COLOR_WHITE            "#ffffff"
-#define COLOR_NT_RED           "#9d2300"
-#define COLOR_BOTTLE_GREEN     "#1f6b4f"
-#define COLOR_PALE_BTL_GREEN   "#57967f"
-#define COLOR_GUNMETAL         "#545c68"
-#define COLOR_MUZZLE_FLASH     "#ffffb2"
-#define COLOR_CHESTNUT         "#996633"
-#define COLOR_BEASTY_BROWN     "#663300"
-#define COLOR_WHEAT            "#ffff99"
-#define COLOR_CYAN_BLUE        "#3366cc"
-#define COLOR_LIGHT_CYAN       "#66ccff"
-#define COLOR_PAKISTAN_GREEN   "#006600"
-#define COLOR_HULL             "#436b8e"
-#define COLOR_AMBER            "#ffbf00"
-#define COLOR_COMMAND_BLUE     "#46698c"
-#define COLOR_SKY_BLUE         "#5ca1cc"
-#define COLOR_PALE_ORANGE      "#b88a3b"
-#define COLOR_CIVIE_GREEN      "#b7f27d"
-#define COLOR_TITANIUM         "#d1e6e3"
-#define COLOR_DARK_GUNMETAL    "#4c535b"
-#define COLOR_INDIGO           "#4b0082"
-#define COLOR_DARK_BLUE_GRAY   "#3e4855"
-#define COLOR_ASTEROID_ROCK    "#735555"
-#define COLOR_PALE_YELLOW      "#c1bb7a"
-#define COLOR_GRAY20           "#333333"
-
-#define	PIPE_COLOR_GREY		"#e4e7ea"	//yes white is grey
-#define	PIPE_COLOR_RED		"#c1293f"
-#define	PIPE_COLOR_BLUE		"#1f92c2"
-#define	PIPE_COLOR_CYAN		"#0c9d98"
-#define	PIPE_COLOR_GREEN	"#8ad55d"
-#define	PIPE_COLOR_YELLOW	"#deb63d"
-#define	PIPE_COLOR_BLACK	"#34383d"
-#define	PIPE_COLOR_ORANGE	"#b95a00"
-
-#define	COMMS_COLOR_DEFAULT    "#ff00ff"
-#define	COMMS_COLOR_ENTERTAIN  "#666666"
-#define	COMMS_COLOR_AI         "#ff00ff"
-#define	COMMS_COLOR_COMMON     "#408010"
-#define	COMMS_COLOR_SERVICE    "#709b00"
-#define	COMMS_COLOR_SUPPLY     "#7f6539"
-#define	COMMS_COLOR_SCIENCE    "#993399"
-#define	COMMS_COLOR_MEDICAL    "#009190"
-#define	COMMS_COLOR_EXPLORER   "#929820"
-#define	COMMS_COLOR_ENGINEER   "#a66300"
-#define	COMMS_COLOR_SECURITY   "#930000"
-#define	COMMS_COLOR_COMMAND    "#204090"
-#define	COMMS_COLOR_CENTCOM   "#5c5c7c"
-#define	COMMS_COLOR_SYNDICATE  "#6d3f40"
-
-#define GLASS_COLOR            "#74b1ee"
-#define GLASS_COLOR_PLASMA     "#7c3a9a"
-#define GLASS_COLOR_TINTED     "#222222"
-#define GLASS_COLOR_FROSTED    "#ffffff"
-
-#define COLOR_BLOOD_HUMAN      "#a10808"
+#define COLOR_FLOORTILE_GRAY   "#8D8B8B"
+#define COLOR_ALMOST_BLACK	   "#333333"
+#define COLOR_BLACK            "#000000"
+#define COLOR_RED              "#FF0000"
+#define COLOR_RED_LIGHT        "#FF3333"
+#define COLOR_MAROON           "#800000"
+#define COLOR_YELLOW           "#FFFF00"
+#define COLOR_OLIVE            "#808000"
+#define COLOR_LIME             "#32CD32"
+#define COLOR_GREEN            "#008000"
+#define COLOR_CYAN             "#00FFFF"
+#define COLOR_TEAL             "#008080"
+#define COLOR_BLUE             "#0000FF"
+#define COLOR_BLUE_LIGHT       "#33CCFF"
+#define COLOR_NAVY             "#000080"
+#define COLOR_PINK             "#FFC0CB"
+#define COLOR_MAGENTA          "#FF00FF"
+#define COLOR_PURPLE           "#800080"
+#define COLOR_ORANGE           "#FF9900"
+#define COLOR_BEIGE            "#CEB689"
+#define COLOR_BLUE_GRAY        "#75A2BB"
+#define COLOR_BROWN            "#BA9F6D"
+#define COLOR_DARK_BROWN       "#997C4F"
+#define COLOR_DARK_ORANGE      "#C3630C"
+#define COLOR_GREEN_GRAY       "#99BB76"
+#define COLOR_RED_GRAY         "#B4696A"
+#define COLOR_PALE_BLUE_GRAY   "#98C5DF"
+#define COLOR_PALE_GREEN_GRAY  "#B7D993"
+#define COLOR_PALE_RED_GRAY    "#D59998"
+#define COLOR_PALE_PURPLE_GRAY "#CBB1CA"
+#define COLOR_PURPLE_GRAY      "#AE8CA8"
 
 //Color defines used by the assembly detailer.
 #define COLOR_ASSEMBLY_BLACK   "#545454"
-#define COLOR_ASSEMBLY_BGRAY   "#9497ab"
-#define COLOR_ASSEMBLY_WHITE   "#e2e2e2"
-#define COLOR_ASSEMBLY_RED     "#cc4242"
-#define COLOR_ASSEMBLY_ORANGE  "#e39751"
-#define COLOR_ASSEMBLY_BEIGE   "#af9366"
-#define COLOR_ASSEMBLY_BROWN   "#97670e"
-#define COLOR_ASSEMBLY_GOLD    "#aa9100"
-#define COLOR_ASSEMBLY_YELLOW  "#ceca2b"
+#define COLOR_ASSEMBLY_BGRAY   "#9497AB"
+#define COLOR_ASSEMBLY_WHITE   "#E2E2E2"
+#define COLOR_ASSEMBLY_RED     "#CC4242"
+#define COLOR_ASSEMBLY_ORANGE  "#E39751"
+#define COLOR_ASSEMBLY_BEIGE   "#AF9366"
+#define COLOR_ASSEMBLY_BROWN   "#97670E"
+#define COLOR_ASSEMBLY_GOLD    "#AA9100"
+#define COLOR_ASSEMBLY_YELLOW  "#CECA2B"
 #define COLOR_ASSEMBLY_GURKHA  "#999875"
 #define COLOR_ASSEMBLY_LGREEN  "#789876"
-#define COLOR_ASSEMBLY_GREEN   "#44843c"
-#define COLOR_ASSEMBLY_LBLUE   "#5d99be"
-#define COLOR_ASSEMBLY_BLUE    "#38559e"
-#define COLOR_ASSEMBLY_PURPLE  "#6f6192"
-
-// Used by fluid system.
-#define COLOR_OCEAN "#99f5ff"
-
-//Light color
-
-#define COLOR_LIGHTING_DEFAULT_BRIGHT					"#999999"
-#define COLOR_LIGHTING_DEFAULT_DARK						"#444444"
-
-#define COLOR_LIGHTING_RED_MACHINERY					"#dd081b"
-#define COLOR_LIGHTING_RED_BRIGHT						"#aa2733"
-#define COLOR_LIGHTING_RED_DARK							"#6d030c"
-#define COLOR_LIGHTING_GREEN_MACHINERY					"#16ca2c"
-#define COLOR_LIGHTING_GREEN_BRIGHT						"#8aa88a"
-#define COLOR_LIGHTING_GREEN_DARK						"#3a5f3a"
-#define COLOR_LIGHTING_BLUE_MACHINERY					"#162cca"
-#define COLOR_LIGHTING_BLUE_BRIGHT						"#8a95a8"
-#define COLOR_LIGHTING_BLUE_DARK						"#3a4b5f"
-#define COLOR_LIGHTING_ORANGE_MACHINERY					"#e0900b"
-#define COLOR_LIGHTING_ORANGE_BRIGHT					"#d7be93"
-#define COLOR_LIGHTING_ORANGE_DARK						"#684e22"
-#define COLOR_LIGHTING_PURPLE_MACHINERY					"#e614d3"
-#define COLOR_LIGHTING_PURPLE_BRIGHT					"#aa2799"
-#define COLOR_LIGHTING_PURPLE_DARK						"#752f6e"
-#define COLOR_LIGHTING_CYAN_MACHINERY					"#50edd9"
-#define COLOR_LIGHTING_CYAN_BRIGHT						"#67c1b6"
-#define COLOR_LIGHTING_CYAN_DARK						"#28766c"
-
-#define COLOR_LIGHTING_MAINT_DARK						"#55493f"
-#define COLOR_LIGHTING_NEOTHEOLOGY_BRIGHT				"#e2e0b6"
-#define COLOR_LIGHTING_NEOTHEOLOGY_DARK					"#797358"
-#define COLOR_LIGHTING_CREW_SOFT						"#fef9e7"
-#define COLOR_LIGHTING_SCI_BRIGHT						"#6a6c71"
-#define COLOR_LIGHTING_SCI_DARK							"#4f535f"
+#define COLOR_ASSEMBLY_GREEN   "#44843C"
+#define COLOR_ASSEMBLY_LBLUE   "#5D99BE"
+#define COLOR_ASSEMBLY_BLUE    "#38559E"
+#define COLOR_ASSEMBLY_PURPLE  "#6F6192"
 
 
+//roguetown
+// Expensive dyes ==========================
+#define CLOTHING_DARK_INK "#392f2f"
+#define CLOTHING_PLUM_PURPLE "#4b3c54"
+#define CLOTHING_SALMON	 "#70545e"
+#define CLOTHING_BLOOD_RED "#763434"
+#define CLOTHING_OCEAN "#45749d"
+#define CLOTHING_SWAMPWEED "#00713d"
 
-#define RANDOM_RGB rgb(rand(0,255), rand(0,255), rand(0,255))
+#define CLOTHING_MAROON	 "#533727"
+#define CLOTHING_RED_OCHRE "#913831"
+#define CLOTHING_RUSSET	 "#80461B"
+#define CLOTHING_MUSTARD_YELLOW "#E1AD01"
+#define CLOTHING_YELLOW_OCHRE "#685e3b"
+#define CLOTHING_FOREST_GREEN "#45553f"
+#define CLOTHING_SKY_BLUE "#40445f"
+#define CLOTHING_MAGE_BLUE "#454fa6"
+#define CLOTHING_MAGE_GREEN "#60794a"
+#define CLOTHING_MAGE_ORANGE "#935329"
+#define CLOTHING_MAGE_YELLOW "#a79730"
+
+// Royal dyes ==========================
+#define CLOTHING_ROYAL_RED "#813434"
+#define CLOTHING_ROYAL_MAJENTA "#822b52"
+#define CLOTHING_FYRITIUS_ORANGE "#9b7540"
+#define CLOTHING_ROYAL_PURPLE "#865c9c"
+#define CLOTHING_BARK_BROWN "#685542"
+#define CLOTHING_ROYAL_BLACK "#2f352f"
+#define CLOTHING_BOG_GREEN "#4f693b"
+#define CLOTHING_ROYAL_TEAL "#3b817a"
+#define CLOTHING_PEAR_YELLOW "#a19f52"
+#define CLOTHING_CHALK_WHITE "#c7c0b5"
+
+// Cheap dyes ==========================
+#define CLOTHING_SOOT_BLACK "#414145"
+#define CLOTHING_WINESTAIN_RED "#673c3c"
+#define CLOTHING_PEASANT_BROWN "#634f44"
+#define CLOTHING_MUD_BROWN "#6f5f4d"
+#define CLOTHING_CHESTNUT "#604631"
+#define CLOTHING_OLD_LEATHER "#473f39"
+#define CLOTHING_SPRING_GREEN "#41493a"
+#define CLOTHING_BERRY_BLUE "#39404d"
+
+#define CLOTHING_ASH_GREY "#676262"
+#define CLOTHING_CANVAS "#858564"
+#define CLOTHING_LINEN "#a1a17a"
+#define CLOTHING_WHITE "#ffffff"
+#define CLOTHING_WET "#afafaf"
+
+/// Deprecated macro, should be removed
+#define CLOTHING_COLOR_NAMES	list("Ash Grey","Chalk White","Cream","White","Dark Ink","Plum Purple","Salmon","Blood Red", "Maroon","Red Ochre","Russet","Chestnut","Mustard Yellow","Yellow Ochre","Forest Green","Sky Blue","Teal", "Royal Black","Soot Black","Winestain Red","Royal Red","Royal Majenta","Fyritius Orange","Bark Brown","Peasant Brown","Mud Brown","Pear Yellow","Spring Green","Bog Green","Royal Teal","Berry Blue", "Royal Blue", "Royal Purple","Dunked in Water" )
+
+/proc/clothing_color2hex(input)
+	var/static/list/all_colors = GLOB.peasant_dyes + GLOB.noble_dyes + GLOB.royal_dyes
+	return all_colors[input]
+
+
+#define hex2num(X) text2num(X, 16)
+
+#define CM_COLOR_SAT_MIN 0.6
+#define CM_COLOR_SAT_MAX 0.7
+#define CM_COLOR_LUM_MIN 0.65
+#define CM_COLOR_LUM_MAX 0.75
+
+
+/**
+ * Gets a color for a name, will return the same color for a given string consistently within a round.atom
+ *
+ * Note that this proc aims to produce pastel-ish colors using the HSL colorspace. These seem to be favorable for displaying on the map.
+ *
+ * Arguments:
+ * * name - The name to generate a color for
+ * * sat_shift - A value between 0 and 1 that will be multiplied against the saturation
+ * * lum_shift - A value between 0 and 1 that will be multiplied against the luminescence
+ */
+/proc/colorize_string(name, sat_shift = 1, lum_shift = 1)
+	// seed to help randomness
+	var/static/rseed = rand(1,26)
+
+	// get hsl using the selected 6 characters of the md5 hash
+	var/hash = copytext(md5(name + GLOB.round_id), rseed, rseed + 6)
+	var/h = hex2num(copytext(hash, 1, 3)) * (360 / 255)
+	var/s = (hex2num(copytext(hash, 3, 5)) >> 2) * ((CM_COLOR_SAT_MAX - CM_COLOR_SAT_MIN) / 63) + CM_COLOR_SAT_MIN
+	var/l = (hex2num(copytext(hash, 5, 7)) >> 2) * ((CM_COLOR_LUM_MAX - CM_COLOR_LUM_MIN) / 63) + CM_COLOR_LUM_MIN
+
+	// adjust for shifts
+	s = clamp(s * sat_shift, 0, 1)
+	l = clamp(l * lum_shift, 0, 1)
+
+	// convert to rgb
+	var/h_int = round(h/60) // mapping each section of H to 60 degree sections
+	var/c = (1 - abs(2 * l - 1)) * s
+	var/x = c * (1 - abs((h / 60) % 2 - 1))
+	var/m = l - c * 0.5
+	x = (x + m) * 255
+	c = (c + m) * 255
+	m *= 255
+	switch(h_int)
+		if(0)
+			return "#[num2hex(c, 2)][num2hex(x, 2)][num2hex(m, 2)]"
+		if(1)
+			return "#[num2hex(x, 2)][num2hex(c, 2)][num2hex(m, 2)]"
+		if(2)
+			return "#[num2hex(m, 2)][num2hex(c, 2)][num2hex(x, 2)]"
+		if(3)
+			return "#[num2hex(m, 2)][num2hex(x, 2)][num2hex(c, 2)]"
+		if(4)
+			return "#[num2hex(x, 2)][num2hex(m, 2)][num2hex(c, 2)]"
+		if(5)
+			return "#[num2hex(c, 2)][num2hex(m, 2)][num2hex(x, 2)]"

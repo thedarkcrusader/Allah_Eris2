@@ -1,3 +1,27 @@
+//! Defines for subsystems and overlays
+//!
+//! Lots of important stuff in here, make sure you have your brain switched on
+//! when editing this file
+
+//! ## DB defines
+/**
+ * DB major schema version
+ *
+ * Update this whenever the db schema changes
+ *
+ * make sure you add an update to the schema_version stable in the db changelog
+ */
+#define DB_MAJOR_VERSION 5
+
+/**
+ * DB minor schema version
+ *
+ * Update this whenever the db schema changes
+ *
+ * make sure you add an update to the schema_version stable in the db changelog
+ */
+#define DB_MINOR_VERSION 9
+
 
 //! ## Timing subsystem
 /**
@@ -6,10 +30,10 @@
  * if the arguments to addtimer are the same as an existing timer, it doesn't create a new timer,
  * and returns the id of the existing timer
  */
-#define TIMER_UNIQUE (1<<0)
+#define TIMER_UNIQUE			(1<<0)
 
 ///For unique timers: Replace the old timer rather then not start this one
-#define TIMER_OVERRIDE (1<<1)
+#define TIMER_OVERRIDE			(1<<1)
 
 /**
  * Timing should be based on how timing progresses on clients, not the server.
@@ -18,30 +42,23 @@
  * should only be used in conjuction with things that have to progress client side, such as
  * animate() or sound()
  */
-#define TIMER_CLIENT_TIME (1<<2)
+#define TIMER_CLIENT_TIME		(1<<2)
 
 ///Timer can be stopped using deltimer()
-#define TIMER_STOPPABLE (1<<3)
+#define TIMER_STOPPABLE			(1<<3)
 
 ///prevents distinguishing identical timers with the wait variable
 ///
 ///To be used with TIMER_UNIQUE
-#define TIMER_NO_HASH_WAIT (1<<4)
+#define TIMER_NO_HASH_WAIT		(1<<4)
 
 ///Loops the timer repeatedly until qdeleted
 ///
 ///In most cases you want a subsystem instead, so don't use this unless you have a good reason
-#define TIMER_LOOP (1<<5)
-
-///Delete the timer on parent datum Destroy() and when deltimer'd
-#define TIMER_DELETE_ME (1<<6)
+#define TIMER_LOOP				(1<<5)
 
 ///Empty ID define
 #define TIMER_ID_NULL -1
-
-//For servers that can't do with any additional lag, set this to none in flightpacks.dm in subsystem/processing.
-#define FLIGHTSUIT_PROCESSING_NONE 0
-#define FLIGHTSUIT_PROCESSING_FULL 1
 
 //! ## Initialization subsystem
 
@@ -68,63 +85,107 @@
 ///Call qdel on the atom after intialization
 #define INITIALIZE_HINT_QDEL 2
 
-///Call qdel with a force of TRUE after initialization
-#define INITIALIZE_HINT_QDEL_FORCE 3
-
 ///type and all subtypes should always immediately call Initialize in New()
 #define INITIALIZE_IMMEDIATE(X) ##X/New(loc, ...){\
 	..();\
-	if(!initialized) {\
-		var/previous_initialized_value = SSatoms.initialized;\
-		SSatoms.initialized = INITIALIZATION_INNEW_MAPLOAD;\
+	if(!(flags_1 & INITIALIZED_1)) {\
 		args[1] = TRUE;\
-		SSatoms.InitAtom(src, FALSE, args);\
-		SSatoms.initialized = previous_initialized_value;\
+		SSatoms.InitAtom(src, args);\
 	}\
 }
 
 // Subsystem init_order, from highest priority to lowest priority
 // Subsystems shutdown in the reverse of the order they initialize in
 // The numbers just define the ordering, they are meaningless otherwise.
+#define INIT_ORDER_ASSETS			101 //we
+#define INIT_ORDER_TITLE			100
+#define INIT_ORDER_GARBAGE			99
+#define INIT_ORDER_DBCORE			95
+#define INIT_ORDER_BLACKBOX			94
+#define INIT_ORDER_SERVER_MAINT		93
+#define INIT_ORDER_INPUT			85
+#define INIT_ORDER_VIS				80
+#define INIT_ORDER_SOUNDS 			79
+#define INIT_ORDER_ACHIEVEMENTS		77
+#define INIT_ORDER_MATERIALS		76
+#define INIT_ORDER_RESEARCH			75
+#define INIT_ORDER_EVENTS			70
+#define INIT_ORDER_JOBS				65
+#define INIT_ORDER_ROLE_CLASS_HANDLER 66
+#define INIT_ORDER_TRIUMPHS			67
+#define INIT_ORDER_AI_MOVEMENT 		56 //We need the movement setup
+#define INIT_ORDER_AI_CONTROLLERS 	55 //So the controller can get the ref
+#define INIT_ORDER_TICKER			54
+#define INIT_ORDER_MAPPING			51
+#define INIT_ORDER_AI_IDLE_CONTROLLERS 50
+#define INIT_ORDER_DUNGEON			49
+#define INIT_ORDER_NETWORKS			45
+#define INIT_ORDER_SPATIAL_GRID 	43
+#define INIT_ORDER_ECONOMY			40
+#define INIT_ORDER_OUTPUTS			35
+#define INIT_ORDER_ATOMS			30
+#define INIT_ORDER_LANGUAGE			25
+#define INIT_ORDER_MACHINES			20
+#define INIT_ORDER_SKILLS			15
+#define INIT_ORDER_RANDOM_TILES		7
+#define INIT_ORDER_TIMER			1
+#define INIT_ORDER_DEFAULT			0
+#define INIT_ORDER_AIR				-1
+#define INIT_ORDER_ICON_SMOOTHING	-5
+#define INIT_ORDER_OVERLAY			-6
+#define INIT_ORDER_XKEYSCORE		-10
+#define INIT_ORDER_STICKY_BAN		-10
+#define INIT_ORDER_LIGHTING			-20
+#define INIT_ORDER_OUTDOOR_EFFECTS  -21
+#define INIT_ORDER_MINOR_MAPPING	-40
+#define INIT_ORDER_PATH				-50
+#define INIT_ORDER_OW 				-55
+#define INIT_ORDER_DISCORD			-60
+#define INIT_ORDER_PLEXORA 			-61
+#define INIT_ORDER_PERSISTENCE		-95
+#define INIT_ORDER_BAN_CACHE 		-98
+#define INIT_ORDER_CHAT				-100 //Should be last to ensure chat remains smooth during init.
 
-#define INIT_ORDER_GARBAGE 99
-#define INIT_ORDER_CHUNKS 98
-#define INIT_ORDER_EXPLOSIONS 97
-#define INIT_ORDER_STATPANELS 96
-#define INIT_ORDER_SKYBOX 20
-#define INIT_ORDER_DBCORE 19
-#define INIT_ORDER_BLACKBOX 18
-#define INIT_ORDER_SERVER_MAINT 17
-#define INIT_ORDER_JOBS 16
-#define INIT_ORDER_EVENTS 15
-#define INIT_ORDER_TICKER 14
-#define INIT_ORDER_SPAWN_DATA 13
-#define INIT_ORDER_MAPPING 12
-#define INIT_ORDER_LANGUAGE 11
-#define INIT_ORDER_INVENTORY 10
-#define INIT_ORDER_CHAR_SETUP 9
-#define INIT_ORDER_ATOMS 8
-#define INIT_ORDER_MACHINES 7
-#define INIT_ORDER_TIMER 1
-#define INIT_ORDER_DEFAULT 0
-#define INIT_ORDER_AIR -1
-#define INIT_ORDER_ALARM -2
-#define INIT_ORDER_MINIMAP -3
-#define INIT_ORDER_HOLOMAPS -4
-#define INIT_ORDER_CRAFT -4 // DO NOT INIT THIS AFTER ASSETS
-#define INIT_ORDER_ASSETS -5
-#define INIT_ORDER_ICON_SMOOTHING -6
-#define INIT_ORDER_OVERLAY -7
-#define INIT_ORDER_XKEYSCORE -10
-#define INIT_ORDER_STICKY_BAN -10
-#define INIT_ORDER_TICKETS -10
-#define INIT_ORDER_LIGHTING -20
-#define INIT_ORDER_SHUTTLE -21
-#define INIT_ORDER_JAMMING -22
-#define INIT_OPEN_SPACE -150
-#define INIT_ORDER_LATELOAD -180
-#define INIT_ORDER_CHAT	-185
-
+// Subsystem fire priority, from lowest to highest priority
+// If the subsystem isn't listed here it's either DEFAULT or PROCESS (if it's a processing subsystem child)
+#define FIRE_PRIORITY_IDLE_NPC 5
+#define FIRE_PRIORITY_SLOW_OBJECTS 5
+#define FIRE_PRIORITY_ENCHANTMENT 10
+#define FIRE_PRIORITY_ROLE_CLASS_HANDLER 10
+#define FIRE_PRIORITY_PING			10
+#define FIRE_PRIORITY_WET_FLOORS	10
+#define FIRE_PRIORITY_WATER_LEVEL	10
+#define FIRE_PRIORITY_SERVER_MAINT	10
+#define FIRE_PRIORITY_RESEARCH		10
+#define FIRE_PRIORITY_VIS			10
+#define FIRE_PRIORITY_AMBIENCE    10
+#define FIRE_PRIORITY_GARBAGE		15
+#define FIRE_PRIORITY_INCONE		19
+#define FIRE_PRIORITY_MOUSECHARGE	20
+#define FIRE_PRIORITY_AIR			20
+#define FIRE_PRIORITY_NPC			20
+#define FIRE_PRIORITY_NPC_MOVEMENT 	21
+#define FIRE_PRIORITY_NPC_ACTIONS 	22
+#define FIRE_PRIORITY_PROCESS		25
+#define FIRE_PRIORITY_THROWING		25
+#define FIRE_PRIORITY_SPACEDRIFT	30
+#define FIRE_PRIORITY_SMOOTHING		35
+#define FIRE_PRIORITY_HUDS			40
+#define FIRE_PRIORITY_NETWORKS		40
+#define FIRE_PRIORITY_OBJ			40
+#define FIRE_PRIORITY_ACID			40
+#define FIRE_PRIORITY_BURNING		40
+#define FIRE_PRIORITY_DEFAULT		50
+#define FIRE_PRIORITY_PARALLAX		65
+#define FIRE_PRIORITY_MOBS			100
+#define FIRE_PRIORITY_TGUI			110
+#define FIRE_PRIORITY_TICKER		200
+#define FIRE_PRIORITY_ATMOS_ADJACENCY	300
+#define FIRE_PRIORITY_CHAT			400
+#define FIRE_PRIORITY_RUNECHAT		410
+#define FIRE_PRIORITY_OVERLAYS		500
+#define FIRE_PRIORITY_DELAYED_VERBS 950
+#define FIRE_PRIORITY_INPUT			1000 // This must always always be the max highest priority. Player input must never be lost.
 
 // SS runlevels
 
@@ -136,44 +197,27 @@
 
 #define RUNLEVELS_DEFAULT (RUNLEVEL_SETUP | RUNLEVEL_GAME | RUNLEVEL_POSTGAME)
 
-#define START_PROCESSING_IN_LIST(Datum, List) \
-if (Datum.is_processing) {\
-	if(Datum.is_processing != "SSmachines.[#List]")\
-	{\
-		CRASH("Failed to start processing. [log_info_line(Datum)] is already being processed by [Datum.is_processing] but queue attempt occured on SSmachines.[#List]."); \
-	}\
-} else {\
-	Datum.is_processing = "SSmachines.[#List]";\
-	SSmachines.List += Datum;\
-}
 
-#define STOP_PROCESSING_IN_LIST(Datum, List) \
-if(Datum.is_processing) {\
-	if(SSmachines.List.Remove(Datum)) {\
-		Datum.is_processing = null;\
-	} else {\
-		CRASH("Failed to stop processing. [log_info_line(Datum)] is being processed by [is_processing] and not found in SSmachines.[#List]"); \
-	}\
-}
 
-#define START_PROCESSING_PIPENET(Datum) START_PROCESSING_IN_LIST(Datum, pipenets)
-#define STOP_PROCESSING_PIPENET(Datum) STOP_PROCESSING_IN_LIST(Datum, pipenets)
+//! ## Overlays subsystem
+// A reasonable number of maximum overlays an object needs
+// If you think you need more, rethink it
+#define MAX_ATOM_OVERLAYS 200
 
-#define START_PROCESSING_POWERNET(Datum) START_PROCESSING_IN_LIST(Datum, powernets)
-#define STOP_PROCESSING_POWERNET(Datum) STOP_PROCESSING_IN_LIST(Datum, powernets)
-
-#define START_PROCESSING_POWER_OBJECT(Datum) START_PROCESSING_IN_LIST(Datum, power_objects)
-#define STOP_PROCESSING_POWER_OBJECT(Datum) STOP_PROCESSING_IN_LIST(Datum, power_objects)
-
-/// The timer key used to know how long subsystem initialization takes
-#define SS_INIT_TIMER_KEY "ss_init"
-
-/**
-	Create a new timer and add it to the queue.
-	* Arguments:
-	* * callback the callback to call on timer finish
-	* * wait deciseconds to run the timer for
-	* * flags flags for this timer, see: code\__DEFINES\subsystems.dm
-	* * timer_subsystem the subsystem to insert this timer into
-*/
-#define addtimer(args...) _addtimer(args, file = __FILE__, line = __LINE__)
+///Compile all the overlays for an atom from the cache lists
+#define POST_OVERLAY_CHANGE(changed_on) \
+	if(length(changed_on.overlays) >= MAX_ATOM_OVERLAYS) { \
+		var/text_lays = overlays2text(changed_on.overlays); \
+		stack_trace("Too many overlays on [changed_on.type] - [length(changed_on.overlays)], refusing to update and cutting.\
+			\n What follows is a printout of all existing overlays at the time of the overflow \n[text_lays]"); \
+		changed_on.overlays.Cut(); \
+		changed_on.add_overlay(mutable_appearance('icons/testing/greyscale_error.dmi')); \
+	} \
+	if(alternate_appearances) { \
+		for(var/I in changed_on.alternate_appearances){\
+			var/datum/atom_hud/alternate_appearance/AA = changed_on.alternate_appearances[I];\
+			if(AA.transfer_overlays){\
+				AA.copy_overlays(changed_on, TRUE);\
+			}\
+		} \
+	}

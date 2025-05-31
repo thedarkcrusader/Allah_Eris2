@@ -1,20 +1,22 @@
+root = true
+
 [*]
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.dm]
+end_of_line = crlf
 indent_style = tab
 indent_size = 4
-charset = utf-8
-trim_trailing_whitespace = true
-insert_final_newline = true
-end_of_line = lf
+
+[*.dmm]
+end_of_line = crlf
+
+[*.py]
+indent_style = space
+indent_size = 4
 
 [*.yml]
 indent_style = space
 indent_size = 2
 
-[*.py]
-indent_style = space
-
-[*.md]
-trim_trailing_whitespace = false
-
-[Dockerfile]
-indent_style = space

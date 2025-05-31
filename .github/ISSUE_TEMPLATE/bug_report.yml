@@ -1,0 +1,76 @@
+name: Bug Report
+description: File a bug report
+title: "[Bug]: "
+labels: ["Bug"]
+body:
+- type: markdown
+  attributes:
+    value: |
+      Thanks for taking the time to fill out this bug report!
+
+- type: dropdown
+  id: location
+  attributes:
+    label: Map
+    multiple: true
+    description: Where did the bug happen?
+    options:
+      - Vanderlin
+      - Rosewood
+
+- type: textarea
+  id: issue-summary
+  attributes:
+    label: Describe the issue
+    description: Please detail, as objectively and specifically as possible, what happened that you considered to be a bug.
+    placeholder: Remember to be specific.
+  validations:
+    required: true
+
+- type: textarea
+  id: howtoreproduce
+  attributes:
+    label: How to reproduce
+    description: Describe how to reproduce the issue or, if unable to reproduce it, what steps you did that you believe might have caused the bug.
+    placeholder: |
+      Tell us the steps required to trigger your bug.
+  validations:
+    required: false
+
+- type: textarea
+  id: test-merges
+  attributes:
+    label: Test Merges
+    description: List the testmerges active when you were reporting the bug.
+    placeholder: |
+      List the testmerges here.
+  validations:
+    required: false
+
+- type: input
+  id: reporting-version
+  attributes:
+    label: "Client Version:"
+    description: |
+      The BYOND version you are using to report this issue. You can find this information in the bottom left corner of the "About BYOND" window in the BYOND client.        It is strongly recommended that you include this, especially for concerns on the visual aspects of the game.
+    placeholder: "xxx.xxxx"
+  validations:
+    required: false
+
+- type: input
+  id: round-id
+  attributes:
+    label: Round ID
+    description: If you have the round ID where the bug occurred, please supply it here.
+    placeholder: Round ID
+  validations:
+    required: false
+
+- type: input
+  id: staffdetails
+  attributes:
+    label: Staff ckey
+    description: If you talked with a staff member to have the bug resolved in-round please add their ckey here.
+    placeholder: Staff ckey
+  validations:
+    required: false

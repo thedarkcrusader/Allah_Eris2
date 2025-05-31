@@ -1,275 +1,79 @@
-#define ENVIRONMENT_SMASH_NONE			0
-#define ENVIRONMENT_SMASH_STRUCTURES	(1<<0) 	//crates, lockers, ect
-#define ENVIRONMENT_SMASH_WALLS			(1<<1)  //walls
-#define ENVIRONMENT_SMASH_RWALLS		(1<<2)	//rwalls
-var/list/mydirs = list(NORTH, SOUTH, EAST, WEST, SOUTHWEST, NORTHWEST, NORTHEAST, SOUTHEAST)
-
 /mob/living/simple_animal/hostile
-	faction = "hostile"
-	bad_type = /mob/living/simple_animal/hostile
-	var/stance = HOSTILE_STANCE_IDLE	//Used to determine behavior
-	var/mob/living/target_mob
-	var/attack_same = 0
-	var/ranged = 0
-	var/rapid = 0
-	var/projectiletype
+	faction = list("hostile")
+	obj_damage = 40
+	environment_smash = ENVIRONMENT_SMASH_STRUCTURES //Bitflags. Set to ENVIRONMENT_SMASH_STRUCTURES to break closets,tables,racks, etc; ENVIRONMENT_SMASH_WALLS for walls; ENVIRONMENT_SMASH_RWALLS for rwalls
+	var/atom/target
+	var/ranged = FALSE
+	var/rapid = 0 //How many shots per volley.
+	var/rapid_fire_delay = 2 //Time between rapid fire shots
+
+	var/projectiletype	//set ONLY it and NULLIFY casingtype var, if we have ONLY projectile
 	var/projectilesound
-	var/casingtype
-	var/ranged_cooldown = 0 //What the current cooldown on ranged attacks is, generally world.time + ranged_cooldown_time
+	var/casingtype		//set ONLY it and NULLIFY projectiletype, if we have projectile IN CASING
+	var/move_to_delay = 3 //delay for the automated movement.
 	var/list/friends = list()
-	var/break_stuff_probability = 10
-	var/ranged_ignores_vision
-	stop_automated_movement_when_pulled = 0
-	var/destroy_surroundings = 1
-	var/fire_verb = "fires"
-	a_intent = I_HURT
-	can_burrow = TRUE
-	hunger_enabled = 0//Until automated eating mechanics are enabled, disable hunger for hostile mobs
-	var/minimum_distance = 1 //Minimum approach distance, so ranged mobs chase targets down, but still keep their distance set in tiles
+	var/list/emote_taunt = list()
+	var/taunt_chance = 0
+
+	var/rapid_melee = 1			 //Number of melee attacks between each npc pool tick. Spread evenly.
+	var/melee_queue_distance = 4 //If target is close enough start preparing to hit them if we have rapid_melee enabled
+
+	var/ranged_message = "fires" //Fluff text for ranged mobs
+	var/ranged_cooldown = 0 //What the current cooldown on ranged attacks is, generally world.time + ranged_cooldown_time
+	var/ranged_cooldown_time = 30 //How long, in deciseconds, the cooldown of ranged attacks is
+	var/ranged_ignores_vision = FALSE //if it'll fire ranged attacks even if it lacks vision on its target, only works with environment smash
+	var/retreat_distance = null //If our mob runs from players when they're too close, set in tile distance. By default, mobs do not retreat.
+	var/minimum_distance = 1 //Minimum approach distance, so ranged mobs chase targets down, but still keep their distance set in tiles to the target, set higher to make mobs keep distance
+
+
+//These vars are related to how mobs locate and target
+	var/robust_searching = 0 //By default, mobs have a simple searching method, set this to 1 for the more scrutinous searching (stat_attack, stat_exclusive, etc), should be disabled on most mobs
+	var/vision_range = 6 //How big of an area to search for targets in, a vision of 9 attempts to find targets as soon as they walk into screen view
+	var/aggro_vision_range = 18 //If a mob is aggro, we search in this radius. Defaults to 9 to keep in line with original simple mob aggro radius
+	var/stat_attack = CONSCIOUS //Mobs with stat_attack to UNCONSCIOUS will attempt to attack things that are unconscious, Mobs with stat_attack set to DEAD will attempt to attack the dead.
+	var/stat_exclusive = FALSE //Mobs with this set to TRUE will exclusively attack things defined by stat_attack, stat_attack DEAD means they will only attack corpses
 	var/atom/targets_from = null //all range/attack/etc. calculations should be done from this atom, defaults to the mob itself, useful for Vehicles and such
-	var/vision_range = 9 //How big of an area to search for targets in, a vision of 9 attempts to find targets as soon as they walk into screen view
-	var/aggro_vision_range = 9 //If a mob is aggro, we search in this radius. Defaults to 9 to keep in line with original simple mob aggro radius
-	var/approaching_target = FALSE //We should dodge now
-	sanity_damage = 0.1
 
-/mob/living/simple_animal/hostile/proc/FindTarget()
-	var/atom/T = null
-	stop_automated_movement = 0
-	for(var/atom/A in ListTargets(vision_range))
+	var/lose_patience_timer_id //id for a timer to call LoseTarget(), used to stop mobs fixating on a target they can't reach
+	var/lose_patience_timeout = 300 //30 seconds by default, so there's no major changes to AI behaviour, beyond actually bailing if stuck forever
 
-		if(A == src)
-			continue
+	var/del_on_deaggro = 0 //seconds to delete after losing aggro
+	var/last_aggro_loss = null
 
-		var/atom/F = Found(A)
-		if(F)
-			T = F
-			break
+	var/retreat_health
 
-		if(isliving(A))
-			var/mob/living/L = A
-			if(L.faction == faction && !attack_same)
-				continue
-			else if(L in friends)
-				continue
-			else if(!SA_attackable(L))
-				stance = HOSTILE_STANCE_ATTACK
-				T = L
-				break
+	var/next_seek
 
-		if(istype(A, /obj/machinery/bot))
-			var/obj/machinery/bot/B = A
-			if (B.health > 0)
-				stance = HOSTILE_STANCE_ATTACK
-				T = B
-				break
-	return T
+	cmode = 1
+	setparrytime = 30
+	dodgetime = 30
 
 
-/mob/living/simple_animal/hostile/proc/Found(var/atom/A)
-	return
+/mob/living/simple_animal/hostile/Initialize()
+	. = ..()
+	last_aggro_loss = world.time //so we delete even if we never found a target
+	if(!targets_from)
+		targets_from = src
 
-/mob/living/simple_animal/hostile/proc/MoveToTarget()
-	stop_automated_movement = 1
-	if(!target_mob || SA_attackable(target_mob))
-		stance = HOSTILE_STANCE_IDLE
-	if(target_mob in ListTargets(10))
-		if(ranged)
-			if(get_dist(src, target_mob) <= 6 && !istype(src, /mob/living/simple_animal/hostile/megafauna))
-				OpenFire(target_mob)
-			else
-				set_glide_size(DELAY2GLIDESIZE(move_to_delay))
-				walk_to(src, target_mob, 1, move_to_delay)
-			if(ranged && istype(src, /mob/living/simple_animal/hostile/megafauna))
-				var/mob/living/simple_animal/hostile/megafauna/megafauna = src
-				sleep(rand(megafauna.megafauna_min_cooldown,megafauna.megafauna_max_cooldown))
-				if(istype(src, /mob/living/simple_animal/hostile/megafauna/one_star))
-					if(prob(rand(15,25)))
-						stance = HOSTILE_STANCE_ATTACKING
-						set_glide_size(DELAY2GLIDESIZE(move_to_delay))
-						walk_to(src, target_mob, 1, move_to_delay)
-					else
-						OpenFire(target_mob)
-				else
-					if(prob(45))
-						stance = HOSTILE_STANCE_ATTACKING
-						set_glide_size(DELAY2GLIDESIZE(move_to_delay))
-						walk_to(src, target_mob, 1, move_to_delay)
-					else
-						OpenFire(target_mob)
-		else
-			stance = HOSTILE_STANCE_ATTACKING
-			set_glide_size(DELAY2GLIDESIZE(move_to_delay))
-			walk_to(src, target_mob, 1, move_to_delay)
-	return 0
-
-/mob/living/simple_animal/hostile/proc/DestroyPathToTarget()
-	if(environment_smash)
-		EscapeConfinement()
-		var/dir_to_target = get_dir(targets_from, target_mob)
-		var/dir_list = list()
-		if(dir_to_target in mydirs) //it's diagonal, so we need two directions to hit
-			for(var/direction in mydirs)
-				if(direction & dir_to_target)
-					dir_list += direction
-		else
-			dir_list += dir_to_target
-		for(var/direction in dir_list) //now we hit all of the directions we got in this fashion, since it's the only directions we should actually need
-			DestroyObjectsInDirection(direction)
-
-/mob/living/simple_animal/hostile/proc/EscapeConfinement()
-	if(!isturf(targets_from.loc) && targets_from.loc != null)//Did someone put us in something?
-		var/atom/A = targets_from.loc
-		UnarmedAttack(A)//Bang on it till we get out
-
-/mob/living/simple_animal/hostile/proc/DestroyObjectsInDirection(direction)
-	var/turf/T = get_step(targets_from, direction)
-	if(QDELETED(T))
-		return
-	if(T.Adjacent(targets_from))
-		UnarmedAttack(T)
-		return
-	for(var/obj/O in T.contents)
-		if(!O.Adjacent(targets_from))
-			continue
-		if((istype(O, /obj/machinery) || istype(O, /obj/structure) && O.density && environment_smash >= ENVIRONMENT_SMASH_STRUCTURES))
-			UnarmedAttack(O)
-			return
-
-/mob/living/simple_animal/hostile/proc/AttackTarget()
-	stop_automated_movement = 1
-	if(!target_mob || SA_attackable(target_mob))
-		LoseTarget()
-		return 0
-	if(!(target_mob in ListTargets(10)))
-		LostTarget()
-		return 0
-	if(get_dist(src, target_mob) <= 1)	//Attacking
-		AttackingTarget()
-		return 1
-
-/mob/living/simple_animal/hostile/proc/AttackingTarget()
-	if(!Adjacent(target_mob))
-		return
-	if(isliving(target_mob))
-		var/mob/living/L = target_mob
-		L.attack_generic(src,rand(melee_damage_lower,melee_damage_upper),attacktext)
-		return L
-	if(istype(target_mob,/mob/living/exosuit))
-		var/mob/living/exosuit/M = target_mob
-		M.attack_generic(src,rand(melee_damage_lower,melee_damage_upper),attacktext)
-		return M
-	if(istype(target_mob,/obj/machinery/bot))
-		var/obj/machinery/bot/B = target_mob
-		B.attack_generic(src,rand(melee_damage_lower,melee_damage_upper),attacktext)
-		return B
-
-/mob/living/simple_animal/hostile/proc/LoseTarget()
-	stance = HOSTILE_STANCE_IDLE
-	target_mob = null
-	walk(src, 0)
-
-/mob/living/simple_animal/hostile/proc/LostTarget()
-	stance = HOSTILE_STANCE_IDLE
-	walk(src, 0)
-
-
-/mob/living/simple_animal/hostile/proc/ListTargets(var/dist = 7)
-	var/list/L = hearers(src, dist)
-
-	for (var/mob/living/exosuit/M in GLOB.mechas_list)
-		if (M.z == z && get_dist(src, M) <= dist)
-			L += M
-
-	return L
+/mob/living/simple_animal/hostile/Destroy()
+	targets_from = null
+	return ..()
 
 /mob/living/simple_animal/hostile/Life()
-
 	. = ..()
-	if(!stasis && !AI_inactive)
-		if(!.)
-			walk(src, 0)
-			return 0
-		if(client)
-			return 0
+	if(!.) //dead
+		walk(src, 0) //stops walking
+		return 0
 
-		if(!stat)
-			switch(stance)
-				if(HOSTILE_STANCE_IDLE)
-					target_mob = FindTarget()
-
-				if(HOSTILE_STANCE_ATTACK)
-					if(destroy_surroundings)
-						DestroySurroundings()
-					MoveToTarget()
-
-				if(HOSTILE_STANCE_ATTACKING)
-					if(destroy_surroundings)
-						DestroySurroundings()
-					AttackTarget()
-
-/mob/living/simple_animal/hostile/proc/OpenFire(target_mob)
-	var/target = target_mob
-	visible_message("\red <b>[src]</b> [fire_verb] at [target]!", 1)
-
-	if(rapid)
-		spawn(1)
-			Shoot(target, loc, src)
-			if(casingtype)
-				new casingtype(get_turf(src))
-		spawn(4)
-			Shoot(target, loc, src)
-			if(casingtype)
-				new casingtype(get_turf(src))
-		spawn(6)
-			Shoot(target, loc, src)
-			if(casingtype)
-				new casingtype(get_turf(src))
-	else
-		Shoot(target, loc, src)
-		if(casingtype)
-			new casingtype
-
-	stance = HOSTILE_STANCE_IDLE
-	target_mob = null
+/mob/living/proc/AttackingTarget(mob/living/passed_target)
 	return
 
-/mob/living/simple_animal/hostile/proc/Shoot(var/target, var/start, var/user, var/bullet = 0)
-	if(target == start)
-		return
-
-	var/obj/item/projectile/A = new projectiletype(user:loc)
-	playsound(user, projectilesound, 100, 1)
-	if(!A)	return
-	var/def_zone = get_exposed_defense_zone(target)
-	A.launch(target, def_zone)
-
-/mob/living/simple_animal/hostile/proc/DestroySurroundings()
-	if(istype(src, /mob/living/simple_animal/hostile/megafauna))
-		set_dir(get_dir(src,target_mob))
-		for(var/turf/wall/obstacle in get_step(src, dir))
-			if(prob(35))
-				obstacle.dismantle_wall(src)
-		for(var/obj/machinery/obstacle in get_step(src, dir))
-			if(prob(65))
-				obstacle.Destroy()
-		for(var/obj/structure/obstacle in get_step(src, dir))
-			if(prob(95))
-				qdel(obstacle)
-
-	if(prob(break_stuff_probability))
-		for(var/dir in cardinal) // North, South, East, West
-			for(var/obj/machinery/obstacle in get_step(src, dir))
-				if((obstacle.dir == reverse_dir[dir])) // So that windows get smashed in the right order
-					obstacle.attack_generic(src,rand(melee_damage_lower,melee_damage_upper),attacktext)
-					return
-			for(var/turf/wall/obstacle in get_step(src, dir))
-				if((obstacle.dir == reverse_dir[dir])) // So that windows get smashed in the right order
-					obstacle.attack_generic(src,rand(melee_damage_lower,melee_damage_upper),attacktext)
-					return
-			for(var/obj/structure/window/obstacle in get_step(src, dir))
-				if(obstacle.dir == reverse_dir[dir]) // So that windows get smashed in the right order
-					obstacle.attack_generic(src,rand(melee_damage_lower,melee_damage_upper),attacktext)
-					return
-			var/obj/structure/obstacle = locate(/obj/structure, get_step(src, dir))
-			if(istype(obstacle, /obj/structure/window) || istype(obstacle, /obj/structure/closet) || istype(obstacle, /obj/structure/table) || istype(obstacle, /obj/structure/grille) || istype(obstacle, /obj/structure/railing))
-				obstacle.attack_generic(src,rand(melee_damage_lower,melee_damage_upper),attacktext)
+/mob/living/simple_animal/hostile/AttackingTarget(mob/living/passed_target)
+	if(SEND_SIGNAL(src, COMSIG_HOSTILE_PRE_ATTACKINGTARGET, passed_target) & COMPONENT_HOSTILE_NO_PREATTACK)
+		return FALSE //but more importantly return before attack_animal called
+	SEND_SIGNAL(src, COMSIG_HOSTILE_ATTACKINGTARGET, passed_target)
+	var/mob/living/actual_target = passed_target
+	if(!actual_target)
+		actual_target = target
+	if(!QDELETED(actual_target))
+		return actual_target.attack_animal(src)

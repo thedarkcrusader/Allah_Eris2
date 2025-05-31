@@ -4,37 +4,47 @@
 
 #define NUM_E 2.71828183
 
-#define M_PI						3.1416
+#define PI						3.1416
 #define INFINITY				1e31	//closer then enough
 
 #define SHORT_REAL_LIMIT 16777216
 
-#define SQRTWO 1.414
+//"fancy" math for calculating time in ms from tick_usage percentage and the length of ticks
+//percent_of_tick_used * (ticklag * 100(to convert to ms)) / 100(percent ratio)
+//collapsed to percent_of_tick_used * tick_lag
+#define TICK_DELTA_TO_MS(percent_of_tick_used) ((percent_of_tick_used) * world.tick_lag)
+#define TICK_USAGE_TO_MS(starting_tickusage) (TICK_DELTA_TO_MS(TICK_USAGE_REAL - starting_tickusage))
 
 #define PERCENT(val) (round((val)*100, 0.1))
 #define CLAMP01(x) (CLAMP(x, 0, 1))
 
-#define SIGN(x) ( x < 0 ? -1  : 1 )
+//time of day but automatically adjusts to the server going into the next day within the same round.
+//for when you need a reliable time number that doesn't depend on byond time.
+#define REALTIMEOFDAY (world.timeofday + (MIDNIGHT_ROLLOVER * MIDNIGHT_ROLLOVER_CHECK))
+#define MIDNIGHT_ROLLOVER_CHECK ( GLOB.rollovercheck_last_timeofday != world.timeofday ? update_midnight_rollover() : GLOB.midnight_rollovers )
+
+#define SIGN(x) ( (x)!=0 ? (x) / abs(x) : 0 )
 
 #define CEILING(x, y) ( -round(-(x) / (y)) * (y) )
 
-#define DIST_EUCLIDIAN(x1,y1,x2,y2) (sqrt((x1-x2)**2 + (y1-y2)**2))
+#define ROUND_UP(x) ( -round(-(x)))
 
 // round() acts like floor(x, 1) by default but can't handle other values
 #define FLOOR(x, y) ( round((x) / (y)) * (y) )
 
-#define QUANTIZE(variable) (round(variable, 0.0001))
 
-#define CLAMP(CLVALUE,CLMIN,CLMAX) ( max( (CLMIN), min((CLVALUE), (CLMAX)) ) )
+#define CLAMP(CLVALUE,CLMIN,CLMAX) clamp(CLVALUE, CLMIN, CLMAX)
+
 
 // Similar to clamp but the bottom rolls around to the top and vice versa. min is inclusive, max is exclusive
 #define WRAP(val, min, max) ( min == max ? min : (val) - (round(((val) - (min))/((max) - (min))) * ((max) - (min))) )
 
 // Real modulus that handles decimals
-#define MODULUS(x, y) ( (x) - (y) * round((x) / (y)) )
+#define MODULUS(x, y) ( (x) - FLOOR(x, y))
 
-// Tangent
-#define TAN(x) (sin(x) / cos(x))
+
+#define TAN(x) tan(x)
+
 
 // Cotangent
 #define COT(x) (1 / TAN(x))
@@ -59,30 +69,11 @@
 // Used for calculating the radioactive strength falloff
 #define INVERSE_SQUARE(initial_strength,cur_distance,initial_distance) ( (initial_strength)*((initial_distance)**2/(cur_distance)**2) )
 
-// Vector algebra.
-#define SQUAREDNORM(x, y) (x**2 + y**)
-
-#define NORM(x, y) (sqrt(SQUAREDNORM(x, y)))
-
-#define ISPOWEROFTWO(val) ((val & (val-1)) == 0)
-
-#define ROUNDUPTOPOWEROFTWO(val) (2 ** -round(-log(2, val)))
-
 #define ISABOUTEQUAL(a, b, deviation) (deviation ? abs((a) - (b)) <= deviation : abs((a) - (b)) <= 0.1)
 
 #define ISEVEN(x) (x % 2 == 0)
 
 #define ISODD(x) (x % 2 != 0)
-
-#define NFRACT(tofract) (tofract - round(tofract)) // I live in agony
-
-//Probability based rounding that makes whole numbers out of decimals based on luck.
-//The decimal value is the probability to be rounded up.
-//Eg a value of 1.37 has a 37% chance to become 2, otherwise it is 1
-//Useful for game balance matters where the gulf caused by consistent rounding is too much
-#define ROUND_PROB(val) (val - (NFRACT(val)) + prob(NFRACT(val) * 100))
-
-#define RAND_DECIMAL(lower, upper) (rand(0, upper - lower) + lower)
 
 // Returns true if val is from min to max, inclusive.
 #define ISINRANGE(val, min, max) (min <= val && val <= max)
@@ -215,58 +206,13 @@
 
 	return list(region_x1 & region_x2, region_y1 & region_y2)
 
-/proc/Mean(...)
-	var/sum = 0
-	for(var/val in args)
-		sum += val
-	return sum / args.len
+#define EXP_DISTRIBUTION(desired_mean) ( -(1/(1/desired_mean)) * log(rand(1, 1000) * 0.001) )
 
+#define LORENTZ_DISTRIBUTION(x, s) ( s*TAN(TODEGREES(PI*(rand()-0.5))) + x )
+#define LORENTZ_CUMULATIVE_DISTRIBUTION(x, y, s) ( (1/PI)*TORADIANS(arctan((x-y)/s)) + 1/2 )
+
+#define RULE_OF_THREE(a, b, x) ((a*x)/b)
 // )
 
-// Round up
-proc/n_ceil(var/num)
-	if(isnum(num))
-		return round(num)+1
-
-// Find leftmost bit using bitshifting
-proc/leftmost_bit(num)
-	var/pos = 0
-	if(num)
-		while(num > 0)
-			num >>= 1
-			pos++
-	return pos
-
-proc/get_vector(dir) // Accepts a directional string and returns a list containing an actual vector
-    switch(dir)
-        if(NORTH)
-            return list(0, 1)
-        if(NORTHEAST)
-            return list(1, 1)
-        if(EAST)
-            return list(1, 0)
-        if(SOUTHEAST)
-            return list(1, -1)
-        if(SOUTH)
-            return list(0, -1)
-        if(SOUTHWEST)
-            return list(-1, -1)
-        if(WEST)
-            return list(-1, 0)
-        if(NORTHWEST)
-            return list(-1, 1)
-        else if(!dir)
-            return list(1, 0)
-
-proc/get_vector_angle(vec1, vec2) // Calculates the angle between two vectors, then returns the angle. Uses degrees instead of radians because BYOND expects trig functions to be called with degrees.
-    var/dot = vec1[1] * vec2[1] + vec1[2] * vec2[2] // Calculate the dot product
-    var/mag1 = sqrt((vec1[1] ** 2) + (vec1[2] ** 2)) // Calculate the magnitudes of the vectors
-    var/mag2 = sqrt((vec2[1] ** 2) + (vec2[2] ** 2))
-    var/angle = arccos(dot / (mag1 * mag2)) // Calculate the angle based on the dot product and magnitudes of the vectors
-    return angle
-
-#define T100C 373.15 //  100.0 degrees celsius
-
-
-
-#define CELSIUS + T0C
+/// Avoids division by zero by returning 0 if the divisor is 0 or null.
+#define SAFE_DIVIDE(dividend, divisor) (!divisor ? 0 : dividend/divisor)

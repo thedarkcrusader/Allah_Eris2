@@ -1,17 +1,24 @@
+#define MAX_COOKIE_LENGTH 5
+
 /*********************************
 For the main html chat area
 *********************************/
-GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets/html/browserOutput.html'))
+
+//Precaching a bunch of shit
+GLOBAL_DATUM_INIT(iconCache, /savefile, new("tmp/iconCache.sav")) //Cache of icons for the browser output
 
 //On client, created on login
 /datum/chatOutput
 	var/client/owner	 //client ref
 	var/loaded       = FALSE // Has the client loaded the browser output area?
-	var/list/messageQueue //If they haven't loaded chat, this is where messages will go until they do
+	var/list/messageQueue = list()//If they haven't loaded chat, this is where messages will go until they do
 	var/cookieSent   = FALSE // Has the client sent a cookie for analysis
 	var/broken       = FALSE
 	var/list/connectionHistory //Contains the connection history passed from chat cookie
-	var/adminMusicVolume = 25 //This is for the Play Global Sound verb
+	var/adminMusicVolume = 50 //This is for the Play Global Sound verb
+	var/total_checks = 0
+	var/load_attempts = 0
+
 
 /datum/chatOutput/New(client/C)
 	owner = C
@@ -28,8 +35,12 @@ GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets
 		broken = TRUE
 		message_admins("Couldn't start chat for [key_name_admin(owner)]!")
 		. = FALSE
-		alert(owner.mob, "Updated chat window does not exist. If you are using a custom skin file please allow the game to update.")
+		if(owner)
+			alert(owner.mob, "Updated chat window does not exist. If you are using a custom skin file please allow the game to update.")
 		return
+
+	if(!owner) // In case the client vanishes before winexists returns
+		return 0
 
 	if(winget(owner, "browseroutput", "is-visible") == "true") //Already setup
 		doneLoading()
@@ -43,27 +54,37 @@ GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets
 	set waitfor = FALSE
 	if(!owner)
 		return
+	if(loaded)
+		return
+	var/datum/asset/stuff = get_asset_datum(/datum/asset/group/goonchat)
+	stuff.send(owner)
 
-	var/datum/asset/group/gc = get_asset_datum(/datum/asset/group/goonchat)
+	owner << browse(file('code/modules/goonchat/browserassets/html/browserOutput.html'), "window=browseroutput")
 
-	if (gc.send(owner))
-		owner.browse_queue_flush() // stall loading html until goochant actualy gets sent
-
-	var/html = GLOB.goonchatbasehtml
-	html = replacetextEx(html, "%FONTAWESOME%", SSassets.transport.get_asset_url("font-awesome.css"))
-
-	owner << browse(html, "window=browseroutput")
+	if (load_attempts < 5) //To a max of 5 load attempts
+		spawn(20 SECONDS)
+			if (owner && !loaded)
+				load_attempts++
+				load()
+	else
+		return
 
 /datum/chatOutput/Topic(href, list/href_list)
 	if(usr.client != owner)
 		return TRUE
 
+	if(href_list["admin_command"])
+		if(!owner.holder)
+			return
+		owner.holder.admin_command(href_list["admin_command"], href_list["target"])
+		return
+
 	// Build arguments.
 	// Arguments are in the form "param[paramname]=thing"
 	var/list/params = list()
 	for(var/key in href_list)
-		if(length_char(key) > 7 && findtext(key, "param")) // 7 is the amount of characters in the basic param key template.
-			var/param_name = copytext_char(key, 7, -1)
+		if(length(key) > 7 && findtext(key, "param")) // 7 is the amount of characters in the basic param key template.
+			var/param_name = copytext(key, 7, -1)
 			var/item       = href_list[key]
 
 			params[param_name] = item
@@ -88,10 +109,6 @@ GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets
 			swaptodarkmode()
 		if("swaptolightmode")
 			swaptolightmode()
-		if("enable_fullscreen")
-			enable_fullscreen()
-		if("disable_fullscreen")
-			disable_fullscreen()
 
 	if(data)
 		ehjax_send(data = data)
@@ -99,12 +116,11 @@ GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets
 
 //Called on chat output done-loading by JS.
 /datum/chatOutput/proc/doneLoading()
-	if(loaded)
+	if(loaded || !owner)
 		return
 
 	loaded = TRUE
 	showChat()
-
 
 	for(var/message in messageQueue)
 		// whitespace has already been handled by the original to_chat
@@ -113,12 +129,33 @@ GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets
 	messageQueue = null
 	sendClientData()
 
-	//do not convert to to_chat()
-	owner << "<span class=\"userdanger\">Failed to load fancy chat, reverting to old chat. Certain features won't work.</span>"
+	syncRegex()
+
+	SEND_TEXT(owner, "<span class=\"userdanger\">Failed to load fancy chat, reverting to old chat. Certain features won't work.</span>")
 
 /datum/chatOutput/proc/showChat()
 	winset(owner, "output", "is-visible=false")
 	winset(owner, "browseroutput", "is-disabled=false;is-visible=true")
+
+/proc/syncChatRegexes()
+	for (var/user in GLOB.clients)
+		var/client/C = user
+		var/datum/chatOutput/Cchat = C.chatOutput
+		if (Cchat && !Cchat.broken && Cchat.loaded)
+			Cchat.syncRegex()
+
+/datum/chatOutput/proc/syncRegex()
+	var/list/regexes = list()
+
+	if (config.ic_filter_regex)
+		regexes["show_filtered_ic_chat"] = list(
+			config.ic_filter_regex.name,
+			"ig",
+			span_boldwarning("$1")
+		)
+
+	if (regexes.len)
+		ehjax_send(data = list("syncRegex" = regexes))
 
 /datum/chatOutput/proc/ehjax_send(client/C = owner, window = "browseroutput", data)
 	if(islist(data))
@@ -154,21 +191,26 @@ GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets
 	var/data = json_encode(deets)
 	ehjax_send(data = data)
 
+
 //Called by client, sent data to investigate (cookie history so far)
 /datum/chatOutput/proc/analyzeClientData(cookie = "")
 	if(!cookie)
 		return
 
 	if(cookie != "none")
-		var/regex/crashy_thingy = regex("^\\s*(\[\\\[\\{\\}\\\]\]\\s*){5,}")
-		if(crashy_thingy.Find(cookie))
-			log_and_message_admins("[key_name(owner)] tried to crash the server using at least 5 \"\[\" in a row. Ban them.")
+		var/regex/simple_crash_regex = new /regex("(\\\[ *){5}")
+		if(simple_crash_regex.Find(cookie))
+			message_admins("[key_name(src.owner)] tried to crash the server using malformed JSON")
+			log_admin("[key_name(owner)] tried to crash the server using malformed JSON")
 			return
-
 		var/list/connData = json_decode(cookie)
 		if (connData && islist(connData) && connData.len > 0 && connData["connData"])
 			connectionHistory = connData["connData"] //lol fuck
 			var/list/found = new()
+			if(connectionHistory.len > MAX_COOKIE_LENGTH)
+				message_admins("[key_name(src.owner)] was kicked for an invalid ban cookie)")
+				qdel(owner)
+				return
 			for(var/i in connectionHistory.len to 1 step -1)
 				var/list/row = src.connectionHistory[i]
 				if (!row || row.len < 3 || (!row["ckey"] || !row["compid"] || !row["ip"])) //Passed malformed history object
@@ -181,10 +223,7 @@ GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets
 			if (found.len > 0)
 				//TODO: add a new evasion ban for the CURRENT client details, using the matched row details
 				message_admins("[key_name(src.owner)] has a cookie from a banned account! (Matched: [found["ckey"]], [found["ip"]], [found["compid"]])")
-				//log_admin_private("[key_name(owner)] has a cookie from a banned account! (Matched: [found["ckey"]], [found["ip"]], [found["compid"]])")
-				for(var/client/A in admins)
-					if(A.get_preference_value(/datum/client_preference/staff/play_adminhelp_ping) == GLOB.PREF_HEAR)
-						sound_to(A, 'sound/effects/adminhelp.ogg')
+				log_admin_private("[key_name(owner)] has a cookie from a banned account! (Matched: [found["ckey"]], [found["ip"]], [found["compid"]])")
 
 	cookieSent = TRUE
 
@@ -202,28 +241,12 @@ GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets
 		return
 
 	if(target == world)
-		target = clients
+		target = GLOB.clients
 
 	var/original_message = message
 	if(handle_whitespace)
 		message = replacetext(message, "\n", "<br>")
-		message = replacetext(message, "\t", "[GLOB.TAB][GLOB.TAB]")
-
-	//Replace expanded \icon macro with icon2html
-	//regex/Replace with a proc won't work here because icon2html takes target as an argument and there is no way to pass it to the replacement proc
-	//not even hacks with reassigning usr work
-	var/regex/i = new(@/<IMG CLASS=icon SRC=(\[[^]]+])(?: ICONSTATE='([^']+)')?>/, "g")
-	while(i.Find(message))
-		message = copytext(message,1,i.index)+icon2html(locate(i.group[1]), target, icon_state=i.group[2])+copytext(message,i.next)
-
-	message = \
-		symbols_to_unicode(
-			strip_improper(
-				color_macro_to_html(
-					message
-				)
-			)
-		)
+		message = replacetext(message, "\t", "[FOURSPACES][FOURSPACES]") //EIGHT SPACES IN TOTAL!!
 
 	if(islist(target))
 		// Do the double-encoding outside the loop to save nanoseconds
@@ -235,7 +258,7 @@ GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets
 				continue
 
 			//Send it to the old style output window.
-			C << original_message
+			SEND_TEXT(C, original_message)
 
 			if(!C.chatOutput || C.chatOutput.broken) // A player who hasn't updated his skin file.
 				continue
@@ -253,7 +276,7 @@ GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets
 			return
 
 		//Send it to the old style output window.
-		C << original_message
+		SEND_TEXT(C, original_message)
 
 		if(!C.chatOutput || C.chatOutput.broken) // A player who hasn't updated his skin file.
 			return
@@ -266,21 +289,14 @@ GLOBAL_VAR_INIT(goonchatbasehtml, file2text('code/modules/goonchat/browserassets
 		// url_encode it TWICE, this way any UTF-8 characters are able to be decoded by the Javascript.
 		C << output(url_encode(url_encode(message)), "browseroutput:output")
 
+/proc/to_chat(target, message, handle_whitespace = TRUE)
+	if(Master.current_runlevel == RUNLEVEL_INIT || !SSchat?.initialized)
+		to_chat_immediate(target, message, handle_whitespace)
+		return
+	SSchat.queue(target, message, handle_whitespace)
+
 /datum/chatOutput/proc/swaptolightmode() //Dark mode light mode stuff. Yell at KMC if this breaks! (See darkmode.dm for documentation)
 	owner.force_white_theme()
 
 /datum/chatOutput/proc/swaptodarkmode()
 	owner.force_dark_theme()
-
-/datum/chatOutput/proc/enable_fullscreen()
-	owner.enable_fullscreen()
-
-/datum/chatOutput/proc/disable_fullscreen()
-	owner.disable_fullscreen()
-
-/proc/to_chat(target, message, handle_whitespace = TRUE, trailing_newline = TRUE)
-	if(Master.current_runlevel == RUNLEVEL_INIT || !SSchat?.initialized)
-		to_chat_immediate(target, message, handle_whitespace)
-		return
-	SSchat.queue(target, message, handle_whitespace, trailing_newline)
-

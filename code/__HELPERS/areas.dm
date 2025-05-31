@@ -1,110 +1,110 @@
-//Takes: Area type as text string or as typepath OR an instance of the area.
-//Returns: A list of all turfs in areas of that type in the world.
-/proc/get_area_turfs(var/areatype, var/list/predicates)
-	if(!areatype) return null
-	if(istext(areatype)) areatype = text2path(areatype)
-	if(isarea(areatype))
-		var/area/areatemp = areatype
-		areatype = areatemp.type
+#define BP_MAX_ROOM_SIZE 300
 
-	var/list/turfs = new/list()
-	for(var/areapath in typesof(areatype))
-		var/area/A = locate(areapath)
-		for(var/turf/T in A.contents)
-			if(!predicates || all_predicates_true(list(T), predicates))
-				turfs += T
-	return turfs
+// Gets an atmos isolated contained space
+// Returns an associative list of turf|dirs pairs
+// The dirs are connected turfs in the same space
+// break_if_found is a typecache of turf/area types to return false if found
+// Please keep this proc type agnostic. If you need to restrict it do it elsewhere or add an arg.
+/proc/detect_room(turf/origin, list/break_if_found, max_size=INFINITY)
+	if(origin.blocks_air)
+		return list(origin)
 
-//Returns everything in an area based on type, searching recursively
-/proc/get_area_contents(var/areatype)
-	var/list/turf/LT = get_area_turfs(areatype)
-	var/list/contents = list()
-	for (var/turf/T in LT)
-		contents |= T.get_recursive_contents()
-
-	return contents
-
-
-/proc/pick_area_turf(var/areatype, var/list/predicates)
-	var/list/turfs = get_area_turfs(areatype, predicates)
-	if(turfs && turfs.len)
-		return pick(turfs)
-
-/proc/is_matching_vessel(var/atom/A, var/atom/B)
-	var/area/area1 = get_area(A)
-	var/area/area2 = get_area(B)
-	if (!area1 || !area2)
-		return FALSE
-
-	if (area1.vessel == area2.vessel)
-		return TRUE
-	return FALSE
-
-/atom/proc/get_vessel()
-	var/area/A = get_area(src)
-	return A.vessel
-
-
-//A useful proc for events.
-//This returns a random area of the station which is meaningful. Ie, a room somewhere
-//If filter_players is true, it will only pick an area that has no human players in it
-	//This is useful for spawning, you dont want people to see things pop into existence
-//If filter_maintenance is true, maintenance areas won't be chosen
-	//Since eris maintenance is a labyrinth and people dont hang around there, this defaults true
-/proc/random_ship_area(var/filter_players = FALSE, var/filter_maintenance = TRUE, var/filter_critical = FALSE, need_apc = FALSE)
-	var/list/possible = list()
-	for(var/Y in ship_areas)
-		var/area/A = Y
-		if (istype(A, /area/shuttle))
-			continue
-
-		if (filter_maintenance && A.is_maintenance)
-			continue
-
-		if (filter_critical && (A.flags & AREA_FLAG_CRITICAL))
-			continue
-
-		//Although hostile mobs instadying to turrets is fun
-		//If there's no AI they'll just be hit with stunbeams all day and spam the attack logs.
-		if (istype(A, /area/turret_protected))
-			continue
-
-		if(need_apc && !A.apc)
-			continue
-
-		if(filter_players)
-			var/should_continue = FALSE
-			for(var/mob/living/carbon/human/H in GLOB.human_mob_list)
-				if(!H.client)
-					continue
-				if(A == get_area(H))
-					should_continue = TRUE
-					break
-
-			if(should_continue)
+	. = list()
+	var/list/checked_turfs = list()
+	var/list/found_turfs = list(origin)
+	while(found_turfs.len)
+		var/turf/sourceT = found_turfs[1]
+		found_turfs.Cut(1, 2)
+		var/dir_flags = checked_turfs[sourceT]
+		for(var/dir in GLOB.alldirs)
+			if(length(.) > max_size)
+				return
+			if(dir_flags & dir) // This means we've checked this dir before, probably from the other turf
 				continue
+			var/turf/checkT = get_step(sourceT, dir)
+			if(!checkT)
+				continue
+			checked_turfs[sourceT] |= dir
+			checked_turfs[checkT] |= turn(dir, 180)
+			.[sourceT] |= dir
+			.[checkT] |= turn(dir, 180)
+			if(break_if_found[checkT.type] || break_if_found[checkT.loc.type])
+				return FALSE
+			var/static/list/cardinal_cache = list("[NORTH]"=TRUE, "[EAST]"=TRUE, "[SOUTH]"=TRUE, "[WEST]"=TRUE)
+			if(!cardinal_cache["[dir]"] || checkT.blocks_air || !CANATMOSPASS(sourceT, checkT))
+				continue
+			found_turfs += checkT // Since checkT is connected, add it to the list to be processed
 
-		possible += A
+/proc/create_area(mob/creator)
+	// Passed into the above proc as list/break_if_found
+	var/static/area_or_turf_fail_types = typecacheof(list(
+		))
+	// Ignore these areas and dont let people expand them. They can expand into them though
+	var/static/blacklisted_areas = typecacheof(list(
+		/area/space,
+		))
+	var/list/turfs = detect_room(get_turf(creator), area_or_turf_fail_types, BP_MAX_ROOM_SIZE*2)
+	if(!turfs)
+		to_chat(creator, "<span class='warning'>The new area must be completely airtight.</span>")
+		return
+	if(turfs.len > BP_MAX_ROOM_SIZE)
+		to_chat(creator, "<span class='warning'>The room you're in is too big. It is [turfs.len >= BP_MAX_ROOM_SIZE *2 ? "more than 100" : ((turfs.len / BP_MAX_ROOM_SIZE)-1)*100]% larger than allowed.</span>")
+		return
+	var/list/areas = list("New Area" = /area)
+	for(var/i in 1 to turfs.len)
+		var/area/place = get_area(turfs[i])
+		if(blacklisted_areas[place.type])
+			continue
+		if(place.noteleport || place.hidden)
+			continue // No expanding powerless rooms etc
+		areas[place.name] = place
+	var/area_choice = browser_input_list(creator, "Choose an area to expand or make a new area.", "Area Expansion", areas)
+	area_choice = areas[area_choice]
 
-	return pick(possible)
+	if(!area_choice)
+		to_chat(creator, "<span class='warning'>No choice selected. The area remains undefined.</span>")
+		return
+	var/area/newA
+	var/area/oldA = get_area(get_turf(creator))
+	if(!isarea(area_choice))
+		var/str = stripped_input(creator,"New area name:", "Blueprint Editing", "", MAX_NAME_LEN)
+		if(!str || !length(str)) //cancel
+			return
+		if(length(str) > 50)
+			to_chat(creator, "<span class='warning'>The given name is too long. The area remains undefined.</span>")
+			return
+		newA = new area_choice
+		newA.setup(str)
+		newA.set_dynamic_lighting()
+		newA.has_gravity = oldA.has_gravity
+	else
+		newA = area_choice
 
-/area/proc/random_space()
-	var/list/turfs = list()
-	for(var/turf/floor/F in src.contents)
-		if(turf_clear(F))
-			turfs += F
-	if (turfs.len)
-		return pick(turfs)
-	else return null
+	/**
+	 * A list of all machinery tied to an area along with the area itself. key=area name,value=list(area,list of machinery)
+	 * we use this to keep track of what areas are affected by the blueprints & what machinery of these areas needs to be reconfigured accordingly
+	 */
+	var/list/area/affected_areas = list()
+	for(var/turf/the_turf as anything in turfs)
+		var/area/old_area = the_turf.loc
 
+		//keep rack of all areas affected by turf changes
+		affected_areas[old_area.name] = old_area
 
-/area/proc/random_hideable_turf()
-	var/list/turfs = list()
-	for(var/turf/floor/F in src.contents)
-		if(turf_clear(F))
-			if (F.flooring && (F.flooring.flags & TURF_HIDES_THINGS))
-				turfs += F
-	if (turfs.len)
-		return pick(turfs)
-	else return null
+		//move the turf to its new area and unregister it from the old one
+		the_turf.change_area(old_area, newA)
 
+		//inform atoms on the turf that their area has changed
+		for(var/atom/stuff as anything in the_turf)
+			//unregister the stuff from its old area
+			SEND_SIGNAL(stuff, COMSIG_EXIT_AREA, old_area)
+
+			SEND_SIGNAL(stuff, COMSIG_ENTER_AREA, newA)
+		the_turf.change_area(old_area, newA)
+
+	newA.reg_in_areas_in_z()
+
+	to_chat(creator, "<span class='notice'>I have created a new area, named [newA.name]. It is now weather proof, and constructing an APC will allow it to be powered.</span>")
+	return TRUE
+
+#undef BP_MAX_ROOM_SIZE

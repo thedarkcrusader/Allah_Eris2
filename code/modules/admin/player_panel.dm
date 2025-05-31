@@ -1,9 +1,12 @@
-
 /datum/admins/proc/player_panel_new()//The new one
-	if (!usr.client.holder)
+	if(!check_rights())
 		return
 	log_admin("[key_name(usr)] checked the player panel.")
-	var/dat = "<html><head><meta http-equiv='X-UA-Compatible' content='IE=edge; charset=UTF-8'/><title>Player Panel</title></head>"
+	var/dat = "<html><head><meta http-equiv='X-UA-Compatible' content='IE=edge'/><title>Player Panel</title></head>"
+
+	var/client/user = usr.client
+
+	dat += user.prefs.get_ui_theme_stylesheet()
 
 	//javascript, the part that does most of the work~
 	dat += {"
@@ -39,15 +42,11 @@
 								}
 								var ltd = tr.getElementsByTagName("td");
 								var td = ltd\[0\];
-								var lsearch = td.getElementsByTagName("b");
+								var lsearch = td.getElementsByClassName("filter_data");
 								var search = lsearch\[0\];
-								//var inner_span = li.getElementsByTagName("span")\[1\] //Should only ever contain one element.
-								//document.write("<p>"+search.innerText+"<br>"+filter+"<br>"+search.innerText.indexOf(filter))
 								if ( search.innerText.toLowerCase().indexOf(filter) == -1 )
 								{
-									//document.write("a");
-									//ltr.removeChild(tr);
-									td.innerHTML = "";
+									tr.innerHTML = "";
 									i--;
 								}
 							}catch(err) {   }
@@ -59,37 +58,34 @@
 					var debug = document.getElementById("debug");
 
 					locked_tabs = new Array();
-
 				}
 
-				function expand(id,job,name,real_name,image,key,ip,antagonist,ref){
+				function expand(id,job,name,real_name,old_names,key,ip,antagonist,ref){
 
 					clearAll();
 
 					var span = document.getElementById(id);
+					var ckey = key.toLowerCase().replace(/\[^a-z@0-9\]+/g,"");
 
 					body = "<table><tr><td>";
 
 					body += "</td><td align='center'>";
 
-					body += "<font size='2'><b>"+job+" "+name+"</b><br><b>Real name "+real_name+"</b><br><b>Played by "+key+" ("+ip+")</b></font>"
+					body += "<font size='2'><b>"+job+" "+name+"</b><br><b>Real name "+real_name+"</b><br><b>Played by "+key+" ("+ip+")</b><br><b>Old names :"+old_names+"</b></font>";
 
 					body += "</td><td align='center'>";
 
-					body += "<a href='?src=\ref[src];adminplayeropts="+ref+"'>PP</a> - "
-					body += "<a href='?src=\ref[src];notes=show;mob="+ref+"'>N</a> - "
-					body += "<a href='?_src_=vars;Vars="+ref+"'>VV</a> - "
-					body += "<a href='?src=\ref[src];contractor="+ref+"'>TP</a> - "
-					body += "<a href='?src=\ref[usr];priv_msg=\ref"+ref+"'>PM</a> - "
-					body += "<a href='?src=\ref[src];subtlemessage="+ref+"'>SM</a> - "
-					body += "<a href='?src=\ref[src];manup="+ref+"'>MAN_UP</a> - "
-					body += "<a href='?src=\ref[src];viewlogs="+ref+"'>LOGS</a> - "
-					body += "<a href='?src=\ref[src];paralyze="+ref+"'>PARA</a> - "
-					body += "<a href='?src=\ref[src];adminobservejump="+ref+"'>JMP</a><br>"
-					if(antagonist > 1)
-						body += "<font size='2'><a href='?src=\ref[src];check_antagonist=1'><font color='red'><b>Antagonist</b></font></a></font>";
-					else if(antagonist > 0)
-						body += "<font size='2'><font color='red'><b>Limited Antagonist</b></font></font>";
+					body += "<a href='?_src_=holder;[HrefToken()];adminplayeropts="+ref+"'>PP</a> - "
+					body += "<a href='?_src_=holder;[HrefToken()];showmessageckey="+ckey+"'>N</a> - "
+					body += "<a href='?_src_=vars;[HrefToken()];Vars="+ref+"'>VV</a> - "
+					body += "<a href='?_src_=holder;[HrefToken()];traitor="+ref+"'>TP</a> - "
+					body += "<a href='?priv_msg="+ckey+"'>PM</a> - "
+					body += "<a href='?_src_=holder;[HrefToken()];subtlemessage="+ref+"'>SM</a> - "
+					body += "<a href='?_src_=holder;[HrefToken()];adminplayerobservefollow="+ref+"'>FLW</a> - "
+					body += "<a href='?_src_=holder;[HrefToken()];individuallog="+ref+"'>LOGS</a><br>"
+					if(antagonist > 0)
+						body += "<font size='2'><a href='?_src_=holder;[HrefToken()];check_antagonist=1'><font color='red'><b>Antagonist</b></font></a></font>";
+
 					body += "</td></tr></table>";
 
 
@@ -103,7 +99,7 @@
 
 						var id = span.getAttribute("id");
 
-						if(!(id.indexOf("item")==0))
+						if(!id || !(id.indexOf("item")==0))
 							continue;
 
 						var pass = 1;
@@ -148,9 +144,6 @@
 					locked_tabs.push(id);
 					var notice_span = document.getElementById(notice_span_id);
 					notice_span.innerHTML = "<font color='red'>Locked</font> ";
-					//link.setAttribute("onClick","attempt('"+id+"','"+link_id+"','"+notice_span_id+"');");
-					//document.write("removeFromLocked('"+id+"','"+link_id+"','"+notice_span_id+"')");
-					//document.write("aa - "+link.getAttribute("onClick"));
 				}
 
 				function attempt(ab){
@@ -173,8 +166,6 @@
 					locked_tabs\[index\] = "";
 					var notice_span = document.getElementById(notice_span_id);
 					notice_span.innerHTML = "";
-					//var link = document.getElementById(link_id);
-					//link.setAttribute("onClick","addToLocked('"+id+"','"+link_id+"','"+notice_span_id+"')");
 				}
 
 				function selectTextField(){
@@ -199,7 +190,7 @@
 			<tr id='title_tr'>
 				<td align='center'>
 					<font size='5'><b>Player panel</b></font><br>
-					Hover over a line to see more information - <a href='?src=\ref[src];check_antagonist=1'>Storyteller Panel</a>
+					Hover over a line to see more information - <a href='?_src_=holder;[HrefToken()];check_antagonist=1'>Check antagonists</a> - Kick <a href='?_src_=holder;[HrefToken()];kick_all_from_lobby=1;afkonly=0'>everyone</a>/<a href='?_src_=holder;[HrefToken()];kick_all_from_lobby=1;afkonly=1'>AFKers</a> in lobby
 					<p>
 				</td>
 			</tr>
@@ -212,6 +203,12 @@
 
 	"}
 
+
+	var/ui_mode = user.prefs.ui_theme
+	var/dark_ui = FALSE
+	if(ui_mode == UI_PREFERENCE_DARK_MODE)
+		dark_ui = TRUE
+
 	//player table header
 	dat += {"
 		<span id='maintable_data_archive'>
@@ -222,9 +219,9 @@
 	for(var/mob/M in mobs)
 		if(M.ckey)
 
-			var/color = "#e6e6e6"
+			var/color = dark_ui ? "#2a2a2a" : "#e6e6e6"
 			if(i%2 == 0)
-				color = "#f2f2f2"
+				color = dark_ui ? "#1e1d1d" : "#f2f2f2"
 			var/is_antagonist = is_special_character(M)
 
 			var/M_job = ""
@@ -233,30 +230,14 @@
 
 				if(iscarbon(M)) //Carbon stuff
 					if(ishuman(M))
-						var/mob/living/carbon/human/H = M
-						M_job = H.job
-					else if(isslime(M))
-						M_job = "Slime"
-					else if(issmall(M))
+						M_job = M.job
+					else if(ismonkey(M))
 						M_job = "Monkey"
 					else
 						M_job = "Carbon-based"
 
-				else if(issilicon(M)) //silicon
-					if(isAI(M))
-						M_job = "AI"
-					else if(ispAI(M))
-						M_job = "pAI"
-					else if(isrobot(M))
-						M_job = "Robot"
-					else
-						M_job = "Silicon-based"
-
 				else if(isanimal(M)) //simple animals
-					if(iscorgi(M))
-						M_job = "Corgi"
-					else
-						M_job = "Animal"
+					M_job = "Animal"
 
 				else
 					M_job = "Living"
@@ -264,28 +245,22 @@
 			else if(isnewplayer(M))
 				M_job = "New player"
 
-			else if(isghost(M))
-				M_job = "Ghost"
-			else
-				M_job = "Unknown ([M.type])"
+			else if(isobserver(M))
+				var/mob/dead/observer/O = M
+				if(O.started_as_observer)//Did they get BTFO or are they just not trying?
+					M_job = "Observer"
+				else
+					M_job = "Ghost"
 
-			M_job = replacetext(M_job, "'", "")
-			M_job = replacetext(M_job, "\"", "")
-			M_job = replacetext(M_job, "\\", "")
-
-			var/M_name = M.name
-			M_name = replacetext(M_name, "'", "")
-			M_name = replacetext(M_name, "\"", "")
-			M_name = replacetext(M_name, "\\", "")
-			var/M_rname = M.real_name
-			M_rname = replacetext(M_rname, "'", "")
-			M_rname = replacetext(M_rname, "\"", "")
-			M_rname = replacetext(M_rname, "\\", "")
-
-			var/M_key = M.key
-			M_key = replacetext(M_key, "'", "")
-			M_key = replacetext(M_key, "\"", "")
-			M_key = replacetext(M_key, "\\", "")
+			var/M_name = html_encode(M.name)
+			var/M_rname = html_encode(M.real_name)
+			var/M_key = html_encode(M.key)
+			var/previous_names = ""
+			if(M_key)
+				var/datum/player_details/P = GLOB.player_details[ckey(M_key)]
+				if(P)
+					previous_names = P.played_names.Join(",")
+			previous_names = html_encode(previous_names)
 
 			//output for each mob
 			dat += {"
@@ -294,9 +269,10 @@
 					<td align='center' bgcolor='[color]'>
 						<span id='notice_span[i]'></span>
 						<a id='link[i]'
-						onmouseover='expand("item[i]","[M_job]","[M_name]","[M_rname]","--unused--","[M_key]","[M.lastKnownIP]",[is_antagonist],"[REF(M)]")'
+						onmouseover='expand("item[i]","[M_job]","[M_name]","[M_rname]","[previous_names]","[M_key]","[M.lastKnownIP]",[is_antagonist],"[REF(M)]")'
 						>
-						<span id='search[i]'><b>[M_name] - [M_rname] - [M_key] ([M_job])</b></span>
+						<b id='search[i]'>[M_name] - [M_rname] - [M_key] ([M_job])</b>
+						<span hidden class='filter_data'>[M_name] [M_rname] [M_key] [M_job] [previous_names]</span>
 						</a>
 						<br><span id='item[i]'></span>
 					</td>
@@ -320,12 +296,3 @@
 	"}
 
 	usr << browse(dat, "window=players;size=600x480")
-
-
-/datum/admins/proc/storyteller_panel()
-	var/datum/storyteller/ST = get_storyteller()
-	if(ST)
-		ST.storyteller_panel()
-	else
-		to_chat(usr, SPAN_WARNING("There is no storyteller."))
-

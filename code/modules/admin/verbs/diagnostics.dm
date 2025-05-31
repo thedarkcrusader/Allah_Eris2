@@ -20,13 +20,13 @@
 				largest_click_time = M.next_click - world.time
 			else
 				largest_click_time = 0
-		log_admin("DEBUG: [key_name(M)]  next_move = [M.next_move]  next_click = [M.next_click]  world.time = [world.time]")
+		log_admin("DEBUG: [key_name(M)]  next_move = [M.next_move]  lastDblClick = [M.next_click]  world.time = [world.time]")
 		M.next_move = 1
 		M.next_click = 0
-	message_admins("[key_name_admin(largest_move_mob)] had the largest move delay with [largest_move_time] frames / [largest_move_time/10] seconds!", 1)
-	message_admins("[key_name_admin(largest_click_mob)] had the largest click delay with [largest_click_time] frames / [largest_click_time/10] seconds!", 1)
-	message_admins("world.time = [world.time]", 1)
-
+	message_admins("[ADMIN_LOOKUPFLW(largest_move_mob)] had the largest move delay with [largest_move_time] frames / [DisplayTimeText(largest_move_time)]!")
+	message_admins("[ADMIN_LOOKUPFLW(largest_click_mob)] had the largest click delay with [largest_click_time] frames / [DisplayTimeText(largest_click_time)]!")
+	message_admins("world.time = [world.time]")
+	SSblackbox.record_feedback("tally", "admin_verb", 1, "Unfreeze Everyone") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
 	return
 
 /client/proc/radio_report()
@@ -47,52 +47,54 @@
 				continue
 			output += "&nbsp;&nbsp;[filter]: [f.len]<br>"
 			for (var/device in f)
-				if (isobj(device))
-					output += "&nbsp;&nbsp;&nbsp;&nbsp;[device] ([device:x],[device:y],[device:z] in area [get_area(device:loc)])<br>"
+				if (istype(device, /atom))
+					var/atom/A = device
+					output += "&nbsp;&nbsp;&nbsp;&nbsp;[device] ([AREACOORD(A)])<br>"
 				else
 					output += "&nbsp;&nbsp;&nbsp;&nbsp;[device]<br>"
 
 	usr << browse(output,"window=radioreport")
+	SSblackbox.record_feedback("tally", "admin_verb", 1, "Show Radio Report") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
 
 /client/proc/reload_admins()
 	set name = "Reload Admins"
-	set category = "Debug"
+	set category = "Admin"
 
-	if(!check_rights(R_SERVER))
+	if(!src.holder)
 		return
 
-	message_admins("[usr] manually reloaded admins")
+	var/confirm = alert(src, "Are you sure you want to reload all admins?", "Confirm", "Yes", "No")
+	if(confirm !="Yes")
+		return
+
 	load_admins()
+	SSblackbox.record_feedback("tally", "admin_verb", 1, "Reload All Admins") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
+	message_admins("[key_name_admin(usr)] manually reloaded admins")
 
-/client/proc/reload_mentors()
-	set name = "Reload Mentors"
-	set category = "Debug"
-
-	if(!check_rights(R_SERVER))
+/client/proc/toggle_cdn()
+	set name = "Toggle CDN"
+	set category = "Server"
+	var/static/admin_disabled_cdn_transport = null
+	if (alert(usr, "Are you sure you want to toggle the CDN asset transport?", "Confirm", "Yes", "No") != "Yes")
 		return
-
-	message_admins("[usr] manually reloaded Mentors")
-	world.load_mentors()
-
-/client/proc/print_jobban_old()
-	set name = "Print Jobban Log"
-	set desc = "This spams all the active jobban entries for the current round to standard output."
-	set category = "Debug"
-
-	to_chat(usr, "<b>Jobbans active in this round.</b>")
-	for(var/t in jobban_keylist)
-		to_chat(usr, "[t]")
-
-/client/proc/print_jobban_old_filter()
-	set name = "Search Jobban Log"
-	set desc = "This searches all the active jobban entries for the current round and outputs the results to standard output."
-	set category = "Debug"
-
-	var/filter = input("Contains what?","Filter") as text|null
-	if(!filter)
-		return
-
-	to_chat(usr, "<b>Jobbans active in this round.</b>")
-	for(var/t in jobban_keylist)
-		if(findtext(t, filter))
-			to_chat(usr, "[t]")
+	var/current_transport = CONFIG_GET(string/asset_transport)
+	if (!current_transport || current_transport == "simple")
+		if (admin_disabled_cdn_transport)
+			CONFIG_SET(string/asset_transport, admin_disabled_cdn_transport)
+			admin_disabled_cdn_transport = null
+			SSassets.OnConfigLoad()
+			message_admins("[key_name_admin(usr)] re-enabled the CDN asset transport")
+			log_admin("[key_name(usr)] re-enabled the CDN asset transport")
+		else
+			to_chat(usr, "<span class='adminnotice'>The CDN is not enabled!</span>")
+			if (alert(usr, "The CDN asset transport is not enabled! If you having issues with assets you can also try disabling filename mutations.", "The CDN asset transport is not enabled!", "Try disabling filename mutations", "Nevermind") == "Try disabling filename mutations")
+				SSassets.transport.dont_mutate_filenames = !SSassets.transport.dont_mutate_filenames
+				message_admins("[key_name_admin(usr)] [(SSassets.transport.dont_mutate_filenames ? "disabled" : "re-enabled")] asset filename transforms")
+				log_admin("[key_name(usr)] [(SSassets.transport.dont_mutate_filenames ? "disabled" : "re-enabled")] asset filename transforms")
+	else
+		admin_disabled_cdn_transport = current_transport
+		CONFIG_SET(string/asset_transport, "simple")
+		SSassets.OnConfigLoad()
+		SSassets.transport.dont_mutate_filenames = TRUE
+		message_admins("[key_name_admin(usr)] disabled the CDN asset transport")
+		log_admin("[key_name(usr)] disabled the CDN asset transport")

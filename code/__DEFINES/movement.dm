@@ -1,28 +1,38 @@
-#define MOVE_DELAY_MIN 1 // Absolute minimum of movement delay - cannot be lowered further by any means
-#define MOVE_DELAY_BASE 1.1
-#define MOVE_DELAY_VENTCRAWL MOVE_DELAY_BASE //Ventcrawling has a static speed for all mobs
+//The minimum for glide_size to be clamped to.
+//Clamped to 5 because byond's glide size scaling is actually just completely broken and "step"
+//movement is better than dealing with the awful camera juddering
+#define MIN_GLIDE_SIZE 4
+//The maximum for glide_size to be clamped to.
+//This shouldn't be higher than the icon size, and generally you shouldn't be changing this, but it's here just in case.
+#define MAX_GLIDE_SIZE 8
 
-//Glidesize
-#define FRACTIONAL_GLIDESIZES 1
-#ifdef FRACTIONAL_GLIDESIZES
-#define DELAY2GLIDESIZE(delay) (world.icon_size / max(CEILING(delay / world.tick_lag, 1), 1))
-#else
-#define DELAY2GLIDESIZE(delay) (CEILING(world.icon_size / max(CEILING(delay / world.tick_lag, 1), 1)))
-#endif
+//This is a global so it can be changed in game, if you want to make this a bit faster you can make it a constant/define directly in the code
+//GLOBAL_VAR_INIT(glide_size_multiplier, 1.25)
 
+GLOBAL_VAR_INIT(glide_size_multiplier, 1.0)
 
-#define JETPACK_MOVE_COST	0.005
+///Broken down, here's what this does:
+/// divides the world icon_size (32) by delay divided by ticklag to get the number of pixels something should be moving each tick.
+/// The division result is given a min value of 1 to prevent obscenely slow glide sizes from being set
+/// Then that's multiplied by the global glide size multiplier. 1.25 by default feels pretty close to spot on. This is just to try to get byond to behave.
+/// The whole result is then clamped to within the range above.
+/// Not very readable but it works
+#define DELAY_TO_GLIDE_SIZE(delay) (clamp(((world.icon_size / max((delay) / world.tick_lag, 1)) * GLOB.glide_size_multiplier), MIN_GLIDE_SIZE, MAX_GLIDE_SIZE))
 
+///Similar to DELAY_TO_GLIDE_SIZE, except without the clamping, and it supports piping in an unrelated scalar
+#define MOVEMENT_ADJUSTED_GLIDE_SIZE(delay, movement_disparity) (world.icon_size / ((delay) / world.tick_lag) * movement_disparity * GLOB.glide_size_multiplier)
 
-#define HAS_TRANSFORMATION_MOVEMENT_HANDLER(X) X.HasMovementHandler(/datum/movement_handler/mob/transformation)
-#define ADD_TRANSFORMATION_MOVEMENT_HANDLER(X) X.AddMovementHandler(/datum/movement_handler/mob/transformation)
-#define DEL_TRANSFORMATION_MOVEMENT_HANDLER(X) X.RemoveMovementHandler(/datum/movement_handler/mob/transformation)
+//Movement loop priority. Only one loop can run at a time, this dictates that
+// Higher numbers beat lower numbers
+///Standard, go lower then this if you want to override, higher otherwise
+#define MOVEMENT_DEFAULT_PRIORITY 10
+///Very few things should override this
+#define MOVEMENT_SPACE_PRIORITY 100
+///Higher then the heavens
+#define MOVEMENT_ABOVE_SPACE_PRIORITY (MOVEMENT_SPACE_PRIORITY + 1)
 
-
-// Quick and deliberate movements are not necessarily mutually exclusive
-#define MOVE_INTENT_DELIBERATE 0x0001
-#define MOVE_INTENT_EXERTIVE   0x0002
-#define MOVE_INTENT_QUICK      0x0004
-
-#define MOVING_DELIBERATELY(X) (X ? X.move_intent?.flags & MOVE_INTENT_DELIBERATE : TRUE)
-#define MOVING_QUICKLY(X) (X.move_intent?.flags & MOVE_INTENT_QUICK)
+//Movement loop flags
+///Should the loop act immediately following its addition?
+#define MOVEMENT_LOOP_START_FAST (1<<0)
+///Do we not use the priority system?
+#define MOVEMENT_LOOP_IGNORE_PRIORITY (1<<1)

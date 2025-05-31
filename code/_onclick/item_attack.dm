@@ -1,332 +1,556 @@
-/*
-=== Item Click Call Sequences ===
-These are the default click code call sequences used when clicking on stuff with an item.
-
-Atoms:
-
-mob/ClickOn() calls the item's resolve_attackby() proc.
-item/resolve_attackby() calls the target atom's attackby() proc.
-
-Mobs:
-
-mob/living/attackby() after checking for surgery, calls the item's attack() proc.
-item/attack() generates attack logs, sets click cooldown and calls the mob's attacked_with_item() proc. If you override this, consider whether you need to set a click cooldown, play attack animations, and generate logs yourself.
-mob/attacked_with_item() should then do mob-type specific stuff (like determining hit/miss, handling shields, etc) and then possibly call the item's apply_hit_effect() proc to actually apply the effects of being hit.
-
-Item Hit Effects:
-
-item/apply_hit_effect() can be overriden to do whatever you want. However "standard" physical damage based weapons should make use of the target mob's hit_with_weapon() proc to
-avoid code duplication. This includes items that may sometimes act as a standard weapon in addition to having other effects (e.g. stunbatons on harm intent).
-*/
+/**
+ *This is the proc that handles the order of an item_attack.
+ *The order of procs called is:
+ *tool_act on the target. If it returns TRUE, the chain will be stopped.
+ *pre_attack() on src. If this returns TRUE, the chain will be stopped.
+ *attackby on the target. If it returns TRUE, the chain will be stopped.
+ *and lastly
+ *afterattack. The return value does not matter.
+ */
+/obj/item/proc/melee_attack_chain(mob/user, atom/target, params)
+	if(user.check_arm_grabbed(user.active_hand_index))
+		var/mob/living/G = user.pulledby
+		var/mob/living/U = user
+		var/userskill = 1
+		if(U?.get_skill_level(/datum/skill/combat/wrestling))
+			userskill = ((U.get_skill_level(/datum/skill/combat/wrestling) * 0.1) + 1)
+		var/grabberskill = 1
+		if(G?.get_skill_level(/datum/skill/combat/wrestling))
+			grabberskill = ((G.get_skill_level(/datum/skill/combat/wrestling) * 0.1) + 1)
+		if(((U.STASTR + rand(1, 6)) * userskill) < ((G.STASTR + rand(1, 6)) * grabberskill))
+			to_chat(user, span_notice("I can't move my arm!"))
+			user.changeNext_move(CLICK_CD_GRABBING)
+			return
+		else
+			user.resist_grab()
+	if(!user.has_hand_for_held_index(user.active_hand_index, TRUE)) //we obviously have a hand, but we need to check for fingers/prosthetics
+		to_chat(user, "<span class='warning'>I can't move the fingers of my [user.active_hand_index == 1 ? "left" : "right"] hand.</span>")
+		return
+	if(!istype(src, /obj/item/grabbing))
+		if(HAS_TRAIT(user, TRAIT_CHUNKYFINGERS))
+			to_chat(user, span_warning("...What?"))
+			return
+	if(tool_behaviour && target.tool_act(user, src, tool_behaviour))
+		return
+	if(pre_attack(target, user, params))
+		return
+	if(target.attackby(src,user, params))
+		return
+	if(QDELETED(src) || QDELETED(target))
+		attack_qdeleted(target, user, TRUE, params)
+		return
+	afterattack(target, user, TRUE, params)
 
 // Called when the item is in the active hand, and clicked; alternately, there is an 'activate held object' verb or you can hit pagedown.
 /obj/item/proc/attack_self(mob/user)
-	return
+	if(SEND_SIGNAL(src, COMSIG_ITEM_ATTACK_SELF, user) & COMPONENT_NO_INTERACT)
+		return
+	interact(user)
 
-
-// Called at the start of resolve_attackby(), before the actual attack.
-// Return a nonzero value to abort the attack
-/obj/item/proc/pre_attack(atom/a, mob/user, var/params)
-	return
-
-//I would prefer to rename this to attack(), but that would involve touching hundreds of files.
-/obj/item/proc/resolve_attackby(atom/A, mob/user, params)
-	if(item_flags & ABSTRACT)//Abstract items cannot be interacted with. They're not real.
-		return 1
-	if (pre_attack(A, user, params))
-		return 1 //Returning 1 passes an abort signal upstream
-	add_fingerprint(user)
-	if(ishuman(user))//monkeys can use items, unfortunately
-		var/mob/living/carbon/human/H = user
-		if(H.blocking)
-			H.stop_blocking()
-	if(ishuman(user) && !(user == A) && !(user.loc == A) && (w_class >=  ITEM_SIZE_NORMAL) && wielded && user.a_intent == I_HURT && !istype(src, /obj/item/gun) && !istype(A, /obj/structure) && !istype(A, /turf/wall) && A.loc != user && !no_swing)
-		swing_attack(A, user, params)
-		if(istype(A, /turf/floor)) // shitty hack so you can attack floors while wielding a large weapon
-			return A.attackby(src, user, params)
-		return 1 //Swinging calls its own attacks
-	return A.attackby(src, user, params)
-
-//Returns TRUE if attack is to be carried out, FALSE otherwise.
-/obj/item/proc/double_tact(mob/user, atom/atom_target, adjacent)
-	if(atom_target.loc == user)//putting stuff in your backpack, or something else on your person?
-		return TRUE //regular bags won't even be able to hold items this big, but who knows
-	if((w_class >= ITEM_SIZE_HUGE || (w_class == ITEM_SIZE_BULKY && !wielded)) && !abstract && !istype(src, /obj/item/gun) && !no_double_tact)//grabs have colossal w_class. You can't raise something that does not exist.
-		if(!adjacent || istype(atom_target, /turf) || istype(atom_target, /mob) || user.a_intent == I_HURT)//guns have the point blank privilege
-			if(!ready)
-				user.visible_message(SPAN_DANGER("[user] raises [src]!"))
-				ready = TRUE
-				var/obj/effect/effect/melee/alert/A = new()
-				user.vis_contents += A
-				qdel(A)
-				var/unready_time = world.time + (10 SECONDS)
-				while(world.time < unready_time)
-					sleep(1)
-					if(!(ready))
-						user.vis_contents -= A
-						return FALSE
-					if(!(is_equipped()))
-						ready = FALSE
-						user.vis_contents -= A
-						return FALSE
-				user.visible_message(SPAN_NOTICE("[user] lowers \his [src]."))
-				ready = FALSE
-				user.vis_contents -= A
-				return FALSE
-			else
-				ready = FALSE
-				return TRUE
-		else
-			return TRUE
-	else
+/obj/item/proc/pre_attack(atom/A, mob/living/user, params) //do stuff before attackby!
+	if(SEND_SIGNAL(src, COMSIG_ITEM_PRE_ATTACK, A, user, params) & COMPONENT_NO_ATTACK)
 		return TRUE
+	return FALSE //return TRUE to avoid calling attackby after this proc does stuff
 
-
-/obj/item/proc/swing_attack(atom/A, mob/user, params)
-	var/holdinghand = user.get_inventory_slot(src)
-	if(params && islist(params) && params["mech"])
-		holdinghand = params["mech_hand"]
-	var/turf/R
-	var/turf/C
-	var/turf/L
-	if(A.x == 0 && A.y == 0 && A.z == 0) //Attacking equipped items results in them getting forwarded
-		C = get_turf(user)
-	else
-		C = get_turf(A)
-	var/_dir
-	if(C == get_turf(user)) //If turf matches with user, move the attack towards where the user is facing
-		_dir = user.dir
-		C = get_step(C, _dir)
-	else
-		_dir = get_dir(user, A)
-	switch(_dir)
-		if(NORTH)
-			R = get_step(C, EAST)
-			L = get_step(C, WEST)
-		if(SOUTH)
-			R = get_step(C, WEST)
-			L = get_step(C, EAST)
-		if(EAST)
-			R = get_step(C, SOUTH)
-			L = get_step(C, NORTH)
-		if(WEST)
-			R = get_step(C, NORTH)
-			L = get_step(C, SOUTH)
-		if(NORTHEAST)
-			R = get_step(C, SOUTH)
-			L = get_step(C, WEST)
-		if(NORTHWEST)
-			R = get_step(C, EAST)
-			L = get_step(C, SOUTH)
-		if(SOUTHEAST)
-			R = get_step(C, WEST)
-			L = get_step(C, NORTH)
-		if(SOUTHWEST)
-			R = get_step(C, NORTH)
-			L = get_step(C, EAST)
-	var/obj/effect/effect/melee/swing/S = new(get_turf(user))
-	S.dir = _dir
-	user.visible_message(SPAN_DANGER("[user] swings \his [src]"))
-	playsound(loc, 'sound/effects/swoosh.ogg', 50, 1, -1)
-	switch(holdinghand)
-		if(slot_l_hand)
-			flick("left_swing", S)
-			var/dmg_modifier = 1
-			dmg_modifier = tileattack(user, L, modifier = 1)
-			dmg_modifier = tileattack(user, C, modifier = dmg_modifier, original_target = A)
-			tileattack(user, R, modifier = dmg_modifier)
-			QDEL_IN(S, 2 SECONDS)
-		if(slot_r_hand)
-			flick("right_swing", S)
-			var/dmg_modifier = 1
-			dmg_modifier = tileattack(user, R, modifier = 1)
-			dmg_modifier = tileattack(user, C, modifier = dmg_modifier, original_target = A)
-			tileattack(user, L, modifier = dmg_modifier)
-			QDEL_IN(S, 2 SECONDS)
-	user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-
-/atom/proc/attackby(obj/item/W, mob/user, params)
-	return
-
-/atom/movable/attackby(obj/item/I, mob/living/user)
-	if(!(I.flags & NOBLUDGEON))
-		if(user.client && user.a_intent == I_HELP)
-			return
-
-		user.do_attack_animation(src)
-		if (I.hitsound)
-			playsound(loc, I.hitsound, 50, 1, -1)
-		visible_message(SPAN_DANGER("[src] has been hit by [user] with [I]."))
-		user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-
-// meant for handling stuff when destroyed
-/obj/proc/nt_sword_handle()
+/atom/proc/pre_attack_right(atom/A, mob/living/user, params)
 	return FALSE
 
-/obj/proc/nt_sword_attack(obj/item/I, mob/living/user)//for sword of truth
-	. = FALSE
-	if(!istype(I, /obj/item/tool/sword/nt_sword))
+// No comment
+/atom/proc/attackby(obj/item/W, mob/user, params)
+	if(user.used_intent.tranged)
 		return FALSE
-	var/obj/item/tool/sword/nt_sword/NT = I
-	if(user.a_intent != I_HURT)
-		to_chat(user, SPAN_NOTICE("You need to be in a harming stance."))
+	if(SEND_SIGNAL(src, COMSIG_PARENT_ATTACKBY, W, user, params) & COMPONENT_NO_AFTERATTACK)
+		return TRUE
+	return FALSE
+
+/obj/attackby(obj/item/I, mob/living/user, params)
+	if(!user.cmode)
+		if(user.try_recipes(src, I, user))
+			user.changeNext_move(CLICK_CD_FAST)
+			return TRUE
+	if(I.obj_flags_ignore)
+		return I.attack_obj(src, user)
+	return ..() || ((obj_flags & CAN_BE_HIT) && I.attack_obj(src, user))
+
+/turf/attackby(obj/item/I, mob/living/user, params)
+	if(liquids && I.heat)
+		hotspot_expose(I.heat)
+	return ..() || (max_integrity && I.attack_turf(src, user))
+
+/mob/living/attackby(obj/item/I, mob/living/user, params)
+	if(..())
+		return TRUE
+	var/adf = user.used_intent.clickcd
+	if(istype(user.rmb_intent, /datum/rmb_intent/aimed))
+		adf = round(adf * 1.4)
+	if(istype(user.rmb_intent, /datum/rmb_intent/swift))
+		adf = round(adf * 0.6)
+
+	for(var/obj/item/clothing/worn_thing in get_equipped_items(include_pockets = TRUE))//checks clothing worn by src.
+	// Things that are supposed to be worn, being held = cannot block
+		if(isclothing(worn_thing))
+			if(worn_thing in held_items)
+				continue
+		// Things that are supposed to be held, being worn = cannot block
+		else if(!(worn_thing in held_items))
+			continue
+		worn_thing.hit_response(src, user) //checks if clothing has hit response. Refer to Items.dm
+
+	user.changeNext_move(adf)
+	return I.attack(src, user)
+
+/mob/living
+	var/tempatarget = null
+	var/pegleg = 0			//Handles check & slowdown for peglegs. Fuckin' bootleg, literally, but hey it at least works.
+	var/pet_passive = FALSE
+
+/obj/item/proc/attack(mob/living/M, mob/living/user)
+	if(SEND_SIGNAL(src, COMSIG_ITEM_ATTACK, M, user) & COMPONENT_ITEM_NO_ATTACK)
 		return FALSE
-	if(NT.isBroken)
+	if(SEND_SIGNAL(user, COMSIG_MOB_ITEM_ATTACK, M, src))
 		return FALSE
-	if(!(NT.flags & NOBLUDGEON))
-		if(user.a_intent == I_HELP)
-			return FALSE
-		user.do_attack_animation(src)
-		if (NT.hitsound)
-			playsound(loc, I.hitsound, 50, 1, -1)
-		visible_message(SPAN_DANGER("[src] has been hit by [user] with [NT]."))
-		user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-		for(var/mob/living/carbon/human/H in viewers(user))
-			SEND_SIGNAL_OLD(H, SWORD_OF_TRUTH_OF_DESTRUCTION, src)
-		if(eotp)
-			eotp.addObservation(200)
-			eotp.power_gaine *= 2
-			eotp.max_observation *= 1.25
-			eotp.armaments_rate *= 2
-			eotp.max_armaments_points *= 2
-		nt_sword_handle()
-		qdel(src)
+	if(item_flags & NOBLUDGEON)
+		return FALSE
 
-		. = TRUE
+	if(force && HAS_TRAIT(user, TRAIT_PACIFISM))
+		to_chat(user, "<span class='warning'>I don't want to harm other living beings!</span>")
+		return
+
+	M.lastattacker = user.real_name
+	M.lastattackerckey = user.ckey
+	if(M.mind)
+		M.mind.attackedme[user.real_name] = world.time
+	if(force)
+		if(user.used_intent)
+			if(!user.used_intent.noaa)
+				playsound(get_turf(src), pick(swingsound), 100, FALSE, -1)
+			if(user.used_intent.no_attack) //BYE!!!
+				return
+	else
+		return
+
+//	if(force)
+//		user.emote("attackgrunt")
+	var/datum/intent/cached_intent = user.used_intent
+	if(user.used_intent.swingdelay)
+		sleep(user.used_intent.swingdelay)
+	if(user.a_intent != cached_intent)
+		return
+	if(QDELETED(src) || QDELETED(M))
+		return
+	if(!user.CanReach(M,src))
+		return
+	if(user.get_active_held_item() != src)
+		return
+	if(user.incapacitated(ignore_grab = TRUE))
+		return
+	if((M.body_position != LYING_DOWN))
+		if(M.checkmiss(user))
+			return
+	if(istype(user.rmb_intent, /datum/rmb_intent/strong))
+		user.adjust_stamina(10)
+	if(istype(user.rmb_intent, /datum/rmb_intent/swift))
+		user.adjust_stamina(10)
+	var/turf/turf_before = get_turf(M)
+	if(M.checkdefense(user.used_intent, user))
+		if(M.d_intent == INTENT_PARRY)
+			if(!M.get_active_held_item() && !M.get_inactive_held_item()) //we parried with a bracer, redirect damage
+				if(M.active_hand_index == 1)
+					user.tempatarget = BODY_ZONE_L_ARM
+				else
+					user.tempatarget = BODY_ZONE_R_ARM
+				if(M.attacked_by(src, user)) //we change intents when attacking sometimes so don't play if we do (embedding items)
+					if(user.used_intent == cached_intent)
+						var/tempsound = user.used_intent.hitsound
+						if(tempsound)
+							playsound(M.loc,  tempsound, 100, FALSE, -1)
+						else
+							playsound(M.loc,  "nodmg", 100, FALSE, -1)
+				log_combat(user, M, "attacked", src.name, "(INTENT: [uppertext(user.used_intent.name)]) (DAMTYPE: [uppertext(damtype)])")
+				add_fingerprint(user)
+		if(M.d_intent == INTENT_DODGE)
+			if(!user.used_intent.swingdelay)
+				if(get_dist(get_turf(user), get_turf(M)) <= user.used_intent.reach)
+					user.do_attack_animation(turf_before, visual_effect_icon = user.used_intent.animname, used_item = src, used_intent = user.used_intent)
+				else
+					user.do_attack_animation(get_ranged_target_turf(user, get_dir(user, M), 1), visual_effect_icon = user.used_intent.animname, used_item = src, used_intent = user.used_intent)
+		return
+	if(!user.used_intent.noaa)
+		if(get_dist(get_turf(user), get_turf(M)) <= user.used_intent.reach)
+			user.do_attack_animation(M, visual_effect_icon = user.used_intent.animname, used_item = src, used_intent = user.used_intent)
+		else
+			user.do_attack_animation(get_ranged_target_turf(user, get_dir(user, M), 1), visual_effect_icon = user.used_intent.animname, used_item = src, used_intent = user.used_intent)
+	if(user.zone_selected == BODY_ZONE_PRECISE_R_INHAND)
+		var/offh = 0
+		var/obj/item/W = M.held_items[1]
+		if(W)
+			if(M.body_position == LYING_DOWN)
+				M.throw_item(get_step(M,turn(M.dir, 90)), offhand = offh)
+			else
+				M.dropItemToGround(W)
+			M.visible_message("<span class='notice'>[user] disarms [M]!</span>", \
+							"<span class='boldwarning'>I'm disarmed by [user]!</span>")
+			return
+
+	if(user.zone_selected == BODY_ZONE_PRECISE_L_INHAND)
+		var/offh = 0
+		var/obj/item/W = M.held_items[2]
+		if(W)
+			if(M.body_position == LYING_DOWN)
+				M.throw_item(get_step(M,turn(M.dir, 270)), offhand = offh)
+			else
+				M.dropItemToGround(W)
+			M.visible_message("<span class='notice'>[user] disarms [M]!</span>", \
+							"<span class='boldwarning'>I'm disarmed by [user]!</span>")
+			return
+
+	if(M.attacked_by(src, user))
+		if(user.used_intent == cached_intent)
+			var/tempsound = user.used_intent.hitsound
+			if(tempsound)
+				playsound(M.loc,  tempsound, 100, FALSE, -1)
+			else
+				playsound(M.loc,  "nodmg", 100, FALSE, -1)
+
+	log_combat(user, M, "attacked", src.name, "(INTENT: [uppertext(user.used_intent.name)]) (DAMTYPE: [uppertext(damtype)])")
+	add_fingerprint(user)
 
 
-/obj/item/attackby(obj/item/I, mob/living/user, var/params)
+//the equivalent of the standard version of attack() but for object targets.
+/obj/item/proc/attack_obj(obj/O, mob/living/user)
+	if(SEND_SIGNAL(src, COMSIG_ITEM_ATTACK_OBJ, O, user) & COMPONENT_NO_ATTACK_OBJ)
+		return
+	if(item_flags & NOBLUDGEON)
+		return
+	if(O.attacked_by(src, user))
+		user.do_attack_animation(O, used_intent = user.used_intent, used_item = src,)
+		return TRUE
+
+/obj/item/proc/attack_turf(turf/T, mob/living/user)
+	if(T.max_integrity)
+		if(T.attacked_by(src, user))
+			user.do_attack_animation(T, used_intent = user.used_intent, used_item = src,)
+			return TRUE
+
+/atom/movable/proc/attacked_by()
+	return FALSE
+
+/*
+* I didnt code this but this is what ive deciphered.
+* Complex damage is the final calculation of damage
+* and the source of dulling for weapons.
+* This proc is also not overridable due to having no root.
+* -IP
+*/
+/proc/get_complex_damage(obj/item/I, mob/living/user, blade_dulling, turf/closed/mineral/T)
+	var/dullfactor = 1
+	if(!I?.force)
+		return 0
+	// newforce starts here and is the default amount of damage the item does.
+	var/newforce = I.force
+	// If this weapon has no user and is somehow attacking you just return default.
+	if(!istype(user))
+		return newforce
+	var/cont = FALSE
+	var/used_str = user.STASTR
+	if(iscarbon(user))
+		var/mob/living/carbon/C = user
+		/*
+		* If you have a dominant hand which is assigned at
+		* character creation. You suffer a -1 Str if your
+		* no using the item in your dominant hand.
+		* Check living/carbon/carbon.dm for more info.
+		*/
+		if(C.domhand)
+			used_str = C.get_str_arms(C.used_hand)
+	//STR is +1 from STRONG stance and -1 from WEAK stance
+	if(istype(user.rmb_intent, /datum/rmb_intent/strong))
+		used_str++
+	if(istype(user.rmb_intent, /datum/rmb_intent/weak))
+		used_str /= 2
+	//Your max STR is 20.
+	used_str = CLAMP(used_str, 1, 20)
+	if(used_str >= 11)
+		newforce = newforce + (newforce * ((used_str - 10) * 0.1))
+	else if(used_str <= 9)
+		newforce = newforce - (newforce * ((10 - used_str) * 0.1))
+
+	if(I.minstr)
+		var/effective = I.minstr
+		if(I.wielded)
+			effective = max(I.minstr / 2, 1)
+		//Strength influence is reduced to 30%
+		if(effective > user.STASTR)
+			newforce = max(newforce*0.3, 1)
+
+	//Blade Dulling Starts here.
+	switch(blade_dulling)
+		if(DULLING_CUT) //wooden that can't be attacked by clubs (trees, bushes, grass)
+			switch(user.used_intent.blade_class)
+				if(BCLASS_CUT)
+					var/mob/living/lumberjacker = user
+					var/lumberskill = lumberjacker.get_skill_level(/datum/skill/labor/lumberjacking)
+					if(!I.remove_bintegrity(1, user))
+						dullfactor = 0.2
+					else
+						dullfactor = 0.45 + (lumberskill * 0.15)
+						lumberjacker.mind.add_sleep_experience(/datum/skill/labor/lumberjacking, (lumberjacker.STAINT*0.2))
+					cont = TRUE
+				if(BCLASS_CHOP)
+					//Additional damage for axes against trees.
+					if(istype(I, /obj/item/weapon))
+						var/obj/item/weapon/R = I
+						if(R.axe_cut)
+							//Yes i know its cheap to just make it a flat plus.
+							newforce = newforce + R.axe_cut
+					if(!I.remove_bintegrity(1, user))
+						dullfactor = 0.2
+					else
+						dullfactor = 1.5
+					cont = TRUE
+			if(!cont)
+				return 0
+		if(DULLING_BASH) //stone/metal, can't be attacked by cutting
+			switch(user.used_intent.blade_class)
+				if(BCLASS_BLUNT)
+					cont = TRUE
+				if(BCLASS_SMASH)
+					dullfactor = 1.5
+					cont = TRUE
+				if(BCLASS_DRILL)
+					dullfactor = 10
+					cont = TRUE
+				if(BCLASS_PICK)
+					dullfactor = 1.5
+					cont = TRUE
+			if(!cont)
+				return 0
+		if(DULLING_BASHCHOP) //structures that can be attacked by clubs also (doors fences etc)
+			switch(user.used_intent.blade_class)
+				if(BCLASS_CUT)
+					if(!I.remove_bintegrity(1, user))
+						dullfactor = 0.8
+					cont = TRUE
+				if(BCLASS_CHOP)
+					if(!I.remove_bintegrity(1, user))
+						dullfactor = 0.8
+					else
+						dullfactor = 1.5
+					cont = TRUE
+				if(BCLASS_SMASH)
+					dullfactor = 1.5
+					cont = TRUE
+				if(BCLASS_DRILL)
+					dullfactor = 10
+					cont = TRUE
+				if(BCLASS_BLUNT)
+					cont = TRUE
+				if(BCLASS_PICK)
+					var/mob/living/miner = user
+					var/mineskill = miner.get_skill_level(/datum/skill/labor/mining)
+					dullfactor = 1.6 - (mineskill * 0.1)
+					cont = TRUE
+			if(!cont)
+				return 0
+		if(DULLING_PICK) //cannot deal damage if not a pick item. aka rock walls
+			if(user.body_position == LYING_DOWN)
+				to_chat(user, span_warning("I need to stand up to get a proper swing."))
+				return 0
+			if(user.used_intent.blade_class != BCLASS_PICK && user.used_intent.blade_class != BCLASS_DRILL)
+				return 0
+			var/mob/living/miner = user
+			//Mining Skill force multiplier.
+			var/mineskill = miner.get_skill_level(/datum/skill/labor/mining)
+			newforce = newforce * (8+(mineskill*1.5))
+			// Pick quality multiplier. Affected by smithing, or material of the pick.
+			if(istype(I, /obj/item/weapon/pick))
+				var/obj/item/weapon/pick/P = I
+				newforce *= P.pickmult
+			shake_camera(user, 1, 0.1)
+			miner.adjust_experience(/datum/skill/labor/mining, (miner.STAINT*0.2))
+	/*
+	* Ill be honest this final thing is extremely confusing.
+	* Newforce after being altered by strength stat is then
+	* multiplied by the damage factor of used_intent datum
+	* for exsample /datum/intent/mace/smash has a damfactor
+	* of 1.1. This value is then multiplied again by the
+	* dullfactor which ranges from 0.2 to 1.6 and is 1 by
+	* default. Picks are not effected by dullfactor if hitting
+	* a rock wall or anything with DULLING_PICK blade_dulling
+	* flag. This is alot.
+	*/
+	newforce = (newforce * user.used_intent.damfactor) * dullfactor
+	if(user.used_intent.get_chargetime() && user.client?.chargedprog < 100)
+		newforce = newforce * round(user.client?.chargedprog / 100, 0.1)
+	// newforce = round(newforce, 1)
+	if(user.body_position == LYING_DOWN)
+		newforce *= 0.5
+	if(user.has_status_effect(/datum/status_effect/divine_strike))
+		newforce += 5
+	// newforce is rounded upto the nearest intiger.
+	newforce = round(newforce,1)
+	//This is returning the maximum of the arguments meaning this is to prevent negative values.
+	newforce = max(newforce, 1)
+	return newforce
+
+/obj/attacked_by(obj/item/I, mob/living/user)
+	user.changeNext_move(CLICK_CD_MELEE)
+	var/newforce = get_complex_damage(I, user, blade_dulling)
+	if(!newforce)
+		return 0
+	if(newforce < damage_deflection)
+		return 0
+	if(user.used_intent.no_attack)
+		return 0
+	log_combat(user, src, "attacked", I)
+	var/verbu = "hits"
+	verbu = pick(user.used_intent.attack_verb)
+	if(newforce > 1)
+		if(user.adjust_stamina(5))
+			user.visible_message("<span class='danger'>[user] [verbu] [src] with [I]!</span>")
+		else
+			user.visible_message("<span class='warning'>[user] [verbu] [src] with [I]!</span>")
+			newforce = 1
+	else
+		user.visible_message("<span class='warning'>[user] [verbu] [src] with [I]!</span>")
+	take_damage(newforce, I.damtype, I.damage_type, 1)
+	if(newforce > 1)
+		I.take_damage(1, BRUTE, "blunt")
+	return TRUE
+
+/turf/proc/attacked_by(obj/item/I, mob/living/user)
+	var/newforce = get_complex_damage(I, user, blade_dulling)
+	if(!newforce)
+		return 0
+	if(newforce < damage_deflection)
+		return 0
+	if(user.used_intent.no_attack)
+		return 0
+	user.changeNext_move(CLICK_CD_MELEE)
+	log_combat(user, src, "attacked", I)
+	var/verbu = "hits"
+	verbu = pick(user.used_intent.attack_verb)
+	if(newforce > 1)
+		if(user.adjust_stamina(5))
+			user.visible_message("<span class='danger'>[user] [verbu] [src] with [I]!</span>")
+		else
+			user.visible_message("<span class='warning'>[user] [verbu] [src] with [I]!</span>")
+			newforce = 1
+	else
+		user.visible_message("<span class='warning'>[user] [verbu] [src] with [I]!</span>")
+
+	take_damage(newforce, I.damtype, I.damage_type, 1)
+	if(newforce > 1)
+		I.take_damage(1, BRUTE, "blunt")
+	return TRUE
+
+/mob/living/proc/simple_limb_hit(zone)
+	if(!zone)
+		return ""
+	if(istype(src, /mob/living/simple_animal))
+		return zone
+	else
+		return "body"
+
+/obj/item/proc/funny_attack_effects(mob/living/target, mob/living/user, nodmg)
 	return
 
-/mob/living/attackby(obj/item/I, mob/living/user, var/params)
-	if(!ismob(user))
-		return FALSE
-	var/surgery_check = can_operate(src, user)
-	if(surgery_check && do_surgery(src, user, I, surgery_check)) //Surgery
+/mob/living/attacked_by(obj/item/I, mob/living/user)
+	var/hitlim = simple_limb_hit(user.zone_selected)
+	I.funny_attack_effects(src, user)
+	if(I.force)
+		var/newforce = get_complex_damage(I, user)
+		apply_damage(newforce, I.damtype, def_zone = hitlim)
+		if(I.damtype == BRUTE)
+			next_attack_msg.Cut()
+			if(HAS_TRAIT(src, TRAIT_SIMPLE_WOUNDS))
+				var/datum/wound/crit_wound  = simple_woundcritroll(user.used_intent.blade_class, newforce, user, hitlim)
+				if(should_embed_weapon(crit_wound, I))
+					// throw_alert("embeddedobject", /atom/movable/screen/alert/embeddedobject)
+					simple_add_embedded_object(I, silent = FALSE, crit_message = TRUE)
+					src.grabbedby(user, 1, item_override = I)
+			var/haha = user.used_intent.blade_class
+			if(newforce > 5)
+				if(haha != BCLASS_BLUNT)
+					I.add_mob_blood(src)
+					var/turf/location = get_turf(src)
+					add_splatter_floor(location)
+					if(get_dist(user, src) <= 1)	//people with TK won't get smeared with blood
+						user.add_mob_blood(src)
+			if(newforce > 15)
+				if(haha == BCLASS_BLUNT)
+					I.add_mob_blood(src)
+					var/turf/location = get_turf(src)
+					add_splatter_floor(location)
+					if(get_dist(user, src) <= 1)	//people with TK won't get smeared with blood
+						user.add_mob_blood(src)
+	send_item_attack_message(I, user, hitlim)
+	if(I.force)
 		return TRUE
+
+/mob/living/simple_animal/attacked_by(obj/item/I, mob/living/user)
+	if(I.force < force_threshold || I.damtype == STAMINA)
+		playsound(loc, 'sound/blank.ogg', I.get_clamped_volume(), TRUE, -1)
 	else
-		return I.attack(src, user, user.targeted_organ)
-
-//Used by Area of effect attacks, if it returns FALSE, it failed
-/obj/item/proc/attack_with_multiplier(mob/living/user, var/atom/target, var/modifier = 1)
-	if(!wielded && modifier > 0)
-		return FALSE
-	var/original_force = force
-	var/original_unwielded_force = force_wielded_multiplier ? force / force_wielded_multiplier : force / 1.3
-	force *= modifier
-	target.attackby(src, user)
-	force = wielded ? original_force : round(original_unwielded_force, 1)
-	return TRUE
-
-//Same as above but for mobs
-/obj/item/proc/attack_with_multiplier_mob(mob/living/user, var/mob/living/target, var/modifier = 1)
-	if(!wielded && modifier > 0)
-		return FALSE
-	var/original_force = force
-	var/original_unwielded_force = force_wielded_multiplier ? force / force_wielded_multiplier : force / 1.3
-	force *= modifier
-	attack(target, user, user.targeted_organ)
-	force = wielded ? original_force : round(original_unwielded_force, 1)
-	return TRUE
-
-//Area of effect attacks (swinging), return remaining damage
-/obj/item/proc/tileattack(mob/living/user, turf/targetarea, var/modifier = 1, var/swing_degradation = 0.2, var/original_target)
-	if(istype(targetarea, /turf/wall))
-		var/turf/W = targetarea
-		if(attack_with_multiplier(user, W, modifier))
-			return (modifier - swing_degradation) // We hit a static object, prevents hitting anything underneath
-	var/successful_hit = FALSE
-	for(var/obj/S in targetarea)
-		if ((S.density || istype(S, /obj/effect/plant)) && !istype(S, /obj/structure/table) && !istype(S, /obj/machinery/disposal) && !istype(S, /obj/structure/closet))
-			if(attack_with_multiplier(user, S, modifier))
-				successful_hit = TRUE // Livings or targeted mobs can still be hit
-	if(successful_hit)
-		modifier -= swing_degradation // Only deduct damage once for dense objects
-	var/list/living_mobs = new/list()
-	var/list/dead_mobs = new/list()
-	for(var/mob/living/M in targetarea)
-		if(M != user)
-			if(M.stat == DEAD)
-				dead_mobs.Add(M)
-			else
-				living_mobs.Add(M)
-	var/mob/living/target
-	if(original_target && istype(original_target, /mob/living)) // Check if original target is a mob
-		if(LAZYFIND(living_mobs, original_target) || LAZYFIND(dead_mobs, original_target)) // Check if original target is a mob on this tile
-			target = original_target
-			if(attack_with_multiplier_mob(user, target, modifier))
-				modifier -= swing_degradation
-			if(target.density) // If the original target was dense, the rest of the mobs are shielded
-				return modifier
-
-	while(living_mobs.len && modifier > 0)
-		target = pick_n_take(living_mobs)
-		if(attack_with_multiplier_mob(user, target, modifier))
-			modifier -= swing_degradation
-		successful_hit = TRUE
-		if(target.density) // If we hit a dense target, the rest of the mobs are shielded
-			return modifier
-	if(!successful_hit && dead_mobs.len) // If we hit nothing, try to hit dead mobs
-		target = pick(dead_mobs)
-		if(attack_with_multiplier_mob(user, target, modifier))
-			modifier -= swing_degradation
-	return modifier
-// modifying force after calling attack() here is a bad idea, as the force can be changed by means of embedding in a target, which leads to unwielding a weapon.
-//This code replicates the damage reduction caused by unwielding something, but it will likely cause problems elsewhere.
+		return ..()
 
 // Proximity_flag is 1 if this afterattack was called on something adjacent, in your square, or on your person.
 // Click parameters is the params string from byond Click() code, see that documentation.
-/obj/item/proc/afterattack(atom/A as mob|obj|turf|area, mob/user, proximity, params)
-	if((!proximity && !ismob(A)) || !wielded || !extended_reach)//extended reach is only for mobs when you wield the spear
+/obj/item/proc/afterattack(atom/target, mob/living/user, proximity_flag, click_parameters)
+	SEND_SIGNAL(src, COMSIG_ITEM_AFTERATTACK, target, user, proximity_flag, click_parameters)
+	SEND_SIGNAL(user, COMSIG_MOB_ITEM_AFTERATTACK, target, user, proximity_flag, click_parameters)
+	if(force && !user.used_intent.tranged && !user.used_intent.tshield)
+		if(proximity_flag && isopenturf(target) && !user.used_intent?.noaa)
+			var/adf = user.used_intent.clickcd
+			if(istype(user.rmb_intent, /datum/rmb_intent/aimed))
+				adf = round(adf * 1.4)
+			if(istype(user.rmb_intent, /datum/rmb_intent/swift))
+				adf = round(adf * 0.6)
+			user.changeNext_move(adf)
+			if(get_dist(get_turf(user), get_turf(target)) <= user.used_intent.reach)
+				user.do_attack_animation(target, visual_effect_icon = user.used_intent.animname, used_item = src, used_intent = user.used_intent)
+			else
+				user.do_attack_animation(get_ranged_target_turf(user, get_dir(user, target), 1), visual_effect_icon = user.used_intent.animname, used_item = src, used_intent = user.used_intent)
+			playsound(get_turf(src), pick(swingsound), 100, FALSE, -1)
+			user.aftermiss()
+		if(!proximity_flag && ismob(target) && !user.used_intent?.noaa) //this block invokes miss cost clicking on seomone who isn't adjacent to you
+			var/adf = user.used_intent.clickcd
+			if(istype(user.rmb_intent, /datum/rmb_intent/aimed))
+				adf = round(adf * 1.4)
+			if(istype(user.rmb_intent, /datum/rmb_intent/swift))
+				adf = round(adf * 0.6)
+			user.changeNext_move(adf)
+			if(get_dist(get_turf(user), get_turf(target)) <= user.used_intent.reach)
+				user.do_attack_animation(target, visual_effect_icon = user.used_intent.animname, used_item = src, used_intent = user.used_intent)
+			else
+				user.do_attack_animation(get_ranged_target_turf(user, get_dir(user, target), 1), visual_effect_icon = user.used_intent.animname, used_item = src, used_intent = user.used_intent)
+			playsound(get_turf(src), pick(swingsound), 100, FALSE, -1)
+			user.aftermiss()
+
+// Called if the target gets deleted by our attack
+/obj/item/proc/attack_qdeleted(atom/target, mob/user, proximity_flag, click_parameters)
+	SEND_SIGNAL(src, COMSIG_ITEM_ATTACK_QDELETED, target, user, proximity_flag, click_parameters)
+	SEND_SIGNAL(user, COMSIG_MOB_ITEM_ATTACK_QDELETED, target, user, proximity_flag, click_parameters)
+
+/obj/item/proc/get_clamped_volume()
+	if(w_class)
+		if(force)
+			return CLAMP((force + w_class) * 4, 30, 100)// Add the item's force to its weight class and multiply by 4, then clamp the value between 30 and 100
+		else
+			return CLAMP(w_class * 6, 10, 100) // Multiply the item's weight class by 6, then clamp the value between 10 and 100
+
+/mob/living/proc/send_item_attack_message(obj/item/I, mob/living/user, hit_area)
+	var/message_verb = "attacked"
+	if(user.used_intent)
+		message_verb = "[pick(user.used_intent.attack_verb)]"
+	else if(!I.force)
 		return
-	if(get_dist(user.loc, A.loc) < 3)//okay, we are in reach, now we need to check if there is anything dense in our path
-		var/turf/T = get_step(user.loc, get_dir(user, A))
-		if(T.Enter(user))
-			resolve_attackby(A, user, params)
-	return
-
-//I would prefer to rename this attack_as_weapon(), but that would involve touching hundreds of files.
-/obj/item/proc/attack(mob/living/M, mob/living/user, target_zone)
-	if(!force || (flags & NOBLUDGEON))
-		return FALSE
-
-	if(!user)
-		return FALSE
-
-	/////////////////////////
-	user.lastattacked = M
-	M.lastattacker = user
-
-	if(!no_attack_log)
-		user.attack_log += "\[[time_stamp()]\]<font color='red'> Attacked [M.name] ([M.ckey]) with [name] (INTENT: [uppertext(user.a_intent)]) (DAMTYE: [uppertext(damtype)])</font>"
-		M.attack_log += "\[[time_stamp()]\]<font color='orange'> Attacked by [user.name] ([user.ckey]) with [name] (INTENT: [uppertext(user.a_intent)]) (DAMTYE: [uppertext(damtype)])</font>"
-		msg_admin_attack("[key_name(user)] attacked [key_name(M)] with [name] (INTENT: [uppertext(user.a_intent)]) (DAMTYE: [uppertext(damtype)])" )
-	/////////////////////////
-
-	user.setClickCooldown(DEFAULT_ATTACK_COOLDOWN)
-	user.do_attack_animation(M)
-
-	var/hit_zone = M.resolve_item_attack(src, user, target_zone)
-	if(hit_zone)
-		apply_hit_effect(M, user, hit_zone)
-
-	return TRUE
-
-//Called when a weapon is used to make a successful melee attack on a mob. Returns the blocked result
-/obj/item/proc/apply_hit_effect(mob/living/target, mob/living/user, var/hit_zone)
-	if(hitsound)
-		playsound(loc, hitsound, 50, 1, -1)
-
-	if (is_hot() >= HEAT_MOBIGNITE_THRESHOLD)
-		target.IgniteMob()
-
-	var/power = force
-	if(ishuman(user))
-		var/mob/living/carbon/human/H = user
-		power *= H.damage_multiplier
-		if(H.holding_back)
-			power /= 2
-//	if(HULK in user.mutations)
-//		power *= 2
-	target.hit_with_weapon(src, user, power, hit_zone)
-	return
+	var/message_hit_area = ""
+	if(hit_area)
+		message_hit_area = " in the [hit_area]"
+	var/attack_message = "[user] [message_verb] [src][message_hit_area] with [I]!"
+	var/attack_message_local = "[user] [message_verb] me[message_hit_area] with [I]!"
+	visible_message("<span class='danger'>[attack_message][next_attack_msg.Join()]</span>",\
+		"<span class='danger'>[attack_message_local][next_attack_msg.Join()]</span>", null, COMBAT_MESSAGE_RANGE)
+	next_attack_msg.Cut()
+	return 1

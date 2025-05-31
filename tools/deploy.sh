@@ -10,23 +10,28 @@ if [[ $# -eq 2 ]] ; then
 fi
 
 mkdir -p \
-    $1/maps \
+    $1/_maps \
+    $1/icons/effects \
+    $1/icons/mob/clothing \
+    $1/icons/mob/inhands \
+    $1/icons/mob/simple \
+    $1/icons/obj \
     $1/strings \
-	$1/config \
-    $1/tgui/public \
-    $1/tgui/packages/tgfont/dist
 
 if [ -d ".git" ]; then
   mkdir -p $1/.git/logs
   cp -r .git/logs/* $1/.git/logs/
 fi
 
-cp cev_eris.dmb cev_eris.rsc $1/
-cp -r maps/* $1/maps/
+cp vanderlin.dmb vanderlin.rsc $1/
+cp -r _maps/* $1/_maps/
+cp -r icons/*_title.dmi $1/icons/
+cp -r icons/effects/* $1/icons/effects/
+cp -r icons/mob/clothing/* $1/icons/mob/clothing/
+cp -r icons/mob/inhands/* $1/icons/mob/inhands/
+cp -r icons/mob/simple/* $1/icons/mob/simple/
+cp -r icons/obj/* $1/icons/obj/
 cp -r strings/* $1/strings/
-cp -r config/names $1/config/
-cp -r tgui/public/* $1/tgui/public/
-cp -r tgui/packages/tgfont/dist/* $1/tgui/packages/tgfont/dist/
 
 #remove .dm files from _maps
 

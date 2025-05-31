@@ -1,515 +1,340 @@
-//** Shield Helpers
-//These are shared by various items that have shield-like behaviour
-
-//bad_arc is the ABSOLUTE arc of directions from which we cannot block. If you want to fix it to e.g. the user's facing you will need to rotate the dirs yourself.
-/proc/check_parry_arc(mob/user, var/bad_arc, atom/damage_source = null, mob/attacker = null)
-	//check attack direction
-	var/attack_dir = 0 //direction from the user to the source of the attack
-	if(istype(damage_source, /obj/item/projectile))
-		var/obj/item/projectile/P = damage_source
-		attack_dir = get_dir(get_turf(user), P.starting)
-	else if(attacker)
-		attack_dir = get_dir(get_turf(user), get_turf(attacker))
-	else if(damage_source)
-		attack_dir = get_dir(get_turf(user), get_turf(damage_source))
-
-	if(!(attack_dir && (attack_dir & bad_arc)))
-		return 1
-	return 0
-
-/proc/default_parry_check(mob/user, mob/attacker, atom/damage_source)
-	//parry only melee attacks
-	if(istype(damage_source, /obj/item/projectile) || (attacker && get_dist(user, attacker) > 1) || user.incapacitated())
-		return 0
-
-	//block as long as they are not directly behind us
-	var/bad_arc = reverse_direction(user.dir) //arc of directions from which we cannot block
-	if(!check_parry_arc(user, bad_arc, damage_source, attacker))
-		return 0
-
-	return 1
-
-/obj/item/shield
-	name = "shield"
-	var/base_block_chance = 30
-	var/slowdown_time = 1
-	var/shield_integrity = 100
-	var/shield_difficulty = 60
-	style = STYLE_NEG_HIGH
-
-/obj/item/shield/examine(mob/user, extra_description = "")
-	switch(get_block_chance(user))
-		if(0 to 30)
-			extra_description += "So heavy... You feel doubtful in your ability to parry with this shield using only one hand until you grow stronger."
-		if(31 to 45)
-			extra_description += "Holding this feels a little clumsy. Perhaps if you were a bit stronger..."
-		if(46 to 55)
-			extra_description += "A bit hefty, but you feel confident in your ability to parry with this shield."
-		if(56 to 70)
-			extra_description += "The weight of this shield feels comfortable and maneuverable."
-		if(71 to INFINITY)
-			extra_description += "You feel ready for a gladiator duel! Bring it on, roaches!"
-	..(user, extra_description)
-
-/obj/item/shield/proc/get_wielder_skill(mob/user, stat_type)
-	if(user && user.stats)
-		return max(1,user.stats.getStat(stat_type))
-
-	return 1 //STAT_LEVEL_MIN doesn't work due to division by zero error
-
-/obj/item/shield/handle_shield(mob/user, var/damage, atom/damage_source = null, mob/attacker = null, var/def_zone = null, var/attack_text = "the attack")
-
-	if(istype(damage_source, /obj/item/projectile) || (attacker && get_dist(user, attacker) > 1) || user.incapacitated())
-		return 0
-
-	//block as long as they are not directly behind us
-	var/bad_arc = reverse_direction(user.dir) //arc of directions from which we cannot block
-	if(check_parry_arc(user, bad_arc, damage_source, attacker))
-		if(prob(get_block_chance(user)))
-			user.visible_message(SPAN_DANGER("\The [user] blocks [attack_text] with \the [src]!"))
-			return 1
-	return 0
-
-/obj/item/shield/block_bullet(mob/user, var/obj/item/projectile/damage_source, def_zone)
-	var/bad_arc = reverse_direction(user.dir)
-	var/list/protected_area
-	if(prob(50))
-		protected_area = get_partial_protected_area(user)
-	else protected_area = get_protected_area(user)
-	if(protected_area.Find(def_zone) && check_shield_arc(user, bad_arc, damage_source))
-		if(!damage_source.check_penetrate(src))
-			visible_message(SPAN_DANGER("\The [user] blocks [damage_source] with \his [src]!"))
-			playsound(user.loc, 'sound/weapons/shield/shieldblock.ogg', 50, 1)
-			return 1
-	return 0
-
-/obj/item/shield/proc/check_shield_arc(mob/user, var/bad_arc, atom/damage_source = null, mob/attacker = null)
-	//shield direction
-
-	var/shield_dir = 0
-	if(user.get_equipped_item(slot_l_hand) == src)
-		shield_dir = turn(user.dir, 90)
-	else if(user.get_equipped_item(slot_r_hand) == src)
-		shield_dir = turn(user.dir, -90)
-	//check attack direction
-	var/attack_dir = 0 //direction from the user to the source of the attack
-	if(istype(damage_source, /obj/item/projectile))
-		var/obj/item/projectile/P = damage_source
-		attack_dir = get_dir(get_turf(user), P.starting)
-	else if(attacker)
-		attack_dir = get_dir(get_turf(user), get_turf(attacker))
-	else if(damage_source)
-		attack_dir = get_dir(get_turf(user), get_turf(damage_source))
-
-	//blocked directions
-	if(user.get_equipped_item(slot_back) == src)
-		if(attack_dir & bad_arc && attack_dir)
-			return TRUE
-		else
-			return FALSE
-
-	if(wielded && !(attack_dir && (attack_dir & bad_arc)))
-		return TRUE
-	else if(!(attack_dir == bad_arc) && !(attack_dir == reverse_direction(shield_dir)) && !(attack_dir == (bad_arc | reverse_direction(shield_dir))))
-		return TRUE
-	return FALSE
-
-/obj/item/shield/proc/get_block_chance(mob/user)
-	return shield_difficulty/(1+100/get_wielder_skill(user,STAT_ROB))+base_block_chance
-
-/obj/item/shield/proc/get_protected_area(mob/user)
-	return BP_ALL_LIMBS
-
-/obj/item/shield/proc/get_partial_protected_area(mob/user)
-	return get_protected_area(user)
-
-/obj/item/shield/attack(mob/M, mob/user)
-	if(isliving(M))
-		var/mob/living/L = M
-		if(L.slowdown < slowdown_time * 3)
-			L.slowdown += slowdown_time
-	return ..()
-
-/obj/item/shield/buckler
-	name = "tactical shield"
-	desc = "A compact personal shield made of pre-preg aramid fibres designed to stop or deflect bullets without slowing down its wielder."
-	icon = 'icons/obj/weapons.dmi'
-	icon_state = "tactical"
-	item_state = "tactical"
-	flags = CONDUCT
-	slot_flags = SLOT_BELT|SLOT_BACK
-	force = WEAPON_FORCE_PAINFUL
-	throwforce = WEAPON_FORCE_PAINFUL
-	throw_speed = 2
-	throw_range = 6
-	w_class = ITEM_SIZE_BULKY
-	origin_tech = list(TECH_MATERIAL = 2)
-	matter = list(MATERIAL_GLASS = 5, MATERIAL_STEEL = 5, MATERIAL_PLASTEEL = 12)
-	price_tag = 500
-	attack_verb = list("shoved", "bashed")
-	shield_integrity = 195
-	var/cooldown = 0 //shield bash cooldown. based on world.time
-	var/picked_by_human = FALSE
-	var/mob/living/carbon/human/picking_human
-
-/obj/item/shield/buckler/handle_shield(mob/user)
-	. = ..()
-	if(.) playsound(user.loc, 'sound/weapons/Genhit.ogg', 50, 1)
-
-/obj/item/shield/buckler/get_protected_area(mob/user)
-	var/list/p_area = list(BP_CHEST)
-
-	if(user.get_equipped_item(slot_back) == src)
-		return p_area
-
-	if(user.get_equipped_item(slot_l_hand) == src)
-		p_area.Add(BP_L_ARM)
-	else if(user.get_equipped_item(slot_r_hand) == src)
-		p_area.Add(BP_R_ARM)
-
-	return p_area
-
-/obj/item/shield/buckler/get_partial_protected_area(mob/user)
-	var/list/p_area = get_protected_area(user)
-	p_area.Add(BP_GROIN, BP_HEAD)
-	return p_area
-
-/obj/item/shield/buckler/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W, /obj/item/melee/baton))
-		on_bash(W, user)
-	else
-		..()
-
-/obj/item/shield/buckler/proc/on_bash(var/obj/item/W, var/mob/user)
-	if(cooldown < world.time - 25)
-		user.visible_message(SPAN_WARNING("[user] bashes [src] with \his [W]!"))
-		playsound(user.loc, 'sound/effects/shieldbash.ogg', 50, 1)
-		cooldown = world.time
-
-/obj/item/shield/riot
-	name = "ballistic shield"
-	desc = "A heavy personal shield made of pre-preg aramid fibres designed to stop or deflect bullets and other projectiles fired at its wielder at the cost of mobility."
-	icon = 'icons/obj/weapons.dmi'
-	icon_state = "riot"
-	item_state = "riot"
-	flags = CONDUCT
-	slot_flags = SLOT_BACK
-	force = WEAPON_FORCE_PAINFUL
-	throwforce = WEAPON_FORCE_PAINFUL
-	throw_speed = 1
-	throw_range = 4
-	w_class = ITEM_SIZE_HUGE
-	origin_tech = list(TECH_MATERIAL = 2)
-	matter = list(MATERIAL_GLASS = 10, MATERIAL_STEEL = 10, MATERIAL_PLASTEEL = 15)
-	price_tag = 500
-	base_block_chance = 45
-	shield_difficulty = 35
-	attack_verb = list("shoved", "bashed")
-	shield_integrity = 205
-	var/cooldown = 0 //shield bash cooldown. based on world.time
-	var/picked_by_human = FALSE
-	var/mob/living/carbon/human/picking_human
-
-/obj/item/shield/riot/handle_shield(mob/user)
-	. = ..()
-	if(.) playsound(user.loc, 'sound/weapons/shield/shieldmelee.ogg', 50, 1)
-
-/obj/item/shield/riot/get_block_chance(mob/user)
-	if(MOVING_QUICKLY(user))
-		return shield_difficulty/(1+100/get_wielder_skill(user,STAT_ROB))
-	if(MOVING_DELIBERATELY(user))
-		return shield_difficulty/(1+100/get_wielder_skill(user,STAT_ROB))+base_block_chance //diminishing returns
-
-/obj/item/shield/riot/get_protected_area(mob/user)
-	var/list/p_area = list(BP_CHEST, BP_GROIN, BP_HEAD)
-
-	if(user.get_equipped_item(slot_back) == src)
-		return p_area
-
-	if(MOVING_QUICKLY(user))
-		if(user.get_equipped_item(slot_l_hand) == src)
-			p_area = list(BP_L_ARM)
-		else if(user.get_equipped_item(slot_r_hand) == src)
-			p_area = list(BP_R_ARM)
-	else if(MOVING_DELIBERATELY(user) && wielded)
-		p_area = BP_ALL_LIMBS
-
-	if(user.get_equipped_item(slot_l_hand) == src)
-		p_area.Add(BP_L_ARM)
-	else if(user.get_equipped_item(slot_r_hand) == src)
-		p_area.Add(BP_R_ARM)
-	return p_area
-
-/obj/item/shield/riot/get_partial_protected_area(mob/user)
-	if(MOVING_DELIBERATELY(user))
-		return BP_ALL_LIMBS
-	else return get_protected_area(user)
-
-/obj/item/shield/riot/New()
-	RegisterSignal(src, COMSIG_ITEM_PICKED, PROC_REF(is_picked))
-	RegisterSignal(src, COMSIG_ITEM_DROPPED, PROC_REF(is_dropped))
-	return ..()
-
-/obj/item/shield/riot/proc/is_picked()
-	SIGNAL_HANDLER
-	var/mob/living/carbon/human/user = loc
-	if(istype(user))
-		picked_by_human = TRUE
-		picking_human = user
-		RegisterSignal(picking_human, COMSIG_HUMAN_WALKINTENT_CHANGE, PROC_REF(update_state))
-		update_state()
-
-/obj/item/shield/riot/proc/is_dropped()
-	SIGNAL_HANDLER
-	if(picked_by_human && picking_human)
-		UnregisterSignal(picking_human, COMSIG_HUMAN_WALKINTENT_CHANGE)
-		picked_by_human = FALSE
-		picking_human = null
-
-/obj/item/shield/riot/proc/update_state()
-	SIGNAL_HANDLER
-	if(!picking_human)
-		return
-	if(MOVING_QUICKLY(picking_human))
-		item_state = "[initial(item_state)]_run"
-		visible_message("[picking_human] lowers [gender_datums[picking_human.gender].his] [src.name].")
-	else
-		item_state = "[initial(item_state)]_walk"
-		visible_message("[picking_human] raises [gender_datums[picking_human.gender].his] [src.name] to cover [gender_datums[picking_human.gender].him]self!")
-	update_wear_icon()
-
-/obj/item/shield/riot/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W, /obj/item/melee/baton))
-		on_bash(W, user)
-	else
-		..()
-
-/obj/item/shield/riot/proc/on_bash(var/obj/item/W, var/mob/user)
-	if(cooldown < world.time - 25)
-		user.visible_message(SPAN_WARNING("[user] bashes [src] with [W]!"))
-		playsound(user.loc, 'sound/effects/shieldbash.ogg', 50, 1)
-		cooldown = world.time
-
-/obj/item/shield/riot/dozershield
-	name = "bulldozer shield"
-	desc = "A crude beast of a shield hewn from slabs of metal welded to a locker door, it has been forged into a wall that stands between you and your foes."
-	icon = 'icons/obj/weapons.dmi'
-	icon_state = "dozershield"
-	item_state = "dozershield"
-	flags = CONDUCT
-	slot_flags = SLOT_BACK
-	force = WEAPON_FORCE_DANGEROUS
-	throwforce = WEAPON_FORCE_DANGEROUS
-	throw_speed = 1
-	throw_range = 4
-	w_class = ITEM_SIZE_HUGE
-	origin_tech = list()
-	matter = list(MATERIAL_GLASS = 20, MATERIAL_STEEL = 20, MATERIAL_PLASTEEL = 10)
-	price_tag = 200
-	base_block_chance = 55
-	shield_difficulty = 10
-	shield_integrity = 230
-	slowdown_hold = 1
-
-/obj/item/shield/riot/dozershield/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W, /obj/item/tool/hammer) || istype(W, /obj/item/tool/sword))
-		on_bash(W, user)
-	else
-		..()
-
-/obj/item/shield/hardsuit
-	name = "hardsuit shield"
-	desc = "A massive ballistic shield that seems impossible to wield without mechanical assist."
-	icon = 'icons/obj/weapons.dmi'
-	icon_state = "hardshield"
-	item_state = "hardshield"
-	flags = CONDUCT
-	slot_flags = SLOT_BACK
-	force = WEAPON_FORCE_PAINFUL
-	throwforce = WEAPON_FORCE_PAINFUL
-	throw_speed = 1
-	throw_range = 4
-	w_class = ITEM_SIZE_HUGE
-	origin_tech = list()
-	matter = list()
-	price_tag = 0
-	base_block_chance = 60
-	shield_difficulty = 10
-	attack_verb = list("smashed", "bashed")
-	shield_integrity = 250
-	var/cooldown = 0 //shield bash cooldown. based on world.time
-	var/picked_by_human = FALSE
-	var/mob/living/carbon/human/picking_human
-	slowdown_hold = 3
-	var/mob/living/creator
-	var/cleanup = TRUE	// Should the shield despawn moments after being discarded by the summoner?
-	var/init_procees = TRUE
-	bad_type = /obj/item/shield/hardsuit
-
-/obj/item/shield/hardsuit/get_protected_area(mob/user)
-	var/list/p_area = list(BP_CHEST, BP_GROIN, BP_HEAD)
-
-	if(user.get_equipped_item(slot_l_hand) == src)
-		p_area.Add(BP_L_ARM)
-	else if(user.get_equipped_item(slot_r_hand) == src)
-		p_area.Add(BP_R_ARM)
-	return p_area
-
-/obj/item/shield/hardsuit/get_partial_protected_area(mob/user)
-	return BP_ALL_LIMBS
-
-/obj/item/shield/hardsuit/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W, /obj/item/melee/baton))
-		on_bash(W, user)
-	else
-		..()
-
-/obj/item/shield/hardsuit/proc/on_bash(var/obj/item/W, var/mob/user)
-	if(cooldown < world.time - 25)
-		user.visible_message(SPAN_WARNING("[user] bashes [src] with \his [W]!"))
-		playsound(user.loc, 'sound/effects/shieldbash.ogg', 50, 1)
-		cooldown = world.time
-
-/obj/item/shield/hardsuit/Initialize(mapload)
-	. = ..()
-	if(init_procees)
-		START_PROCESSING(SSobj, src)
-
-/obj/item/shield/hardsuit/Destroy()
-	STOP_PROCESSING(SSobj, src)
-	. = ..()
-
-/obj/item/shield/hardsuit/dropped()
-	if(cleanup)
-		spawn(1) if(src) qdel(src)
-
-/obj/item/shield/hardsuit/Process()
-	if(!creator || loc != creator || (creator.l_hand != src && creator.r_hand != src))
-		// Tidy up a bit.
-		if(isliving(loc))
-			var/mob/living/carbon/human/host = loc
-			if(istype(host))
-				for(var/obj/item/organ/external/organ in host.organs)
-					for(var/obj/item/O in organ.implants)
-						if(O == src)
-							organ.implants -= src
-			host.pinned -= src
-			host.embedded -= src
-			host.drop_from_inventory(src)
-		if(cleanup)
-			spawn(1) if(src) qdel(src)
-
-/*
- * Handmade shield
- */
-
-/obj/item/shield/buckler/handmade
-	name = "round handmade shield"
-	desc = "A handmade stout shield, that protects the wielder while not weighting them down."
-	icon_state = "buckler"
-	item_state = "buckler"
-	flags = null
-	throw_speed = 2
-	throw_range = 6
-	matter = list(MATERIAL_STEEL = 6)
-	base_block_chance = 35
-	shield_difficulty = 65
-	shield_integrity = 170
-
-/obj/item/shield/buckler/handmade/attackby(obj/item/W as obj, mob/user as mob)
-	if(istype(W, /obj/item/extinguisher) || istype(W, /obj/item/storage/toolbox) || istype(W, /obj/item/melee))
-		on_bash(W, user)
-	else
-		..()
-
-/obj/item/shield/riot/tray
-	name = "tray shield"
-	desc = "A thin makeshift shield, but with a good size."
-	icon_state = "tray_shield"
-	item_state = "tray_shield"
-	flags = CONDUCT
-	throw_speed = 2
-	throw_range = 4
-	matter = list(MATERIAL_STEEL = 4)
-	base_block_chance = 40
-	shield_difficulty = 30
-	shield_integrity = 155
-
-/obj/item/shield/riot/tray/get_protected_area(mob/user)
-	var/list/p_area = list(BP_CHEST, BP_HEAD, BP_L_ARM, BP_R_ARM, BP_GROIN)
-	if(MOVING_DELIBERATELY(user) && wielded)
-		p_area = BP_ALL_LIMBS
-	return p_area
-
-/obj/item/shield/riot/tray/get_partial_protected_area(mob/user)
-	return BP_ALL_LIMBS
-
-/obj/item/shield/riot/tray/get_block_chance(mob/user)
-	return shield_difficulty/(1+100/get_wielder_skill(user,STAT_ROB))+base_block_chance
-
-/*
- * Energy Shield
- */
-
-/obj/item/shield/buckler/energy
-	name = "energy combat shield"
-	desc = "A shield capable of stopping most projectile and melee attacks. It can be retracted, expanded, and stored anywhere."
-	icon = 'icons/obj/weapons.dmi'
-	icon_state = "eshield0" // eshield1 for expanded
-	item_state = "eshield0"
-	flags = CONDUCT
-	force = 3
+#define SHIELD_BASH		/datum/intent/shield/bash
+#define SHIELD_BLOCK		/datum/intent/shield/block
+#define SHIELD_BANG_COOLDOWN (3 SECONDS)
+
+/obj/item/weapon/shield
+	name = ""
+	desc = ""
+	icon_state = ""
+	icon = 'icons/roguetown/weapons/32.dmi'
+	slot_flags = ITEM_SLOT_BACK
+	flags_1 = null
+	force = 10
 	throwforce = 5
 	throw_speed = 1
-	throw_range = 4
-	w_class = ITEM_SIZE_SMALL
-	origin_tech = list(TECH_MATERIAL = 4, TECH_MAGNET = 3, TECH_COVERT = 4)
-	attack_verb = list("shoved", "bashed")
-	var/active = 0
-	base_block_chance = 35
-	shield_difficulty = 70
-	shield_integrity = 200
+	throw_range = 3
+	w_class = WEIGHT_CLASS_BULKY
+	possible_item_intents = list(SHIELD_BASH, SHIELD_BLOCK)
+	block_chance = 0
+	sharpness = IS_BLUNT
+	wlength = WLENGTH_SHORT
+	resistance_flags = FLAMMABLE
+	can_parry = TRUE
+	associated_skill = /datum/skill/combat/shields
+	destroy_sound = 'sound/foley/shielddestroy.ogg'
+	wdefense = 5
+	var/coverage = 90
+	parrysound = "parrywood"
+	attacked_sound = "parrywood"
+	max_integrity = 100
+	blade_dulling = DULLING_BASHCHOP
+	anvilrepair = /datum/skill/craft/armorsmithing
+	smeltresult = /obj/item/ash
+	melting_material = null
+	COOLDOWN_DECLARE(shield_bang)
 
-/obj/item/shield/buckler/energy/handle_shield(mob/user)
-	if(!active)
-		return 0 //turn it on first!
+// Shield banging
+/obj/item/weapon/shield/attackby(obj/item/attackby_item, mob/user, params)
+	if(istype(attackby_item, /obj/item/weapon) && !istype(attackby_item, /obj/item/weapon/hammer))
+		if(!COOLDOWN_FINISHED(src, shield_bang))
+			return
+		user.visible_message("<span class='danger'>[user] bangs [src] with [attackby_item]!</span>")
+		playsound(user.loc, 'sound/combat/shieldbang.ogg', 50, TRUE)
+		COOLDOWN_START(src, shield_bang, SHIELD_BANG_COOLDOWN)
+		return
+
+	return ..()
+
+/obj/item/weapon/shield/hit_reaction(mob/living/carbon/human/owner, atom/movable/hitby, attack_text = "the projectile", final_block_chance = 0, damage = 0, attack_type = MELEE_ATTACK)
+	SEND_SIGNAL(src, COMSIG_ITEM_HIT_REACT, args)
+	if(attack_type == THROWN_PROJECTILE_ATTACK || attack_type == PROJECTILE_ATTACK)
+		if(istype(hitby, /obj/projectile))
+			var/obj/projectile/P = hitby
+			if(P.armor_penetration >= 80)
+				owner.visible_message("<span class='danger'>The [hitby] pierces [owner]'s [src]!</span>")
+				return 0
+		if(owner.client?.chargedprog == 100 && owner.used_intent?.tranged)
+			owner.visible_message("<span class='danger'>[owner] blocks [hitby] with [src]!</span>")
+			return 1
+		else
+			if(prob(coverage))
+				owner.visible_message("<span class='danger'>[owner] blocks [hitby] with [src]!</span>")
+				return 1
+	return 0
+
+/datum/intent/shield/bash
+	name = "bash"
+	icon_state = "inbash"
+	hitsound = list('sound/combat/shieldbash_wood.ogg')
+	chargetime = 0
+	item_damage_type = "blunt"
+
+/datum/intent/shield/bash/metal
+	hitsound = list('sound/combat/shieldbash_metal.ogg')
+
+/datum/intent/shield/block
+	name = "block"
+	icon_state = "inblock"
+	tranged = 1 //we can't attack directly with this intent, but we can charge it
+	tshield = 1
+	chargetime = 5
+	hitsound = list('sound/combat/shieldbash_wood.ogg')
+	warnie = "shieldwarn"
+	item_damage_type = "blunt"
+	charge_pointer = 'icons/effects/mousemice/charge/shield_charging.dmi'
+	charged_pointer = 'icons/effects/mousemice/charge/shield_charged.dmi'
+
+/datum/intent/shield/block/metal
+	hitsound = list('sound/combat/shieldbash_metal.ogg')
+
+/obj/item/weapon/shield/wood
+	name = "wooden shield"
+	desc = "A simple, emblazoned round wooden shield with leather padding. \nCan exceptionally block attacks, but is more brittle than metal ones."
+	icon_state = "woodsh"
+	dropshrink = 0.8
+	coverage = 50
+	max_integrity = 150
+
+/obj/item/weapon/shield/wood/attack_right(mob/user)
+	if(!overlays.len)
+		if(!('icons/roguetown/weapons/wood_heraldry.dmi' in GLOB.IconStates_cache))
+			var/icon/J = new('icons/roguetown/weapons/wood_heraldry.dmi')
+			var/list/istates = J.IconStates()
+			GLOB.IconStates_cache |= icon
+			GLOB.IconStates_cache['icons/roguetown/weapons/wood_heraldry.dmi'] = istates
+
+		var/picked_name = input(user, "Choose a Heraldry", "VANDERLIN", name) as null|anything in sortList(GLOB.IconStates_cache['icons/roguetown/weapons/wood_heraldry.dmi'])
+		if(!picked_name)
+			picked_name = "none"
+		var/mutable_appearance/M = mutable_appearance('icons/roguetown/weapons/wood_heraldry.dmi', picked_name)
+		M.alpha = 178
+		add_overlay(M)
+		var/mutable_appearance/MU = mutable_appearance(icon, "woodsh_detail")
+		MU.alpha = 114
+		add_overlay(MU)
+		if(alert("Are you pleased with your heraldry?", "Heraldry", "Yes", "No") != "Yes")
+			cut_overlays()
+	else
+		..()
+
+/obj/item/weapon/shield/wood/getonmobprop(tag)
 	. = ..()
+	if(tag)
+		switch(tag)
+			if("gen")
+				return list("shrink" = 0.6,"sx" = -5,"sy" = -1,"nx" = 6,"ny" = -1,"wx" = 0,"wy" = -2,"ex" = 0,"ey" = -2,"northabove" = 0,"southabove" = 1,"eastabove" = 1,"westabove" = 0,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 0,"sflip" = 0,"wflip" = 1,"eflip" = 0)
+			if("onback")
+				return list("shrink" = 0.6,"sx" = 1,"sy" = 4,"nx" = 1,"ny" = 2,"wx" = 3,"wy" = 3,"ex" = 0,"ey" = 2,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 8,"sflip" = 0,"wflip" = 0,"eflip" = 0,"northabove" = 1,"southabove" = 0,"eastabove" = 0,"westabove" = 0)
 
-	if(.)
-		var/datum/effect/effect/system/spark_spread/spark_system = new
-		spark_system.set_up(5, 0, user.loc)
-		spark_system.start()
-		playsound(user.loc, 'sound/weapons/blade1.ogg', 50, 1)
+/obj/item/weapon/shield/wood/adept
 
-/obj/item/shield/buckler/energy/attack_self(mob/living/user as mob)
-/*	if ((CLUMSY in user.mutations) && prob(50))
-		to_chat(user, SPAN_WARNING("You beat yourself in the head with [src]."))
-		user.take_organ_damage(5)
-	active = !active
-*/
-	if(active)
-		force = WEAPON_FORCE_PAINFUL
-		update_icon()
-		w_class = ITEM_SIZE_BULKY
-		playsound(user, 'sound/weapons/saberon.ogg', 50, 1)
-		to_chat(user, SPAN_NOTICE("\The [src] is now active."))
+/obj/item/weapon/shield/wood/adept/Initialize()
+	..()
+	if(!overlays.len)
+		if(!('icons/roguetown/weapons/wood_heraldry.dmi' in GLOB.IconStates_cache))
+			var/icon/J = new('icons/roguetown/weapons/wood_heraldry.dmi')
+			var/list/istates = J.IconStates()
+			GLOB.IconStates_cache |= icon
+			GLOB.IconStates_cache['icons/roguetown/weapons/wood_heraldry.dmi'] = istates
+		if("Psydon" in GLOB.IconStates_cache['icons/roguetown/weapons/wood_heraldry.dmi'])
+			var/picked_name = "Psydon"
+			var/mutable_appearance/M = mutable_appearance('icons/roguetown/weapons/wood_heraldry.dmi', picked_name)
+			M.alpha = 178
+			add_overlay(M)
+			var/mutable_appearance/MU = mutable_appearance(icon, "woodsh_detail")
+			MU.alpha = 114
+			add_overlay(MU)
+			update_icon()
+		else
+			return
 
+/obj/item/weapon/shield/tower
+	name = "tower shield"
+	desc = "A gigantic, iron reinforced shield that covers the entire body, a design-copy of the Aasimar shields of an era gone by."
+	icon_state = "shield_tower"
+	force = 15
+	throwforce = 10
+	throw_speed = 1
+	throw_range = 3
+	wlength = WLENGTH_NORMAL
+	wbalance = -1 // Heavy, big shield
+	resistance_flags = FLAMMABLE
+	wdefense = 6
+	coverage = 65
+	parrysound = list('sound/combat/parry/shield/towershield (1).ogg','sound/combat/parry/shield/towershield (2).ogg','sound/combat/parry/shield/towershield (3).ogg')
+	max_integrity = 300
+	melting_material = /datum/material/iron
+	melt_amount = 75
+
+/obj/item/weapon/shield/tower/spidershield
+	name = "spider shield"
+	desc = "A bulky shield of spike-like lengths molten together. The motifs evoke anything but safety and protection."
+	icon_state = "spidershield"
+	coverage = 55
+
+/obj/item/weapon/shield/tower/getonmobprop(tag)
+	. = ..()
+	if(tag)
+		switch(tag)
+			if("gen")
+				return list("shrink" = 0.6,"sx" = -5,"sy" = -1,"nx" = 6,"ny" = -1,"wx" = 0,"wy" = -2,"ex" = 0,"ey" = -2,"northabove" = 0,"southabove" = 1,"eastabove" = 1,"westabove" = 0,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 0,"sflip" = 0,"wflip" = 1,"eflip" = 0)
+			if("onback")
+				return list("shrink" = 0.6,"sx" = 1,"sy" = 4,"nx" = 1,"ny" = 2,"wx" = 3,"wy" = 3,"ex" = 0,"ey" = 2,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 8,"sflip" = 0,"wflip" = 0,"eflip" = 0,"northabove" = 1,"southabove" = 0,"eastabove" = 0,"westabove" = 0)
+
+/obj/item/weapon/shield/tower/hoplite
+	name = "ancient shield"
+	desc = "A gigantic, bronze reinforced shield that covers the entire body. An aasimar relic from an era long past."
+	icon_state = "boeotian"
+	possible_item_intents = list(/datum/intent/shield/bash/metal, /datum/intent/shield/block/metal)
+	force = 20
+	throwforce = 10
+	throw_speed = 1
+	throw_range = 3
+	wlength = WLENGTH_NORMAL
+	wbalance = -1 // Heavy, big shield
+	resistance_flags = null
+	flags_1 = CONDUCT_1
+	wdefense = 8
+	coverage = 75 // Rare shield from unique job, gets a tiny bit of additional coverage
+	attacked_sound = list('sound/combat/parry/shield/metalshield (1).ogg','sound/combat/parry/shield/metalshield (2).ogg','sound/combat/parry/shield/metalshield (3).ogg')
+	parrysound = list('sound/combat/parry/shield/metalshield (1).ogg','sound/combat/parry/shield/metalshield (2).ogg','sound/combat/parry/shield/metalshield (3).ogg')
+	max_integrity = 500
+	blade_dulling = DULLING_BASH
+	sellprice = 150 // A noble collector would love to get their hands on one of these
+	melting_material = /datum/material/bronze
+	melt_amount = 75
+
+/obj/item/weapon/shield/tower/hoplite/getonmobprop(tag)
+	. = ..()
+	if(tag)
+		switch(tag)
+			if("gen")
+				return list("shrink" = 0.6,"sx" = -5,"sy" = -1,"nx" = 6,"ny" = -1,"wx" = 0,"wy" = -2,"ex" = 0,"ey" = -2,"northabove" = 0,"southabove" = 1,"eastabove" = 1,"westabove" = 0,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 0,"sflip" = 0,"wflip" = 1,"eflip" = 0)
+			if("onback")
+				return list("shrink" = 0.6,"sx" = 1,"sy" = 4,"nx" = 1,"ny" = 2,"wx" = 3,"wy" = 3,"ex" = 0,"ey" = 2,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 8,"sflip" = 0,"wflip" = 0,"eflip" = 0,"northabove" = 1,"southabove" = 0,"eastabove" = 0,"westabove" = 0)
+
+/obj/item/weapon/shield/tower/metal
+	name = "kite shield"
+	desc = "A knightly, kite shaped steel shield, emblazoned with heraldry. \nBoasts superior coverage and durability, owed to its exquisite craftsmanship."
+	icon_state = "ironsh"
+	possible_item_intents = list(/datum/intent/shield/bash/metal, /datum/intent/shield/block/metal)
+	force = 20
+	throwforce = 10
+	throw_speed = 1
+	throw_range = 3
+	wlength = WLENGTH_NORMAL
+	resistance_flags = null
+	flags_1 = CONDUCT_1
+	wdefense = 7
+	coverage = 70
+	attacked_sound = list('sound/combat/parry/shield/metalshield (1).ogg','sound/combat/parry/shield/metalshield (2).ogg','sound/combat/parry/shield/metalshield (3).ogg')
+	parrysound = list('sound/combat/parry/shield/metalshield (1).ogg','sound/combat/parry/shield/metalshield (2).ogg','sound/combat/parry/shield/metalshield (3).ogg')
+	max_integrity = 500
+	blade_dulling = DULLING_BASH
+	sellprice = 30
+	melting_material = /datum/material/steel
+	melt_amount = 90
+
+/obj/item/weapon/shield/tower/metal/getonmobprop(tag)
+	if(tag)
+		switch(tag)
+			if("gen")
+				return list("shrink" = 0.6,"sx" = -5,"sy" = -1,"nx" = 6,"ny" = -1,"wx" = 0,"wy" = -2,"ex" = 0,"ey" = -2,"northabove" = 0,"southabove" = 1,"eastabove" = 1,"westabove" = 0,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 0,"sflip" = 0,"wflip" = 1,"eflip" = 0)
+			if("onback")
+				return list("shrink" = 0.6,"sx" = 1,"sy" = 4,"nx" = 1,"ny" = 2,"wx" = 3,"wy" = 3,"ex" = 0,"ey" = 2,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 8,"sflip" = 0,"wflip" = 0,"eflip" = 0,"northabove" = 1,"southabove" = 0,"eastabove" = 0,"westabove" = 0)
+	return ..()
+
+/obj/item/weapon/shield/tower/metal/attack_right(mob/user)
+	if(!overlays.len)
+		if(!('icons/roguetown/weapons/shield_heraldry.dmi' in GLOB.IconStates_cache))
+			var/icon/J = new('icons/roguetown/weapons/shield_heraldry.dmi')
+			var/list/istates = J.IconStates()
+			GLOB.IconStates_cache |= icon
+			GLOB.IconStates_cache['icons/roguetown/weapons/shield_heraldry.dmi'] = istates
+		var/picked_name = input(user, "Choose a Heraldry", "VANDERLIN", name) as null|anything in sortList(GLOB.IconStates_cache['icons/roguetown/weapons/shield_heraldry.dmi'])
+		if(!picked_name)
+			picked_name = "none"
+		var/mutable_appearance/M = mutable_appearance('icons/roguetown/weapons/shield_heraldry.dmi', picked_name)
+		M.alpha = 190
+		add_overlay(M)
+		var/mutable_appearance/MU = mutable_appearance(icon, "ironsh_detail")
+		MU.alpha = 90
+		add_overlay(MU)
+		if(alert("Are you pleased with your heraldry?", "Heraldry", "Yes", "No") != "Yes")
+			cut_overlays()
 	else
-		force = 3
-		update_icon()
-		w_class = ITEM_SIZE_TINY
-		playsound(user, 'sound/weapons/saberoff.ogg', 50, 1)
-		to_chat(user, SPAN_NOTICE("\The [src] can now be concealed."))
+		..()
 
-	add_fingerprint(user)
-	return
+#undef SHIELD_BANG_COOLDOWN
 
-/obj/item/shield/buckler/energy/update_icon()
-	icon_state = "eshield[active]"
-	item_state = "eshield[active]"
-	update_wear_icon()
-	if(active)
-		set_light(1.5, 1.5, COLOR_LIGHTING_BLUE_BRIGHT)
+
+/obj/item/weapon/shield/tower/buckleriron
+	name = "iron buckler"
+	desc = "A small sized iron shield, popular among mercenaries due to it's light weight and ease of mobility."
+	icon_state = "ironbuckler"
+	slot_flags = ITEM_SLOT_HIP|ITEM_SLOT_BACK
+	force = 10
+	throwforce = 10
+	dropshrink = 0.75
+	throw_speed = 1
+	throw_range = 3
+	wlength = WLENGTH_NORMAL
+	wbalance = 1 // small, tiny shield
+	resistance_flags = FIRE_PROOF
+	wdefense = 4
+	coverage = 45
+	attacked_sound = list('sound/combat/parry/shield/metalshield (1).ogg','sound/combat/parry/shield/metalshield (2).ogg','sound/combat/parry/shield/metalshield (3).ogg')
+	parrysound = list('sound/combat/parry/shield/metalshield (1).ogg','sound/combat/parry/shield/metalshield (2).ogg','sound/combat/parry/shield/metalshield (3).ogg')
+	max_integrity = 250
+	melting_material = /datum/material/iron
+	melt_amount = 75
+
+/obj/item/weapon/shield/tower/buckleriron/getonmobprop(tag)
+	. = ..()
+	if(tag)
+		switch(tag)
+			if("gen")
+				return list("shrink" = 0.6,"sx" = -5,"sy" = -1,"nx" = 6,"ny" = -1,"wx" = 0,"wy" = -2,"ex" = 0,"ey" = -2,"northabove" = 0,"southabove" = 1,"eastabove" = 1,"westabove" = 0,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 0,"sflip" = 0,"wflip" = 1,"eflip" = 0)
+			if("onback")
+				return list("shrink" = 0.6,"sx" = 1,"sy" = 4,"nx" = 1,"ny" = 2,"wx" = 3,"wy" = 3,"ex" = 0,"ey" = 2,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 8,"sflip" = 0,"wflip" = 0,"eflip" = 0,"northabove" = 1,"southabove" = 0,"eastabove" = 0,"westabove" = 0)
+			if("onbelt")
+				return list("shrink" = 0.3,"sx" = -2,"sy" = -5,"nx" = 4,"ny" = -5,"wx" = 0,"wy" = -5,"ex" = 2,"ey" = -5,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 0,"sflip" = 0,"wflip" = 0,"eflip" = 0,"northabove" = 0,"southabove" = 1,"eastabove" = 1,"westabove" = 0)
+
+/obj/item/weapon/shield/heater
+	name = "heater shield"
+	desc = "A sturdy wood and leather shield. Made to not be too encumbering while still providing good protection."
+	icon_state = "heatershield"
+	force = 15
+	throwforce = 10
+	dropshrink = 0.8
+	coverage = 60
+	attacked_sound = list('sound/combat/parry/shield/towershield (1).ogg','sound/combat/parry/shield/towershield (2).ogg','sound/combat/parry/shield/towershield (3).ogg')
+	parrysound = list('sound/combat/parry/shield/towershield (1).ogg','sound/combat/parry/shield/towershield (2).ogg','sound/combat/parry/shield/towershield (3).ogg')
+	max_integrity = 200
+
+/obj/item/weapon/shield/heater/attack_right(mob/user)
+	if(!overlays.len)
+		var/icon/J = new('icons/roguetown/weapons/heater_heraldry.dmi')
+		var/list/istates = J.IconStates()
+		var/picked_name = input(user, "Choose a Heraldry", "ROGUETOWN", name) as null|anything in sortList(istates)
+		if(!picked_name)
+			picked_name = "none"
+		var/mutable_appearance/M = mutable_appearance('icons/roguetown/weapons/heater_heraldry.dmi', picked_name)
+		M.alpha = 178
+		add_overlay(M)
+		var/mutable_appearance/MU = mutable_appearance(icon, "heatershield_detail")
+		MU.alpha = 114
+		add_overlay(MU)
+		if(alert("Are you pleased with your heraldry?", "Heraldry", "Yes", "No") != "Yes")
+			cut_overlays()
 	else
-		set_light(0)
+		..()
 
+/obj/item/weapon/shield/heater/getonmobprop(tag)
+	. = ..()
+	if(tag)
+		switch(tag)
+			if("gen")
+				return list("shrink" = 0.6,"sx" = -5,"sy" = -1,"nx" = 6,"ny" = -1,"wx" = 0,"wy" = -2,"ex" = 0,"ey" = -2,"northabove" = 0,"southabove" = 1,"eastabove" = 1,"westabove" = 0,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 0,"sflip" = 0,"wflip" = 0,"eflip" = 0)
+			if("onback")
+				return list("shrink" = 0.6,"sx" = 1,"sy" = 4,"nx" = 1,"ny" = 2,"wx" = 3,"wy" = 3,"ex" = 0,"ey" = 2,"nturn" = 0,"sturn" = 0,"wturn" = 0,"eturn" = 0,"nflip" = 8,"sflip" = 0,"wflip" = 0,"eflip" = 0,"northabove" = 1,"southabove" = 0,"eastabove" = 0,"westabove" = 0)

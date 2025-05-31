@@ -11,7 +11,6 @@ GLOBAL_LIST_EMPTY(asset_datums)
 
 /datum/asset
 	var/_abstract = /datum/asset
-	var/cached_url_mappings
 
 /datum/asset/New()
 	GLOB.asset_datums[type] = src
@@ -20,13 +19,6 @@ GLOBAL_LIST_EMPTY(asset_datums)
 /datum/asset/proc/get_url_mappings()
 	return list()
 
-/// Returns a cached tgui message of URL mappings
-/datum/asset/proc/get_serialized_url_mappings()
-	if (isnull(cached_url_mappings))
-		cached_url_mappings = TGUI_CREATE_MESSAGE("asset/mappings", get_url_mappings())
-
-	return cached_url_mappings
-
 /datum/asset/proc/register()
 	return
 
@@ -34,29 +26,20 @@ GLOBAL_LIST_EMPTY(asset_datums)
 	return
 
 
-/// If you don't need anything complicated.
+//If you don't need anything complicated.
 /datum/asset/simple
 	_abstract = /datum/asset/simple
-	/// list of assets for this datum in the form of:
-	/// asset_filename = asset_file. At runtime the asset_file will be
-	/// converted into a asset_cache datum.
-	var/assets = list()
-	/// Set to true to have this asset also be sent via the legacy browse_rsc
-	/// system when cdn transports are enabled?
-	var/legacy = FALSE
-	/// TRUE for keeping local asset names when browse_rsc backend is used
-	var/keep_local_name = FALSE
+	var/assets = list() //! list of assets for this datum in the form of asset_filename = asset_file. At runtime the asset_file will be converted into a asset_cache datum.
+	var/legacy = FALSE //! set to true to have this asset also be sent via browse_rsc when cdn asset transports are enabled.
 
 /datum/asset/simple/register()
 	for(var/asset_name in assets)
 		var/datum/asset_cache_item/ACI = SSassets.transport.register_asset(asset_name, assets[asset_name])
-		if (!istype(ACI, /datum/asset_cache_item))
+		if (!ACI)
 			log_asset("ERROR: Invalid asset: [type]:[asset_name]:[ACI]")
 			continue
 		if (legacy)
-			ACI.legacy = legacy
-		if (keep_local_name)
-			ACI.keep_local_name = keep_local_name
+			ACI.legacy = TRUE
 		assets[asset_name] = ACI
 
 /datum/asset/simple/send(client)
@@ -106,7 +89,6 @@ GLOBAL_LIST_EMPTY(asset_datums)
 /datum/asset/spritesheet/register()
 	if (!name)
 		CRASH("spritesheet [type] cannot register without a name")
-	create_spritesheets()
 	ensure_stripped()
 	for(var/size_id in sizes)
 		var/size = sizes[size_id]
@@ -173,20 +155,11 @@ GLOBAL_LIST_EMPTY(asset_datums)
 		out += ".[name][size_id].[sprite_id]{background-position:-[x]px -[y]px;}"
 
 	return out.Join("\n")
-/**
- * Override this proc to start creation of the spritesheet. All of the Insert,
- * InsertAll and etc. calls go here.
- */
-/datum/asset/spritesheet/proc/create_spritesheets()
-	SHOULD_CALL_PARENT(FALSE)
-	CRASH("create_spritesheets() not implemented for [type]!")
 
 /datum/asset/spritesheet/proc/Insert(sprite_name, icon/I, icon_state="", dir=SOUTH, frame=1, moving=FALSE)
 	I = icon(I, icon_state=icon_state, dir=dir, frame=frame, moving=moving)
 	if (!I || !length(icon_states(I)))  // that direction or state doesn't exist
 		return
-	//any sprite modifications we want to do (aka, coloring a greyscaled asset)
-	I = ModifyInserted(I)
 	var/size_id = "[I.Width()]x[I.Height()]"
 	var/size = sizes[size_id]
 
@@ -202,15 +175,6 @@ GLOBAL_LIST_EMPTY(asset_datums)
 	else
 		sizes[size_id] = size = list(1, I, null)
 		sprites[sprite_name] = list(size_id, 0)
-
-/**
- * A simple proc handing the Icon for you to modify before it gets turned into an asset.
- *
- * Arguments:
- * * I: icon being turned into an asset
- */
-/datum/asset/spritesheet/proc/ModifyInserted(icon/pre_asset)
-	return pre_asset
 
 /datum/asset/spritesheet/proc/InsertAll(prefix, icon/I, list/directions)
 	if (length(prefix))
@@ -235,7 +199,7 @@ GLOBAL_LIST_EMPTY(asset_datums)
 	if (!sprite)
 		return null
 	var/size_id = sprite[SPR_SIZE]
-	return {"<span class="[name][size_id] [sprite_name]"></span>"}
+	return {"<span class='[name][size_id] [sprite_name]'></span>"}
 
 /datum/asset/spritesheet/proc/icon_class_name(sprite_name)
 	var/sprite = sprites[sprite_name]
@@ -244,50 +208,21 @@ GLOBAL_LIST_EMPTY(asset_datums)
 	var/size_id = sprite[SPR_SIZE]
 	return {"[name][size_id] [sprite_name]"}
 
-/**
- * Returns the size class (ex design32x32) for a given sprite's icon
- *
- * Arguments:
- * * sprite_name - The sprite to get the size of
- */
-/datum/asset/spritesheet/proc/icon_size_id(sprite_name)
-	var/sprite = sprites[sprite_name]
-	if (!sprite)
-		return null
-	var/size_id = sprite[SPR_SIZE]
-	return "[name][size_id]"
-
 #undef SPR_SIZE
 #undef SPR_IDX
 #undef SPRSZ_COUNT
 #undef SPRSZ_ICON
 #undef SPRSZ_STRIPPED
 
+
 /datum/asset/spritesheet/simple
 	_abstract = /datum/asset/spritesheet/simple
 	var/list/assets
 
-/datum/asset/spritesheet/simple/create_spritesheets()
-	for(var/key in assets)
+/datum/asset/spritesheet/simple/register()
+	for (var/key in assets)
 		Insert(key, assets[key])
-
-/datum/asset/changelog_item
-	_abstract = /datum/asset/changelog_item
-	var/item_filename
-
-/datum/asset/changelog_item/New(date)
-	item_filename = sanitize_filename("[date].yml")
-	SSassets.transport.register_asset(item_filename, file("html/changelogs/archive/" + item_filename))
-
-/datum/asset/changelog_item/send(client)
-	if (!item_filename)
-		return
-	. = SSassets.transport.send_assets(client, item_filename)
-
-/datum/asset/changelog_item/get_url_mappings()
-	if (!item_filename)
-		return
-	. = list("[item_filename]" = SSassets.transport.get_asset_url(item_filename))
+	..()
 
 //Generates assets based on iconstates of a single icon
 /datum/asset/simple/icon_states
@@ -370,4 +305,3 @@ GLOBAL_LIST_EMPTY(asset_datums)
 /// Needed because byond doesn't allow you to browse() to a url.
 /datum/asset/simple/namespaced/proc/get_htmlloader(filename)
 	return url2htmlloader(SSassets.transport.get_asset_url(filename, assets[filename]))
-

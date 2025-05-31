@@ -1,168 +1,148 @@
-/mob/proc/say()
-	return
+//Speech verbs.
 
-/mob/verb/say_verb(message as text)
+
+/mob/verb/say_verb()
 	set name = "Say"
 	set category = "IC"
+	set hidden = 1
 
-	if(say_disabled)	//This is here to try to identify lag problems
-		to_chat(usr, "\red Speech is currently admin-disabled.")
+	var/message = input(usr, "", "say") as text|null
+	// If they don't type anything just drop the message.
+	set_typing_indicator(FALSE)
+	if(!length(message))
 		return
-
-	if(ishuman(src))
-		var/mob/living/carbon/human/human = src
-		if(human.suppress_communication)
-			to_chat(src, human.get_suppressed_message())
-			return
-
-	if(!message)
-		set_typing_indicator(TRUE)
-		hud_typing = TRUE
-		message = input("", "say (text)") as text
-		hud_typing = FALSE
-		set_typing_indicator(FALSE)
+	if(GLOB.say_disabled)	//This is here to try to identify lag problems
+		to_chat(usr, "<span class='danger'>Speech is currently admin-disabled.</span>")
+		return
 	if(message)
+		set_typing_indicator(FALSE)
 		say(message)
 
-
-/mob/verb/me_verb(message as text)
-	set name = "Emote"
+///Whisper verb
+/mob/verb/whisper_verb(message as text)
+	set name = "Whisper"
 	set category = "IC"
+	set hidden = 1
 
-	if(say_disabled)	//This is here to try to identify lag problems
-		to_chat(usr, "\red Speech is currently admin-disabled.")
+	if(GLOB.say_disabled)	//This is here to try to identify lag problems
+		to_chat(usr, "<span class='danger'>Speech is currently admin-disabled.</span>")
+		return
+	whisper(message)
+
+///whisper a message
+/mob/proc/whisper(message, datum/language/language=null, sanitize = TRUE)
+	say(message, language, sanitize = sanitize) //only living mobs actually whisper, everything else just talks
+
+///The me emote verb
+/mob/verb/me_verb()
+	set name = "Me"
+	set category = "IC"
+	set hidden = 1
+
+	if(client)
+		if(get_playerquality(client.ckey) <= -20)
+			to_chat(usr, "<span class='warning'>I can't use custom emotes. (LOW PQ)</span>")
+			return
+	var/message = input(usr, "", "me") as text|null
+	// If they don't type anything just drop the message.
+	set_typing_indicator(FALSE)
+	if(!length(message))
+		return
+	if(GLOB.say_disabled)	//This is here to try to identify lag problems
+		to_chat(usr, "<span class='danger'>Speech is currently admin-disabled.</span>")
+		return
+	message = trim(copytext_char(sanitize(message), 1, MAX_MESSAGE_LEN))
+	usr.emote("me",1,message,TRUE, custom_me = TRUE)
+
+///Speak as a dead person (ghost etc)
+/mob/proc/say_dead(message)
+	return
+/*
+	var/name = real_name
+	var/alt_name = ""
+
+	if(GLOB.say_disabled)	//This is here to try to identify lag problems
+		to_chat(usr, "<span class='danger'>Speech is currently admin-disabled.</span>")
 		return
 
-	if(ishuman(src))
-		var/mob/living/carbon/human/human = src
-		if(human.suppress_communication)
-			to_chat(src, human.get_suppressed_message())
+	var/jb = is_banned_from(ckey, "Deadchat")
+	if(QDELETED(src))
+		return
+
+	if(jb)
+		to_chat(src, "<span class='danger'>I have been banned from deadchat.</span>")
+		return
+
+
+
+	if (src.client)
+		if(src.client.prefs.muted & MUTE_DEADCHAT)
+			to_chat(src, "<span class='danger'>I cannot talk in deadchat (muted).</span>")
 			return
 
-	if(!message)
-		set_typing_indicator(TRUE)
-		hud_typing = TRUE
-		message = input("", "me (text)") as text
-		hud_typing = FALSE
-		set_typing_indicator(FALSE)
-	if(message)
-		message = sanitize(message)
-		if(use_me)
-			emote("me", emote_type, message)
+		if(src.client.handle_spam_prevention(message,MUTE_DEADCHAT))
+			return
+
+	var/mob/dead/observer/O = src
+	if(isobserver(src) && O.deadchat_name)
+		name = "[O.deadchat_name]"
+	else
+		if(mind && mind.name)
+			name = "[mind.name]"
 		else
-			emote(message)
+			name = real_name
+		if(name != real_name)
+			alt_name = " (died as [real_name])"
 
-
-/mob/proc/say_dead(message)
-	if(say_disabled)	//This is here to try to identify lag problems
-		to_chat(usr, SPAN_DANGER("Speech is currently admin-disabled."))
+	var/spanned = say_quote(message)
+	var/source = "<span class='game'><span class='prefix'>DEAD:</span> <span class='name'>[name]</span>[alt_name]"
+	var/rendered = " <span class='message'>[emoji_parse(spanned)]</span></span>"
+	log_talk(message, LOG_SAY, tag="DEAD")
+	if(SEND_SIGNAL(src, COMSIG_MOB_DEADSAY, message) & MOB_DEADSAY_SIGNAL_INTERCEPT)
 		return
-	if(src.client && !src.client.holder && !config.dsay_allowed)
-		to_chat(src, SPAN_DANGER("Deadchat is globally muted."))
-		return
-
-	if(get_preference_value(/datum/client_preference/show_dsay) == GLOB.PREF_HIDE)
-		to_chat(usr, SPAN_DANGER("You have deadchat muted."))
-		return
-
-	say_dead_direct("[pick("complains", "moans", "whines", "laments", "blubbers")], <span class='message'>\"[emoji_parse(message)]\"</span>", src)
-
-/mob/proc/say_understands(mob/other, datum/language/speaking = null)
-
-	if(src.stat == DEAD)
-		return TRUE
-
-	//Universal speak makes everything understandable, for obvious reasons.
-	else if(src.universal_speak || src.universal_understand)
-		return TRUE
-
-	//Languages are handled after.
-	if(!speaking)
-		if(!other)
-			return TRUE
-		if(other.universal_speak)
-			return TRUE
-		if(isAI(src) && ispAI(other))
-			return TRUE
-		if(istype(other, src.type) || istype(src, other.type))
-			return TRUE
-		return FALSE
-
-	if(speaking.flags&INNATE)
-		return TRUE
-
-	//Language check.
-	for(var/datum/language/L in src.languages)
-		if(speaking.name == L.name)
-			return TRUE
-
-
-	return FALSE
-
-/*
-   ***Deprecated***
-   let this be handled at the hear_say or hear_radio proc
-   This is left in for robot speaking when humans gain binary channel access until I get around to rewriting
-   robot_talk() proc.
-   There is no language handling build into it however there is at the /mob level so we accept the call
-   for it but just ignore it.
+	deadchat_broadcast(rendered, source, follow_target = src, speaker_key = key)
 */
 
-/mob/proc/say_quote(message, datum/language/speaking = null)
-	var/verb = "says"
-	var/ending = copytext(message, length(message))
-	if(ending=="!")
-		verb=pick("exclaims", "shouts", "yells")
-	else if(ending=="?")
-		verb="asks"
+///Check if this message is an emote
+/mob/proc/check_emote(message, forced)
+	if(copytext(message, 1, 2) == "*")
+		emote(copytext_char(message, 2), intentional = !forced, custom_me = TRUE)
+		return 1
 
-	return verb
+/mob/proc/check_whisper(message, forced)
+	if(copytext(message, 1, 2) == "+")
+		whisper(copytext(message, 2),sanitize = FALSE)//already sani'd
+		return 1
+/* commenting out subtler
+/mob/proc/check_subtler(message, forced)
+	if(copytext_char(message, 1, 2) == "@")
+		emote("subtle", message = copytext_char(message, 2), intentional = !forced)
+		return 1
+*/
+///Check if the mob has a hivemind channel
+/mob/proc/hivecheck()
+	return 0
 
+///Check if the mob has a ling hivemind
+/mob/proc/lingcheck()
+	return LINGHIVE_NONE
 
-/mob/proc/emote(act, type, message)
-	if(act == "me")
-		return custom_emote(type, message)
-
-/mob/proc/get_ear()
-	// returns an atom representing a location on the map from which this
-	// mob can hear things
-
-	// should be overloaded for all mobs whose "ear" is separate from their "mob"
-
-	return get_turf(src)
-
-/mob/proc/say_test(text)
-	var/ending = copytext(text, length(text))
-	if(ending == "?")
-		return "1"
-	else if(ending == "!")
-		return "2"
-	return "0"
-
-//parses the message mode code (e.g. :h, :w) from text, such as that supplied to say.
-//returns the message mode string or null for no message mode.
-//standard mode is the mode returned for the special ';' radio code.
-/mob/proc/parse_message_mode(message, standard_mode = "headset")
-	if(length(message) >= 1 && copytext(message,1,2) == get_prefix_key(/decl/prefix/radio_main_channel))
-		return standard_mode
-
-	if(length(message) >= 2 && copytext(message,1,2) == get_prefix_key(/decl/prefix/radio_channel_selection))
-		var/channel_prefix = copytext_char(message, 2, 3)//copytext_char due to 2-bytes rusky symbols
-		return department_radio_keys[channel_prefix]
-	return null
-
-//parses the language code (e.g. :j) from text, such as that supplied to say.
-//returns the language object only if the code corresponds to a language that src can speak, otherwise null.
-/mob/proc/parse_language(message)
-	var/prefix = copytext(message, 1, 2)
-
-	if(length(message) >= 1 && prefix == get_prefix_key(/decl/prefix/audible_emote))
-		return all_languages["Noise"]
-
-	if(length(message) >= 2 && is_language_prefix(prefix))
-		var/language_prefix = copytext(message, 2, 3)
-		var/datum/language/L = language_keys[language_prefix]
-		if(can_speak(L))
-			return L
-
-	return null
+/**
+ * Get the mode of a message
+ *
+ * Result can be
+ * * MODE_WHISPER (Quiet speech)
+ * * MODE_HEADSET (Common radio channel)
+ * * A department radio (lots of values here)
+ */
+/mob/proc/get_message_mode(message)
+	var/key = copytext(message, 1, 2)
+	if(key == "#")
+		return MODE_WHISPER
+	else if(key == "%")
+		return MODE_SING
+	else if(key == ";")
+		return MODE_HEADSET
+	else if(length(message) > 2 && (key in GLOB.department_radio_prefixes))
+		var/key_symbol = lowertext(copytext(message, 2, 3))
+		return GLOB.department_radio_keys[key_symbol]

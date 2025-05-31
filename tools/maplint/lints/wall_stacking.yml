@@ -1,0 +1,4 @@
+/turf/closed:
+  banned_neighbors:
+  - /obj/structure/door
+  - /obj/structure/window

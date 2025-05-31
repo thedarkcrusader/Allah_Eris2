@@ -7,7 +7,7 @@
 /mob/proc/update_icons()
 	return
 
-/mob/proc/update_hud()
+/mob/proc/update_transform()
 	return
 
 /mob/proc/update_inv_handcuffed()
@@ -16,53 +16,62 @@
 /mob/proc/update_inv_legcuffed()
 	return
 
-/mob/proc/update_inv_back()
-	return
-
-/mob/proc/update_inv_l_hand()
-	return
-
-/mob/proc/update_inv_r_hand()
+/mob/proc/update_inv_hands()
 	return
 
 /mob/proc/update_inv_wear_mask()
 	return
 
+/mob/proc/update_inv_neck()
+	return
+
 /mob/proc/update_inv_wear_suit()
 	return
 
-/mob/proc/update_inv_w_uniform()
+/mob/proc/update_inv_back()
 	return
 
 /mob/proc/update_inv_belt()
 	return
 
+/mob/proc/update_inv_wrists()
+	return
+
 /mob/proc/update_inv_head()
+	return
+
+/mob/proc/update_body()
+	return
+
+/mob/proc/update_fire()
+	return
+
+/mob/proc/update_warning()
 	return
 
 /mob/proc/update_inv_gloves()
 	return
 
-/mob/proc/update_mutations()
-	return
-
-/mob/proc/update_inv_wear_id()
-	return
-
 /mob/proc/update_inv_shoes()
-	return
-
-/mob/proc/update_inv_glasses()
-	return
-
-/mob/proc/update_inv_s_store()
 	return
 
 /mob/proc/update_inv_pockets()
 	return
 
-/mob/proc/update_inv_ears()
+/mob/proc/update_inv_ring()
 	return
 
-/mob/proc/update_targeted()
+/mob/proc/update_inv_pants()
+	return
+
+/mob/proc/update_inv_shirt()
+	return
+
+/mob/proc/update_inv_armor()
+	return
+
+/mob/proc/update_inv_cloak()
+	return
+
+/mob/proc/update_inv_mouth()
 	return

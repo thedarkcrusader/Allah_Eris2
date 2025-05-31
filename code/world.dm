@@ -2,7 +2,7 @@
 //Try looking in game/world.dm
 
 /**
- * # World
+ * # WorldR
  *
  * Two possibilities exist: either we are alone in the Universe or we are not. Both are equally terrifying. ~ Arthur C. Clarke
  *
@@ -11,10 +11,14 @@
  * The world /New() is the root of where a round itself begins
  */
 /world
-	mob = /mob/new_player
-	turf = /turf/space
-	area = /area/space
+	mob = /mob/dead/new_player
+	turf = /turf/closed/basic
+	area = /area/rogue
 	view = "15x15"
 	hub = "Exadv1.spacestation13"
-	cache_lifespan = 0	//stops player uploaded stuff from being kept in the rsc past the current session
-	fps = 40
+	hub_password = "zX1svaLpIhl70uii"
+	name = "VANDERLIN"
+	fps = 20
+#ifdef FIND_REF_NO_CHECK_TICK
+	loop_checks = FALSE
+#endif

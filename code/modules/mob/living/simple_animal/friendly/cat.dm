@@ -1,380 +1,207 @@
 //Cat
-/mob/living/simple_animal/cat
-	name = "cat"
-	desc = "A domesticated, feline pet. Has a tendency to adopt crewmembers."
+/mob/living/simple_animal/pet/cat
+	name = "parent roguecat"
+	desc = "If you're seeing this, someone forgot to set a mob desc or it spawned the parent mob. Report to the Creators."
+	icon = 'icons/roguetown/mob/monster/pets.dmi'
 	icon_state = "cat2"
-	item_state = "cat2"
+	icon_living = "cat2"
+	icon_dead = "cat2_dead"
+	gender = MALE
+	speak = list("Meow!", "Esp!", "Purr!", "HSSSSS")
 	speak_emote = list("purrs", "meows")
-	emote_see = list("shakes their head", "shivers")
+	emote_hear = list("meows.", "mews.")
+	emote_see = list("shakes its head.", "shivers.")
 	speak_chance = 1
 	turns_per_move = 5
 	see_in_dark = 6
-	meat_type = /obj/item/reagent_containers/food/snacks/meat
-	response_help  = "pets"
-	response_disarm = "gently pushes aside"
-	response_harm   = "kicks"
-	var/mob/flee_target
-	min_oxy = 16 //Require atleast 16kPA oxygen
-	minbodytemp = 223		//Below -50 Degrees Celcius
-	maxbodytemp = 323	//Above 50 Degrees Celcius
-	holder_type = /obj/item/holder/cat
-	mob_size = MOB_SMALL
-	possession_candidate = 1
-
-	scan_range = 3//less aggressive about stealing food
-	metabolic_factor = 0.75
-	sanity_damage = -1
-	var/mob/living/simple_animal/mouse/mousetarget = null
-	seek_speed = 5
+	ventcrawler = VENTCRAWLER_ALWAYS
 	pass_flags = PASSTABLE
+	mob_size = MOB_SIZE_SMALL
+	density = FALSE // moveblocking cat is annoying as hell
+	pass_flags = PASSMOB
+	mob_biotypes = MOB_ORGANIC|MOB_BEAST
+	minbodytemp = 200
+	maxbodytemp = 400
+	animal_species = /mob/living/simple_animal/pet/cat
+	base_intents = list(/datum/intent/simple/claw)
 
-/mob/living/simple_animal/cat/Life()
-	..()
+	food_type = list(
+		/obj/item/reagent_containers/food/snacks/smallrat,
+		/obj/item/reagent_containers/food/snacks/fish,
+	)
 
-	if(!stasis)
-		if (turns_since_move > 5 || (flee_target || mousetarget))
-			walk_to(src,0)
-			turns_since_move = 0
+	childtype = list(/mob/living/simple_animal/pet/cat/kitten)
+	botched_butcher_results = list(/obj/item/reagent_containers/food/snacks/meat/steak = 1)
+	butcher_results = list(/obj/item/reagent_containers/food/snacks/meat/steak = 1,
+							/obj/item/alch/sinew = 1,
+							/obj/item/alch/bone = 1)
+	perfect_butcher_results = list(/obj/item/reagent_containers/food/snacks/meat/steak = 1,
+							/obj/item/alch/sinew = 2,
+							/obj/item/alch/bone = 1)
+	response_help_continuous = "pets"
+	response_help_simple = "pet"
+	response_disarm_continuous = "gently pushes aside"
+	response_disarm_simple = "gently push aside"
+	response_harm_continuous = "kicks"
+	response_harm_simple = "kick"
+	base_strength = 3
+	base_endurance = 4
+	base_speed = 3
+	base_constitution = 3
+	gold_core_spawnable = FRIENDLY_SPAWN
+	tame_chance = 25
 
-			if (flee_target) //fleeing takes precendence
-				handle_flee_target()
-			else
-				handle_movement_target()
+	footstep_type = FOOTSTEP_MOB_CLAW
 
-		if (!movement_target)
-			walk_to(src,0)
+	ai_controller = /datum/ai_controller/cat
 
-		spawn(2)
-			attack_mice()
+	var/obj/item/held_item
 
-		if(prob(2)) //spooky
-			var/mob/observer/ghost/spook = locate() in range(src,5)
-			if(spook)
-				var/turf/T = spook.loc
-				var/list/visible = list()
-				for(var/obj/O in T.contents)
-					if(!O.invisibility && O.name)
-						visible += O
-				if(visible.len)
-					var/atom/A = pick(visible)
-					visible_emote("suddenly stops and stares at something unseen[istype(A) ? " near [A]":""].")
-
-/mob/living/simple_animal/cat/proc/handle_movement_target()
-	//if our target is neither inside a turf or inside a human(???), stop
-	if((movement_target) && !(isturf(movement_target.loc) || ishuman(movement_target.loc) ))
-		movement_target = null
-		stop_automated_movement = 0
-	//if we have no target or our current one is out of sight/too far away
-	if( !movement_target || !(movement_target.loc in oview(src, 4)) )
-		movement_target = null
-		stop_automated_movement = 0
-
-	if(movement_target)
-		stop_automated_movement = 1
-		walk_to(src,movement_target,0,seek_move_delay)
-
-/mob/living/simple_animal/cat/proc/attack_mice()
-	if((loc) && isturf(loc))
-		if(!incapacitated())
-			for(var/mob/living/simple_animal/mouse/M in oview(src,1))
-				if(M.stat != DEAD)
-					M.splat()
-					visible_emote(pick("bites \the [M]!","toys with \the [M].","chomps on \the [M]!"))
-					movement_target = null
-					stop_automated_movement = 0
-					if (prob(75))
-						break//usually only kill one mouse per proc
-
-/mob/living/simple_animal/cat/beg(var/atom/thing, var/atom/holder)
-	visible_emote("licks its lips and hungrily glares at [holder]'s [thing.name]")
-
-/mob/living/simple_animal/cat/Released()
-	//A thrown cat will immediately attack mice near where it lands
-	handle_movement_target()
-	spawn(3)
-		attack_mice()
-	..()
-
-/mob/living/simple_animal/cat/proc/handle_flee_target()
-	//see if we should stop fleeing
-	if (flee_target && !(flee_target.loc in view(src)))
-		flee_target = null
-		stop_automated_movement = 0
-
-	if (flee_target)
-		if(prob(25)) say("HSSSSS")
-		stop_automated_movement = 1
-		walk_away(src, flee_target, 7, 2)
-
-/mob/living/simple_animal/cat/proc/set_flee_target(atom/A)
-	if(A)
-		flee_target = A
-		turns_since_move = 5
-
-/mob/living/simple_animal/cat/attackby(var/obj/item/O, var/mob/user)
+/mob/living/simple_animal/pet/cat/Initialize()
 	. = ..()
-	if(O.force)
-		set_flee_target(user? user : src.loc)
+	if(prob(50))
+		gender = FEMALE
+	AddElement(/datum/element/ai_retaliate)
+	verbs += /mob/living/proc/lay_down
+	AddComponent(\
+			/datum/component/breed,\
+			list(/mob/living/simple_animal/pet/cat),\
+			3 MINUTES,\
+			list(/mob/living/simple_animal/pet/cat/kitten = 100),\
+			CALLBACK(src, PROC_REF(after_birth)),\
+		)
 
-/mob/living/simple_animal/cat/attack_hand(mob/living/carbon/human/M as mob)
+/mob/living/simple_animal/pet/cat/proc/drop_held_item()
+	held_item.forceMove(get_turf(src))
+	held_item = null
+
+/mob/living/simple_animal/pet/cat/Crossed(mob/living/L) // Gato Basado - makes it leave when people step too close
 	. = ..()
-	if(M.a_intent == I_HURT)
-		set_flee_target(M)
+	if(L)
+		if(health > 1)
+			icon_state = "[icon_living]"
+			set_resting(FALSE, instant = TRUE)
+			// update_mobility()
+			if(isturf(loc))
+				dir = pick(GLOB.cardinals)
+				step(src, dir)
+			if(!stat && resting && !buckled)
+				return
 
-/mob/living/simple_animal/cat/explosion_act(target_power)
-	. = ..()
-	if(QDELETED(src))
-		return
-	set_flee_target(get_turf(src))
-
-/mob/living/simple_animal/cat/bullet_act(var/obj/item/projectile/proj)
-	. = ..()
-	set_flee_target(proj.firer? proj.firer : src.loc)
-
-/mob/living/simple_animal/cat/hitby(atom/movable/AM)
-	. = ..()
-	set_flee_target(AM.thrower? AM.thrower : src.loc)
-
-/mob/living/simple_animal/cat/MouseDrop(atom/over_object)
-
-	var/mob/living/carbon/H = over_object
-	if(!istype(H) || !Adjacent(H)) return ..()
-
-	if(H.a_intent == I_HELP)
-		get_scooped(H)
-		return
+/mob/living/simple_animal/proc/personal_space()
+	if(locate(/mob/living/carbon) in get_turf(src))
+		sleep(1)
+		dir = pick(GLOB.alldirs)
+		step(src, dir)
+		personal_space()
 	else
-		return ..()
-
-//Cats always land on their feet
-/mob/living/simple_animal/cat/get_fall_damage()
-	return 0
-
-//Basic friend AI
-/mob/living/simple_animal/cat/fluff
-	var/mob/living/carbon/human/friend
-	var/befriend_job = null
-
-/mob/living/simple_animal/cat/fluff/handle_movement_target()
-	if (friend)
-		var/follow_dist = 5
-		if (friend.stat >= DEAD || friend.health <= HEALTH_THRESHOLD_SOFTCRIT) //danger
-			follow_dist = 1
-		else if (friend.stat || friend.health <= 50) //danger or just sleeping
-			follow_dist = 2
-		var/near_dist = max(follow_dist - 2, 1)
-		var/current_dist = get_dist(src, friend)
-
-		if (movement_target != friend)
-			if (current_dist > follow_dist && !ismouse(movement_target) && (friend in oview(src)))
-				//stop existing movement
-				walk_to(src,0)
-				turns_since_scan = 0
-
-				//walk to friend
-				stop_automated_movement = 1
-				movement_target = friend
-				walk_to(src, movement_target, near_dist, seek_move_delay)
-
-		//already following and close enough, stop
-		else if (current_dist <= near_dist)
-			walk_to(src,0)
-			movement_target = null
-			stop_automated_movement = 0
-			if (prob(10))
-				say("Meow!")
-
-	if (!friend || movement_target != friend)
-		..()
-
-/mob/living/simple_animal/cat/fluff/Life()
-	..()
-	if (stat || !friend)
 		return
-	if (get_dist(src, friend) <= 1)
-		if (friend.stat >= DEAD || friend.health <= HEALTH_THRESHOLD_SOFTCRIT)
-			if (prob((friend.stat < DEAD)? 50 : 15))
-				var/verb = pick("meows", "mews", "mrowls")
-				visible_emote(pick("[verb] in distress.", "[verb] anxiously."))
 
+
+/mob/living/simple_animal/pet/cat/inn
+	name = "inn cat"
+	desc = "This old, fat cat keeps the inn free of rats... allegedly. It seems like he mostly lazes about in the sun and asks for treats."
+
+/mob/living/simple_animal/pet/cat/cabbit
+	name = "cabbit"
+	desc = "A cabbit, a particular favorite of Enigma's fauna, as pets and meals. It has been exported to Vanderlin." // Do NOT eat the cabbit!!!!!!
+	icon = 'icons/roguetown/mob/cabbit.dmi'
+	icon_state = "cabbit"
+	icon_living = "cabbit"
+	icon_dead = "cabbit_dead"
+	remains_type = /obj/effect/decal/remains/cabbit
+	speak = list("Meow!", "Chk!", "Purr!", "Chrr!")
+	speak_emote = list("chirrups", "meows")
+	emote_hear = list("meows.", "clucks.")
+	emote_see = list("brings their ears alert.", "scratches their ear with a hindleg.")
+	childtype = list() // TODO: puppy cabbits =:3
+	botched_butcher_results = list(/obj/item/reagent_containers/food/snacks/meat/steak = 1)
+	butcher_results = list(/obj/item/reagent_containers/food/snacks/meat/steak = 1,
+							/obj/item/alch/sinew = 1,
+							/obj/item/alch/bone = 1)
+	perfect_butcher_results = list(/obj/item/reagent_containers/food/snacks/meat/steak = 1,
+							/obj/item/alch/sinew = 2,
+							/obj/item/alch/bone = 1,
+							/obj/item/natural/fur/cabbit = 1)
+
+/mob/living/simple_animal/pet/cat/black
+	name = "black cat"
+	desc = "Possessed of lamplike eyes and a meow that sounds like the rattle of bones. Black cats are sacred to Necra, said to bring wandering spirits to the Carriageman."
+	gender = FEMALE
+	icon = 'icons/roguetown/topadd/takyon/Cat.dmi'
+	icon_state = "cat"
+	icon_living = "cat"
+	icon_dead = "cat_dead"
+
+/mob/living/simple_animal/pet/cat/original
+	name = "Batsy"
+	desc = ""
+	gender = FEMALE
+	icon_state = "original"
+	icon_living = "original"
+	icon_dead = "original_dead"
+	unique_pet = TRUE
+
+/mob/living/simple_animal/pet/cat/kitten
+	name = "kitten"
+	desc = ""
+	density = FALSE
+	pass_flags = PASSMOB
+	mob_size = MOB_SIZE_SMALL
+	adult_growth = /mob/living/simple_animal/pet/cat
+
+	ai_controller = /datum/ai_controller/kitten
+
+/mob/living/simple_animal/pet/cat/kitten/Initialize()
+	. = ..()
+	var/matrix/matrix = matrix()
+	matrix.Scale(0.5, 0.5)
+	transform = matrix
+
+/mob/living/simple_animal/pet/cat/proc/after_birth(mob/living/simple_animal/pet/cat/kitten/baby, mob/living/partner)
+	return
+
+/mob/living/simple_animal/pet/cat/proc/wuv(change, mob/M)
+	if(change)
+		if(change > 0)
+			if(M && stat != DEAD)
+				new /obj/effect/temp_visual/heart(loc)
+				emote("me", 1, "purrs!")
+				if(flags_1 & HOLOGRAM_1)
+					return
+				SEND_SIGNAL(M, COMSIG_ADD_MOOD_EVENT, src, /datum/mood_event/pet_animal, src)
 		else
-			if (prob(5))
-				var/msg5 = (pick("nuzzles [friend].",
-								   "brushes against [friend].",
-								   "rubs against [friend].",
-								   "purrs."))
-				src.visible_message("<span class='name'>[src]</span> [msg5].")
-	else if (friend.health <= 50)
-		if (prob(10))
-			var/verb = pick("meows", "mews", "mrowls")
-			visible_emote("[verb] anxiously.")
+			if(M && stat != DEAD)
+				emote("me", 1, "hisses!")
 
-/mob/living/simple_animal/cat/fluff/verb/friend()
-	set name = "Become Friends"
-	set category = "IC"
-	set src in view(1)
 
-	if(friend && usr == friend)
-		set_dir(get_dir(src, friend))
-		say("Meow!")
-		return
 
-	if (ishuman(usr))
-		var/mob/living/carbon/human/H = usr
-		if(H.job == befriend_job)
-			friend = usr
-			set_dir(get_dir(src, friend))
-			say("Meow!")
+
+/mob/living/simple_animal/pet/cat/attack_hand(mob/living/carbon/human/M)
+	. = ..()
+	if(stat != DEAD)
+		// Handle vampire reaction
+		if(M.mind && M.mind.has_antag_datum(/datum/antagonist/vampire))
+			visible_message("<span class='notice'>\The [src] hisses at [M] and recoils in disgust.</span>")
+			icon_state = "[icon_living]"
+			set_resting(FALSE)
+			playsound(get_turf(src), 'sound/vo/mobs/cat/cathiss.ogg', 80, TRUE, -1)
+			dir = pick(GLOB.alldirs)
+			step(src, dir)
+			personal_space()
 			return
 
-	to_chat(usr, SPAN_NOTICE("[src] ignores you."))
-	return
-
-
-//RUNTIME IS ALIVE! SQUEEEEEEEE~
-/mob/living/simple_animal/cat/fluff/Runtime
-	name = "Runtime"
-	desc = "Her fur has the look and feel of velvet, and her tail quivers occasionally."
-	gender = FEMALE
-	icon_state = "cat"
-	item_state =  "cat"
-	befriend_job = "Moebius Biolab Officer"
-
-/mob/living/simple_animal/cat/kitten
-	name = "kitten"
-	desc = "D'aaawwww"
-	icon_state = "kitten"
-	item_state = "kitten"
-	gender = NEUTER
-
-// Leaving this here for now.
-/obj/item/holder/cat/fluff/bones
-	name = "Bones"
-	desc = "It's Bones! Meow."
-	gender = MALE
-	icon_state = "cat3"
-	item_state = "cat3"
-
-/mob/living/simple_animal/cat/fluff/bones
-	name = "Bones"
-	desc = "That's Bones the cat. He's a laid back, research cat. Meow."
-	gender = MALE
-	icon_state = "cat3"
-	item_state = "cat3"
-	holder_type = /obj/item/holder/cat/fluff/bones
-	befriend_job = "Moebius Biolab Officer"
-	sanity_damage = -2
-	var/friend_name = "Erstatz Vryroxes"
-
-/mob/living/simple_animal/cat/kitten/New()
-	gender = pick(MALE, FEMALE)
-	..()
-
-// Runtime cat
-
-var/cat_cooldown = 20 SECONDS
-var/cat_max_number = 10
-var/cat_teleport = 0.0
-var/cat_number = 0
-
-/mob/living/simple_animal/cat/runtime
-	name = "Dusty"
-	desc = "A bluespace denizen that purrs its way into our dimension when the very fabric of reality is teared apart."
-	icon_state = "runtimecat"
-	item_state = "runtimecat"
-	density = 0
-	anchored = TRUE  // So that people cannot pull Dusty
-	mob_size = MOB_HUGE // So that people cannot put Dusty in lockers to move it
-
-	status_flags = GODMODE // Bluespace cat
-	min_oxy = 0
-	minbodytemp = 0
-	maxbodytemp = INFINITY
-	autoseek_food = 0
-	metabolic_factor = 0.0
-
-	harm_intent_damage = 10
-	melee_damage_lower = 10
-	melee_damage_upper = 15
-	attacktext = "slashed"
-	attack_sound = 'sound/weapons/bladeslice.ogg'
-
-	var/cat_life_duration = 1 MINUTES
-
-/mob/living/simple_animal/cat/runtime/New(loc)
-	..(loc)
-	stats.addPerk(PERK_TERRIBLE_FATE)
-	cat_number += 1
-	playsound(loc, 'sound/effects/teleport.ogg', 50, 1)
-	spawn(cat_life_duration)
-		qdel(src)
-
-/mob/living/simple_animal/cat/runtime/Destroy()
-	// We teleport Dusty in the corner of one of the ship zlevel for stylish disparition
-	do_teleport(src, get_turf(locate(1, 1, pick(GLOB.maps_data.station_levels))), 2, 0, null, null, 'sound/effects/teleport.ogg', 'sound/effects/teleport.ogg')
-	cat_number -= 1
-	return ..()
-
-/mob/living/simple_animal/cat/runtime/attackby(var/obj/item/O, var/mob/user)
-	visible_message(SPAN_DANGER("[user]'s [O.name] harmlessly passes through \the [src]."))
-	strike_back(user)
-
-/mob/living/simple_animal/cat/runtime/attack_hand(mob/living/carbon/human/M as mob)
-
-	switch(M.a_intent)
-
-		if(I_HELP)  // Pet the cat
-			M.visible_message(SPAN_NOTICE("[M] pets \the [src]."))
-
-		if(I_DISARM)
-			M.visible_message(SPAN_NOTICE("[M]'s hand passes through \the [src]."))
-			M.do_attack_animation(src)
-
-		if(I_GRAB)
-			if (M == src)
-				return
-			if (!(status_flags & CANPUSH))
+		// Handle racist reaction if enabled
+		if(ai_controller.blackboard[BB_CAT_RACISM])
+			if((isdarkelf(M)) || ishalforc(M) || istiefling(M))
+				visible_message("<span class='notice'>\The [src] hisses at [M] and recoils in disgust.</span>")
+				icon_state = "[icon_living]"
+				set_resting(FALSE)
+				playsound(get_turf(src), 'sound/vo/mobs/cat/cathiss.ogg', 80, TRUE, -1)
+				dir = pick(GLOB.alldirs)
+				step(src, dir)
+				personal_space()
 				return
 
-			M.visible_message(SPAN_NOTICE("[M]'s hand passes through \the [src]."))
-			M.do_attack_animation(src)
-
-		if(I_HURT)
-			var/datum/gender/G = gender_datums[M.gender]
-			M.visible_message(SPAN_WARNING("[M] tries to kick \the [src] but [G.his] foot passes through."))
-			M.do_attack_animation(src)
-			visible_message(SPAN_WARNING("\The [src] hisses."))
-			strike_back(M)
-
-	return
-
-/mob/living/simple_animal/cat/runtime/proc/strike_back(var/mob/target_mob)
-	if(!Adjacent(target_mob))
-		return
-	if(isliving(target_mob))
-		var/mob/living/L = target_mob
-		L.attack_generic(src,rand(melee_damage_lower,melee_damage_upper),attacktext)
-		return L
-	if(istype(target_mob,/mob/living/exosuit))
-		var/mob/living/exosuit/M = target_mob
-		M.attack_generic(src,rand(melee_damage_lower,melee_damage_upper),attacktext)
-		return M
-	if(istype(target_mob,/obj/machinery/bot))
-		var/obj/machinery/bot/B = target_mob
-		B.attack_generic(src,rand(melee_damage_lower,melee_damage_upper),attacktext)
-		return B
-
-/mob/living/simple_animal/cat/runtime/set_flee_target(atom/A)
-	return
-
-/mob/living/simple_animal/cat/runtime/bullet_act(var/obj/item/projectile/proj)
-	return PROJECTILE_FORCE_MISS
-
-/mob/living/simple_animal/cat/runtime/explosion_act(target_power)
-	return 0
-
-/mob/living/simple_animal/cat/runtime/singularity_act()
-	return
-
-/mob/living/simple_animal/cat/runtime/MouseDrop(atom/over_object)
-	return
+		// Handle normal petting - trigger the wuv proc
+		wuv(1, M)
