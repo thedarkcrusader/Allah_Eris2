@@ -13,9 +13,9 @@
 	faction = FACTION_STATION
 	total_positions = 11
 	spawn_positions = 11
-	min_pq = -100
+	min_pq = 0
 	bypass_lastclass = TRUE
-	selection_color = "#553e01"
+	selection_color = "#20201e"
 
 	allowed_sexes = list(MALE, FEMALE)
 	allowed_races = RACES_PLAYER_ALL

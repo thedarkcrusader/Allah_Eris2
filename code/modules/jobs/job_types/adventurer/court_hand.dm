@@ -8,7 +8,7 @@
 	job_flags = (JOB_EQUIP_RANK | JOB_NEW_PLAYER_JOINABLE)
 	total_positions = 0
 	spawn_positions = 2
-	min_pq = 10
+	min_pq = 0
 
 	outfit = null
 	outfit_female = null

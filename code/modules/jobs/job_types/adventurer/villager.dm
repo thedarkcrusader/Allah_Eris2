@@ -9,7 +9,7 @@
 	faction = FACTION_STATION
 	total_positions = 0
 	spawn_positions = 0
-	min_pq = -100
+	min_pq = 0
 	banned_leprosy = FALSE
 	bypass_lastclass = TRUE
 

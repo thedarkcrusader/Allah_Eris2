@@ -9,7 +9,7 @@
 	pickprob = 15
 	outfit = /datum/outfit/job/adventurer/bladesinger
 	category_tags = list(CTAG_ADVENTURER)
-	min_pq = 2
+	min_pq = 0
 	cmode_music = 'sound/music/cmode/adventurer/CombatWarrior.ogg'
 
 

@@ -11,7 +11,7 @@
 	faction = FACTION_STATION
 	total_positions = 2
 	spawn_positions = 2
-	min_pq = 2
+	min_pq = 0
 
 	//Reason all races allowed is you are basically a very talented court physician; even 'lower races' would find this to be one of the only ways to obtain a sort of nobility.
 	allowed_sexes = list(MALE, FEMALE)

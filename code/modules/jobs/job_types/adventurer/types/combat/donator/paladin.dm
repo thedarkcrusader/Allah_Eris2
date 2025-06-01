@@ -5,7 +5,7 @@
 	allowed_races = RACES_PLAYER_NONDISCRIMINATED
 	outfit = /datum/outfit/job/adventurer/paladin
 	maximum_possible_slots = 1
-	min_pq = 2
+	min_pq = 0
 	pickprob = 15
 	category_tags = list(CTAG_ADVENTURER)
 

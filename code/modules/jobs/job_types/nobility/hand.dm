@@ -16,7 +16,7 @@
 	spells = list(
 		/obj/effect/proc_holder/spell/self/grant_title,
 	)
-	min_pq = 10
+	min_pq = 0
 	bypass_lastclass = TRUE
 
 	allowed_sexes = list(MALE, FEMALE)

@@ -10,7 +10,7 @@
 	faction = FACTION_STATION
 	total_positions = 2
 	spawn_positions = 2
-	min_pq = 1
+	min_pq = 0
 
 	allowed_sexes = list(MALE, FEMALE)
 	allowed_races = RACES_PLAYER_NONDISCRIMINATED

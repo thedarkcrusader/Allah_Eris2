@@ -10,7 +10,7 @@
 	faction = FACTION_STATION
 	total_positions = 6
 	spawn_positions = 4
-	min_pq = 4
+	min_pq = 0
 	antag_job = TRUE
 
 	outfit = null

@@ -22,7 +22,7 @@
 	cmode_music = 'sound/music/cmode/towner/CombatGaffer.ogg'
 	outfit = /datum/outfit/job/gaffer
 	give_bank_account = 20
-	min_pq = 8
+	min_pq = 0
 	bypass_lastclass = TRUE
 	selection_color = "#3b150e"
 

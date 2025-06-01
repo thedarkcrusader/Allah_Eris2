@@ -5,7 +5,7 @@
 	allowed_races = list("Humen","Aasimar") // not RACES_PLAYER_GRENZ because dwarves don't have a sprite for this armor
 	outfit = /datum/outfit/job/adventurer/swordmaster
 	maximum_possible_slots = 1
-	min_pq = 2
+	min_pq = 0
 	pickprob = 15
 	category_tags = list(CTAG_ADVENTURER)
 	cmode_music = 'sound/music/cmode/combat_grenzelhoft.ogg'

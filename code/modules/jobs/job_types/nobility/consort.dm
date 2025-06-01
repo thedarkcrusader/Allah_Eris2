@@ -10,7 +10,7 @@
 	faction = FACTION_STATION
 	total_positions = 0
 	spawn_positions = 1
-	min_pq = 6
+	min_pq = 0
 	bypass_lastclass = TRUE
 
 	spells = list(/obj/effect/proc_holder/spell/self/convertrole/servant)

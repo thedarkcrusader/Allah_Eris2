@@ -7,7 +7,7 @@
 	maximum_possible_slots = 1
 	pickprob = 15 // Same as the other very rare classes
 	category_tags = list(CTAG_ADVENTURER)
-	min_pq = 2 // Same as Bladesinger
+	min_pq = 0 // Same as Bladesinger
 	cmode_music = 'sound/music/cmode/adventurer/CombatIntense.ogg'
 
 

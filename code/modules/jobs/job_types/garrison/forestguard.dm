@@ -15,7 +15,7 @@
 	faction = FACTION_STATION
 	total_positions = 3
 	spawn_positions = 3
-	min_pq = 5
+	min_pq = 0
 	bypass_lastclass = TRUE
 	selection_color = "#0d6929"
 

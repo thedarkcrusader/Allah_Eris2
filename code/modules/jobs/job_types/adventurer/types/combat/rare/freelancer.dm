@@ -8,7 +8,7 @@
 	outfit = /datum/outfit/job/adventurer/lancer
 	maximum_possible_slots = 1
 	pickprob = 15
-	min_pq = 2
+	min_pq = 0
 	category_tags = list(CTAG_ADVENTURER)
 	cmode_music = 'sound/music/cmode/adventurer/CombatOutlander3.ogg'
 

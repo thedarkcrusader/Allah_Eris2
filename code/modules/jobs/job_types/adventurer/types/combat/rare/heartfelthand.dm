@@ -6,7 +6,7 @@
 	allowed_races = list("Humen")
 	outfit = /datum/outfit/job/adventurer/heartfelthand
 	maximum_possible_slots = 1
-	min_pq = 1
+	min_pq = 0
 	pickprob = 50
 	category_tags = list(CTAG_DISABLED)
 

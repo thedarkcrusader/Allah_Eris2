@@ -17,7 +17,7 @@ GLOBAL_VAR_INIT(adventurer_hugbox_duration_still, 3 MINUTES)
 	faction = FACTION_STATION
 	total_positions = 14
 	spawn_positions = 14
-	min_pq = 2
+	min_pq = 0
 	bypass_lastclass = TRUE
 
 	allowed_races = RACES_PLAYER_ALL

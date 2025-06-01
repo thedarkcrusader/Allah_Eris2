@@ -8,7 +8,7 @@
 	horse = /mob/living/simple_animal/hostile/retaliate/saigabuck/tame/saddled
 	cmode_music = 'sound/music/cmode/adventurer/combat_vaquero.ogg'
 	category_tags = list(CTAG_ADVENTURER)
-	min_pq = 1
+	min_pq = 0
 	pickprob = 30
 	maximum_possible_slots = 1
 
